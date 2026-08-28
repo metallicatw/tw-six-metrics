@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # The engine is standard-library only, so it must pass before anything
+      # is installed.  If this step ever needs a dependency, that is a bug.
+      - name: 零相依測試
+        run: python scripts/run_tests.py
+
+      - name: 安裝開發相依
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[all]"
+
+      - name: ruff
+        run: ruff check src tests scripts
+
+      - name: mypy
+        run: mypy || true      # advisory for now; tighten once annotations settle
+
+      - name: pytest
+        run: pytest
+
+      - name: 端對端冒煙測試
+        run: |
+          twsix show-rules
+          twsix verify

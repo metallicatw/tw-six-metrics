@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ site_title }}{% endblock %}</title>
+<style>
+:root{
+  --ground:#f4f6f8; --surface:#fff; --surface-2:#eaeef2;
+  --ink:#111820; --ink-2:#3b4854; --muted:#6a7885;
+  --rule:#d9e0e6; --accent:#0e5a52; --accent-2:#12766b;
+  --up:#ae2b1e; --down:#146b47;
+  --g4:#0e5a52; --g3:#3a8579; --g2:#7fa9a1; --g1:#b8934f; --g0:#9c5b4c;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --ground:#0d1116; --surface:#151b21; --surface-2:#1c232a;
+  --ink:#e5ebf1; --ink-2:#b2bec9; --muted:#84919e;
+  --rule:#273038; --accent:#57c4b4; --accent-2:#79d4c6;
+  --up:#e4695b; --down:#4eb884;
+  --g4:#57c4b4; --g3:#3e9a8d; --g2:#6e8a86; --g1:#b8934f; --g0:#c4695a;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font:16px/1.7 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--accent-2);text-underline-offset:2px}
+a:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px}
+header.top{background:var(--surface);border-bottom:1px solid var(--rule);margin-bottom:32px}
+header.top .in{max-width:1180px;margin:0 auto;padding:22px 20px}
+header.top h1{margin:0;font-size:21px;letter-spacing:-.01em}
+header.top h1 a{color:inherit;text-decoration:none}
+nav{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:14px}
+nav a{color:var(--ink-2);text-decoration:none}
+nav a[aria-current=page]{color:var(--accent-2);font-weight:600}
+.stamp{font-size:12.5px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums}
+h2{font-size:20px;margin:36px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--ink)}
+h3{font-size:16px;margin:26px 0 8px}
+p{margin:0 0 14px;max-width:70ch}
+.muted{color:var(--muted);font-size:13.5px}
+.scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:4px;background:var(--surface);margin-bottom:20px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:560px}
+th,td{padding:7px 11px;text-align:left;border-bottom:1px solid var(--rule);white-space:nowrap}
+thead th{background:var(--surface-2);font-size:12px;font-weight:600;color:var(--ink-2);position:sticky;top:0}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+td.num{text-align:right;font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+.g{display:inline-block;min-width:26px;text-align:center;padding:1px 6px;border-radius:3px;
+  font-size:12px;font-weight:600;color:#fff;font-family:ui-monospace,Menlo,monospace}
+.g-AA{background:var(--g4)}.g-A{background:var(--g3)}.g-BB{background:var(--g2)}
+.g-B{background:var(--g1)}.g-C{background:var(--g0)}
+.g-na{background:transparent;color:var(--muted);border:1px solid var(--rule)}
+.pick{color:var(--accent-2);font-weight:600}
+.up{color:var(--up)}.down{color:var(--down)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:24px}
+.card{background:var(--surface);padding:16px 18px}
+.card b{display:block;font-size:25px;color:var(--accent);line-height:1.15;
+  font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+.card span{display:block;font-size:12.5px;color:var(--muted);margin-top:6px}
+footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);
+  font-size:12.5px;color:var(--muted)}
+.searchbar{margin:0 0 14px}
+.searchbar input{width:100%;max-width:340px;padding:8px 11px;border:1px solid var(--rule);
+  border-radius:4px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
+@media(max-width:640px){.wrap{padding:0 14px 60px}}
+</style>
+</head>
+<body>
+<header class="top"><div class="in">
+  <h1><a href="{{ rel }}index.html">{{ site_title }}</a></h1>
+  <nav>
+    <a href="{{ rel }}index.html"{% if page=='index' %} aria-current="page"{% endif %}>具投資價值</a>
+    <a href="{{ rel }}list.html"{% if page=='list' %} aria-current="page"{% endif %}>評等清單</a>
+    <a href="{{ rel }}stats.html"{% if page=='stats' %} aria-current="page"{% endif %}>評等統計</a>
+    <a href="{{ rel }}about.html"{% if page=='about' %} aria-current="page"{% endif %}>評分規則</a>
+  </nav>
+  <p class="stamp">資料更新：{{ generated_at }}　·　{{ stock_count }} 檔　·　最新財報季度 {{ latest_quarter }}</p>
+</div></header>
+<div class="wrap">
+{% block body %}{% endblock %}
+<footer>
+  由公開資料自動產生，僅供研究參考，不構成投資建議。<br>
+  規則來源：六大財務指標評等 v6.62 · 引擎版本 {{ engine_version }}
+</footer>
+</div>
+</body>
+</html>

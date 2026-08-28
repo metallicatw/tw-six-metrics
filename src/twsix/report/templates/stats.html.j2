@@ -1,0 +1,31 @@
+{% extends "base.html.j2" %}
+{% block title %}評等統計 — {{ site_title }}{% endblock %}
+{% block body %}
+<h2>評等統計</h2>
+<p class="muted">本期（{{ latest_quarter }}）各指標的評等分布。</p>
+<div class="scroll"><table>
+<thead><tr><th>指標</th><th class="num">AA</th><th class="num">A</th><th class="num">BB</th>
+<th class="num">B</th><th class="num">C</th><th class="num">不評分</th><th class="num">數據不足</th></tr></thead>
+<tbody>
+{% for name, counts in distribution %}
+<tr>
+  <td>{{ name }}</td>
+  {% for key in ['AA','A','BB','B','C','不評分','數據不足'] %}
+  <td class="num">{{ counts.get(key, 0) }}</td>
+  {% endfor %}
+</tr>
+{% endfor %}
+</tbody>
+</table></div>
+
+<h2>產業平均綜合評分</h2>
+<div class="scroll"><table>
+<thead><tr><th>產業</th><th class="num">家數</th><th class="num">平均綜合評分</th><th class="num">具投資價值</th></tr></thead>
+<tbody>
+{% for ind in industries %}
+<tr><td>{{ ind.name }}</td><td class="num">{{ ind.count }}</td>
+<td class="num">{{ '%.2f'|format(ind.avg) }}</td><td class="num">{{ ind.picks }}</td></tr>
+{% endfor %}
+</tbody>
+</table></div>
+{% endblock %}

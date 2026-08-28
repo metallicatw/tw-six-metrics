@@ -1,0 +1,320 @@
+"""Render the static site from stored ratings.
+
+Output is plain HTML with the CSS inlined in one template — no build step, no
+runtime dependency, and every page works from ``file://`` as well as from
+GitHub Pages.  The only third-party import is Jinja2, and even that is
+optional: without it the site simply is not built and the CLI says so.
+"""
+
+from __future__ import annotations
+
+import shutil
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Iterable
+
+from ..models import INDICATOR_LABELS, INDICATOR_ORDER
+
+ENGINE_VERSION = "0.1.0"
+TEMPLATE_DIR = Path(__file__).parent / "templates"
+
+GRADE_KEYS = ["AA", "A", "BB", "B", "C", "不評分", "數據不足"]
+
+
+@dataclass
+class SiteContext:
+    site_title: str
+    generated_at: str
+    stock_count: int
+    latest_quarter: str
+    engine_version: str = ENGINE_VERSION
+
+
+def _env():  # type: ignore[no-untyped-def]
+    try:
+        from jinja2 import Environment, FileSystemLoader, select_autoescape
+    except ImportError as exc:  # pragma: no cover - dependency guard
+        raise RuntimeError(
+            "報表產生需要 Jinja2：pip install jinja2（或 uv sync --extra report）"
+        ) from exc
+    return Environment(
+        loader=FileSystemLoader(str(TEMPLATE_DIR)),
+        autoescape=select_autoescape(["html", "xml"]),
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+
+
+def _float(text: str) -> float | None:
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
+
+
+@dataclass
+class Row:
+    """One stock's newest snapshot, flattened for the templates."""
+
+    stock_id: str
+    name: str
+    market: str
+    industry: str
+    fiscal_quarter: str
+    revenue_month: str
+    grades: dict[str, str]
+    composite: str
+    composite_delta: float | None
+    value_pick: bool
+    composite_value: float | None
+
+
+def rows_from_store(records: Iterable[dict[str, str]]) -> list[Row]:
+    """Take the stored rating table and keep each stock's newest period."""
+    newest: dict[str, dict[str, str]] = {}
+    for r in records:
+        if r.get("period_index") != "1":
+            continue
+        newest[r["stock_id"]] = r
+    out: list[Row] = []
+    for r in newest.values():
+        out.append(
+            Row(
+                stock_id=r["stock_id"],
+                name=r.get("name", ""),
+                market=r.get("market", ""),
+                industry=r.get("industry", ""),
+                fiscal_quarter=r.get("fiscal_quarter", ""),
+                revenue_month=r.get("revenue_month", ""),
+                grades={k: r.get(f"{k}_grade", "") for k in INDICATOR_ORDER},
+                composite=r.get("composite", ""),
+                composite_delta=_float(r.get("composite_delta", "")),
+                value_pick=r.get("value_pick", "") == "1",
+                composite_value=_float(r.get("composite", "")),
+            )
+        )
+    out.sort(key=lambda x: (-(x.composite_value or -1), x.stock_id))
+    return out
+
+
+def build_site(
+    records: list[dict[str, str]],
+    out_dir: Path,
+    *,
+    site_title: str = "台股六大財務指標評等",
+    rules: Any = None,
+    top_n: int = 50,
+) -> dict[str, int]:
+    env = _env()
+    rows = rows_from_store(records)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "stock").mkdir(exist_ok=True)
+
+    composites = [r.composite_value for r in rows if r.composite_value is not None]
+    ctx = SiteContext(
+        site_title=site_title,
+        generated_at=datetime.now(timezone.utc)
+        .astimezone()
+        .strftime("%Y-%m-%d %H:%M %Z"),
+        stock_count=len(rows),
+        latest_quarter=rows[0].fiscal_quarter if rows else "",
+    )
+    base = dict(
+        site_title=ctx.site_title,
+        generated_at=ctx.generated_at,
+        stock_count=ctx.stock_count,
+        latest_quarter=ctx.latest_quarter,
+        engine_version=ctx.engine_version,
+    )
+
+    picks = [r for r in rows if r.value_pick]
+    written: dict[str, int] = {}
+
+    env.get_template("index.html.j2").stream(
+        **base,
+        page="index",
+        rel="",
+        picks=picks,
+        top=rows[:top_n],
+        avg_composite=sum(composites) / len(composites) if composites else 0.0,
+        grade_counts={4: sum(1 for c in composites if c >= 3.5)},
+    ).dump(str(out_dir / "index.html"))
+    written["index.html"] = 1
+
+    env.get_template("list.html.j2").stream(
+        **base, page="list", rel="", rows=rows
+    ).dump(str(out_dir / "list.html"))
+    written["list.html"] = 1
+
+    # -- statistics -------------------------------------------------------
+    distribution: list[tuple[str, dict[str, int]]] = []
+    for key in INDICATOR_ORDER:
+        counter: Counter[str] = Counter()
+        for r in rows:
+            counter[r.grades.get(key) or "數據不足"] += 1
+        distribution.append(
+            (INDICATOR_LABELS[key], {k: counter.get(k, 0) for k in GRADE_KEYS})
+        )
+
+    by_industry: dict[str, list[Row]] = defaultdict(list)
+    for r in rows:
+        by_industry[r.industry or "未分類"].append(r)
+    industries = []
+    for name, group in by_industry.items():
+        vals = [g.composite_value for g in group if g.composite_value is not None]
+        industries.append(
+            {
+                "name": name,
+                "count": len(group),
+                "avg": sum(vals) / len(vals) if vals else 0.0,
+                "picks": sum(1 for g in group if g.value_pick),
+            }
+        )
+    industries.sort(key=lambda x: -x["avg"])  # type: ignore[index,arg-type]
+
+    env.get_template("stats.html.j2").stream(
+        **base, page="stats", rel="", distribution=distribution, industries=industries
+    ).dump(str(out_dir / "stats.html"))
+    written["stats.html"] = 1
+
+    env.get_template("about.html.j2").stream(
+        **base, page="about", rel="", rules=RULE_TEXT, thresholds=_thresholds(rules)
+    ).dump(str(out_dir / "about.html"))
+    written["about.html"] = 1
+
+    # -- per-stock pages --------------------------------------------------
+    grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for r in records:
+        grouped[r["stock_id"]].append(r)
+
+    count = 0
+    template = env.get_template("stock.html.j2")
+    for stock_id, group in grouped.items():
+        group.sort(key=lambda x: int(x.get("period_index") or 0))
+        head = group[0]
+        snapshots = [
+            {
+                "fiscal_quarter": g.get("fiscal_quarter", ""),
+                "revenue_month": g.get("revenue_month", ""),
+                "grades": {k: g.get(f"{k}_grade", "") for k in INDICATOR_ORDER},
+                "composite": g.get("composite", ""),
+                "value_pick": g.get("value_pick", "") == "1",
+            }
+            for g in group
+        ]
+        detail = [
+            {
+                "label": INDICATOR_LABELS[k],
+                "letter": head.get(f"{k}_grade", ""),
+                "reason": head.get(f"{k}_reason", ""),
+                "values": head.get(f"{k}_values", ""),
+            }
+            for k in INDICATOR_ORDER
+        ]
+        template.stream(
+            **base,
+            page="stock",
+            rel="../",
+            stock={
+                "stock_id": stock_id,
+                "name": head.get("name", ""),
+                "market": head.get("market", ""),
+                "industry": head.get("industry", ""),
+            },
+            snapshots=snapshots,
+            detail=detail,
+            indicator_order=list(INDICATOR_ORDER),
+        ).dump(str(out_dir / "stock" / f"{stock_id}.html"))
+        count += 1
+    written["stock/*.html"] = count
+
+    (out_dir / ".nojekyll").write_text("", encoding="utf-8")
+    return written
+
+
+def _thresholds(rules: Any) -> list[tuple[str, Any]]:
+    if rules is None:
+        return []
+    return [
+        (name, getattr(rules, name))
+        for name in sorted(rules.__dataclass_fields__)  # type: ignore[attr-defined]
+    ]
+
+
+#: The rubric, kept as data so the site documents exactly what it applied.
+RULE_TEXT = [
+    {
+        "title": "營收年增率（近六個月）",
+        "rows": [
+            {"grade": "AA", "text": "過去六個月皆為正，平均超過 25%，且最近一個月的年增率較上個月增加或持平"},
+            {"grade": "A", "text": "六個月皆為正、平均 10~25% 且未下滑；或平均超過 25% 但最近一個月小幅衰退（跌幅在 50% 以內）"},
+            {"grade": "BB", "text": "六個月內曾出現單月負成長；或無法列入其他評等者"},
+            {"grade": "B", "text": "平均為正，但最近三個月出現遞減（不論幅度）"},
+            {"grade": "C", "text": "平均為負；或最近一個月為負"},
+        ],
+        "note": "資料以每月營收年增率為準，1 至 2 月合併為單一觀測值以排除農曆年因素。",
+    },
+    {
+        "title": "營業利益率（近四季）",
+        "rows": [
+            {"grade": "AA", "text": "四季穩定沒有下降且平均在 15% 以上；或平均 10~15% 且最近一季呈現上升"},
+            {"grade": "A", "text": "四季穩定沒有下降且平均在 10~15%；或平均 5~10% 但最近一季呈現上升"},
+            {"grade": "BB", "text": "四季曾出現季與季之間下跌 20% 以上但不含最近一季；或無法列入其他評等者"},
+            {"grade": "B", "text": "最近一季比上一季下跌 20% 以上；或四季平均營益率在 5% 以下"},
+            {"grade": "C", "text": "四季平均為負；或最近一季為負"},
+        ],
+        "note": "「穩定沒有下降」指季與季之間的跌幅在 20% 以內。",
+    },
+    {
+        "title": "稅後淨利年增率（近四季）",
+        "rows": [
+            {"grade": "AA", "text": "近三季皆為正且最近一季呈現成長；或近三季皆在 50% 以上"},
+            {"grade": "A", "text": "近兩季皆為正且沒有出現大幅衰退"},
+            {"grade": "BB", "text": "近兩季皆為正但最近一季衰退 50% 以上；或最近一季由負轉正"},
+            {"grade": "B", "text": "最近一季為負；或過去四季出現兩季負數；或近三季遞減且最近一季低於 50%"},
+            {"grade": "C", "text": "最近兩季皆為負"},
+        ],
+        "note": "以歸屬母公司稅後淨利計算。「沒有大幅衰退」指本季與上季之間沒有出現 50% 以上的下跌。",
+    },
+    {
+        "title": "每股盈餘 EPS（近四季累計）",
+        "rows": [
+            {"grade": "AA", "text": "最近四季累積超過 5 元"},
+            {"grade": "A", "text": "最近四季累積 3~5 元"},
+            {"grade": "BB", "text": "最近四季累積 1~3 元"},
+            {"grade": "B", "text": "最近四季累積超過 0 元；或不論累積數，最近一季出現虧損"},
+            {"grade": "C", "text": "最近四季累積虧損"},
+        ],
+        "note": "",
+    },
+    {
+        "title": "存貨周轉率（近四季）",
+        "rows": [
+            {"grade": "AA", "text": "最近四季穩定不下跌，且平均在 1.5 次以上"},
+            {"grade": "A", "text": "最近四季穩定不下跌，且平均在 1.5 次以下"},
+            {"grade": "BB", "text": "最近四季出現連續兩季下跌，累積跌幅在 20% 以上"},
+            {"grade": "B", "text": "最近四季曾出現單季 20% 以上的跌幅"},
+            {"grade": "C", "text": "最近一季出現 20% 以上的跌幅"},
+            {"grade": "不評分", "text": "產業屬性為無庫存或低庫存者"},
+        ],
+        "note": "存貨周轉率由營業成本除以平均存貨計算，不採用券商公布值。",
+    },
+    {
+        "title": "自由現金流量（近六季）",
+        "rows": [
+            {"grade": "AA", "text": "連續六季出現正數"},
+            {"grade": "A", "text": "最近六季累積為正且最近四季累積為正"},
+            {"grade": "BB", "text": "最近六季累積為負但最近四季累積為正"},
+            {"grade": "B", "text": "最近六季累積為正但最近四季累積為負"},
+            {"grade": "C", "text": "最近六季累積為負且最近四季累積為負"},
+        ],
+        "note": "自由現金流量定義為營業活動現金流量加投資活動現金流量，沿用原始活頁簿口徑。",
+    },
+]
+
+
+def copy_static(src: Path, dest: Path) -> None:
+    if src.exists():
+        shutil.copytree(src, dest, dirs_exist_ok=True)

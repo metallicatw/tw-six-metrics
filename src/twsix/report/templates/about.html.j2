@@ -1,0 +1,26 @@
+{% extends "base.html.j2" %}
+{% block title %}評分規則 — {{ site_title }}{% endblock %}
+{% block body %}
+<h2>評分規則</h2>
+<p>
+  每項指標由五個互斥條件判定，命中者給分：AA=4、A=3、BB=2、B=1、C=0。
+  綜合評分是六項的平均；「不評分」的指標（無庫存產業）不計入分母，
+  「數據不足」則使整體綜合評分無法計算。
+</p>
+{% for group in rules %}
+<h3>{{ loop.index }}. {{ group.title }}</h3>
+<div class="scroll"><table>
+<thead><tr><th>等第</th><th>條件</th></tr></thead>
+<tbody>
+{% for r in group.rows %}<tr><td>{{ r.grade }}</td><td style="white-space:normal">{{ r.text }}</td></tr>{% endfor %}
+</tbody>
+</table></div>
+{% if group.note %}<p class="muted">{{ group.note }}</p>{% endif %}
+{% endfor %}
+
+<h2>目前生效的門檻值</h2>
+<div class="scroll"><table>
+<thead><tr><th>參數</th><th class="num">值</th></tr></thead>
+<tbody>{% for k, v in thresholds %}<tr><td>{{ k }}</td><td class="num">{{ v }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

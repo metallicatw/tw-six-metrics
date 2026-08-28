@@ -1,0 +1,22 @@
+{
+  "source_file": "source_workbook.xlsm",
+  "sheet_count": 44,
+  "rating_rows": 15669,
+  "stock_count": 1741,
+  "detail_stock": "5439",
+  "detail_sheets": {
+    "六大財務指標評等": 1485,
+    "評價簡表": 233,
+    "FRQ": 812,
+    "ISQ": 979,
+    "BSQ": 884,
+    "CFQ": 880,
+    "EPQ": 901,
+    "OPQ": 175,
+    "BASIC": 260,
+    "BASIC2": 131,
+    "營收": 711,
+    "股利": 283,
+    "年度交易資訊(上市櫃合併)": 110
+  }
+}

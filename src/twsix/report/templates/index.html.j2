@@ -1,0 +1,31 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import row, table_head %}
+{% block title %}具投資價值 — {{ site_title }}{% endblock %}
+{% block body %}
+<div class="cards">
+  <div class="card"><b>{{ picks|length }}</b><span>本期具投資價值</span></div>
+  <div class="card"><b>{{ stock_count }}</b><span>已評等個股</span></div>
+  <div class="card"><b>{{ '%.2f'|format(avg_composite) }}</b><span>全市場平均綜合評分</span></div>
+  <div class="card"><b>{{ grade_counts.get(4, 0) }}</b><span>綜合評分 ≥ 3.5 家數</span></div>
+</div>
+
+<h2>本期具投資價值清單</h2>
+<p class="muted">
+  六項皆無 0 分與 1 分、綜合評分 ≥ 3、且較上一期未下滑超過 0.3。
+  依綜合評分排序。
+</p>
+{% if picks %}
+<div class="scroll"><table>
+{{ table_head() }}
+<tbody>{% for r in picks %}{{ row(r, rel) }}{% endfor %}</tbody>
+</table></div>
+{% else %}
+<p>本期沒有個股同時符合四項條件。</p>
+{% endif %}
+
+<h2>綜合評分前 {{ top|length }} 名</h2>
+<div class="scroll"><table>
+{{ table_head() }}
+<tbody>{% for r in top %}{{ row(r, rel) }}{% endfor %}</tbody>
+</table></div>
+{% endblock %}

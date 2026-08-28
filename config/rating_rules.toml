@@ -1,0 +1,58 @@
+# 六大財務指標評等 — every threshold the workbook hard-coded.
+#
+# Values here are v6.62's, except where CHANGELOG.md records a deliberate
+# decision.  Changing anything in this file changes historical grades, so
+# treat an edit as a schema change: bump the version, re-run the golden
+# reconciliation, and note the effect in CHANGELOG.md.
+
+version = "6.62-py1"
+
+# --- 1. 營收年增率 (近六個月) ------------------------------------------------
+[revenue]
+revenue_months        = 6
+revenue_aa_avg        = 25.0     # AA: 六個月平均年增率門檻 (%)
+revenue_a_avg_low     = 10.0     # A:  平均 10~25%
+revenue_a_decline_floor = 0.50   # A.2: 最近一月跌幅在 50% 以內
+# v6.62 tests ">=0" in the newest block and ">0" in older blocks.
+# CHANGELOG decision #1 unifies on ">0".  Set to ">=0" to reproduce block 1.
+revenue_aa_positive   = ">0"
+
+# --- 2. 營業利益率 (近四季) --------------------------------------------------
+[operating_margin]
+margin_quarters       = 4
+margin_stable_ratio   = 0.80     # 「穩定」= 季對季跌幅在 20% 以內
+margin_aa_avg         = 15.0
+margin_a_avg          = 10.0
+margin_b_avg          = 5.0
+
+# --- 3. 稅後淨利年增率 (近四季) ----------------------------------------------
+[net_income]
+income_quarters       = 4
+income_aa_all_above   = 50.0     # AA.2: 近三季皆 >= 50%
+income_a_decline_floor = 0.50    # 「沒有大幅衰退」= 跌幅 < 50%
+income_b_growth_ceiling = 50.0
+# 〔六大財務指標評等〕$L$3「正淨利率判斷」.  Off in v6.62's saved state.
+income_positive_margin_gate = false
+income_margin_quarters = 3
+
+# --- 4. 每股盈餘 EPS (近四季累計) --------------------------------------------
+[eps]
+eps_quarters          = 4
+eps_aa                = 5.0      # 元
+eps_a                 = 3.0
+eps_bb                = 1.0
+
+# --- 5. 存貨周轉率 (近四季) --------------------------------------------------
+[inventory]
+inventory_quarters    = 4
+inventory_stable_ratio = 0.80
+inventory_aa_avg      = 1.5      # 次
+inventory_bb_cum_drop = 0.20
+# 無庫存/低庫存產業不評分 (BSQ!K7, BSQ!L7)
+inventory_skip_quarterly_ratio = 0.04
+inventory_skip_annual_ratio    = 0.01
+
+# --- 6. 自由現金流量 (近六季) ------------------------------------------------
+[free_cash_flow]
+fcf_long_quarters     = 6
+fcf_short_quarters    = 4

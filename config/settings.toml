@@ -1,0 +1,47 @@
+# Runtime settings.  Everything the workbook exposed as a yellow cell.
+
+data_dir = "data"
+periods  = 9          # 〔六大財務指標評等〕's nine snapshot blocks
+
+[forecast]
+# 〔EPS預估與估價〕D2 — how next year's revenue is projected
+#   "1&6"  MIN(本月年增率, 近六月平均)      the workbook's default
+#   "3&6"  MIN(近三月平均, 近六月平均)
+#   "12m"  近十二月累計營收年增率
+revenue_growth_method = "1&6"
+
+# F16 — which net margin drives the EPS forecast
+#   "4q_avg" | "4q_min" | "current"
+margin_method = "4q_avg"
+
+# K2 — which historical P/E band to value against
+#   "current_year" | "avg_3y" | "avg_5y" | "min_current_5y"
+pe_basis = "avg_5y"
+
+# L2 — where the P/E history comes from
+#   "computed" (from yearly trading data + yearly EPS)  | "public"
+pe_source = "computed"
+
+# 〔殖利率估價〕 payout basis: "avg_5y" | "last_1y" | "lower_of_both"
+payout_basis = "avg_5y"
+
+# 河流圖 percentile bounds
+river_low_percentile  = 0.10
+river_high_percentile = 0.90
+
+[ingest]
+cache_dir            = ".cache/http"
+cache_ttl_hours      = 6.0
+min_interval_seconds = 1.2
+retries              = 4
+# Leave false.  The MoneyDJ mirrors block data-centre IPs and their terms do
+# not contemplate scheduled scraping.  Run locally if you need it.
+enable_moneydj_fallback = false
+moneydj_host            = "https://moneydj.emega.com.tw"
+
+[report]
+site_dir = "site"
+title    = "台股六大財務指標評等"
+subtitle = "由公開資料自動產生"
+max_list_rows = 2000
+show_value_picks_first = true

@@ -1,0 +1,18 @@
+# Which stocks to rate, and the saved screens that replace
+# 〔股票篩選清單〕's ten hand-typed columns.
+
+[universe]
+include_listed = true       # 上市
+include_otc    = true       # 上櫃
+
+# 〔六大財務指標評等〕 does not apply to banks and insurers: they have no
+# 營業利益 line, so the operating-margin indicator is undefined.
+exclude_industries = ["金融保險業", "金融保險"]
+
+# Stocks always rendered on the site regardless of screen results.
+watchlist = ["5439", "2330", "2454"]
+
+[universe.screens]
+# name = [stock ids]
+"電動車電池" = ["4721", "4739", "5227", "1723", "6509", "8215"]
+"MOSFET"     = ["8261", "6435", "5299", "3317", "6525"]

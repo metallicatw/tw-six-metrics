@@ -1,0 +1,111 @@
+name: quarterly-rating
+
+# 台股財報申報期限：Q1 5/15、Q2 8/14、Q3 11/14、年報 3/31。
+# 各抓一個數日的窗口，讓延遲申報的個股也能補進來。
+on:
+  schedule:
+    - cron: "0 5 29-31 3 *"        # 年報
+    - cron: "0 5 15-20 5 *"        # Q1
+    - cron: "0 5 14-19 8 *"        # Q2
+    - cron: "0 5 14-19 11 *"       # Q3
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[all]"
+
+      - name: 快取抓取結果
+        uses: actions/cache@v4
+        with:
+          path: .cache/http
+          key: http-${{ github.run_id }}
+          restore-keys: http-
+
+      - name: 抓三大報表
+        run: twsix fetch --all
+
+      - name: 全市場重評
+        run: twsix rate --out data || true
+
+      - name: 對帳（守門）
+        run: twsix verify
+
+      - name: 時序回歸檢查
+        run: |
+          # 單次排程若改動超過 5% 個股的評等，多半是資料源默默改版，
+          # 不是市場真的動了。開 issue 而不是安靜地發布。
+          python - <<'PY'
+          import csv, os, subprocess, sys
+          old = subprocess.run(
+              ["git", "show", "HEAD:data/ratings.csv"],
+              capture_output=True, text=True,
+          )
+          if old.returncode != 0:
+              print("首次執行，略過"); sys.exit(0)
+          def load(text):
+              return {
+                  (r["stock_id"], r["period_index"]): r["composite"]
+                  for r in csv.DictReader(text.splitlines())
+              }
+          before = load(old.stdout)
+          with open("data/ratings.csv", encoding="utf-8") as fh:
+              after = load(fh.read())
+          shared = set(before) & set(after)
+          if not shared:
+              sys.exit(0)
+          changed = sum(1 for k in shared if before[k] != after[k])
+          pct = changed / len(shared) * 100
+          print(f"{changed}/{len(shared)} 筆評等變動（{pct:.1f}%）")
+          with open(os.environ["GITHUB_ENV"], "a") as fh:
+              fh.write(f"RATING_DRIFT={pct:.1f}\n")
+          PY
+
+      - name: 建立網站
+        run: twsix build
+
+      - name: 提交資料快照
+        run: |
+          git config user.name  "twsix-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --cached --quiet && echo "資料無異動" && exit 0
+          git commit -m "data: $(date -u +%Y-%m-%d) 季報全市場重評"
+          git push
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
+
+      - name: 異常時開 issue
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `季報排程失敗 ${new Date().toISOString().slice(0,10)}`,
+              body: `執行紀錄：${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\n最可能的原因是官方端點改版；請檢查 ingest 模組的 contract test。`,
+              labels: ["pipeline", "automated"],
+            })

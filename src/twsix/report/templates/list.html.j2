@@ -1,0 +1,26 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import row, table_head %}
+{% block title %}評等清單 — {{ site_title }}{% endblock %}
+{% block body %}
+<h2>評等清單</h2>
+<p class="muted">本期（{{ latest_quarter }}）全市場評等，共 {{ rows|length }} 檔。輸入代號、名稱或產業即時篩選。</p>
+<div class="searchbar">
+  <input id="q" type="search" placeholder="篩選：代號 / 名稱 / 產業" aria-label="篩選">
+</div>
+<div class="scroll"><table id="t">
+{{ table_head() }}
+<tbody>{% for r in rows %}{{ row(r, rel) }}{% endfor %}</tbody>
+</table></div>
+<script>
+(function(){
+  var q=document.getElementById('q'), rows=document.querySelectorAll('#t tbody tr');
+  function apply(){
+    var v=q.value.trim().toLowerCase();
+    rows.forEach(function(tr){
+      tr.style.display = !v || tr.textContent.toLowerCase().indexOf(v)>-1 ? '' : 'none';
+    });
+  }
+  q.addEventListener('input', apply);
+})();
+</script>
+{% endblock %}

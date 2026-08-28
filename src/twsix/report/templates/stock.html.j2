@@ -1,0 +1,42 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import grade %}
+{% block title %}{{ stock.stock_id }} {{ stock.name }} — {{ site_title }}{% endblock %}
+{% block body %}
+<h2>{{ stock.stock_id }}　{{ stock.name }}</h2>
+<p class="muted">{{ stock.market }}　{{ stock.industry }}</p>
+
+<h3>六大財務指標評等（近九期）</h3>
+<div class="scroll"><table>
+<thead><tr>
+  <th>財報季度</th><th>營收月份</th>
+  <th>營收年增率</th><th>營業利益率</th><th>稅後淨利年增率</th>
+  <th>EPS</th><th>存貨周轉率</th><th>自由現金流量</th>
+  <th class="num">綜合評分</th><th></th>
+</tr></thead>
+<tbody>
+{% for s in snapshots %}
+<tr>
+  <td>{{ s.fiscal_quarter }}</td><td>{{ s.revenue_month }}</td>
+  {% for k in indicator_order %}<td>{{ grade(s.grades[k]) }}</td>{% endfor %}
+  <td class="num">{{ s.composite }}</td>
+  <td>{% if s.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table></div>
+
+<h3>本期指標明細</h3>
+<div class="scroll"><table>
+<thead><tr><th>指標</th><th>等第</th><th>命中規則</th><th>近六期數值（新到舊）</th></tr></thead>
+<tbody>
+{% for d in detail %}
+<tr>
+  <td>{{ d.label }}</td>
+  <td>{{ grade(d.letter) }}</td>
+  <td class="muted">{{ d.reason }}</td>
+  <td class="num">{{ d.values }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table></div>
+{% endblock %}

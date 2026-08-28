@@ -1,0 +1,40 @@
+{% macro grade(letter) -%}
+{%- if letter in ('AA','A','BB','B','C') -%}
+<span class="g g-{{ letter }}">{{ letter }}</span>
+{%- else -%}
+<span class="g g-na">{{ letter or '—' }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro delta(v) -%}
+{%- if v is none or v == '' -%}<span class="muted">—</span>
+{%- elif v > 0 -%}<span class="up">+{{ '%.2f'|format(v) }}</span>
+{%- elif v < 0 -%}<span class="down">{{ '%.2f'|format(v) }}</span>
+{%- else -%}0.00{%- endif -%}
+{%- endmacro %}
+
+{% macro row(r, rel) -%}
+<tr>
+  <td><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a></td>
+  <td>{{ r.name }}</td>
+  <td class="muted">{{ r.industry }}</td>
+  <td>{{ grade(r.grades.revenue_yoy) }}</td>
+  <td>{{ grade(r.grades.operating_margin) }}</td>
+  <td>{{ grade(r.grades.net_income_yoy) }}</td>
+  <td>{{ grade(r.grades.eps) }}</td>
+  <td>{{ grade(r.grades.inventory_turnover) }}</td>
+  <td>{{ grade(r.grades.free_cash_flow) }}</td>
+  <td class="num">{{ r.composite }}</td>
+  <td class="num">{{ delta(r.composite_delta) }}</td>
+  <td>{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
+</tr>
+{%- endmacro %}
+
+{% macro table_head() -%}
+<thead><tr>
+  <th>代號</th><th>名稱</th><th>產業</th>
+  <th>營收<br>年增率</th><th>營業<br>利益率</th><th>稅後淨利<br>年增率</th>
+  <th>EPS</th><th>存貨<br>周轉率</th><th>自由<br>現金流</th>
+  <th>綜合<br>評分</th><th>評分<br>變化</th><th></th>
+</tr></thead>
+{%- endmacro %}
