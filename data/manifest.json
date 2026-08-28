@@ -4,7 +4,7 @@
     "tpex_companies": 890,
     "twse_companies": 1095
   },
-  "generated_at": "2026-08-28T08:13:20+00:00",
+  "generated_at": "2026-08-28T08:17:21+00:00",
   "notes": [
     "baseline imported from 評等清單 v6.62 (published snapshot)"
   ],
@@ -17,6 +17,16 @@
     },
     {
       "fetched_at": "2026-08-28T08:12:37+00:00",
+      "name": "tpex_companies",
+      "rows": 890
+    },
+    {
+      "fetched_at": "2026-08-28T08:16:12+00:00",
+      "name": "twse_companies",
+      "rows": 1095
+    },
+    {
+      "fetched_at": "2026-08-28T08:16:12+00:00",
       "name": "tpex_companies",
       "rows": 890
     }
