@@ -79,6 +79,12 @@ jobs:
               fh.write(f"RATING_DRIFT={pct:.1f}\n")
           PY
 
+      # Valuation needs 股價 / 歷年本益比 / 股利, which the official feeds do
+      # not yet supply.  Until `twsix fetch` covers them, only the frozen
+      # samples can be valued — the site says so on any stock without one.
+      - name: 估值（目前僅樣本股）
+        run: twsix value --golden 5439 --out data || true
+
       - name: 建立網站
         run: twsix build
 

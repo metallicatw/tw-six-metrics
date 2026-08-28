@@ -190,6 +190,20 @@ def value_with_growth(
     growth = (forecast_eps - trailing_eps) / abs(trailing_eps)
     peg = forward_pe / growth / 100 if growth > 0 else None
     total = (growth + dividend_yield) / forward_pe * 100 if growth > 0 else None
+    # A shrinking forecast has no PEG target: multiplying a negative growth
+    # rate by EPS yields a negative "price", which is not a cheap stock — it
+    # is a model outside its domain.  Report no prices rather than nonsense.
+    if growth <= 0:
+        peg_prices: dict[int, float] = {}
+        tr_prices: dict[int, float] = {}
+        return GrowthView(
+            forward_pe=forward_pe,
+            eps_growth=growth,
+            peg=peg,
+            total_return=total,
+            peg_prices=peg_prices,
+            total_return_prices=tr_prices,
+        )
     peg_prices = {lvl: lvl * growth * forecast_eps for lvl in PEG_LEVELS}
     tr_prices = {
         lvl: (growth + dividend_yield) * forecast_eps * lvl for lvl in PEG_LEVELS

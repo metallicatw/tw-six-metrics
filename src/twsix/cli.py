@@ -179,9 +179,16 @@ def cmd_build(args: argparse.Namespace) -> int:
         return EXIT_FAIL
 
     out = Path(args.out or settings.report.site_dir)
+    valuations = store.read("valuations")
     written = build_site(
-        records, out, site_title=settings.report.title, rules=settings.rules
+        records,
+        out,
+        site_title=settings.report.title,
+        rules=settings.rules,
+        valuations=valuations,
     )
+    if not valuations:
+        print("  （尚無 data/valuations.csv，個股頁不會顯示估值；見 twsix value）")
     for name, n in written.items():
         print(f"  {name:<16} {n}")
     print(f"網站輸出至 {out}")
@@ -307,6 +314,116 @@ def cmd_import_list(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_value(args: argparse.Namespace) -> int:
+    """估值：EPS 預估、本益比估價、PEG／總報酬、殖利率估價.
+
+    Reads the same sheets the rating engine does, through the same reader the
+    tests exercise, and writes ``data/valuations.csv`` for the site to pick up.
+    """
+    settings = Settings.load(args.config)
+    from .ingest.valuation_source import WorkbookReader, read_valuation_input
+    from .store.snapshots import VALUATION_COLUMNS, valuation_row
+    from .valuation import ValuationOptions, evaluate
+    from .xlsx.extract import Workbook
+
+    if not args.workbook and not args.golden:
+        print(
+            "估值目前只實作了從活頁簿讀取（--workbook），或從已凍結的樣本讀取\n"
+            "（--golden，可用股票見 tests/golden/）。官方來源尚未涵蓋股價、歷年\n"
+            "本益比與股利，`twsix fetch` 完成後此指令會改讀 data/。",
+            file=sys.stderr,
+        )
+        return EXIT_FAIL
+
+    opts = ValuationOptions(
+        growth_method=settings.forecast.revenue_growth_method,
+        margin_method=settings.forecast.margin_method,
+        pe_basis=settings.forecast.pe_basis,
+        payout_basis=settings.forecast.payout_basis,
+    )
+
+    if args.golden:
+        import json
+
+        from .ingest.valuation_source import GridReader
+
+        base = REPO_ROOT / "tests" / "golden" / args.golden
+        if not base.is_dir():
+            print(f"找不到樣本 {base}", file=sys.stderr)
+            return EXIT_FAIL
+        reader = GridReader(
+            {
+                p.stem: json.loads(p.read_text(encoding="utf-8"))
+                for p in sorted(base.glob("*.json"))
+            }
+        )
+        inp = read_valuation_input(
+            reader, stock_id=args.stock or args.golden, as_of=args.as_of or ""
+        )
+    else:
+        with Workbook(Path(args.workbook)) as wb:
+            inp = read_valuation_input(
+                WorkbookReader(wb),
+                stock_id=args.stock or "",
+                as_of=args.as_of or "",
+            )
+    result = evaluate(inp, opts)
+
+    if args.json:
+        import json
+
+        print(
+            json.dumps(valuation_row(result), ensure_ascii=False, indent=2, default=str)
+        )
+        return EXIT_OK
+
+    print(f"{result.stock_id} {result.name}　股價 {_g(result.market_price)}")
+    if result.gaps:
+        for key, why in sorted(result.gaps.items()):
+            print(f"  ! {key:<9} {why}")
+    f, p, g, y = result.forecast, result.pe_view, result.growth_view, result.yield_view
+    if f:
+        print(
+            f"  預估      成長率 {f.growth_rate:.2%}　淨利率 {f.net_margin:.2%}"
+            f"　預估EPS {f.eps:.2f}　近四季EPS {_g(result.trailing_eps)}"
+        )
+    if p:
+        risk = "無風險" if p.risk_free else f"{p.expected_risk:.1%}"
+        rr = "—" if p.reward_risk is None else f"{p.reward_risk:.2f}"
+        print(
+            f"  本益比    帶 {result.band.low:.2f}–{result.band.high:.2f}"
+            f"　目標價 {p.target_price:.1f}　下檔 {p.downside_price:.1f}"
+            f"　報酬 {p.expected_return:.1%}　風險 {risk}　報酬風險比 {rr}"
+        )
+    if g:
+        peg = "—" if g.peg is None else f"{g.peg:.2f}"
+        print(
+            f"  成長      預估本益比 {g.forward_pe:.2f}"
+            f"　EPS成長 {g.eps_growth:.1%}　PEG {peg}"
+        )
+    if y:
+        print(
+            f"  殖利率    預估股利 {y.dividend:.2f}　配發率 {y.payout_ratio:.1%}"
+            f"　便宜 {y.cheap:.1f}　合理 {y.fair:.1f}　昂貴 {y.expensive:.1f}"
+            f"　判斷 {result.verdict}"
+        )
+
+    if args.out:
+        store = Store(args.out)
+        existing = {r["stock_id"]: r for r in store.read("valuations")}
+        existing[result.stock_id] = valuation_row(result)  # type: ignore[assignment]
+        n = store.write(
+            "valuations", list(existing.values()), VALUATION_COLUMNS,
+            sort_by=("stock_id",),
+        )
+        print(f"\n寫入 {store.path('valuations')}（{n} 列）")
+    return EXIT_OK
+
+
+def _g(value: object) -> str:
+    return "—" if value is None else f"{float(value):g}"  # type: ignore[arg-type]
+
+
 def cmd_extract_golden(args: argparse.Namespace) -> int:
     import subprocess
 
@@ -357,6 +474,15 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("workbook")
     i.add_argument("--out", help="資料目錄")
     i.set_defaults(func=cmd_import_list)
+
+    val = sub.add_parser("value", help="估值：EPS預估／本益比／PEG／殖利率")
+    val.add_argument("stock", nargs="?", help="股票代號")
+    val.add_argument("--workbook", help="從 .xlsm 讀取資料（離線可用）")
+    val.add_argument("--golden", help="從已凍結的樣本讀取，如 5439")
+    val.add_argument("--as-of", dest="as_of", help="評估日，民國格式如 115/08/27")
+    val.add_argument("--out", help="把結果寫入資料目錄")
+    val.add_argument("--json", action="store_true", help="輸出 JSON")
+    val.set_defaults(func=cmd_value)
 
     g = sub.add_parser("extract-golden", help="把活頁簿凍結成測試樣本")
     g.add_argument("workbook")

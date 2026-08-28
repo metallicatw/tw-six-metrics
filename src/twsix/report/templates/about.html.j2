@@ -18,6 +18,37 @@
 {% if group.note %}<p class="muted">{{ group.note }}</p>{% endif %}
 {% endfor %}
 
+<h2>估值方法與驗證強度</h2>
+<p>
+  個股頁的估值有四個模型，全部是機械式套用活頁簿的公式，不含任何預測或判斷：
+</p>
+<div class="scroll"><table>
+<thead><tr><th>模型</th><th>作法</th></tr></thead>
+<tbody>
+<tr><td>EPS 預估</td><td style="white-space:normal">
+  去年全年營收 × 預估營收成長率 × 稅後淨利率 ÷ 加權平均股數。
+  成長率預設取「最近一個月年增率」與「近六月平均年增率」孰低，淨利率預設取近四季平均。</td></tr>
+<tr><td>本益比估價</td><td style="white-space:normal">
+  預估 EPS × 近五年最高／最低本益比平均 = 目標價／下檔價。
+  預期報酬與預期風險相對現價計算；現價已低於下檔價時記為「無風險」。</td></tr>
+<tr><td>成長估價</td><td style="white-space:normal">
+  PEG 與總報酬。預估 EPS 低於近四季 EPS 時成長率為負，此時不給 PEG 也不給目標價
+  ——負成長乘以 EPS 得到的負數不是便宜，是模型超出適用範圍。</td></tr>
+<tr><td>殖利率估價</td><td style="white-space:normal">
+  預估 EPS × 近五年平均配發率 = 預估股利，再除以近五年最高／平均／最低殖利率，
+  得到便宜價／合理價／昂貴價。股利所屬年度 X 的配息在 X+1 年發放，殖利率按此對齊。</td></tr>
+</tbody>
+</table></div>
+<p class="muted">
+  <strong>驗證強度不一樣，這點值得講清楚。</strong>
+  六大指標是逐格對帳的——活頁簿的〔六大財務指標評等〕分頁已凍結成迴歸樣本，
+  引擎重算後與 Excel 的答案完全相符。估值則不然：〔EPS預估與估價〕與〔殖利率估價〕
+  兩張分頁沒有被納入樣本，因此沒有 Excel 的答案可以對。目前只能用〔BASIC〕本身算出來的
+  本益比、殖利率、股價淨值比當錨點，反推近四季 EPS、股利與每股淨值是否一致（三項皆相符），
+  以及〔營收〕分頁的三個預估營收成長率儲存格（三種方法皆逐格相符）。
+  換句話說：<em>估值的輸入已驗證，輸出尚未對帳。</em>
+</p>
+
 <h2>目前生效的門檻值</h2>
 <div class="scroll"><table>
 <thead><tr><th>參數</th><th class="num">值</th></tr></thead>

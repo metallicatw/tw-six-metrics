@@ -64,6 +64,27 @@ footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);
 .searchbar{margin:0 0 14px}
 .searchbar input{width:100%;max-width:340px;padding:8px 11px;border:1px solid var(--rule);
   border-radius:4px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
+.stale{background:var(--surface);border:1px solid var(--g1);border-left:4px solid var(--g1);
+  border-radius:4px;padding:11px 14px;font-size:13.5px;color:var(--ink-2);max-width:none}
+/* -- valuation ------------------------------------------------------- */
+.val{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:18px}
+.val section{background:var(--surface);padding:15px 17px}
+.val h4{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+.val dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:13.5px}
+.val dt{color:var(--ink-2);white-space:nowrap}
+.val dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+.val dd.big{font-size:17px;color:var(--accent);font-weight:600}
+.band{margin-top:12px}
+.band .track{position:relative;height:8px;border-radius:4px;
+  background:linear-gradient(90deg,var(--g3) 0%,var(--surface-2) 50%,var(--g0) 100%)}
+.band .pin{position:absolute;top:-4px;width:2px;height:16px;background:var(--ink);border-radius:1px}
+.band .ends{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:5px;
+  font-variant-numeric:tabular-nums}
+.verdict{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;font-weight:600;color:#fff}
+.v-便宜{background:var(--g4)}.v-合理{background:var(--g1)}.v-昂貴{background:var(--g0)}
+.gap{color:var(--muted);font-size:13px;font-style:normal}
 @media(max-width:640px){.wrap{padding:0 14px 60px}}
 </style>
 </head>
@@ -76,9 +97,15 @@ footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);
     <a href="{{ rel }}stats.html"{% if page=='stats' %} aria-current="page"{% endif %}>評等統計</a>
     <a href="{{ rel }}about.html"{% if page=='about' %} aria-current="page"{% endif %}>評分規則</a>
   </nav>
-  <p class="stamp">資料更新：{{ generated_at }}　·　{{ stock_count }} 檔　·　最新財報季度 {{ latest_quarter }}</p>
+  <p class="stamp">
+    網站產生：{{ generated_at }}　·　{{ stock_count }} 檔　·
+    資料截止：財報 {{ latest_quarter or '—' }}　/　營收 {{ latest_revenue_month or '—' }}
+  </p>
 </div></header>
 <div class="wrap">
+{% if data_age_note %}
+<p class="stale" role="status">⚠　{{ data_age_note }}　頁面上的評等與估值都是依這個時點計算的。</p>
+{% endif %}
 {% block body %}{% endblock %}
 <footer>
   由公開資料自動產生，僅供研究參考，不構成投資建議。<br>

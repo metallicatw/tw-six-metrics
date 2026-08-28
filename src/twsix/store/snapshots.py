@@ -196,3 +196,75 @@ def rating_rows(rating: Any) -> list[dict[str, Any]]:
             row[f"{key}_reason"] = result.reason
         out.append(row)
     return out
+
+
+# -- the valuation table ---------------------------------------------------
+
+VALUATION_COLUMNS: tuple[str, ...] = (
+    "stock_id",
+    "name",
+    "as_of",
+    "revenue_month",
+    "market_price",
+    "growth_rate",
+    "trailing_eps",
+    "forecast_eps",
+    "forecast_margin",
+    "forecast_revenue",
+    "pe_high",
+    "pe_low",
+    "target_price",
+    "downside_price",
+    "expected_return",
+    "expected_risk",
+    "reward_risk",
+    "forward_pe",
+    "eps_growth",
+    "peg",
+    "total_return",
+    "dividend",
+    "payout_ratio",
+    "cheap_price",
+    "fair_price",
+    "expensive_price",
+    "current_yield",
+    "verdict",
+    "gaps",
+)
+
+
+def valuation_row(v: Any) -> dict[str, Any]:
+    """Flatten a :class:`~twsix.valuation.StockValuation` into one storable row."""
+    f, p, g, y = v.forecast, v.pe_view, v.growth_view, v.yield_view
+    return {
+        "stock_id": v.stock_id,
+        "name": v.name,
+        "as_of": v.as_of,
+        "revenue_month": f.revenue_month if f else "",
+        "market_price": v.market_price,
+        "growth_rate": v.growth_rate,
+        "trailing_eps": v.trailing_eps,
+        "forecast_eps": f.eps if f else None,
+        "forecast_margin": f.net_margin if f else None,
+        "forecast_revenue": f.projected_revenue if f else None,
+        "pe_high": v.band.high if v.band else None,
+        "pe_low": v.band.low if v.band else None,
+        "target_price": p.target_price if p else None,
+        "downside_price": p.downside_price if p else None,
+        "expected_return": p.expected_return if p else None,
+        "expected_risk": p.expected_risk if p else None,
+        "reward_risk": p.reward_risk if p else None,
+        "forward_pe": g.forward_pe if g else None,
+        "eps_growth": g.eps_growth if g else None,
+        "peg": g.peg if g else None,
+        "total_return": g.total_return if g else None,
+        "dividend": y.dividend if y else None,
+        "payout_ratio": y.payout_ratio if y else None,
+        "cheap_price": y.cheap if y else None,
+        "fair_price": y.fair if y else None,
+        "expensive_price": y.expensive if y else None,
+        "current_yield": y.current_yield if y else None,
+        "verdict": v.verdict,
+        # "缺股價;無預估EPS" — kept so a blank section on the page can explain itself
+        "gaps": ";".join(f"{k}={t}" for k, t in sorted((v.gaps or {}).items())),
+    }

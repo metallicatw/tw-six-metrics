@@ -66,6 +66,10 @@ class Grid:
     def nums(self, row: int, cols: list[str] | None = None) -> list[float | None]:
         return [self.num(c, row) for c in (cols or VALUE_COLS)]
 
+    def row_numbers(self) -> list[int]:
+        """Every row index present in the sheet, ascending."""
+        return sorted(int(r) for r in self._raw)
+
 
 @lru_cache(maxsize=None)
 def sheets(stock_id: str) -> dict[str, Grid]:
@@ -135,3 +139,31 @@ def inventory_ratios(stock_id: str) -> tuple[float | None, float | None]:
 
 def available_stocks() -> list[str]:
     return sorted(p.name for p in GOLDEN.iterdir() if p.is_dir())
+
+
+# =========================================================================
+# valuation fixtures
+# =========================================================================
+#
+# The reading itself lives in ``twsix.ingest.valuation_source`` so that the
+# path these tests exercise is the same code ``twsix value`` runs against a
+# real workbook.  Only the *source of cells* differs: a JSON grid here, an
+# .xlsm there.
+
+
+def _grid_reader(stock_id: str):
+    from twsix.ingest.valuation_source import GridReader
+
+    base = GOLDEN / stock_id
+    raw = {
+        path.stem: json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(base.glob("*.json"))
+    }
+    return GridReader(raw)
+
+
+def valuation_input(stock_id: str, as_of: str = "115/08/27"):
+    """Assemble a :class:`~twsix.valuation.ValuationInput` from the fixtures."""
+    from twsix.ingest.valuation_source import read_valuation_input
+
+    return read_valuation_input(_grid_reader(stock_id), stock_id=stock_id, as_of=as_of)
