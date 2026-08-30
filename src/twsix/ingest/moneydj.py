@@ -32,6 +32,7 @@ from typing import Iterable, Literal, Sequence
 from pathlib import Path
 
 from .base import FetchError, HttpClient
+from .valuation_source import cell_text
 
 Layout = Literal["statement", "ratio"]
 
@@ -403,7 +404,7 @@ class GridSource:
         if row - 1 >= len(grid):
             return ""
         line = grid[row - 1]
-        return str(line[c]) if 0 <= c < len(line) else ""
+        return cell_text(line[c]) if 0 <= c < len(line) else ""
 
     def num(self, sheet: str, col: str, row: int) -> float | None:
         return _to_number(self.text(sheet, col, row))
