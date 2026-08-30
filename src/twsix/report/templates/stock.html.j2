@@ -42,8 +42,13 @@
       <dt>預期報酬</dt><dd>{{ pct(valuation.expected_return) }}</dd>
       <dt>預期風險</dt>
       <dd>{% if valuation.expected_risk is none %}無風險{% else %}{{ pct(valuation.expected_risk) }}{% endif %}</dd>
-      <dt>報酬風險比</dt><dd>{{ n(valuation.reward_risk) }}</dd>
+      <dt>報酬風險比</dt>
+      <dd>{{ n(valuation.reward_risk) }}
+        {%- if valuation.reward_risk_label %} <span class="rr rr-{{ valuation.reward_risk_label }}">{{ valuation.reward_risk_label }}</span>{% endif %}</dd>
     </dl>
+    {% if valuation.reward_risk_rule %}
+    <p class="gap">{{ valuation.reward_risk_rule }}</p>
+    {% endif %}
     {% else %}
     <p class="gap">{{ valuation.gaps.pe or '資料不足' }}</p>
     {% endif %}
@@ -88,11 +93,27 @@
     {% endif %}
   </section>
 </div>
+<details class="rules">
+  <summary>報酬風險比判斷準則（總大EPS、PER 動態調整推估法）</summary>
+  <div class="scroll"><table>
+  <thead><tr><th>報酬風險比</th><th>準則</th></tr></thead>
+  <tbody>
+    <tr><td>&gt; 2</td><td style="white-space:normal">才有買進的意義</td></tr>
+    <tr><td>0.67 ~ 2</td><td style="white-space:normal">多空不明，靜待股價或預估股價區間之變動</td></tr>
+    <tr><td>&lt; 0.67</td><td style="white-space:normal">考慮減碼或賣出</td></tr>
+    <tr><td>&lt; 0.5（或 0.25）</td><td style="white-space:normal">考慮布局空頭部位</td></tr>
+  </tbody>
+  </table></div>
+  {% for note in valuation.reward_risk_notes %}
+  <p class="warn">※　{{ note }}</p>
+  {% endfor %}
+</details>
+
 <p class="muted">
-  估值為機械式套用活頁簿的公式，並非預測。營收成長率取「最近一月與近六月平均孰低」，
-  本益比帶取近五年高低本益比平均，殖利率估價以近五年配發率與殖利率推算。
-  六大指標已與活頁簿逐格對帳；估值的兩張來源分頁未納入樣本，僅以 BASIC 的本益比與
-  殖利率作錨點驗證，詳見<a href="{{ rel }}about.html">評分規則</a>。
+  估值為機械式套用活頁簿的公式，並非預測。營收成長率取「最近一月與近六月平均孰低」；
+  本益比帶採「自行計算」（年度最高低價 ÷ 年度EPS），先剔除五年窗格的最高與最低年，
+  再依所選基準平均；殖利率估價以近五年配發率與殖利率推算，股利按盈餘年遞延一年對齊。
+  六大指標與本益比帶均已與活頁簿逐格對帳，詳見<a href="{{ rel }}about.html">評分規則</a>。
 </p>
 {% elif valuation %}
 <h3>估值</h3>

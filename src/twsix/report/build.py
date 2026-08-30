@@ -148,6 +148,34 @@ def _parse_roc_month(label: str) -> tuple[int, int] | None:
     return int(head) + 1911, int(parts[-1])
 
 
+#: 〔EPS預估與估價〕K17:L21 — 報酬風險比判斷準則 (總大EPS、PER動態調整推估法).
+#: Ordered most-bearish first so the first match wins.
+REWARD_RISK_RULES: tuple[tuple[float, str, str], ...] = (
+    (0.5, "空方", "報酬風險 < 0.5（或 0.25），則考慮布局空頭部位"),
+    (0.67, "減碼", "報酬風險 < 0.67，則考慮減碼或賣出"),
+    (2.0, "多空不明", "報酬風險介於 0.67 ~ 2，多空不明，靜待股價或預估股價區間之變動"),
+    (float("inf"), "可買進", "報酬風險 > 2，才有買進的意義"),
+)
+
+#: The two warnings the workbook prints beside the criteria.  They travel with
+#: the number or not at all — a reward/risk ratio shown bare invites exactly
+#: the over-reading these sentences exist to prevent.
+REWARD_RISK_NOTES: tuple[str, ...] = (
+    "EPS、PER 與報酬風險比之動態方法，越接近下半年越會失去參考意義。",
+    "實務上要先檢視當年度（迄今）之股價高低點是否已出現。",
+)
+
+
+def reward_risk_verdict(ratio: float | None) -> tuple[str, str]:
+    """(label, 準則原文) for a reward/risk ratio, or ("", "") when unknown."""
+    if ratio is None:
+        return ("", "")
+    for threshold, label, text in REWARD_RISK_RULES:
+        if ratio < threshold:
+            return (label, text)
+    return ("", "")
+
+
 def _valuation_view(raw: dict[str, str]) -> dict[str, Any]:
     """One stored valuation row, typed for the template.
 
@@ -178,6 +206,10 @@ def _valuation_view(raw: dict[str, str]) -> dict[str, Any]:
         if None not in (lo, hi, price) and hi > lo
         else None
     )
+    label, rule = reward_risk_verdict(out["reward_risk"])
+    out["reward_risk_label"] = label
+    out["reward_risk_rule"] = rule
+    out["reward_risk_notes"] = list(REWARD_RISK_NOTES)
     out["has_any"] = any(
         out[k] is not None for k in ("forecast_eps", "target_price", "fair_price")
     )
