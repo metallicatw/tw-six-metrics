@@ -811,6 +811,39 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _expand(raw_paths: Sequence[str]) -> list[Path]:
+    """把使用者給的路徑展開成一串檔案。
+
+    Windows 的 cmd 不展開萬用字元——``*.html`` 原封不動傳進 argparse，而 Unix
+    shell 早就展開好了，所以這個 bug 只在 Windows 上出現。兩邊都要能用，所以
+    自己展開一次：目錄當成「裡面所有的 .html」，帶萬用字元的走 glob。
+    """
+    out: list[Path] = []
+    for raw in raw_paths:
+        path = Path(raw)
+        if path.is_dir():
+            out.extend(sorted(path.glob("*.html")))
+        elif any(ch in raw for ch in "*?["):
+            parent = path.parent if str(path.parent) != "." else Path(".")
+            out.extend(sorted(parent.glob(path.name)))
+        else:
+            out.append(path)
+    return out
+
+
+def _read_saved_page(path: Path, sources: Any) -> str:
+    """瀏覽器存下來的檔案，編碼看它自己。
+
+    Goodinfo 是 utf-8，但「另存新檔」有時會落成 cp950。先試 utf-8，讀不到任何
+    一張表的特徵字再試 cp950——用內容判斷，不是用 BOM 或猜。
+    """
+    raw = path.read_bytes()
+    text = raw.decode("utf-8", errors="replace")
+    if not any(src.anchor in text for src in sources.values()):
+        text = raw.decode("cp950", errors="replace")
+    return text
+
+
 def cmd_fetch_page(args: argparse.Namespace) -> int:
     """抓一張還沒有解析器的頁面，存成樣本.
 
@@ -821,62 +854,85 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
     """
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient
+    from .ingest.goodinfo import DIRECTORS, HOLDERS
     from .ingest.pending import SOURCES, identify, probe
 
     names = [args.source] if args.source else list(SOURCES)
 
-    # --check：判斷一個「手動存下來的」檔案能不能用。
+    # --check / --import：處理「手動存下來的」檔案。
     #
     # Goodinfo 擋得住腳本，擋不住你自己的瀏覽器——你本來就看得到那一頁。所以最
-    # 短的路是：在 Chrome 開網址，另存新檔（網頁，僅 HTML），再用這個指令問一句
-    # 「這份存到的是資料還是拒絕頁」。判斷用的是同一個 probe()，跟線上抓一模一樣。
-    if args.check:
-        # Windows 的 cmd 不展開萬用字元——`*.html` 原封不動傳進來，而 Unix shell
-        # 早就展開好了。兩邊都要能用，所以自己展開一次：目錄當成「裡面所有的
-        # .html」，帶萬用字元的當成 glob，其餘照原樣。
-        wanted: list[Path] = []
-        for raw in args.check:
-            path = Path(raw)
-            if path.is_dir():
-                wanted.extend(sorted(path.glob("*.html")))
-            elif any(ch in raw for ch in "*?["):
-                parent = path.parent if str(path.parent) != "." else Path(".")
-                wanted.extend(sorted(parent.glob(path.name)))
-            else:
-                wanted.append(path)
+    # 短的路是：在 Chrome 開網址，另存新檔（網頁，僅 HTML），--check 問一句
+    # 「這份存到的是資料還是拒絕頁」，--import 把它讀成和其他十張表同一種格線。
+    if args.check or args.imports:
+        wanted = _expand(args.check or args.imports)
         if not wanted:
-            print(f"  沒有符合的檔案：{'、'.join(args.check)}", file=sys.stderr)
+            print(f"  沒有符合的檔案：{'、'.join(args.check or args.imports)}",
+                  file=sys.stderr)
             return EXIT_FAIL
 
+        importing = bool(args.imports)
+        sheets_dir = Path(args.data or settings.data_dir) / "sheets" / args.stock
         bad = 0
+        done = 0
+        skipped: list[str] = []
         for path in wanted:
             if not path.exists():
                 print(f"  找不到：{path}", file=sys.stderr)
                 bad += 1
                 continue
-            # 瀏覽器存下來的檔案編碼看它自己：Goodinfo 是 utf-8，但另存新檔
-            # 有時會落成 big5/cp950。兩種都試，取讀得出特徵字的那一種。
-            raw_bytes = path.read_bytes()
-            text = raw_bytes.decode("utf-8", errors="replace")
-            if not any(src.anchor in text for src in SOURCES.values()):
-                text = raw_bytes.decode("cp950", errors="replace")
+            text = _read_saved_page(path, SOURCES)
             # 哪一個來源？看頁面的 <title>，不是檔名，也不是 anchor——
             # Goodinfo 每一頁都帶著同一份左側選單，anchor 會全部命中第一個。
             hit = identify(text)
             if hit is None:
-                print(f"  可疑 {path.name}：{len(text):,} 字元，"
-                      f"找不到任何一張表的特徵字（{'、'.join(s.anchor for s in SOURCES.values())}）",
+                # 給了一整個資料夾時，裡面多半還躺著其他九張表的原始 HTML。
+                # 那不是「壞掉的樣本」，是「不是這兩張」——數出來就好，不要
+                # 讓十個無關的檔案把兩個成功淹掉。
+                skipped.append(path.name)
+                continue
+            result = probe(hit, text)
+            if not result.ok:
+                print(f"  可疑 {path.name}　→ {hit.sheet}　{result.why}",
                       file=sys.stderr)
                 bad += 1
                 continue
-            result = probe(hit, text)
-            print(f"  {'OK  ' if result.ok else '可疑'} {path.name}"
-                  f"　→ {hit.sheet}　{result.why}")
-            if not result.ok:
+            done += 1
+            if not importing:
+                print(f"  OK   {path.name}　→ {hit.sheet}　{result.why}")
+                continue
+
+            # 存進 data/sheets/，之後 `twsix report` 就會把這兩張畫進個股頁。
+            import json
+
+            from .ingest.goodinfo import NotTheTable, parse
+
+            try:
+                table = parse(text)
+            except NotTheTable as exc:
+                print(f"  解析失敗 {path.name}：{exc}", file=sys.stderr)
                 bad += 1
+                continue
+            sheets_dir.mkdir(parents=True, exist_ok=True)
+            target = sheets_dir / f"{table.sheet}.json"
+            target.write_text(
+                json.dumps(table.grid, ensure_ascii=False), encoding="utf-8"
+            )
+            print(f"  匯入 {table.sheet}：{len(table.rows)} 列 × "
+                  f"{len(table.columns)} 欄　-> {target}")
+
+        if skipped:
+            print(f"  （跳過 {len(skipped)} 個不是這兩張的檔案）")
         if bad:
             print(f"\n{bad} 份不能用。用瀏覽器另存新檔時要選「網頁，僅 HTML」，"
                   f"不要選「完整網頁」。", file=sys.stderr)
+        elif not done:
+            print(f"\n沒有找到〔{HOLDERS}〕或〔{DIRECTORS}〕。這兩張要自己用瀏覽器"
+                  f"開 Goodinfo 存下來——Goodinfo 對腳本回 403，對你的瀏覽器不會。",
+                  file=sys.stderr)
+            return EXIT_FAIL
+        elif importing:
+            print(f"\n重新產生個股頁：twsix report {args.stock} --rebuild")
         return EXIT_OK if bad == 0 else EXIT_FAIL
 
     http = HttpClient(
@@ -1098,6 +1154,14 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="檔案",
         help="不連線，改判斷手動存下來的 HTML 能不能用（瀏覽器另存新檔的那種）",
     )
+    fp.add_argument(
+        "--import",
+        dest="imports",
+        nargs="+",
+        metavar="檔案",
+        help="把手動存下來的 HTML 解析後存進 data/sheets/，個股頁就會多這兩張",
+    )
+    fp.add_argument("--data", help="資料目錄（--import 寫進這裡）")
     fp.set_defaults(func=cmd_fetch_page)
 
     pg = sub.add_parser("page", help="個股四頁：評價簡表／六大／EPS預估與估價／殖利率估價")

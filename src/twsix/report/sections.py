@@ -443,3 +443,174 @@ def institutional(grid: Sequence[Sequence[str]]) -> Institutional | None:
 
 # =========================================================================
 # 財務指標評等預估
+
+
+# =========================================================================
+# 大戶持股 / 董監持股 —— Goodinfo 的兩張，唯二不是程式抓回來的
+# =========================================================================
+#
+# 這兩張的輸入是使用者自己用瀏覽器另存下來的 HTML（見 twsix fetch-page
+# --import）。Goodinfo 對腳本回 403，對人不會，而它是這兩份資料唯一的來源。
+# 格線的欄名由 twsix.ingest.goodinfo 攤平而來，所以這裡按名字取欄，不按位置
+# ——欄位順序是 Goodinfo 的，隨時可能改。
+
+#: 大戶的定義：>400 張。活頁簿的〔大戶持股〕圖畫的就是這三級的合計。
+BIG_TIERS = ("＞400張≦800張", "＞800張≦1千張", "＞1千張")
+#: 散戶：一張到十張。兩條線一起看才有意義——籌碼從誰手上換到誰手上。
+SMALL_TIERS = ("≦10張",)
+#: 圖上畫幾週。三年，和河流圖同一個量級；再長就把最近的變化壓平了。
+HOLDER_WEEKS = 156
+
+
+@dataclass
+class Holders:
+    """〔大戶持股〕— 每週各持股分級的持有比例。"""
+
+    weeks: list[dict[str, Any]]
+    tiers: list[str]
+    latest: dict[str, Any]
+    figures: dict[str, str]
+
+
+@dataclass
+class Directors:
+    """〔董監持股〕— 每月董監持股與質押。"""
+
+    months: list[dict[str, Any]]
+    latest: dict[str, Any]
+    figures: dict[str, str]
+
+
+def _named(grid: Sequence[Sequence[str]]) -> tuple[dict[str, int], list[Sequence[str]]]:
+    """第一列是欄名，其餘是資料。回傳「欄名 -> 位置」與資料列。"""
+    if not grid:
+        return {}, []
+    header = [str(c) for c in grid[0]]
+    return {name: i for i, name in enumerate(header)}, list(grid[1:])
+
+
+def _num(row: Sequence[str], at: int | None) -> Number:
+    from ..ingest.moneydj import _to_number
+
+    if at is None or at >= len(row):
+        return None
+    text = str(row[at]).strip()
+    # 「-」是 Goodinfo 的「這個月還沒有數字」（月報未送），不是 0。
+    if text in ("", "-", "—"):
+        return None
+    return _to_number(text)
+
+
+def holders(grid: Sequence[Sequence[str]]) -> Holders | None:
+    """把〔大戶持股〕的格線讀成週列、兩條線與一張表。"""
+    cols, rows = _named(grid)
+    if not rows:
+        return None
+    prefix = "各持股等級股東之持有比例(%)-"
+    tiers = [c[len(prefix):] for c in cols if c.startswith(prefix)]
+    if not tiers:
+        return None
+
+    weeks: list[dict[str, Any]] = []
+    for row in rows:
+        label = str(row[cols["週別"]]).strip() if "週別" in cols else ""
+        if not label:
+            continue
+        share = {t: _num(row, cols.get(prefix + t)) for t in tiers}
+        big = [share[t] for t in BIG_TIERS if share.get(t) is not None]
+        small = [share[t] for t in SMALL_TIERS if share.get(t) is not None]
+        weeks.append(
+            {
+                "week": label,
+                "date": str(row[cols["統計日期"]]).strip() if "統計日期" in cols else "",
+                "close": _num(row, cols.get("當週股價-收盤")),
+                "custody": _num(row, cols.get("集保庫存(萬張)")),
+                "share": share,
+                # 合計在這裡算，不在模板裡：模板算數字就沒有人能測它。
+                "big": sum(big) if big else None,
+                "small": sum(small) if small else None,
+            }
+        )
+    if not weeks:
+        return None
+
+    window = weeks[:HOLDER_WEEKS]
+    labels = [w["week"] for w in window]
+    figures = {
+        "big": charts.line(
+            labels,
+            [w["big"] for w in window],
+            title=f"大戶持股比例（{'＋'.join(BIG_TIERS)}）",
+            unit="%",
+            digits=1,
+            label_every=13,
+        ),
+        "small": charts.line(
+            labels,
+            [w["small"] for w in window],
+            title=f"散戶持股比例（{SMALL_TIERS[0]}）",
+            unit="%",
+            digits=1,
+            label_every=13,
+        ),
+    }
+    return Holders(weeks=weeks, tiers=tiers, latest=weeks[0], figures=figures)
+
+
+#: 圖上畫幾個月。十年——董監持股是慢變數，短窗看不出換手。
+DIRECTOR_MONTHS = 120
+
+
+def directors(grid: Sequence[Sequence[str]]) -> Directors | None:
+    """把〔董監持股〕的格線讀成月列、兩條線與一張表。"""
+    cols, rows = _named(grid)
+    if not rows or "月別" not in cols:
+        return None
+
+    months: list[dict[str, Any]] = []
+    for row in rows:
+        label = str(row[cols["月別"]]).strip()
+        if not label:
+            continue
+        months.append(
+            {
+                "month": label,
+                "close": _num(row, cols.get("當月股價-當月收盤")),
+                "issued": _num(row, cols.get("發行張數(萬張)")),
+                "held": _num(row, cols.get("全體董監持股-持股張數")),
+                "pct": _num(row, cols.get("全體董監持股-持股(%)")),
+                "change": _num(row, cols.get("全體董監持股-持股增減")),
+                "pledged": _num(row, cols.get("全體董監持股-質押張數")),
+                "pledged_pct": _num(row, cols.get("全體董監持股-質押(%)")),
+                "independent": _num(row, cols.get("獨立董監持股-持股(%)")),
+                "foreign": _num(row, cols.get("外資持股(%)")),
+            }
+        )
+    if not months:
+        return None
+
+    # 最新一個月常常整列是「-」（月報未送）。卡片要顯示的是「最近有數字的那個
+    # 月」，不是「最近的那一列」——顯示一排破折號等於把沒送月報說成沒有持股。
+    latest = next((m for m in months if m["pct"] is not None), months[0])
+
+    window = months[:DIRECTOR_MONTHS]
+    labels = [m["month"] for m in window]
+    figures = {
+        "pct": charts.line(
+            labels,
+            [m["pct"] for m in window],
+            title="全體董監持股比例",
+            unit="%",
+            digits=1,
+            label_every=12,
+        ),
+        "pledged": charts.line(
+            labels,
+            [m["pledged_pct"] for m in window],
+            title="全體董監質押比例",
+            unit="%",
+            digits=1,
+            label_every=12,
+        ),
+    }
+    return Directors(months=months, latest=latest, figures=figures)

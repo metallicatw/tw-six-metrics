@@ -29,13 +29,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Sequence
 
+from ..ingest.goodinfo import DIRECTORS, HOLDERS
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
 from . import charts
 from .sections import (
+    Directors,
+    Holders,
     Institutional,
     River,
     Seasonal,
     build_pe_river,
+    directors,
+    holders,
     institutional,
     profit_seasonality,
     revenue_seasonality,
@@ -122,6 +127,9 @@ class StockPage:
     river: River | None = None
     news: Any = None
     institutional: Institutional | None = None
+    #: Goodinfo 的兩張。唯二不是程式抓的——見 twsix fetch-page --import。
+    holders: Holders | None = None
+    directors: Directors | None = None
     revenue_season: Seasonal | None = None
     profit_season: Seasonal | None = None
     unbuilt: list[dict[str, str]] = field(default_factory=list)
@@ -203,8 +211,18 @@ def _num(value: Number, digits: int = 2) -> str:
 #: recorded as a limit rather than carried as a task.  A run from a home
 #: connection would very likely get both; the parser is the easy half.
 UNBUILT_PAGES: tuple[tuple[str, str], ...] = (
-    ("大戶持股", "Goodinfo 股權分散表：帶了 session cookie 與 referer 仍回 403，來源端擋機房 IP"),
-    ("董監持股", "Goodinfo 董監持股表：同一個 403，同一個原因"),
+    (
+        HOLDERS,
+        "Goodinfo 股權分散表：對腳本回 403（家用網路也一樣，擋的是 request 的長相）。"
+        "用瀏覽器開 EquityDistributionClassHis.asp 另存 HTML，再 "
+        "twsix fetch-page <代號> --import <檔案>",
+    ),
+    (
+        DIRECTORS,
+        "Goodinfo 董監持股表：同一個 403，同一個作法。"
+        "用瀏覽器開 StockDirectorSharehold.asp 另存 HTML，再 "
+        "twsix fetch-page <代號> --import <檔案>",
+    ),
 )
 
 
@@ -436,14 +454,23 @@ def build_page(
     inst_grid = reader.grid("三大法人") if hasattr(reader, "grid") else []
     page.institutional = institutional(inst_grid)
     page.news = _news(reader)
-    page.unbuilt = [{"name": n, "why": w} for n, w in UNBUILT_PAGES]
+
+    # Goodinfo 的兩張：有就畫，沒有就在〔尚未建置〕裡說為什麼。匯進來之後那
+    # 一頁的理由就不再適用了，所以清單是算出來的，不是寫死的。
+    grid = reader.grid if hasattr(reader, "grid") else (lambda _n: [])
+    page.holders = holders(grid(HOLDERS))
+    page.directors = directors(grid(DIRECTORS))
+    have = {HOLDERS: page.holders, DIRECTORS: page.directors}
+    page.unbuilt = [
+        {"name": n, "why": w} for n, w in UNBUILT_PAGES if not have.get(n)
+    ]
 
     page.sources = [
         {"sheet": name, "ok": name in set(sheets_present)}
         for name in (
             "FRQ", "CFQ", "ISQ", "BSQ", "BASIC", "營收", "OPQ", "EPQ", "股利",
             "三大法人", "年財務比率", "年度交易資訊_上市櫃合併_",
-            "股價(週)", "個股新聞",
+            "股價(週)", "個股新聞", HOLDERS, DIRECTORS,
         )
     ]
     return page

@@ -26,7 +26,16 @@
   <button type="button" role="tab" id="tab-season" class="tab" aria-controls="panel-season" aria-selected="false" tabindex="-1">季節性</button>
   <button type="button" role="tab" id="tab-inst" class="tab" aria-controls="panel-inst" aria-selected="false" tabindex="-1">外資投信</button>
   <button type="button" role="tab" id="tab-news" class="tab" aria-controls="panel-news" aria-selected="false" tabindex="-1">個股新聞</button>
+  {# 這兩張只有匯入過才有分頁——沒有資料的分頁點開是一句道歉，不是一頁。 #}
+  {% if p.holders %}
+  <button type="button" role="tab" id="tab-holders" class="tab" aria-controls="panel-holders" aria-selected="false" tabindex="-1">大戶持股</button>
+  {% endif %}
+  {% if p.directors %}
+  <button type="button" role="tab" id="tab-directors" class="tab" aria-controls="panel-directors" aria-selected="false" tabindex="-1">董監持股</button>
+  {% endif %}
+  {% if p.unbuilt %}
   <button type="button" role="tab" id="tab-unbuilt" class="tab" aria-controls="panel-unbuilt" aria-selected="false" tabindex="-1">尚未建置</button>
+  {% endif %}
 </div>
 </div>
 
@@ -474,15 +483,118 @@
 <p class="stale">尚未取得〔個股新聞〕，請執行 <code>twsix report {{ p.stock_id }}</code>。</p>
 {% endif %}
 
-{# ================= 尚未建置 ================= #}
+{# ================= 大戶持股 ================= #}
 </section>
 
+{% if p.holders %}
+{% set h = p.holders %}
+<section class="panel" id="panel-holders" role="tabpanel" aria-labelledby="tab-holders" hidden>
+<h3 id="holders">大戶持股</h3>
+<div class="cards">
+  <div class="card"><b>{{ "%.1f"|format(h.latest.big) if h.latest.big is not none else "—" }}%</b>
+    <span>大戶持股（＞400張，{{ h.latest.week }}）</span></div>
+  <div class="card"><b>{{ "%.1f"|format(h.latest.small) if h.latest.small is not none else "—" }}%</b>
+    <span>散戶持股（≦10張）</span></div>
+  <div class="card"><b>{{ "%.1f"|format(h.latest.share["＞1千張"]) if h.latest.share["＞1千張"] is not none else "—" }}%</b>
+    <span>＞1千張</span></div>
+  <div class="card"><b>{{ "%.3f"|format(h.latest.custody) if h.latest.custody is not none else "—" }}</b>
+    <span>集保庫存（萬張）</span></div>
+</div>
+{{ h.figures.big|safe }}
+{{ h.figures.small|safe }}
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>週別</th><th>統計日期</th><th class="num">收盤</th>
+          {% for t in h.tiers %}<th class="num">{{ t }}</th>{% endfor %}
+          <th class="num">大戶合計</th></tr>
+    </thead>
+    <tbody>
+      {% for w in h.weeks[:52] %}
+      <tr>
+        <th scope="row">{{ w.week }}</th>
+        <td>{{ w.date }}</td>
+        <td class="num">{{ "%.2f"|format(w.close) if w.close is not none else "" }}</td>
+        {% for t in h.tiers %}
+        <td class="num">{{ "%.2f"|format(w.share[t]) if w.share[t] is not none else "" }}</td>
+        {% endfor %}
+        <td class="num">{{ "%.2f"|format(w.big) if w.big is not none else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">
+  比例單位為 %，八個級距相加為 100（Goodinfo 四捨五入至小數一位）。
+  「大戶合計」是＞400張三個級距之和，與活頁簿同一個定義。
+  表列最近 52 週，圖為最近 {{ h.weeks[:156]|length }} 週；資料共 {{ h.weeks|length }} 週。
+  來源 Goodinfo 集保戶股權分散週統計，由使用者另存後匯入。
+</p>
+</section>
+{% endif %}
+
+{% if p.directors %}
+{% set dr = p.directors %}
+<section class="panel" id="panel-directors" role="tabpanel" aria-labelledby="tab-directors" hidden>
+<h3 id="directors">董監持股</h3>
+<div class="cards">
+  <div class="card"><b>{{ "%.1f"|format(dr.latest.pct) if dr.latest.pct is not none else "—" }}%</b>
+    <span>全體董監持股（{{ dr.latest.month }}）</span></div>
+  <div class="card"><b>{{ "%.1f"|format(dr.latest.pledged_pct) if dr.latest.pledged_pct is not none else "—" }}%</b>
+    <span>董監質押比例</span></div>
+  <div class="card"><b>{{ "{:,.0f}".format(dr.latest.held) if dr.latest.held is not none else "—" }}</b>
+    <span>董監持股張數</span></div>
+  <div class="card"><b>{{ "%.1f"|format(dr.latest.foreign) if dr.latest.foreign is not none else "—" }}%</b>
+    <span>外資持股</span></div>
+</div>
+{{ dr.figures.pct|safe }}
+{{ dr.figures.pledged|safe }}
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>月別</th><th class="num">當月收盤</th><th class="num">發行張數(萬張)</th>
+          <th class="num">董監持股張數</th><th class="num">持股(%)</th>
+          <th class="num">持股增減</th><th class="num">質押張數</th>
+          <th class="num">質押(%)</th><th class="num">獨立董監(%)</th>
+          <th class="num">外資(%)</th></tr>
+    </thead>
+    <tbody>
+      {% for m in dr.months[:36] %}
+      <tr>
+        <th scope="row">{{ m.month }}</th>
+        <td class="num">{{ "%.2f"|format(m.close) if m.close is not none else "" }}</td>
+        <td class="num">{{ "%.3f"|format(m.issued) if m.issued is not none else "" }}</td>
+        <td class="num">{{ "{:,.0f}".format(m.held) if m.held is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(m.pct) if m.pct is not none else "" }}</td>
+        <td class="num">{{ "{:,.0f}".format(m.change) if m.change is not none else "" }}</td>
+        <td class="num">{{ "{:,.0f}".format(m.pledged) if m.pledged is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(m.pledged_pct) if m.pledged_pct is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(m.independent) if m.independent is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(m.foreign) if m.foreign is not none else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">
+  空白代表該月尚未申報，不是 0——最新一個月在月報送出前整列都是空的，所以上方
+  卡片顯示的是最近一個<b>有數字</b>的月份。
+  表列最近 36 個月，圖為最近 {{ dr.months[:120]|length }} 個月；資料共 {{ dr.months|length }} 個月。
+  來源 Goodinfo 董監持股統計，由使用者另存後匯入。
+</p>
+</section>
+{% endif %}
+
+{# ================= 尚未建置 ================= #}
+{% if p.unbuilt %}
 <section class="panel" id="panel-unbuilt" role="tabpanel" aria-labelledby="tab-unbuilt" hidden>
 <h3 id="unbuilt">尚未建置的頁面</h3>
 <p class="muted">
-  剩下兩張，卡的不是解析器而是來源。Goodinfo 對機房 IP 回 403——先進首頁拿了
-  session cookie、帶上 referer，兩個網址還是同一個 403。沒有真實回應就不寫解析器：
-  照文件猜寫正是這次移植前期讓九張表錯六張的原因。從家用網路跑很可能兩張都拿得到。
+  卡的不是解析器而是來源。Goodinfo 對腳本回 403——先進首頁拿了 session cookie、
+  帶上整組瀏覽器標頭，家用網路也一樣，擋的是 request 的長相不只是 IP。
+  解析器已經寫好了，而且是照兩份真實回應寫的；缺的只是那份回應。
+  用瀏覽器把那一頁另存下來（網頁，僅 HTML），再
+  <code>twsix fetch-page {{ p.stock_id }} --import 檔案</code>，這一頁就會變成分頁。
 </p>
 <div class="scroll">
   <table>
@@ -495,6 +607,7 @@
   </table>
 </div>
 </section>
+{% endif %}
 
 <p class="muted">
   本頁為資料整理，非投資建議。估價模型的輸入與門檻見〈評分規則〉。

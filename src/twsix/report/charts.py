@@ -61,6 +61,8 @@ BAR_GAP = 2.0
 #: Rounded data-ends, anchored to the baseline.
 BAR_RADIUS = 4.0
 LINE_WIDTH = 2.0
+#: 超過這麼多點就不畫標記——白色描邊會把線切成假虛線。
+MARKER_LIMIT = 60
 MARKER_R = 4.5  # 9px across
 
 
@@ -147,24 +149,41 @@ def _x_labels(frame: Frame, labels: Sequence[str], every: int) -> list[str]:
     The oldest label is worth showing because it says how far back the series
     reaches, but forcing it in regardless printed 「110.4Q110.3Q」 on top of
     itself.  A label needs roughly its own width of clear space.
+
+    The two end labels are anchored inwards rather than centred: the first and
+    last slot centres sit on the plot edges, and a centred label there loses
+    half of itself outside the viewBox.  Anchoring moves the drawn text, so the
+    overlap test has to run on where the text actually lands — testing the slot
+    centre instead is how 「26W23」 and 「26W35」 ended up touching.
     """
     out: list[str] = []
     n = len(labels)
     if not n:
         return out
     slot = frame.plot_w / n
-    min_gap = 46.0
-    last_x = -1e9
+    gap = 12.0
+    right = frame.left + frame.plot_w
+    last_right = -1e9
     for i, label in enumerate(labels):
         forced = i == n - 1
         if i % every and not forced:
             continue
         x = frame.left + slot * (i + 0.5)
-        if x - last_x < min_gap:
+        anchor = "start" if i == 0 else "end" if forced else "middle"
+        if anchor == "start":
+            x = max(x, frame.left)
+        elif anchor == "end":
+            x = min(x, right)
+        # 中文字比數字寬一倍，而週別（26W35）與季別（110.4Q）混在同一組圖裡。
+        width = sum(10.0 if ord(c) > 0x2E80 else 6.2 for c in label)
+        left_edge = (
+            x if anchor == "start" else x - width if anchor == "end" else x - width / 2
+        )
+        if left_edge - last_right < gap:
             continue
-        last_x = x
+        last_right = left_edge + width
         out.append(
-            f'<text x="{x:.1f}" y="{frame.height - 8:.1f}" text-anchor="middle" '
+            f'<text x="{x:.1f}" y="{frame.height - 8:.1f}" text-anchor="{anchor}" '
             f'font-size="10" fill="var(--muted)">{escape(label)}</text>'
         )
     return out
@@ -321,11 +340,26 @@ def line(
 
     # Direct-label the newest point only.  A number on every point is noise;
     # the rest are available on hover and in the table.
+    #
+    # ``values`` is oldest-first by the time it gets here (_chronological ran
+    # above), so the newest point is the LAST one.  It used to be index 0 —
+    # which is where the flip to the Taiwan convention left it, and it put the
+    # 「最新值」 label on the oldest point, squashed against the y-axis.  Every
+    # line chart on the site had it.
+    newest_i = max(
+        (i for i, v in enumerate(values) if v is not None), default=None
+    )
+    # 一百多個點時，每個點的白色描邊會把線切成虛線——看起來像散點圖，而且那個
+    # 「虛線」是渲染的假象，不是資料有斷。點少的時候標記幫助讀數，所以用長度
+    # 決定，而不是全有全無。
+    markers = len(values) <= MARKER_LIMIT
     for i, raw in enumerate(values):
         if raw is None:
             continue
+        newest = i == newest_i
+        if not (markers or newest):
+            continue
         x, y = point(i, float(raw))
-        newest = i == 0
         parts.append(
             f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{MARKER_R if newest else 2.5:.1f}" '
             f'fill="var(--accent)" stroke="var(--surface)" stroke-width="2">'
@@ -336,11 +370,12 @@ def line(
             # Anchored above the point with a surface-coloured halo: the line
             # can leave in any direction, and a label sitting on top of it is
             # unreadable exactly when the newest value matters most.
+            # 最新點在右邊界上，置中的文字會有一半跑出畫布，所以靠右對齊。
             parts.append(
-                f'<text x="{x:.1f}" y="{y - 13:.1f}" font-size="11" '
-                f'text-anchor="middle" fill="var(--ink-2)" font-weight="600" '
-                f'paint-order="stroke" stroke="var(--surface)" stroke-width="3.5" '
-                f'stroke-linejoin="round">'
+                f'<text x="{min(x, f.left + f.plot_w):.1f}" y="{y - 13:.1f}" '
+                f'font-size="11" text-anchor="end" fill="var(--ink-2)" '
+                f'font-weight="600" paint-order="stroke" stroke="var(--surface)" '
+                f'stroke-width="3.5" stroke-linejoin="round">'
                 f"{escape(_fmt(float(raw), digits))}{escape(unit)}</text>"
             )
     parts += _x_labels(f, labels, label_every)
