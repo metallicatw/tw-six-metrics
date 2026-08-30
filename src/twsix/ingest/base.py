@@ -33,6 +33,60 @@ DEFAULT_UA = (
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 twsix/0.1"
 )
 
+#: 給會看 request 長相的站台用的一整組標頭。
+#:
+#: Goodinfo 連 index.asp 都回 403，家用網路也一樣——那就不是 IP 的問題。urllib
+#: 預設只送 User-Agent 與 Accept-Encoding: identity，少了 Accept、
+#: Accept-Language、Sec-Fetch-* 這些每個真瀏覽器都會送的欄位；而我們的 UA 尾巴
+#: 還掛著 `twsix/0.1`，等於自報家門。逐項補齊到跟瀏覽器一樣。
+#:
+#: 這不是偽裝成別人，是用一般讀者的方式讀一頁公開的網頁：一次一張、有節流、
+#: 有 Referer。
+BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
+)
+BROWSER_HEADERS: dict[str, str] = {
+    "User-Agent": BROWSER_UA,
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,image/apng,*/*;q=0.8"
+    ),
+    "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
+    "Connection": "keep-alive",
+}
+
+
+def _decoded(resp: Any) -> bytes:
+    """Undo Content-Encoding.
+
+    urllib does not do this for you.  It never mattered while every request
+    went out with the default ``Accept-Encoding: identity``, but a request
+    shaped like a browser's asks for gzip, and a site that fingerprints
+    requests will notice a client that asks and then cannot read the answer.
+    """
+    raw = resp.read()
+    enc = (resp.headers.get("Content-Encoding") or "").lower().strip()
+    if enc in ("gzip", "x-gzip"):
+        import gzip
+
+        return gzip.decompress(raw)
+    if enc == "deflate":
+        import zlib
+
+        try:
+            return zlib.decompress(raw)
+        except zlib.error:  # raw deflate, no zlib wrapper
+            return zlib.decompress(raw, -zlib.MAX_WBITS)
+    return raw
+
 
 class FetchError(RuntimeError):
     """A request failed after every retry."""
@@ -171,12 +225,12 @@ class HttpClient:
                 req = urllib.request.Request(url, data=body, headers=dict(merged))
                 if self.cookies:
                     with self._build_opener().open(req, timeout=self.timeout) as resp:
-                        data = resp.read()
+                        data = _decoded(resp)
                 else:
                     with urllib.request.urlopen(
                         req, timeout=self.timeout, context=tls_context()
                     ) as resp:
-                        data = resp.read()
+                        data = _decoded(resp)
                 if cache_path is not None:
                     cache_path.write_bytes(data)
                 return data

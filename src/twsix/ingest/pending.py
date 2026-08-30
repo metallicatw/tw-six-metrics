@@ -36,6 +36,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping
 
+from .base import BROWSER_HEADERS
+
 GOODINFO = "https://goodinfo.tw"
 
 
@@ -73,19 +75,19 @@ SOURCES: dict[str, Source] = {
             "?STEP=DATA&STOCK_ID={stock}&CHT_CAT=WEEK&PRICE_ADJ=F&SHEET=股數分級"
         ),
         anchor="持股分級",
-        headers={"Referer": GOODINFO + "/tw/index.asp"},
+        headers={**BROWSER_HEADERS, "Referer": GOODINFO + "/tw/index.asp"},
         prime=GOODINFO + "/tw/index.asp",
-        when_empty="Goodinfo 對機房 IP 直接回 403；帶了 session cookie 也一樣。換成家用網路再試",
-        note="Goodinfo 股權分散表。擋 IP 最兇——本專案在雲端跑到的是 403，不是空表。",
+        when_empty="Goodinfo 回 403。先確認換過的整組瀏覽器標頭有送出去，再考慮換網路",
+        note="Goodinfo 股權分散表。它看的是 request 長相不只是 IP，所以要送整組瀏覽器標頭。",
     ),
     "directors": Source(
         key="directors",
         sheet="董監持股",
         url=GOODINFO + "/tw/StockDirectorSharehold.asp?STOCK_ID={stock}",
         anchor="董監",
-        headers={"Referer": GOODINFO + "/tw/index.asp"},
+        headers={**BROWSER_HEADERS, "Referer": GOODINFO + "/tw/index.asp"},
         prime=GOODINFO + "/tw/index.asp",
-        when_empty="Goodinfo 對機房 IP 直接回 403；帶了 session cookie 也一樣。換成家用網路再試",
+        when_empty="Goodinfo 回 403。先確認換過的整組瀏覽器標頭有送出去，再考慮換網路",
         note="Goodinfo 董監持股表，同上。",
     ),
 }

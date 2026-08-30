@@ -824,6 +824,41 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
     from .ingest.pending import SOURCES, probe
 
     names = [args.source] if args.source else list(SOURCES)
+
+    # --check：判斷一個「手動存下來的」檔案能不能用。
+    #
+    # Goodinfo 擋得住腳本，擋不住你自己的瀏覽器——你本來就看得到那一頁。所以最
+    # 短的路是：在 Chrome 開網址，另存新檔（網頁，僅 HTML），再用這個指令問一句
+    # 「這份存到的是資料還是拒絕頁」。判斷用的是同一個 probe()，跟線上抓一模一樣。
+    if args.check:
+        bad = 0
+        for path_str in args.check:
+            path = Path(path_str)
+            if not path.exists():
+                print(f"  找不到：{path}", file=sys.stderr)
+                bad += 1
+                continue
+            text = path.read_text("utf-8", errors="replace")
+            # 哪一個來源？看檔案內容裡有沒有那個 anchor，而不是看檔名。
+            hit = next(
+                (src for src in SOURCES.values() if src.anchor in text), None
+            )
+            if hit is None:
+                print(f"  可疑 {path.name}：{len(text):,} 字元，"
+                      f"找不到任何一張表的特徵字（{'、'.join(s.anchor for s in SOURCES.values())}）",
+                      file=sys.stderr)
+                bad += 1
+                continue
+            result = probe(hit, text)
+            print(f"  {'OK  ' if result.ok else '可疑'} {path.name}"
+                  f"　→ {hit.sheet}　{result.why}")
+            if not result.ok:
+                bad += 1
+        if bad:
+            print(f"\n{bad} 份不能用。用瀏覽器另存新檔時要選「網頁，僅 HTML」，"
+                  f"不要選「完整網頁」。", file=sys.stderr)
+        return EXIT_OK if bad == 0 else EXIT_FAIL
+
     http = HttpClient(
         cache_dir=Path(settings.ingest.cache_dir),
         cache_ttl=0,  # a sample is worth a fresh request
@@ -843,9 +878,18 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
             return EXIT_FAIL
         url = source.url.format(stock=args.stock)
         if source.prime and source.prime not in primed:
-            # Knock on the front door first and keep the cookie.
+            # Knock on the front door first and keep the cookie.  The knock
+            # has to look like the same visitor as the request that follows —
+            # a bare urllib GET to index.asp was itself the first 403.  No
+            # Referer and Sec-Fetch-Site: none, because that is what a browser
+            # sends when you type the address in.
+            front = {
+                k: v for k, v in source.headers.items() if k != "Referer"
+            }
+            if "Sec-Fetch-Site" in front:
+                front["Sec-Fetch-Site"] = "none"
             try:
-                http.get_text(source.prime, encoding=source.encoding)
+                http.get_text(source.prime, encoding=source.encoding, headers=front)
                 primed.add(source.prime)
             except Exception as exc:  # noqa: BLE001 - the data URL may still work
                 print(f"  （{source.sheet} 的首頁沒開成：{exc}）", file=sys.stderr)
@@ -868,8 +912,11 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
 
     if blocked:
         print(
-            f"\n{blocked}/{len(names)} 個來源沒拿到可用的樣本。"
-            f"　被擋的話換個網路再試；拿到的檔案還是可以傳給我看。",
+            f"\n{blocked}/{len(names)} 個來源沒拿到可用的樣本。\n"
+            f"Goodinfo 擋的是腳本，不是你——同一個網址用瀏覽器開得起來。\n"
+            f"改用手動：Chrome 開網址 → 另存新檔 → 選「網頁，僅 HTML」，然後\n"
+            f"  twsix fetch-page {args.stock} --check 存下來的檔案.html\n"
+            f"確認存到的是資料而不是拒絕頁，再把檔案傳給我。",
             file=sys.stderr,
         )
     return EXIT_OK if blocked == 0 else EXIT_FAIL
@@ -1025,6 +1072,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--source", help="prices / news / holders / directors；省略則全部試一次"
     )
     fp.add_argument("--save", help="存檔目錄（預設為目前目錄）")
+    fp.add_argument(
+        "--check",
+        nargs="+",
+        metavar="檔案",
+        help="不連線，改判斷手動存下來的 HTML 能不能用（瀏覽器另存新檔的那種）",
+    )
     fp.set_defaults(func=cmd_fetch_page)
 
     pg = sub.add_parser("page", help="個股四頁：評價簡表／六大／EPS預估與估價／殖利率估價")
