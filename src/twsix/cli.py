@@ -831,14 +831,35 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
     # 短的路是：在 Chrome 開網址，另存新檔（網頁，僅 HTML），再用這個指令問一句
     # 「這份存到的是資料還是拒絕頁」。判斷用的是同一個 probe()，跟線上抓一模一樣。
     if args.check:
+        # Windows 的 cmd 不展開萬用字元——`*.html` 原封不動傳進來，而 Unix shell
+        # 早就展開好了。兩邊都要能用，所以自己展開一次：目錄當成「裡面所有的
+        # .html」，帶萬用字元的當成 glob，其餘照原樣。
+        wanted: list[Path] = []
+        for raw in args.check:
+            path = Path(raw)
+            if path.is_dir():
+                wanted.extend(sorted(path.glob("*.html")))
+            elif any(ch in raw for ch in "*?["):
+                parent = path.parent if str(path.parent) != "." else Path(".")
+                wanted.extend(sorted(parent.glob(path.name)))
+            else:
+                wanted.append(path)
+        if not wanted:
+            print(f"  沒有符合的檔案：{'、'.join(args.check)}", file=sys.stderr)
+            return EXIT_FAIL
+
         bad = 0
-        for path_str in args.check:
-            path = Path(path_str)
+        for path in wanted:
             if not path.exists():
                 print(f"  找不到：{path}", file=sys.stderr)
                 bad += 1
                 continue
-            text = path.read_text("utf-8", errors="replace")
+            # 瀏覽器存下來的檔案編碼看它自己：Goodinfo 是 utf-8，但另存新檔
+            # 有時會落成 big5/cp950。兩種都試，取讀得出特徵字的那一種。
+            raw_bytes = path.read_bytes()
+            text = raw_bytes.decode("utf-8", errors="replace")
+            if not any(src.anchor in text for src in SOURCES.values()):
+                text = raw_bytes.decode("cp950", errors="replace")
             # 哪一個來源？看檔案內容裡有沒有那個 anchor，而不是看檔名。
             hit = next(
                 (src for src in SOURCES.values() if src.anchor in text), None
