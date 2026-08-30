@@ -337,7 +337,11 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
         min_interval=settings.ingest.min_interval_seconds,
         retries=args.retries,
     )
-    dj = MoneyDJ(http=http, preferred=args.host or "")
+    dj = MoneyDJ(
+        http=http,
+        preferred=args.host or "",
+        save_html=Path(args.save_html) if args.save_html else None,
+    )
 
     out_dir = Path(args.out or settings.data_dir) / "sheets" / args.stock
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -588,6 +592,10 @@ def build_parser() -> argparse.ArgumentParser:
     fs.add_argument("stock", help="股票代號")
     fs.add_argument("--sheet", help="只抓一張表，如 ISQ")
     fs.add_argument("--host", help="優先使用的券商站台")
+    fs.add_argument(
+        "--save-html", dest="save_html",
+        help="把抓到的原始 HTML 存到這個目錄（解析出錯時用來對照）",
+    )
     fs.add_argument(
         "--retries", type=int, default=1,
         help="每個站台重試次數（預設 1；輪替八個站台本身就是重試）",
