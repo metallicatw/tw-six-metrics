@@ -161,8 +161,54 @@ def test_the_scenarios_do_not_repeat_the_grade_table():
 
 
 def test_the_unbuilt_pages_are_listed_with_a_reason():
-    """Four tabs have no parser.  Saying so beats a page that looks broken."""
+    """Three tabs have no parser.  Saying so beats a page that looks broken.
+
+    〔外資投信〕 used to be a fourth.  It left this list the day its page was
+    saved — which is the whole point of listing them rather than hiding them.
+    """
     page, _ = _page()
     names = {u["name"] for u in page.unbuilt}
-    assert names == {"個股新聞", "外資投信", "大戶持股", "董監持股"}
+    assert names == {"個股新聞", "大戶持股", "董監持股"}
     assert all(u["why"] for u in page.unbuilt)
+
+
+# -- 外資投信 --------------------------------------------------------------
+
+
+def test_the_institutional_page_reads_twenty_sessions():
+    page, _ = _page()
+    inst = page.institutional
+    assert inst is not None
+    assert len(inst.days) == 20
+    assert inst.latest["date"] == "115/08/28"
+    assert inst.latest["net"]["外資"] == -679
+    assert inst.latest["share"]["外資"] == 0.2113  # 21.13% as a fraction
+
+
+def test_the_period_totals_are_read_not_re_added():
+    """MoneyDJ rounds each day to whole 張; twenty rounded rows need not sum.
+
+    The footer carries the exchange's own total, so it is read from there —
+    re-adding the column would quietly disagree with the page it came from.
+    """
+    page, _ = _page()
+    inst = page.institutional
+    assert inst.totals["外資"] == -4440
+    assert inst.totals["合計"] == -4600
+    assert sum(d["net"]["外資"] for d in inst.days) == -4440  # true here, not guaranteed
+
+
+def test_a_hidden_input_does_not_swallow_the_rest_of_the_page():
+    """〔三大法人〕's date form has two <input type=hidden>.
+
+    ``input`` is void, so treating it as "skip until the closing tag" skips
+    the remainder of the document: the page parsed to four rows, all of them
+    chrome.  Void wins over skip.
+    """
+    from twsix.ingest.moneydj import SKIP_TAGS, VOID_TAGS, parse_page
+
+    assert "input" in VOID_TAGS and "input" not in SKIP_TAGS
+    html = (
+        Path(__file__).resolve().parent / "pages" / "5439" / "5439_三大法人.html"
+    ).read_text(encoding="utf-8")
+    assert len(parse_page(html).rows) > 20

@@ -2,10 +2,9 @@
 
 〔財報圖表〕〔河流圖〕〔營收季節性〕〔獲利季節性〕〔財務指標評等預估〕.
 
-Each one is here because it can be computed and checked.  The four pages that
-are *not* here — 個股新聞, 外資投信, 大戶持股, 董監持股 — need MoneyLink,
-Goodinfo and the 三大法人 page, none of which this project has ever fetched a
-real response from.  Writing those parsers from documentation is exactly the
+〔外資投信〕 joined them once its page was saved.  The three still missing —
+個股新聞, 大戶持股, 董監持股 — need MoneyLink and Goodinfo, neither of which
+this project has ever fetched a real response from.  Writing those parsers from documentation is exactly the
 mistake that cost six of nine sheets earlier in this port, so they stay
 unwritten until someone runs the fetch and saves a page.  ``reference/
 ENDPOINTS.md`` records where they come from and what is missing.
@@ -318,6 +317,96 @@ def profit_seasonality(eps: Sequence[tuple[str, Number]]) -> Seasonal | None:
             label_every=1,
         )
     return Seasonal(columns=columns, rows=rows, figure=figure)
+
+
+# =========================================================================
+# 外資投信
+# =========================================================================
+
+#: 〔三大法人〕's columns, once the two stacked header rows are flattened.
+INST_COL_DATE = 0
+INST_NET = {"外資": 1, "投信": 2, "自營商": 3, "合計": 4}
+INST_HOLDING = {"外資": 5, "投信": 6, "自營商": 7, "合計": 8}
+INST_SHARE = {"外資": 9, "三大法人": 10}
+INST_HEADER_ROW = "日期"
+INST_FOOTER = "合計買賣超"
+
+
+@dataclass
+class Institutional:
+    """〔外資投信〕 — the last 20 sessions of 三大法人 activity."""
+
+    days: list[dict[str, Any]]
+    totals: dict[str, Number]
+    latest: dict[str, Any]
+    figures: dict[str, str]
+
+
+def institutional(grid: Sequence[Sequence[str]]) -> Institutional | None:
+    """Read 〔三大法人〕 into the day rows, the period totals and two charts.
+
+    The footer row carries the exchange's own 20-day sums, so they are read
+    rather than re-added: MoneyDJ rounds each day to whole 張 and a column of
+    twenty rounded numbers does not have to add up to its own stated total.
+    """
+    from ..ingest.moneydj import _to_number
+
+    def cell(row: Sequence[str], col: int) -> str:
+        return row[col].strip() if len(row) > col else ""
+
+    days: list[dict[str, Any]] = []
+    totals: dict[str, Number] = {}
+    started = False
+    for row in grid:
+        label = cell(row, INST_COL_DATE)
+        if label == INST_HEADER_ROW:
+            started = True
+            continue
+        if not started or not label:
+            continue
+        if label == INST_FOOTER:
+            totals = {k: _to_number(cell(row, c)) for k, c in INST_NET.items()}
+            continue
+        if "/" not in label:
+            continue
+        days.append(
+            {
+                "date": label,
+                "net": {k: _to_number(cell(row, c)) for k, c in INST_NET.items()},
+                "holding": {
+                    k: _to_number(cell(row, c)) for k, c in INST_HOLDING.items()
+                },
+                "share": {k: _to_number(cell(row, c)) for k, c in INST_SHARE.items()},
+            }
+        )
+    if not days:
+        return None
+
+    labels = [d["date"][3:] for d in days]  # 「08/28」 — the year is on the page
+    figures = {
+        "foreign_net": charts.bars(
+            labels,
+            [d["net"]["外資"] for d in days],
+            title="外資買賣超",
+            unit=" 張",
+            digits=0,
+            label_every=3,
+        ),
+        "foreign_share": charts.line(
+            labels,
+            [
+                None if d["share"]["外資"] is None else d["share"]["外資"] * 100
+                for d in days
+            ],
+            title="外資持股比重",
+            unit="%",
+            digits=2,
+            label_every=3,
+        ),
+    }
+    return Institutional(
+        days=days, totals=totals, latest=days[0], figures=figures
+    )
 
 
 # =========================================================================

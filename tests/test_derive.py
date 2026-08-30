@@ -25,7 +25,9 @@ from twsix.valuation import ValuationOptions, evaluate
 PAGES = Path(__file__).resolve().parent / "pages" / "5439"
 GOLDEN = Path(__file__).resolve().parent / "golden" / "5439"
 
-SHEETS = ("ISQ", "BSQ", "CFQ", "FRQ", "BASIC", "營收", "OPQ", "EPQ", "股利")
+SHEETS = (
+    "ISQ", "BSQ", "CFQ", "FRQ", "BASIC", "營收", "OPQ", "EPQ", "股利", "三大法人",
+)
 
 
 def fetched() -> dict[str, list[list[str]]]:
