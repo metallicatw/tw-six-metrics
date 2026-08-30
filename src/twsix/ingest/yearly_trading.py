@@ -8,15 +8,17 @@ default — and what the whole dividend-yield model needs.  Without this sheet a
 fetched stock can still be forecast and priced off the published P/E, but
 〔殖利率估價〕 abstains.
 
-**This module is written against the endpoints' documented shape, not against
-a saved response.**  Every other parser in this package was checked
-cell-for-cell against real pages, and the one time I wrote to a guess instead,
-six of nine sheets failed on the first real run.  So: the field mapping is by
-name rather than by position, both response envelopes the two exchanges use
-are accepted, and :func:`check` fails loudly rather than returning a short
-series that would quietly bias the P/E band.  Run ``twsix fetch-yearly 5439
---save-raw <dir>`` once from a machine the exchanges will serve, and the saved
-JSON becomes this module's fixture the way ``tests/pages/`` did for MoneyDJ.
+櫃買's response is now a fixture: ``tests/pages/5439/5439_yearly_tpex.json`` is
+what 5439 actually returned, and the tests parse it.  It immediately justified
+the decision to map columns by *name*: 櫃買 labels its price columns
+「盤中最高價」/「盤中最低價」 and carries an extra 「加權平均價(B/A)」 that
+證交所 does not have, so reading by position would have taken the wrong column
+off one of the two exchanges.
+
+證交所's response is still unseen — 5439 is 上櫃, so 證交所 has nothing for it,
+and the first attempt never reached the server at all (see
+:func:`~twsix.ingest.base.tls_context` for why).  Fetch any 上市 code with
+``twsix fetch-yearly 2330 --save-raw <dir>`` and that half gets a fixture too.
 """
 
 from __future__ import annotations
@@ -42,7 +44,10 @@ WIDTH = 9
 ORIGIN = 3  # the body starts at sheet row 3
 
 #: Field names as the exchanges label them.  Matched by 「含有」 rather than
-#: equality: the exchanges have renamed 收盤平均價 to 平均收盤價 and back.
+#: equality, and that is not defensiveness: 櫃買 labels its columns
+#: 「盤中最高價」/「盤中最低價」 where 證交所 says 「最高價」/「最低價」, and
+#: 櫃買 carries an extra 「加權平均價(B/A)」 column that 證交所 does not have.
+#: Matching by position would read the wrong column off one of the two.
 FIELD_ALIASES: dict[int, tuple[str, ...]] = {
     COL_YEAR: ("年度",),
     COL_HIGH: ("最高價",),
@@ -61,11 +66,25 @@ class Year:
     avg: float | None
 
 
+class NotListedHere(FetchError):
+    """The exchange answered, and said it has no such stock.
+
+    5439 is 上櫃, so 證交所 returns a ``stat`` explaining there is no matching
+    data rather than an error.  That is a normal half of every fetch — each
+    stock is listed on exactly one of the two — so it must not read as a
+    failure, or every single-stock fetch would report one.
+    """
+
+
 def _envelope(payload: Any) -> tuple[list[str], list[list[Any]]]:
-    """Both exchanges answer with ``fields`` + ``data``; TPEx nests it in ``tables``.
+    """Both exchanges answer with ``fields`` + ``data``; 櫃買 nests it in ``tables``.
+
+    櫃買 returns two tables — the yearly history first, then a one-row
+    「近年最高價／最低價」 summary whose column names would also match the
+    aliases below.  Taking the first is deliberate.
 
     Returning the pair rather than a DataFrame-ish object keeps the mapping
-    explicit — a renamed column is then a contract failure with a name in it,
+    explicit: a renamed column is then a contract failure with a name in it,
     not a KeyError three functions away.
     """
     if isinstance(payload, dict):
@@ -75,6 +94,9 @@ def _envelope(payload: Any) -> tuple[list[str], list[list[Any]]]:
         data = payload.get("data") or payload.get("Data") or []
         if fields and isinstance(data, list):
             return [str(f) for f in fields], [list(r) for r in data]
+        stat = str(payload.get("stat", "")).strip()
+        if stat and stat.lower() != "ok":
+            raise NotListedHere(stat)
     raise FetchError("回應格式無法辨識：找不到 fields / data")
 
 
@@ -199,8 +221,15 @@ class YearlyTrading:
                 out[name] = {"error": str(exc)}
         return out
 
-    def fetch(self, stock_id: str) -> list[list[str]]:
-        raw = self.raw(stock_id)
+    def fetch(
+        self, stock_id: str, raw: dict[str, Any] | None = None
+    ) -> tuple[list[list[str]], list[str]]:
+        """The sheet grid, and which exchanges actually supplied it.
+
+        ``raw`` lets a caller that has already downloaded (``--save-raw``) hand
+        the payloads straight in, rather than paying for the round trip twice.
+        """
+        raw = self.raw(stock_id) if raw is None else raw
         parsed: dict[str, list[Year]] = {}
         errors: list[str] = []
         for name in ("twse", "tpex"):
@@ -210,10 +239,15 @@ class YearlyTrading:
                 continue
             try:
                 parsed[name] = parse(payload)
+            except NotListedHere:
+                continue  # the stock is simply listed on the other exchange
             except FetchError as exc:
                 errors.append(f"{name}: {exc}")
         years = merge(parsed.get("twse", []), parsed.get("tpex", []))
-        if not years and errors:
-            raise FetchError("年度交易資訊抓取失敗：\n  " + "\n  ".join(errors))
+        if not years:
+            raise FetchError(
+                "年度交易資訊抓取失敗：\n  " + "\n  ".join(errors or ["兩個交易所都沒有這檔"])
+            )
         check(years)
-        return to_grid(years)
+        sources = [n for n, ys in parsed.items() if ys]
+        return to_grid(years), sources

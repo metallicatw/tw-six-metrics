@@ -604,10 +604,12 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
     )
     yt = YearlyTrading(http=http)
 
+    raw = None
     if args.save_raw:
         raw_dir = Path(args.save_raw)
         raw_dir.mkdir(parents=True, exist_ok=True)
-        for name, payload in yt.raw(args.stock).items():
+        raw = yt.raw(args.stock)
+        for name, payload in raw.items():
             target = raw_dir / f"{args.stock}_yearly_{name}.json"
             target.write_text(
                 json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
@@ -615,7 +617,7 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
             print(f"  {name:<6} -> {target}")
 
     try:
-        grid = yt.fetch(args.stock)
+        grid, sources = yt.fetch(args.stock, raw)
     except Exception as exc:  # noqa: BLE001 - report and stop
         print(f"年度交易資訊抓取失敗：{exc}", file=sys.stderr)
         if args.save_raw:
@@ -632,7 +634,11 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
         json.dumps(grid, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
     )
     years = [row[0] for row in grid if row and row[0]]
-    print(f"  年度交易資訊 {len(years)} 年（{years[-1]}–{years[0]}）-> {target}")
+    where = "、".join({"twse": "證交所", "tpex": "櫃買"}.get(s, s) for s in sources)
+    print(
+        f"  年度交易資訊 {len(years)} 年（{years[-1]}–{years[0]}）"
+        f"　來源：{where} -> {target}"
+    )
     return EXIT_OK
 
 
