@@ -64,6 +64,13 @@ class Source:
     #: told a 鉅亨網 reader that Goodinfo was blocking them.
     when_empty: str = ""
     note: str = ""
+    #: A phrase from this page's <title>, used to tell a saved file apart from
+    #: its neighbours.  ``anchor`` cannot do that job: every Goodinfo page
+    #: carries the same left-hand menu, so 「持股分級」 appears in the 董監 page
+    #: too and the first source in the table always won.  The title is the one
+    #: string on the page that belongs to this page alone — it is also what the
+    #: browser names the file when you save it.
+    title_hint: str = ""
 
 
 SOURCES: dict[str, Source] = {
@@ -75,6 +82,7 @@ SOURCES: dict[str, Source] = {
             "?STEP=DATA&STOCK_ID={stock}&CHT_CAT=WEEK&PRICE_ADJ=F&SHEET=股數分級"
         ),
         anchor="持股分級",
+        title_hint="持股分級",
         headers={**BROWSER_HEADERS, "Referer": GOODINFO + "/tw/index.asp"},
         prime=GOODINFO + "/tw/index.asp",
         when_empty="Goodinfo 回 403。先確認換過的整組瀏覽器標頭有送出去，再考慮換網路",
@@ -85,6 +93,7 @@ SOURCES: dict[str, Source] = {
         sheet="董監持股",
         url=GOODINFO + "/tw/StockDirectorSharehold.asp?STOCK_ID={stock}",
         anchor="董監",
+        title_hint="董事、監察人",
         headers={**BROWSER_HEADERS, "Referer": GOODINFO + "/tw/index.asp"},
         prime=GOODINFO + "/tw/index.asp",
         when_empty="Goodinfo 回 403。先確認換過的整組瀏覽器標頭有送出去，再考慮換網路",
@@ -119,3 +128,28 @@ def probe(source: Source, text: str) -> Probe:
             why += f"。{source.when_empty}"
         return Probe(source, text, False, why)
     return Probe(source, text, True, f"{len(text):,} 字元，含「{source.anchor}」")
+
+
+def identify(text: str) -> Source | None:
+    """Which page is this?
+
+    The <title> first, because it is the only string that belongs to one page
+    alone — every Goodinfo page carries the same left-hand menu, so an anchor
+    like 「持股分級」 is present on all of them and matching by anchor made the
+    董監 file report itself as 大戶持股.  Anchors stay as the fallback for a
+    response with no title (a rejection page, usually).
+    """
+    import re
+
+    m = re.search(r"<title[^>]*>(.*?)</title>", text, re.S | re.I)
+    title = m.group(1) if m else ""
+    if title:
+        hits = [
+            src
+            for src in SOURCES.values()
+            if src.title_hint and src.title_hint in title
+        ]
+        if len(hits) == 1:
+            return hits[0]
+    hits = [src for src in SOURCES.values() if src.anchor in text]
+    return hits[0] if len(hits) == 1 else None

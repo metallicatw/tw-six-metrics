@@ -821,7 +821,7 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
     """
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient
-    from .ingest.pending import SOURCES, probe
+    from .ingest.pending import SOURCES, identify, probe
 
     names = [args.source] if args.source else list(SOURCES)
 
@@ -860,10 +860,9 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
             text = raw_bytes.decode("utf-8", errors="replace")
             if not any(src.anchor in text for src in SOURCES.values()):
                 text = raw_bytes.decode("cp950", errors="replace")
-            # 哪一個來源？看檔案內容裡有沒有那個 anchor，而不是看檔名。
-            hit = next(
-                (src for src in SOURCES.values() if src.anchor in text), None
-            )
+            # 哪一個來源？看頁面的 <title>，不是檔名，也不是 anchor——
+            # Goodinfo 每一頁都帶著同一份左側選單，anchor 會全部命中第一個。
+            hit = identify(text)
             if hit is None:
                 print(f"  可疑 {path.name}：{len(text):,} 字元，"
                       f"找不到任何一張表的特徵字（{'、'.join(s.anchor for s in SOURCES.values())}）",
