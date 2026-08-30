@@ -391,10 +391,12 @@ tr.here th{font-weight:700}
       if(r[4]){
         var t=document.createElement('span'); t.className='tag full'; t.textContent='完整';
         li.appendChild(t);
-      } else if(live){
-        var g=document.createElement('span'); g.className='tag grabbtn'; g.textContent='立即抓取';
+      } else if(live || repo){
+        var g=document.createElement('span'); g.className='tag grabbtn';
+        g.textContent = live ? '立即抓取' : '抓這一檔';
         g.addEventListener('mousedown', function(e){
-          e.preventDefault(); e.stopPropagation(); fetchStock(r[0]);
+          e.preventDefault(); e.stopPropagation();
+          if(live) fetchStock(r[0]); else askGithub(r[0]);
         });
         li.appendChild(g);
       }
@@ -431,9 +433,72 @@ tr.here th{font-weight:700}
    * 「立即抓取」放進搜尋結果，問不到就當作沒有這回事。
    */
   var live=false, grab=document.getElementById('grab');
+  var repo = {{ (repo or '')|tojson }};
   fetch(base+'api/ping').then(function(r){return r.ok?r.json():null;})
     .then(function(j){ live = !!(j && j.service==='twsix'); })
     .catch(function(){ live=false; });
+
+  /* 線上版的抓取路徑。
+   *
+   * 靜態網站自己抓不到券商鏡像站，但它可以「請這個 repo 去抓」：開一張標題就是
+   * 股號的 issue，.github/workflows/stock.yml 接手。issue 網址可以預先填好標題
+   * 與標籤，所以對使用者是一次點擊加一次送出，手機上也一樣。
+   *
+   * 送出之後不是叫人自己等：頁面每 15 秒重讀一次 search.json（同源，不碰 API，
+   * 沒有跨域也沒有速率限制），看那一檔的「有無完整頁」旗標翻過來沒有，翻了就
+   * 直接跳過去。GitHub Pages 的 CDN 會快取，所以帶一個時間戳當作不同網址。
+   */
+  function issueUrl(code){
+    return 'https://github.com/' + repo + '/issues/new'
+      + '?title=' + encodeURIComponent(code)
+      + '&labels=' + encodeURIComponent('抓取個股')
+      + '&body=' + encodeURIComponent(
+          '由網站上的「抓這一檔」按鈕開啟。\n\n'
+          + '送出後 workflow 會抓取 ' + code + ' 的報表、產生完整報告並重建網站，'
+          + '完成後會在這張 issue 留言並關閉。\n\n'
+          + '標題只放股號，不要加其他文字。');
+  }
+
+  var watching = null;
+  function watch(code, tries){
+    if(watching && watching !== code) return;
+    watching = code;
+    fetch(base + 'search.json?t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(rows){
+        for(var i=0;i<rows.length;i++){
+          if(rows[i][0] === code && rows[i][4]){
+            say(code + ' 好了，正在開啟報告…', []);
+            location.href = base + 'stock/' + code + '.html';
+            return;
+          }
+        }
+        next(code, tries);
+      })
+      .catch(function(){ next(code, tries); });
+  }
+  function next(code, tries){
+    if(tries <= 0){
+      say('還在等 GitHub 建置 ' + code + '。可以先關掉這頁，過幾分鐘再搜尋一次。', []);
+      watching = null;
+      return;
+    }
+    var mins = Math.round(tries * 15 / 60);
+    say('已送出 ' + code + '，等 GitHub 抓取並重建網站…（最多再等約 '
+        + mins + ' 分鐘，好了會自動跳過去）', []);
+    setTimeout(function(){ watch(code, tries - 1); }, 15000);
+  }
+
+  function askGithub(code){
+    close();
+    window.open(issueUrl(code), '_blank', 'noopener');
+    say('已開啟 GitHub 的 issue 頁面——按綠色的 Submit new issue 就會開始抓。', []);
+    /* 20 次 × 15 秒 = 五分鐘。抓一檔約 20 秒，建站約半分鐘，加上 runner 排隊，
+       五分鐘沒好通常是 workflow 失敗，那時叫人去看 Actions 比繼續轉圈有用。 */
+    setTimeout(function(){ watch(code, 20); }, 15000);
+  }
+  window.twsixAskGithub = askGithub;
+  window.twsixCanAsk = function(){ return !live && !!repo; };
 
   function say(head, log){
     if(!grab) return;
@@ -488,7 +553,9 @@ tr.here th{font-weight:700}
         e.preventDefault();
         /* 有完整報告就跳過去；沒有而且本機服務在跑，Enter 就是「去抓」——
            那才是「輸入代號就跑出完整報告」的意思。 */
-        if(!hits[cur][4] && live) fetchStock(hits[cur][0]);
+        if(hits[cur][4]) go(hits[cur]);
+        else if(live) fetchStock(hits[cur][0]);
+        else if(repo) askGithub(hits[cur][0]);
         else go(hits[cur]);
       }
     } else if(e.key==='Escape'){ close(); box.blur(); }

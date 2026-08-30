@@ -272,3 +272,66 @@ def test_the_dropped_section_is_gone_from_the_page_and_the_code():
     page = (out / "stock" / "5439.html").read_text("utf-8")
     assert "財務指標評等預估" not in page
     assert 'id="tab-scenarios"' not in page
+
+
+# -- 線上版的抓取路徑 ------------------------------------------------------
+
+
+def test_the_published_site_can_ask_github_to_fetch_a_stock():
+    """The one thing GitHub Pages can do that a static page normally cannot.
+
+    It cannot fetch the mirrors — the browser refuses the cross-origin request
+    and the engine is Python — but it can *ask the repository to*, by opening
+    an issue whose title is the code.  A workflow picks that up.  The issue URL
+    carries the title, so it is one click plus one Submit, phone included.
+    """
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
+    page = (out / "index.html").read_text("utf-8")
+
+    assert '"owner/repo"' in page
+    assert "issues/new" in page
+    assert "title=" in page
+
+
+def test_the_page_watches_for_its_own_result_rather_than_telling_you_to_wait():
+    """search.json is same-origin, so no API, no CORS, no rate limit.
+
+    The flag in field 5 flips when the stock gets a full page, which is exactly
+    the signal 「好了沒」 needs.  Cache-busted because the Pages CDN would
+    otherwise hand back the same file for minutes.
+    """
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
+    page = (out / "index.html").read_text("utf-8")
+
+    assert "search.json?t=" in page
+    assert "no-store" in page
+
+
+def test_no_repo_configured_means_no_offer():
+    """A fork, or a site published elsewhere, must not point back here."""
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="")
+    page = (out / "index.html").read_text("utf-8")
+
+    assert "metallicatw" not in page
+    assert 'var repo = ""' in page or "var repo = ''" in page
+
+
+def test_the_unfetched_stock_page_offers_both_paths_from_one_implementation():
+    """`twsix serve` fetches on the spot; GitHub Pages asks the repo.
+
+    Same button, same built HTML — which of the two it does is decided at load
+    time by whether /api/ping answers.
+    """
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
+    page = (out / "stock" / "2330.html").read_text("utf-8")
+
+    assert "twsixLive" in page and "twsixCanAsk" in page
+    assert "twsixFetch" in page and "twsixAskGithub" in page

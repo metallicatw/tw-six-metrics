@@ -186,6 +186,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         out,
         site_title=settings.report.title,
         rules=settings.rules,
+        repo=settings.report.repo,
         valuations=valuations,
         sheets_dir=store.root / "sheets",
     )
@@ -705,6 +706,7 @@ def cmd_page(args: argparse.Namespace) -> int:
         out / f"{args.stock}.html",
         site_title=settings.report.title,
         rel="../",
+        repo=settings.report.repo,
     )
     composite = (
         f"　綜合 {page.latest_composite:.2f}"

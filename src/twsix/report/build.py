@@ -270,6 +270,7 @@ def build_site(
     *,
     site_title: str = "台股六大財務指標評等",
     rules: Any = None,
+    repo: str = "",
     top_n: int = 50,
     valuations: list[dict[str, str]] | None = None,
     sheets_dir: Path | None = None,
@@ -294,6 +295,7 @@ def build_site(
     )
     base = dict(
         hidden_pages=sorted(HIDDEN_PAGES),
+        repo=repo,
         site_title=ctx.site_title,
         generated_at=ctx.generated_at,
         stock_count=ctx.stock_count,
@@ -666,6 +668,7 @@ def _full_stock_page(
         site_title=base.get("site_title", ""),
         generated_at=base.get("generated_at", ""),
         rel="../",
+        repo=base.get("repo", ""),
     )
     return True
 
@@ -677,6 +680,7 @@ def build_stock_page(
     site_title: str = "台股六大財務指標評等",
     generated_at: str = "",
     rel: str = "",
+    repo: str = "",
 ) -> Path:
     """Render 〔評價簡表〕〔六大財務指標評等〕〔EPS預估與估價〕〔殖利率估價〕.
 
@@ -690,6 +694,7 @@ def build_stock_page(
     env.get_template("stockpage.html.j2").stream(
         p=page,
         hidden_pages=sorted(HIDDEN_PAGES),
+        repo=repo,
         page="stock",
         rel=rel,
         site_title=site_title,

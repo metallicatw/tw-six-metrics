@@ -47,6 +47,14 @@ class ReportSettings:
     site_dir: str = "site"
     title: str = "台股六大財務指標評等"
     subtitle: str = "由公開資料自動產生"
+    #: ``owner/name`` of the GitHub repository this site is published from.
+    #:
+    #: The published site cannot fetch a stock itself — the browser refuses the
+    #: cross-origin request and the engine is Python — but it *can* ask this
+    #: repository to do it, by opening a pre-filled issue that a workflow picks
+    #: up.  Empty turns that offer off, which is what a fork with no Actions
+    #: budget, or a site published anywhere else, should get.
+    repo: str = "metallicatw/tw-six-metrics"
     max_list_rows: int = 2000
     show_value_picks_first: bool = True
 

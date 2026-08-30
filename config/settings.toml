@@ -44,5 +44,9 @@ moneydj_host            = "https://moneydj.emega.com.tw"
 site_dir = "site"
 title    = "台股六大財務指標評等"
 subtitle = "由公開資料自動產生"
+# 發布這個網站的 GitHub repo（owner/name）。網頁上按「抓這一檔」會開一張預先
+# 填好的 issue，由 .github/workflows/stock.yml 接手抓取並重建網站。
+# 留空就不顯示那個按鈕——fork 出去、或發布到別的地方，本來就不該指回這裡。
+repo = "metallicatw/tw-six-metrics"
 max_list_rows = 2000
 show_value_picks_first = true
