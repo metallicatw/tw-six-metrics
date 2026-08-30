@@ -332,6 +332,30 @@ def cmd_import_list(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+class _SavedPages:
+    """An :class:`~twsix.ingest.base.HttpClient` stand-in over ``--save-html`` output.
+
+    ``MoneyDJ`` asks for a URL; this answers from ``<dir>/<stock>_<sheet>.html``,
+    the exact names ``--save-html`` writes.  Nothing else about the fetch path
+    changes, so what gets parsed offline is what gets parsed online.
+    """
+
+    def __init__(self, directory: Path, stock: str) -> None:
+        self._dir = directory
+        self._stock = stock
+
+    def get_text(self, url: str, encoding: str = "") -> str:
+        from .ingest.moneydj import ENDPOINTS
+
+        for sheet, spec in ENDPOINTS.items():
+            if url.endswith(spec.path.format(stock=self._stock)):
+                path = self._dir / f"{self._stock}_{sheet}.html"
+                if not path.is_file():
+                    raise FileNotFoundError(f"找不到 {path}")
+                return path.read_text(encoding="utf-8")
+        raise FileNotFoundError(f"無法由網址判斷分頁：{url}")
+
+
 def cmd_fetch_stock(args: argparse.Namespace) -> int:
     """單檔查詢：抓一支股票的九張報表，存成可離線重讀的格線.
 
@@ -349,17 +373,24 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
     # Rotation across eight mirrors *is* the retry strategy, so retrying each
     # host four times just makes "you are blocked" take a minute to discover.
     # One attempt per host, then move on.
-    http = HttpClient(
-        cache_dir=Path(settings.ingest.cache_dir),
-        cache_ttl=settings.ingest.cache_ttl_hours * 3600,
-        min_interval=settings.ingest.min_interval_seconds,
-        retries=args.retries,
-    )
-    dj = MoneyDJ(
-        http=http,
-        preferred=args.host or "",
-        save_html=Path(args.save_html) if args.save_html else None,
-    )
+    if args.from_html:
+        # Re-read pages already on disk.  A parse bug and a blocked IP look
+        # nothing alike, and separating them is the difference between fixing
+        # the parser in a second and re-fetching nine pages to find out.
+        http = _SavedPages(Path(args.from_html), args.stock)
+        dj = MoneyDJ(http=http, hosts=("saved://",))
+    else:
+        http = HttpClient(
+            cache_dir=Path(settings.ingest.cache_dir),
+            cache_ttl=settings.ingest.cache_ttl_hours * 3600,
+            min_interval=settings.ingest.min_interval_seconds,
+            retries=args.retries,
+        )
+        dj = MoneyDJ(
+            http=http,
+            preferred=args.host or "",
+            save_html=Path(args.save_html) if args.save_html else None,
+        )
 
     out_dir = Path(args.out or settings.data_dir) / "sheets" / args.stock
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -613,6 +644,10 @@ def build_parser() -> argparse.ArgumentParser:
     fs.add_argument(
         "--save-html", dest="save_html",
         help="把抓到的原始 HTML 存到這個目錄（解析出錯時用來對照）",
+    )
+    fs.add_argument(
+        "--from-html", dest="from_html",
+        help="不連網，改讀 --save-html 存下的 HTML 目錄（解析出錯時用來重跑）",
     )
     fs.add_argument(
         "--retries", type=int, default=1,
