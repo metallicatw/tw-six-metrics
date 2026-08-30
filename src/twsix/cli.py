@@ -16,6 +16,7 @@ import argparse
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Sequence
 
 from .config import REPO_ROOT, Settings
 from .models import INDICATOR_ORDER, INDICATOR_LABELS
@@ -200,6 +201,18 @@ def cmd_build(args: argparse.Namespace) -> int:
 # =========================================================================
 
 
+#: Column names the official feeds use for a stock's identifier, best first.
+ID_COLUMNS: tuple[str, ...] = ("公司代號", "Code", "SecuritiesCompanyCode", "股票代號")
+
+
+def _id_columns(columns: Sequence[str]) -> tuple[str, ...]:
+    """A deterministic sort key: the id column when there is one, else all."""
+    for name in ID_COLUMNS:
+        if name in columns:
+            return (name,)
+    return tuple(columns)
+
+
 def cmd_fetch(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient
@@ -245,7 +258,12 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             failures += 1
             continue
         columns = sorted({k for r in rows for k in r}) if rows else []
-        n = store.write(name, rows, columns) if columns else 0
+        # Sort before writing.  The store promises that an unchanged fetch
+        # produces a byte-identical file — that is the whole reason the data
+        # lives in CSV — but these feeds do not guarantee row order, so an
+        # unsorted write rewrote data/tpex_companies.csv in full between two
+        # runs on the same day.
+        n = store.write(name, rows, columns, sort_by=_id_columns(columns)) if columns else 0
         manifest.counts[name] = n
         manifest.sources.append({"name": name, "fetched_at": now, "rows": n})
         print(f"  {name:<18} {n} 列")
