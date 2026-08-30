@@ -332,6 +332,30 @@ def cmd_import_list(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+class _SavedPages:
+    """An :class:`~twsix.ingest.base.HttpClient` stand-in over ``--save-html`` output.
+
+    ``MoneyDJ`` asks for a URL; this answers from ``<dir>/<stock>_<sheet>.html``,
+    the exact names ``--save-html`` writes.  Nothing else about the fetch path
+    changes, so what gets parsed offline is what gets parsed online.
+    """
+
+    def __init__(self, directory: Path, stock: str) -> None:
+        self._dir = directory
+        self._stock = stock
+
+    def get_text(self, url: str, encoding: str = "") -> str:
+        from .ingest.moneydj import ENDPOINTS
+
+        for sheet, spec in ENDPOINTS.items():
+            if url.endswith(spec.path.format(stock=self._stock)):
+                path = self._dir / f"{self._stock}_{sheet}.html"
+                if not path.is_file():
+                    raise FileNotFoundError(f"找不到 {path}")
+                return path.read_text(encoding="utf-8")
+        raise FileNotFoundError(f"無法由網址判斷分頁：{url}")
+
+
 def cmd_fetch_stock(args: argparse.Namespace) -> int:
     """單檔查詢：抓一支股票的九張報表，存成可離線重讀的格線.
 
@@ -349,17 +373,24 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
     # Rotation across eight mirrors *is* the retry strategy, so retrying each
     # host four times just makes "you are blocked" take a minute to discover.
     # One attempt per host, then move on.
-    http = HttpClient(
-        cache_dir=Path(settings.ingest.cache_dir),
-        cache_ttl=settings.ingest.cache_ttl_hours * 3600,
-        min_interval=settings.ingest.min_interval_seconds,
-        retries=args.retries,
-    )
-    dj = MoneyDJ(
-        http=http,
-        preferred=args.host or "",
-        save_html=Path(args.save_html) if args.save_html else None,
-    )
+    if args.from_html:
+        # Re-read pages already on disk.  A parse bug and a blocked IP look
+        # nothing alike, and separating them is the difference between fixing
+        # the parser in a second and re-fetching nine pages to find out.
+        http = _SavedPages(Path(args.from_html), args.stock)
+        dj = MoneyDJ(http=http, hosts=("saved://",))
+    else:
+        http = HttpClient(
+            cache_dir=Path(settings.ingest.cache_dir),
+            cache_ttl=settings.ingest.cache_ttl_hours * 3600,
+            min_interval=settings.ingest.min_interval_seconds,
+            retries=args.retries,
+        )
+        dj = MoneyDJ(
+            http=http,
+            preferred=args.host or "",
+            save_html=Path(args.save_html) if args.save_html else None,
+        )
 
     out_dir = Path(args.out or settings.data_dir) / "sheets" / args.stock
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -411,6 +442,8 @@ def _fetched_reader(root: Path, stock: str):
 
     from .ingest.moneydj import GridSource
 
+    from .ingest.derive import enrich
+
     base = root / "sheets" / stock
     if not base.is_dir():
         return None
@@ -418,7 +451,11 @@ def _fetched_reader(root: Path, stock: str):
         p.stem: json.loads(p.read_text(encoding="utf-8"))
         for p in sorted(base.glob("*.json"))
     }
-    return GridSource(grids) if grids else None
+    if not grids:
+        return None
+    # The pages carry what MoneyDJ printed; the workbook's sheets carry more.
+    # `enrich` puts the formula columns back before anything reads them.
+    return GridSource(enrich(grids, stock))
 
 
 def cmd_value(args: argparse.Namespace) -> int:
@@ -544,6 +581,61 @@ def _g(value: object) -> str:
     return "—" if value is None else f"{float(value):g}"  # type: ignore[arg-type]
 
 
+def cmd_fetch_yearly(args: argparse.Namespace) -> int:
+    """年度交易資訊：從證交所、櫃買中心抓歷年最高／最低／收盤平均價.
+
+    This is the one sheet the mirrors do not serve, and the one the P/E band
+    (自行計算) and the whole dividend-yield model need.  It is also the only
+    parser in the project not yet checked against a real response — so
+    ``--save-raw`` writes both payloads verbatim, and running it once from a
+    network the exchanges will serve turns it into a fixture.
+    """
+    import json
+
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient
+    from .ingest.yearly_trading import SHEET, YearlyTrading
+
+    http = HttpClient(
+        cache_dir=Path(settings.ingest.cache_dir),
+        cache_ttl=settings.ingest.cache_ttl_hours * 3600,
+        min_interval=settings.ingest.min_interval_seconds,
+        retries=settings.ingest.retries,
+    )
+    yt = YearlyTrading(http=http)
+
+    if args.save_raw:
+        raw_dir = Path(args.save_raw)
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        for name, payload in yt.raw(args.stock).items():
+            target = raw_dir / f"{args.stock}_yearly_{name}.json"
+            target.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
+            )
+            print(f"  {name:<6} -> {target}")
+
+    try:
+        grid = yt.fetch(args.stock)
+    except Exception as exc:  # noqa: BLE001 - report and stop
+        print(f"年度交易資訊抓取失敗：{exc}", file=sys.stderr)
+        if args.save_raw:
+            print(
+                "  原始回應已存下——把那兩個 JSON 給我，解析就照著它們改。",
+                file=sys.stderr,
+            )
+        return EXIT_FAIL
+
+    out_dir = Path(args.out or settings.data_dir) / "sheets" / args.stock
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / f"{SHEET}.json"
+    target.write_text(
+        json.dumps(grid, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+    )
+    years = [row[0] for row in grid if row and row[0]]
+    print(f"  年度交易資訊 {len(years)} 年（{years[-1]}–{years[0]}）-> {target}")
+    return EXIT_OK
+
+
 def cmd_extract_golden(args: argparse.Namespace) -> int:
     import subprocess
 
@@ -615,11 +707,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="把抓到的原始 HTML 存到這個目錄（解析出錯時用來對照）",
     )
     fs.add_argument(
+        "--from-html", dest="from_html",
+        help="不連網，改讀 --save-html 存下的 HTML 目錄（解析出錯時用來重跑）",
+    )
+    fs.add_argument(
         "--retries", type=int, default=1,
         help="每個站台重試次數（預設 1；輪替八個站台本身就是重試）",
     )
     fs.add_argument("--out", help="資料目錄")
     fs.set_defaults(func=cmd_fetch_stock)
+
+    fy = sub.add_parser(
+        "fetch-yearly", help="年度交易資訊：歷年最高／最低／收盤平均價（證交所、櫃買）"
+    )
+    fy.add_argument("stock", help="股票代號")
+    fy.add_argument(
+        "--save-raw", dest="save_raw",
+        help="把兩個交易所的原始 JSON 存到這個目錄（解析尚未對照過真實回應）",
+    )
+    fy.add_argument("--out", help="資料目錄")
+    fy.set_defaults(func=cmd_fetch_yearly)
 
     g = sub.add_parser("extract-golden", help="把活頁簿凍結成測試樣本")
     g.add_argument("workbook")

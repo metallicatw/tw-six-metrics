@@ -1,23 +1,28 @@
-"""Broker-mirror fetch layer.
+"""Broker-mirror fetch layer, tested against the real pages.
 
 The HTTP half cannot be tested here — the sandbox reaches none of the mirrors.
-So the module is split so that everything *except* the socket is a pure
-function over text, and those are what these tests drive:
+Everything else is a pure function over text, and these tests drive it with
+the nine pages 5439 actually returned, saved under ``tests/pages/5439/``.
 
-* :func:`parse_main_table` against markup shaped like the real page — the
-  structure is not guessed, it is transcribed from `MoneyDJ_財報三表_New`
-  (`#oMainTable` → `div.table-row` → `span`).
-* :func:`check_contract` against grids taken from the **workbook**, which is
-  by definition the shape a correct parse must produce.
+The oracle is not a hand-written fixture.  It is the workbook's own sheets
+(``tests/golden/5439/*.json``), which hold exactly what Excel wrote when it
+imported these same pages.  So :func:`parse_page` is checked cell-for-cell
+against a known-correct import rather than against markup I invented — which
+matters, because the first version of this module *was* checked against markup
+I invented, passed every test, and then failed six of nine sheets on the first
+real run.
 
-That second point is the whole design: the contract is validated against real
-data even though the fetch is not, so a markup change is caught by a failing
-contract rather than by a silently empty page.
+Some columns in the golden sheets are the workbook's own formulas, not the
+page's data (〔營收〕's I..AK, 〔BASIC〕's J..Q).  The comparison is therefore
+bounded by the width the page itself spans; the rows below each page's body
+are excluded the same way.
 """
 
 from __future__ import annotations
 
+import json
 from contextlib import contextmanager
+from pathlib import Path
 
 from golden_loader import sheets
 from twsix.ingest.moneydj import (
@@ -31,9 +36,28 @@ from twsix.ingest.moneydj import (
     _offset_grid,
     _to_number,
     check_contract,
-    parse_html_table,
-    parse_main_table,
+    parse_page,
 )
+
+PAGES = Path(__file__).resolve().parent / "pages" / "5439"
+GOLDEN = Path(__file__).resolve().parent / "golden" / "5439"
+
+#: The nine sheets 〔評價簡表〕 fetches, and how far down each page's own body
+#: reaches in the sheet.  Below that the workbook appends its own calculations
+#: (〔BASIC〕's 本益比成長率 block at row 44, 〔股利〕's footnotes), which no
+#: parse of the page can or should produce.
+SHEETS: dict[str, int] = {
+    "ISQ": 999,
+    "BSQ": 999,
+    "CFQ": 999,
+    "FRQ": 103,
+    "BASIC": 43,
+    "營收": 999,
+    "OPQ": 999,
+    "EPQ": 999,
+    "股利": 36,
+}
+
 
 @contextmanager
 def raises(exc):
@@ -54,119 +78,150 @@ class _Caught:
         return _Caught.last  # type: ignore[return-value]
 
 
-# Shaped like the real 綜合損益表 page: a heading div with the title and unit,
-# then rows whose cells are spans, wrapped in the chrome the parser must skip.
-PAGE = """
-<html><body>
-<div id="nav"><span>不該被讀到</span></div>
-<table id="oMainTable"><tr><td>
-  <div class="table-header">高技(5439) 綜合損益表<br>單位：仟元</div>
-  <div class="table-row"><span>期別</span><span>2026.2Q</span><span>2026.1Q</span></div>
-  <div class="table-row"><span>營業收入</span><span>2,559,000</span><span>2,258,000</span></div>
-  <div class="table-row"><span>營業成本</span><span>(1,984,000)</span><span>-1,752,000</span></div>
-</td></tr></table>
-<div id="footer"><span>也不該被讀到</span></div>
-</body></html>
-"""
+def page(sheet: str) -> str:
+    return (PAGES / f"5439_{sheet}.html").read_text(encoding="utf-8")
 
 
-def test_parse_reads_only_the_main_table():
-    t = parse_main_table(PAGE)
-    flat = [c for row in t.rows for c in row]
-    assert "不該被讀到" not in flat
-    assert "也不該被讀到" not in flat
+def parsed(sheet: str) -> list[list[str]]:
+    """The page, laid out at the sheet row the workbook writes it to."""
+    return _offset_grid(sheet, parse_page(page(sheet)))
 
 
-def test_parse_finds_every_row_and_cell():
-    t = parse_main_table(PAGE)
-    # rows[0] and [1] are the 財報名稱 / 單位 lines the VBA writes above the body.
-    assert t.rows[2] == ["期別", "2026.2Q", "2026.1Q"]
-    assert t.rows[3] == ["營業收入", "2,559,000", "2,258,000"]
+def golden(sheet: str) -> dict[str, dict[str, str]]:
+    return json.load((GOLDEN / f"{sheet}.json").open(encoding="utf-8"))
 
 
-def test_parse_picks_up_title_and_unit():
-    t = parse_main_table(PAGE)
-    assert t.title.startswith("高技")
-    assert "仟元" in t.rows[1][0]
+def _same(got: str, want: str) -> bool:
+    """Compare as the sheet would: 「1,050,323」 is 1050323 and 「4.48%」 is .0448."""
+    if got.strip() == want.strip():
+        return True
+    a, b = _to_number(got), _to_number(want)
+    return a is not None and b is not None and abs(a - b) < 1e-9
 
 
-def test_void_tags_do_not_break_the_nesting_count():
-    """<br> has no closing tag; counting it as nesting broke every later row.
+# -- the parse -------------------------------------------------------------
 
-    The first real run parsed nothing at all from a page whose heading
-    contained a <br>, because the depth counter only ever went up.
+
+def test_every_page_parses_into_the_sheet_the_workbook_holds():
+    """Cell for cell, over every column the page supplies.
+
+    This is the test the module needed and did not have.  If MoneyDJ moves a
+    heading, splits a cell, or drops a column, some cell here stops matching
+    and names itself.
     """
-    t = parse_main_table(PAGE)
-    assert len(t.rows) == 5  # 2 heading lines + 3 data rows
+    for sheet, last_row in SHEETS.items():
+        grid = parsed(sheet)
+        width = max((len(r) for r in grid), default=0)
+        assert width, f"{sheet}: 完全沒解析到內容"
+        first_row = ENDPOINTS[sheet].origin
+        for row, cells in golden(sheet).items():
+            if not first_row <= int(row) <= last_row:
+                continue  # the workbook's own header rows, and its own trailer
+            for col, want in cells.items():
+                if len(col) > 1 or ord(col) - 65 >= width:
+                    continue  # a column the workbook computes, not one the page has
+                r, c = int(row) - 1, ord(col) - 65
+                got = grid[r][c] if r < len(grid) and c < len(grid[r]) else ""
+                assert _same(got, want), f"{sheet}!{col}{row}: 期望 {want!r}，得到 {got!r}"
 
 
-def test_grid_reproduces_the_workbook_row_offset():
-    """The VBA dumps arrData at A3, so 期別 must land on sheet row 5."""
-    grid = _offset_grid("ISQ", parse_main_table(PAGE))
+def test_every_page_satisfies_its_contract():
+    for sheet in SHEETS:
+        check_contract(sheet, parsed(sheet))
+
+
+def test_isq_survives_a_form_closed_inside_the_table():
+    """〔ISQ〕 opens ``<FORM>`` before ``<table>`` and closes it inside the ``<td>``.
+
+    Honouring that close pops the table off the element stack, so every row
+    after it lands outside the table and the page parses to four rows — the
+    title and unit and nothing else.  Browsers ignore a close that reaches out
+    of an open cell; so does the DOM builder.
+    """
+    grid = parsed("ISQ")
+    assert len(grid) > 100
     assert grid[4][0] == "期別"
+    assert grid[103][0] == "每股盈餘"
 
 
-RATIO_PAGE = """
-<html><body><table id="oMainTable"><tr><td>
-  <div class="table-header">高技(5439) 財務比率表</div>
-  <div class="table-header">獲利能力指標<br>單位：%</div>
-  <div class="table-row"><span>期別</span><span>2026.2Q</span></div>
-  <div class="table-row"><span>種類</span><span>合併</span></div>
-  <div class="table-row"><span>ROA(C)稅前息前折舊前</span><span>5.24</span></div>
-</td></tr></table></body></html>
-"""
+def test_dividends_survive_rows_that_never_open():
+    """〔股利〕's data rows are written ``</tr>`` … ``<td>`` … ``</tr>``.
 
-
-def test_ratio_layout_keeps_section_headings_inline():
-    """〔FRQ〕's 期別 sits at sheet row 6, not 5.
-
-    The section heading (獲利能力指標 / 單位：%) occupies two rows *between*
-    the title and the data.  Lumping headings at the top shifted the whole
-    sheet up by one — the first real run reported "第 6 列預期含「期別」，
-    實際為「種類」", which is precisely an off-by-one.
+    The opening ``<tr>`` is simply absent.  A parser that trusts the markup
+    finds six rows where there are eighteen years of dividends — which is what
+    the first real run reported as 「只解析出 6 列」.
     """
-    grid = _offset_grid("FRQ", parse_main_table(RATIO_PAGE, "ratio"))
+    grid = parsed("股利")
+    years = [r[0] for r in grid if r and r[0].isdigit() and len(r[0]) == 4]
+    assert len(years) >= 15
+    assert years[0] == "2025"
+
+
+def test_a_rowspan_cell_does_not_push_the_next_row_down():
+    """〔股利〕's 「員工<br/>配股率(%)」 is two lines *and* ``rowspan=2``.
+
+    Counting its second line as height in its own row inserts a blank row, and
+    everything under it — the whole dividend history — shifts down one.
+    """
+    grid = parsed("股利")
+    assert grid[5][0] == "股利所屬年度"  # sheet row 6
+    assert grid[5][8] == "員工"
+    assert grid[6][8] == "配股率(%)"
+    assert grid[6][1] == "盈餘發放"  # sheet row 7, not row 8
+
+
+def test_a_unit_div_lands_on_its_own_row():
+    """Every page keeps 「單位：…」 in the *same* cell as its title.
+
+    It is a block-level ``<div class="t11">``, so Excel put it on the next row
+    and the whole body sits one row lower than a naive parse would place it.
+    """
+    for sheet, unit in (
+        ("OPQ", "單位：千股 / 百萬元"),
+        ("EPQ", "單位：百萬"),
+        ("營收", "單位：仟元"),
+        ("股利", "單位：元"),
+    ):
+        grid = parsed(sheet)
+        assert unit in [r[0] for r in grid[:7] if r], f"{sheet} 少了 {unit}"
+
+
+def test_basic_widens_its_first_column_for_the_nested_pe_table():
+    """〔BASIC〕's body sits in A and C..I, with B empty.
+
+    Its 年度/本益比 block is a nine-column table nested inside an eight-column
+    parent, so the region had to open up by one — and Excel widened the
+    region's first column.  Get this wrong and 收盤價 moves off I5, which is
+    the price every valuation starts from.
+    """
+    grid = parsed("BASIC")
+    assert grid[4][0] == "開盤價"
+    assert grid[4][1] == ""
+    assert grid[4][8] == "264.5"  # I5 — 收盤價
+    assert grid[28][0] == "年度"
+    assert grid[31][0] == "最高本益比"
+    assert grid[31][1] == "32.13"
+
+
+def test_frq_section_headings_occupy_rows_between_the_data():
+    """〔FRQ〕's 獲利能力指標 / 單位：% are captions, and captions are rows."""
+    grid = parsed("FRQ")
+    assert grid[3][0] == "獲利能力指標"
+    assert grid[4][0] == "單位：%"
     assert grid[5][0] == "期別"
-    assert grid[6][0] == "種類"
-    # Not check_contract() here — this fixture is three rows long and FRQ's
-    # contract wants thirty.  The contract is exercised against the real
-    # workbook grid in test_contracts_pass_on_the_workbooks_own_sheets.
 
 
-TABLE_PAGE = """
-<html><body>
-<table><tr><td>版面用的表格</td></tr></table>
-<table><tr><td>還是版面</td></tr></table>
-<table>
-  <tr><td>高技(5439)月營收明細</td></tr>
-  <tr><td>單位：仟元</td></tr>
-  <tr><td>年/月</td><td>營收</td></tr>
-  <tr><td>115/07</td><td>1,050,323</td></tr>
-</table>
-</body></html>
-"""
+def test_scripts_and_form_controls_never_reach_the_sheet():
+    """〔BASIC〕's title cell holds a three-option ``<select>``; the sheet has 基本資料."""
+    grid = parsed("BASIC")
+    assert grid[2][0] == "基本資料"
+    flat = " ".join(c for row in grid for c in row)
+    assert "changeStkID" not in flat
+    assert "高技一(54391)" not in flat
 
 
-def test_query_tables_era_sheets_parse_plain_html_tables():
-    """〔BASIC〕〔營收〕〔股利〕〔OPQ〕〔EPQ〕 are <table>, not div.table-row.
-
-    They were never converted off Excel's QueryTables.  Feeding them to the
-    div parser produced four rows of nothing on the first real run.
-    """
-    t = parse_html_table(TABLE_PAGE, 3)
-    assert t.rows[2] == ["年/月", "營收"]
-    assert t.rows[3] == ["115/07", "1,050,323"]
-
-
-def test_table_index_falls_back_to_the_largest_table():
-    """A wrong index must not silently return a layout table's one cell."""
-    t = parse_html_table(TABLE_PAGE, 1)
-    assert len(t.rows) == 4  # fell back to the real one
-
-
-def test_missing_table_yields_nothing_rather_than_garbage():
-    t = parse_main_table("<html><body><div class='table-row'><span>x</span></div></body></html>")
-    assert t.rows == []
+def test_a_page_without_a_data_table_yields_nothing_rather_than_garbage():
+    assert parse_page("<html><body><p>查無資料</p></body></html>").rows == []
 
 
 # -- contracts -------------------------------------------------------------
@@ -176,8 +231,7 @@ def _workbook_grid(sheet: str) -> list[list[str]]:
     """The workbook's own sheet as a dense grid — a known-good parse."""
     g = sheets("5439")[sheet]
     rows = g.row_numbers()
-    width = 12
-    cols = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"][:width]
+    cols = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"]
     out: list[list[str]] = []
     for r in range(1, max(rows) + 1):
         out.append([g[c, r] for c in cols])
@@ -186,7 +240,7 @@ def _workbook_grid(sheet: str) -> list[list[str]]:
 
 def test_contracts_pass_on_the_workbooks_own_sheets():
     """Every contract must accept real data — otherwise it is just noise."""
-    for sheet in ("ISQ", "BSQ", "CFQ", "FRQ", "EPQ", "OPQ", "BASIC", "營收", "股利"):
+    for sheet in SHEETS:
         check_contract(sheet, _workbook_grid(sheet))
 
 
@@ -198,97 +252,53 @@ def test_contract_catches_a_shifted_layout():
     assert "期別" in str(e.value)
 
 
-def test_contract_catches_an_empty_parse():
-    with raises(ContractError) as e:
-        check_contract("ISQ", [])
-    assert "只解析出 0 列" in str(e.value)
-
-
-def test_contract_error_names_the_cell_and_points_at_the_reference():
-    with raises(ContractError) as e:
-        check_contract("ISQ", [[""] for _ in range(200)])
-    msg = str(e.value)
-    assert "第 5 列第 1 欄" in msg
-    assert "ENDPOINTS.md" in msg
-
-
-def test_unknown_sheet_has_no_contract_and_does_not_explode():
-    check_contract("沒有這張表", [])
-
-
-# -- endpoints and hosts ---------------------------------------------------
-
-
-def test_every_fetch_order_sheet_has_an_endpoint():
+def test_every_fetched_sheet_has_a_contract():
     for sheet in ORDER:
-        assert sheet in ENDPOINTS, sheet
+        assert sheet in CONTRACTS, f"{sheet} 沒有契約檢查"
+        assert sheet in ENDPOINTS
 
 
-def test_hosts_are_https_and_unique():
-    assert len(set(HOSTS)) == len(HOSTS)
-    assert all(h.startswith("https://") for h in HOSTS)
+# -- numbers ---------------------------------------------------------------
+
+
+def test_percentages_come_back_as_fractions():
+    """The sheets store 22.46% as 0.2246, and the ratings compare fractions."""
+    assert abs(_to_number("22.46%") - 0.2246) < 1e-12
+    assert abs(_to_number("-4.78%") + 0.0478) < 1e-12
+    assert _to_number("1,050,323") == 1050323
+    assert _to_number("(1,234)") == -1234
+    assert _to_number("N/A") is None
+
+
+# -- the reader over fetched grids ----------------------------------------
+
+
+def test_grid_source_reads_a_fetched_page_by_sheet_coordinates():
+    """The payoff: a fetched page is addressed exactly like a workbook sheet."""
+    src = GridSource({s: parsed(s) for s in SHEETS})
+    assert src.num("BASIC", "I", 5) == 264.5
+    assert src.num("BASIC", "B", 32) == 32.13
+    assert src.text("營收", "A", 8) == "115/07"
+    assert src.num("EPQ", "K", 7) == 4.64
+    assert src.text("股利", "A", 8) == "2025"
+    assert src.num("股利", "D", 8) == 7.19992263
+
+
+# -- fetch plumbing --------------------------------------------------------
 
 
 def test_host_rotation_skips_a_refusing_mirror():
-    calls: list[str] = []
+    class _Http:
+        def __init__(self):
+            self.tried: list[str] = []
 
-    class Boom:
-        def get_text(self, url, encoding="utf-8", **kw):
-            calls.append(url)
-            if len(calls) < 3:
-                raise OSError("connection refused")
-            return PAGE
+        def get_text(self, url: str, encoding: str = "") -> str:
+            self.tried.append(url)
+            if HOSTS[0] in url:
+                raise OSError("403")
+            return page("OPQ")
 
-    # 三大法人 has no contract, so this test is about rotation and nothing else.
-    dj = MoneyDJ(http=Boom())  # type: ignore[arg-type]
-    grid = dj.fetch("5439", "三大法人")
-    assert grid[4][0] == "期別"
-    assert len(calls) == 3  # two mirrors refused, the third served
-
-
-def test_a_contract_failure_does_not_hammer_all_eight_mirrors():
-    """Broken markup comes back from every mirror; one failure is enough."""
-    calls: list[str] = []
-
-    class Blank:
-        def get_text(self, url, encoding="utf-8", **kw):
-            calls.append(url)
-            return "<html><body><table id='oMainTable'></table></body></html>"
-
-    dj = MoneyDJ(http=Blank())  # type: ignore[arg-type]
-    with raises(ContractError):
-        dj.fetch("5439", "ISQ")
-    assert len(calls) == 1
-
-
-def test_preferred_host_goes_first():
-    seen: list[str] = []
-
-    class Rec:
-        def get_text(self, url, encoding="utf-8", **kw):
-            seen.append(url)
-            return PAGE
-
-    MoneyDJ(http=Rec(), preferred=HOSTS[3]).fetch("5439", "三大法人")  # type: ignore[arg-type]
-    assert seen[0].startswith(HOSTS[3])
-
-
-# -- numbers and the reader ------------------------------------------------
-
-
-def test_number_parsing_handles_the_pages_conventions():
-    assert _to_number("2,559,000") == 2559000.0
-    assert _to_number("(1,984)") == -1984.0  # parentheses are negatives
-    assert _to_number("14.13%") == 14.13
-    assert _to_number("N/A") is None
-    assert _to_number("---") is None
-    assert _to_number("") is None
-
-
-def test_grid_source_reads_like_a_sheet():
-    src = GridSource({"ISQ": _offset_grid("ISQ", parse_main_table(PAGE))})
-    assert src.has("ISQ") and not src.has("BSQ")
-    assert src.text("ISQ", "A", 5) == "期別"
-    assert src.text("ISQ", "B", 6) == "2,559,000"
-    assert src.num("ISQ", "B", 6) == 2559000.0
-    assert src.text("ISQ", "Z", 5) == ""  # off the end, not an error
+    http = _Http()
+    grid = MoneyDJ(http=http).fetch("5439", "OPQ")
+    assert len(http.tried) == 2
+    assert grid[4][0] == "季別"

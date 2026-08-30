@@ -204,10 +204,25 @@ def read_valuation_input(
 
     years, p_hi, p_lo, p_avg = yearly_prices(reader)
 
-    # 自行計算 (BASIC2) when present, else 公開資訊 (BASIC's published figures).
+    eps_by_year = annual_eps(reader, years)
+
+    # 自行計算 (BASIC2) when the workbook has already built it; otherwise
+    # rebuild it here from 年度最高/最低價 ÷ 年度EPS, which is what BASIC2 is.
+    # Only 公開資訊 (〔BASIC〕's published P/E) is left when there are no yearly
+    # prices — and that basis prices growth stocks a quarter behind, which is
+    # why the workbook does not default to it.
     if reader.has(BASIC2):
         pe_high = _nums(reader, BASIC2, BASIC2_ROW_PE_HIGH, BASIC2_YEAR_COLS)
         pe_low = _nums(reader, BASIC2, BASIC2_ROW_PE_LOW, BASIC2_YEAR_COLS)
+    elif any(p_hi) and any(eps_by_year):
+        from ..valuation.eps_forecast import PeBand
+
+        # 〔BASIC2〕B6 holds the *forecast* EPS for the running year, which is
+        # not known until the forecast has run.  It does not matter for the
+        # bases the workbook offers: 5年平均 and 3年平均 both count from 去年,
+        # so index 0 is excluded either way.  當年度 and 當年/5年孰低 abstain
+        # rather than quietly using a trailing figure in its place.
+        pe_high, pe_low = PeBand.computed_multiples(p_hi, p_lo, [None, *eps_by_year[1:]])
     else:
         pe_high = _nums(reader, BASIC, BASIC_ROW_PE_HIGH, BASIC_YEAR_COLS)
         pe_low = _nums(reader, BASIC, BASIC_ROW_PE_LOW, BASIC_YEAR_COLS)
@@ -235,7 +250,7 @@ def read_valuation_input(
         pe_high=pe_high,
         pe_low=pe_low,
         dividends=dividends(reader, years),
-        annual_eps=annual_eps(reader, years),
+        annual_eps=eps_by_year,
         price_high=p_hi,
         price_low=p_lo,
         price_avg=p_avg,
