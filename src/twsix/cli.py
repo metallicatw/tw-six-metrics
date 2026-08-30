@@ -442,6 +442,8 @@ def _fetched_reader(root: Path, stock: str):
 
     from .ingest.moneydj import GridSource
 
+    from .ingest.derive import enrich
+
     base = root / "sheets" / stock
     if not base.is_dir():
         return None
@@ -449,7 +451,11 @@ def _fetched_reader(root: Path, stock: str):
         p.stem: json.loads(p.read_text(encoding="utf-8"))
         for p in sorted(base.glob("*.json"))
     }
-    return GridSource(grids) if grids else None
+    if not grids:
+        return None
+    # The pages carry what MoneyDJ printed; the workbook's sheets carry more.
+    # `enrich` puts the formula columns back before anything reads them.
+    return GridSource(enrich(grids, stock))
 
 
 def cmd_value(args: argparse.Namespace) -> int:
@@ -575,6 +581,61 @@ def _g(value: object) -> str:
     return "—" if value is None else f"{float(value):g}"  # type: ignore[arg-type]
 
 
+def cmd_fetch_yearly(args: argparse.Namespace) -> int:
+    """年度交易資訊：從證交所、櫃買中心抓歷年最高／最低／收盤平均價.
+
+    This is the one sheet the mirrors do not serve, and the one the P/E band
+    (自行計算) and the whole dividend-yield model need.  It is also the only
+    parser in the project not yet checked against a real response — so
+    ``--save-raw`` writes both payloads verbatim, and running it once from a
+    network the exchanges will serve turns it into a fixture.
+    """
+    import json
+
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient
+    from .ingest.yearly_trading import SHEET, YearlyTrading
+
+    http = HttpClient(
+        cache_dir=Path(settings.ingest.cache_dir),
+        cache_ttl=settings.ingest.cache_ttl_hours * 3600,
+        min_interval=settings.ingest.min_interval_seconds,
+        retries=settings.ingest.retries,
+    )
+    yt = YearlyTrading(http=http)
+
+    if args.save_raw:
+        raw_dir = Path(args.save_raw)
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        for name, payload in yt.raw(args.stock).items():
+            target = raw_dir / f"{args.stock}_yearly_{name}.json"
+            target.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
+            )
+            print(f"  {name:<6} -> {target}")
+
+    try:
+        grid = yt.fetch(args.stock)
+    except Exception as exc:  # noqa: BLE001 - report and stop
+        print(f"年度交易資訊抓取失敗：{exc}", file=sys.stderr)
+        if args.save_raw:
+            print(
+                "  原始回應已存下——把那兩個 JSON 給我，解析就照著它們改。",
+                file=sys.stderr,
+            )
+        return EXIT_FAIL
+
+    out_dir = Path(args.out or settings.data_dir) / "sheets" / args.stock
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / f"{SHEET}.json"
+    target.write_text(
+        json.dumps(grid, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+    )
+    years = [row[0] for row in grid if row and row[0]]
+    print(f"  年度交易資訊 {len(years)} 年（{years[-1]}–{years[0]}）-> {target}")
+    return EXIT_OK
+
+
 def cmd_extract_golden(args: argparse.Namespace) -> int:
     import subprocess
 
@@ -655,6 +716,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fs.add_argument("--out", help="資料目錄")
     fs.set_defaults(func=cmd_fetch_stock)
+
+    fy = sub.add_parser(
+        "fetch-yearly", help="年度交易資訊：歷年最高／最低／收盤平均價（證交所、櫃買）"
+    )
+    fy.add_argument("stock", help="股票代號")
+    fy.add_argument(
+        "--save-raw", dest="save_raw",
+        help="把兩個交易所的原始 JSON 存到這個目錄（解析尚未對照過真實回應）",
+    )
+    fy.add_argument("--out", help="資料目錄")
+    fy.set_defaults(func=cmd_fetch_yearly)
 
     g = sub.add_parser("extract-golden", help="把活頁簿凍結成測試樣本")
     g.add_argument("workbook")
