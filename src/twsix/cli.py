@@ -314,6 +314,91 @@ def cmd_import_list(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_fetch_stock(args: argparse.Namespace) -> int:
+    """單檔查詢：抓一支股票的九張報表，存成可離線重讀的格線.
+
+    This is 〔評價簡表〕B1's Worksheet_Change, ported: the same nine sheets in
+    the same order, from the same broker mirrors.  The grids are written to
+    disk so a failed parse can be inspected without hitting the sites again —
+    the pages change, and the saved grid is the evidence of what came back.
+    """
+    import json
+
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient
+    from .ingest.moneydj import ORDER, ContractError, MoneyDJ
+
+    # Rotation across eight mirrors *is* the retry strategy, so retrying each
+    # host four times just makes "you are blocked" take a minute to discover.
+    # One attempt per host, then move on.
+    http = HttpClient(
+        cache_dir=Path(settings.ingest.cache_dir),
+        cache_ttl=settings.ingest.cache_ttl_hours * 3600,
+        min_interval=settings.ingest.min_interval_seconds,
+        retries=args.retries,
+    )
+    dj = MoneyDJ(http=http, preferred=args.host or "")
+
+    out_dir = Path(args.out or settings.data_dir) / "sheets" / args.stock
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    sheets = [args.sheet] if args.sheet else list(ORDER)
+    failures = 0
+    contract_failures = 0
+    for name in sheets:
+        try:
+            grid = dj.fetch(args.stock, name)
+        except ContractError as exc:
+            print(f"  {name:<8} 契約不符：{exc}", file=sys.stderr)
+            failures += 1
+            contract_failures += 1
+            continue
+        except Exception as exc:  # noqa: BLE001 - report and carry on
+            print(f"  {name:<8} 失敗：{exc}", file=sys.stderr)
+            failures += 1
+            continue
+        target = out_dir / f"{name}.json"
+        target.write_text(
+            json.dumps(grid, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+        )
+        print(f"  {name:<8} {len(grid):>4} 列 -> {target}")
+
+    if failures:
+        # The two failure modes need different fixes, so say which happened
+        # rather than printing one message that is half wrong either way.
+        print(f"\n{failures}/{len(sheets)} 張表未取得。", file=sys.stderr)
+        if contract_failures:
+            print(
+                f"  其中 {contract_failures} 張是契約不符——頁面抓到了但版面不符預期，"
+                f"多半是站台改版。請對照 reference/ENDPOINTS.md 更新 "
+                f"moneydj.CONTRACTS。",
+                file=sys.stderr,
+            )
+        if failures > contract_failures:
+            print(
+                "  其餘是連線失敗。八個站台全部拒絕通常代表 IP 被擋"
+                "（機房 IP 尤其容易），請改在自己的網路環境執行。",
+                file=sys.stderr,
+            )
+    return EXIT_OK if failures == 0 else EXIT_FAIL
+
+
+def _fetched_reader(root: Path, stock: str):
+    """A CellReader over grids saved by ``fetch-stock``."""
+    import json
+
+    from .ingest.moneydj import GridSource
+
+    base = root / "sheets" / stock
+    if not base.is_dir():
+        return None
+    grids = {
+        p.stem: json.loads(p.read_text(encoding="utf-8"))
+        for p in sorted(base.glob("*.json"))
+    }
+    return GridSource(grids) if grids else None
+
+
 def cmd_value(args: argparse.Namespace) -> int:
     """估值：EPS 預估、本益比估價、PEG／總報酬、殖利率估價.
 
@@ -326,11 +411,12 @@ def cmd_value(args: argparse.Namespace) -> int:
     from .valuation import ValuationOptions, evaluate
     from .xlsx.extract import Workbook
 
-    if not args.workbook and not args.golden:
+    if not args.workbook and not args.golden and not args.fetched:
         print(
-            "估值目前只實作了從活頁簿讀取（--workbook），或從已凍結的樣本讀取\n"
-            "（--golden，可用股票見 tests/golden/）。官方來源尚未涵蓋股價、歷年\n"
-            "本益比與股利，`twsix fetch` 完成後此指令會改讀 data/。",
+            "請指定資料來源：\n"
+            "  --workbook book.xlsm   從活頁簿讀（已驗證的路徑）\n"
+            "  --golden 5439          從已凍結的樣本讀（見 tests/golden/）\n"
+            "  --fetched 5439         從 `twsix fetch-stock` 存下的格線讀",
             file=sys.stderr,
         )
         return EXIT_FAIL
@@ -342,7 +428,19 @@ def cmd_value(args: argparse.Namespace) -> int:
         payout_basis=settings.forecast.payout_basis,
     )
 
-    if args.golden:
+    if args.fetched:
+        reader = _fetched_reader(Path(args.data or settings.data_dir), args.fetched)
+        if reader is None:
+            print(
+                f"找不到 {args.fetched} 的快取格線，請先執行："
+                f"　twsix fetch-stock {args.fetched}",
+                file=sys.stderr,
+            )
+            return EXIT_FAIL
+        inp = read_valuation_input(
+            reader, stock_id=args.stock or args.fetched, as_of=args.as_of or ""
+        )
+    elif args.golden:
         import json
 
         from .ingest.valuation_source import GridReader
@@ -479,10 +577,23 @@ def build_parser() -> argparse.ArgumentParser:
     val.add_argument("stock", nargs="?", help="股票代號")
     val.add_argument("--workbook", help="從 .xlsm 讀取資料（離線可用）")
     val.add_argument("--golden", help="從已凍結的樣本讀取，如 5439")
+    val.add_argument("--fetched", help="從 fetch-stock 存下的格線讀取，如 5439")
+    val.add_argument("--data", help="資料目錄（--fetched 用）")
     val.add_argument("--as-of", dest="as_of", help="評估日，民國格式如 115/08/27")
     val.add_argument("--out", help="把結果寫入資料目錄")
     val.add_argument("--json", action="store_true", help="輸出 JSON")
     val.set_defaults(func=cmd_value)
+
+    fs = sub.add_parser("fetch-stock", help="單檔查詢：抓一支股票的九張報表")
+    fs.add_argument("stock", help="股票代號")
+    fs.add_argument("--sheet", help="只抓一張表，如 ISQ")
+    fs.add_argument("--host", help="優先使用的券商站台")
+    fs.add_argument(
+        "--retries", type=int, default=1,
+        help="每個站台重試次數（預設 1；輪替八個站台本身就是重試）",
+    )
+    fs.add_argument("--out", help="資料目錄")
+    fs.set_defaults(func=cmd_fetch_stock)
 
     g = sub.add_parser("extract-golden", help="把活頁簿凍結成測試樣本")
     g.add_argument("workbook")
