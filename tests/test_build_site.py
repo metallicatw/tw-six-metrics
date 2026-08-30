@@ -281,9 +281,13 @@ def test_the_published_site_can_ask_github_to_fetch_a_stock():
     """The one thing GitHub Pages can do that a static page normally cannot.
 
     It cannot fetch the mirrors — the browser refuses the cross-origin request
-    and the engine is Python — but it can *ask the repository to*, by opening
-    an issue whose title is the code.  A workflow picks that up.  The issue URL
-    carries the title, so it is one click plus one Submit, phone included.
+    and the engine is Python — but it can *ask the repository to*, with a
+    workflow_dispatch POST to the REST API, which is CORS-enabled.  One press,
+    no navigation; the panel then polls the run and the site.
+
+    The issue detour this replaced is gone rather than kept as a fallback: it
+    turned one press into a page full of other buttons and an editable stock
+    code, and it never closed itself.
     """
     tmp = _tmp()
     out = tmp / "site"
@@ -291,8 +295,9 @@ def test_the_published_site_can_ask_github_to_fetch_a_stock():
     page = (out / "index.html").read_text("utf-8")
 
     assert '"owner/repo"' in page
-    assert "issues/new" in page
-    assert "title=" in page
+    assert "/dispatches" in page
+    assert "api.github.com" in page
+    assert "issues/new" not in page
 
 
 def test_the_page_watches_for_its_own_result_rather_than_telling_you_to_wait():
@@ -354,3 +359,85 @@ def test_the_wait_survives_navigating_away():
     assert "sessionStorage" in page
     assert "twsix.pending" in page
     assert "location.reload" in page
+
+
+# ---------------------------------------------------------------------------
+# 這一段測的不是排版，是「按了沒反應」。
+#
+# 那個 bug 只有一行：清單裡的小按鈕呼叫 askGithub()，而函式當時叫 grabOnline。
+# 瀏覽器丟一個 ReferenceError 就安靜地不做事——沒有錯誤訊息、沒有面板、沒有任何
+# 跡象，看起來就是按鈕壞了。Python 測試看不見這種錯，因為它不執行 JavaScript。
+#
+# 所以退一步用靜態的方式問同一件事：頁面裡每一個被呼叫的名字，都有被定義嗎？
+
+_JS_GLOBALS = frozenset(
+    """
+    if for while switch catch return typeof function new delete void
+    fetch setTimeout setInterval clearInterval clearTimeout encodeURIComponent
+    decodeURIComponent parseInt parseFloat isNaN String Number Boolean Object
+    Array JSON Date Math Promise Error RegExp Set Map alert confirm require
+    """.split()
+)
+
+
+def _script_bodies(page: str) -> str:
+    out = []
+    rest = page
+    while "<script>" in rest:
+        _, rest = rest.split("<script>", 1)
+        body, rest = rest.split("</script>", 1)
+        out.append(body)
+    return "\n".join(out)
+
+
+def test_every_function_the_page_calls_is_a_function_the_page_defines():
+    """按了沒反應的那個 bug：呼叫 askGithub()，定義的卻叫 grabOnline。
+
+    ReferenceError 在瀏覽器裡是靜默的——事件處理器直接不執行，畫面上什麼都不會
+    發生。這個測試不執行 JavaScript，只問一個保守的問題：script 裡每個 `名字(`
+    形式的呼叫，都找得到對應的定義嗎？找不到就是那一類的錯字。
+    """
+    import re
+
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
+
+    for name in ("index.html", "stock/2330.html", "stock/5439.html"):
+        page = (out / name).read_text("utf-8")
+        js = _script_bodies(page)
+        # 前面接著 `.` 的是方法呼叫，屬於某個物件，不在這裡的判斷範圍。
+        called = {
+            m.group(1)
+            for m in re.finditer(r"(?<![.\w$])([a-zA-Z_$][\w$]*)\s*\(", js)
+        }
+        defined = set(re.findall(r"function\s+([a-zA-Z_$][\w$]*)\s*\(", js))
+        defined |= set(re.findall(r"(?:var|let|const)\s+([a-zA-Z_$][\w$]*)\s*=", js))
+        missing = sorted(called - defined - _JS_GLOBALS)
+        assert not missing, f"{name} 呼叫了沒有定義的函式：{missing}"
+
+
+def test_the_fetch_button_sits_next_to_the_search_box():
+    """一顆按鈕，一個對象：搜尋框裡的那一檔。
+
+    上一版把它放在個股頁最底下，離「要抓哪一檔」最遠的地方，而搜尋結果旁邊那顆
+    小標籤又壞著——所以正常的路徑（打代號、按抓取）是死的，只有捲到頁尾才找得到
+    活的入口。現在只剩頁首那一顆。
+    """
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
+
+    index = (out / "index.html").read_text("utf-8")
+    assert 'id="grabnow"' in index
+    # 在搜尋表單裡面，不是頁面某處
+    form = index.split('class="find"', 1)[1].split("</form>", 1)[0]
+    assert 'id="grabnow"' in form
+
+    thin = (out / "stock" / "2330.html").read_text("utf-8")
+    assert 'data-grab="2330"' in thin  # 停在這一頁時按鈕預設指這一檔
+    assert 'id="grab-btn"' not in thin  # 底部那顆已經沒了
+    assert "GitHub issue" not in thin  # 連同那句說明
+
+    full = (out / "stock" / "5439.html").read_text("utf-8")
+    assert "data-grab=" not in full  # 已經完整，沒有東西可抓

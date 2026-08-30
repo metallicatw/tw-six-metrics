@@ -357,6 +357,9 @@ def build_site(
             **base,
             page="stock",
             rel="../",
+            # 這一頁只有評分表。頁首那顆「抓取」預設就指這一檔——完整版不設，
+            # 按鈕也就不出現。
+            grab_code=stock_id,
             stock={
                 "stock_id": stock_id,
                 "name": head.get("name", ""),

@@ -79,7 +79,13 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;
 footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--rule);
   font-size:12.5px;color:var(--muted)}
 /* -- 頁首個股搜尋 ----------------------------------------------------- */
-.find{position:relative;margin:10px 0 0;max-width:420px}
+.find{position:relative;margin:10px 0 0;max-width:520px}
+/* 搜尋框與「抓取」同一列。抓取這個動作的對象永遠是框裡那一檔，兩者分開放
+   （例如按鈕留在頁面底部）就得先讓讀者自己把它們連起來——而那正是上一版
+   最常被按錯的地方。 */
+.findrow{display:flex;gap:8px;align-items:stretch}
+.findrow input{flex:1 1 auto;min-width:0}
+.findrow .btn-grab{flex:0 0 auto;white-space:nowrap;font-size:13px;padding:0 14px}
 .find input{width:100%;padding:8px 12px;border:1px solid var(--rule);border-radius:5px;
   background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
 .find input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px;
@@ -103,7 +109,11 @@ footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--rule);
 .grab{position:absolute;z-index:45;left:0;right:0;top:calc(100% + 4px);
   background:var(--surface);border:1px solid var(--accent);border-radius:5px;
   padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
-.grab .head{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--ink)}
+.grab .head{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--ink);padding-right:20px}
+.grab .x{position:absolute;top:5px;right:6px;appearance:none;border:none;background:none;
+  color:var(--muted);font:inherit;font-size:13px;line-height:1;padding:3px 5px;cursor:pointer;
+  border-radius:3px}
+.grab .x:hover{background:var(--surface-2);color:var(--ink)}
 .grab .log{margin:0;max-height:180px;overflow:auto;font-size:11px;line-height:1.6;
   color:var(--muted);white-space:pre-wrap;word-break:break-all;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -286,7 +296,9 @@ tr.here th{font-weight:700}
 @media(max-width:640px){.wrap{padding:0 14px 60px}}
 </style>
 </head>
-<body>
+{# 停在一個「還沒有完整報告」的個股頁時，頁首那顆按鈕預設就指這一檔——讀者
+   不必再把代號打一次。有完整報告的頁面不設，按鈕就不會出現。 #}
+<body{% if grab_code %} data-grab="{{ grab_code }}"{% endif %}>
 <header class="top"><div class="in">
   <h1><a href="{{ rel }}index.html">{{ site_title }}</a></h1>
   {# 三個分頁暫時不連：它們讀的是一年前的全市場快照，而排名和分布用舊資料算出來
@@ -309,16 +321,24 @@ tr.here th{font-weight:700}
        off, submitting takes the reader to 評等清單, which has its own filter
        and lists every stock.  The combobox below is an enhancement on top of
        a page that already worked. #}
-    <input id="find" name="q" type="search" autocomplete="off" spellcheck="false"
-           placeholder="輸入代號或名稱…　（按 / 跳到這裡）" aria-label="搜尋個股"
-           role="combobox" aria-expanded="false" aria-controls="find-list"
-           aria-autocomplete="list">
+    <div class="findrow">
+      <input id="find" name="q" type="search" autocomplete="off" spellcheck="false"
+             placeholder="輸入代號或名稱…　（按 / 跳到這裡）" aria-label="搜尋個股"
+             role="combobox" aria-expanded="false" aria-controls="find-list"
+             aria-autocomplete="list">
+      {# 只有在「這一檔還沒有完整報告，而且抓得到」的時候才出現。沒東西可抓時
+         留一顆按不動的按鈕，比沒有按鈕更難懂。 #}
+      <button type="button" id="grabnow" class="btn-grab" hidden>抓取</button>
+    </div>
     <ul id="find-list" role="listbox" aria-label="搜尋結果" hidden></ul>
     {# 進度面板要跟搜尋框對齊，所以必須待在 .find 裡面——它是 position:relative
        的那一層。放在外面會拿 header 當定位基準，掉到畫面上量不到的地方去。
        只有在 `twsix serve` 底下才會用到：載入時問一次 /api/ping，GitHub Pages
        上問不到就永遠不顯示。同一份 HTML，兩種行為。 #}
     <div id="grab" class="grab" hidden>
+      {# 面板蓋在搜尋結果上面。跑完會自己換頁，但失敗或逾時的時候它會一直留著，
+         把搜尋框整個擋住——所以要給一個關得掉的辦法。 #}
+      <button type="button" class="x" id="grab-x" aria-label="關閉進度">✕</button>
       <p class="head"></p>
       <pre class="log" aria-live="polite"></pre>
     </div>
@@ -385,6 +405,7 @@ tr.here th{font-weight:700}
 
   function draw(){
     list.innerHTML='';
+    refreshOffer();
     if(!hits.length){ close(); return; }
     hits.forEach(function(r,i){
       var li=document.createElement('li');
@@ -405,7 +426,7 @@ tr.here th{font-weight:700}
         g.textContent = '抓這一檔';
         g.addEventListener('mousedown', function(e){
           e.preventDefault(); e.stopPropagation();
-          if(live) fetchStock(r[0]); else askGithub(r[0]);
+          grabNow(r[0]);
         });
         li.appendChild(g);
       }
@@ -429,7 +450,7 @@ tr.here th{font-weight:700}
 
   function run(){
     var q=box.value.trim().toLowerCase();
-    if(!q){ hits=[]; close(); return; }
+    if(!q){ hits=[]; close(); refreshOffer(); return; }
     load().then(function(){
       if(box.value.trim().toLowerCase()!==q) return;  /* 打字比抓索引快 */
       hits=search(q); cur=hits.length?0:-1; draw();
@@ -444,8 +465,56 @@ tr.here th{font-weight:700}
   var live=false, grab=document.getElementById('grab');
   var repo = {{ (repo or '')|tojson }};
   fetch(base+'api/ping').then(function(r){return r.ok?r.json():null;})
-    .then(function(j){ live = !!(j && j.service==='twsix'); })
-    .catch(function(){ live=false; });
+    .then(function(j){ live = !!(j && j.service==='twsix'); refreshOffer(); })
+    .catch(function(){ live=false; refreshOffer(); });
+
+  /* ---- 頁首那顆「抓取 XXXX」 -------------------------------------------
+   * 一顆按鈕，一個對象：搜尋框裡選中的那一檔；框是空的就退回這一頁的股票。
+   * 已經有完整報告、或這台機器根本抓不了（沒有本機服務也沒有設 repo），
+   * 按鈕就不出現。
+   */
+  var btn = document.getElementById('grabnow');
+  var pageCode = document.body.getAttribute('data-grab') || '';
+  var target = '';
+
+  function canGrab(){ return live || !!repo; }
+  function offer(code){
+    target = (code && canGrab()) ? code : '';
+    if(!btn) return;
+    if(target){ btn.textContent = '抓取 ' + target; btn.hidden = false; }
+    else btn.hidden = true;
+  }
+  function refreshOffer(){
+    var q = box.value.trim();
+    if(q && hits.length){
+      var h = hits[cur > -1 ? cur : 0];
+      offer(h && !h[4] ? h[0] : '');
+    } else if(!q){
+      offer(pageCode);
+    } else {
+      offer('');   /* 打了字卻找不到這一檔：沒有對象可抓 */
+    }
+  }
+  function grabNow(code){
+    if(!code) return;
+    if(live) fetchStock(code); else if(repo) askGithub(code);
+  }
+  if(btn){
+    /* mousedown 先於 blur，preventDefault 讓搜尋框不失焦——否則清單一關，
+       按鈕的對象就在 click 抵達之前被換掉了。 */
+    btn.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    btn.addEventListener('click', function(){ grabNow(target); });
+  }
+  var grabX = document.getElementById('grab-x');
+  if(grabX){
+    grabX.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    /* 關掉面板只是不再看它，不是取消——runner 那邊照跑。等待也一併放掉，
+       否則下一頁又會把同一個面板叫回來。 */
+    grabX.addEventListener('click', function(){
+      clearInterval(ticker); ticker = null; watching = null; forget();
+      grab.hidden = true;
+    });
+  }
 
   /* 線上版的抓取路徑：按下去就跑，不換頁。
    *
@@ -616,20 +685,9 @@ tr.here th{font-weight:700}
       .catch(function(){ setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000); });
   }
 
-  /* ---- 沒有權杖時的退路：開一張 issue -------------------------------- */
-  function issueUrl(code){
-    return 'https://github.com/' + repo + '/issues/new'
-      + '?title=' + encodeURIComponent(code)
-      + '&labels=' + encodeURIComponent('抓取個股')
-      + '&body=' + encodeURIComponent(
-          '由網站上的「抓這一檔」按鈕開啟。標題只放股號，不要加其他文字。');
-  }
-  function askViaIssue(code){
-    close(); beginPanel(); remember(code);
-    window.open(issueUrl(code), '_blank', 'noopener');
-    step('已開啟 GitHub issue 頁面——按綠色的 Submit new issue 就會開始抓。');
-    setTimeout(function(){ watch(code, 40); }, 15000);
-  }
+  /* 曾經有一條「沒權杖就開一張 issue」的退路，已經拿掉。它把一次點擊變成換頁、
+     核對標題、按 Submit，而那一頁上還有別的按鈕可以按錯、有預填的股號可以改壞；
+     跑完也不會自己關。權杖貼一次就一勞永逸，兩條路並存只是留著壞的那條。 */
 
   /* ---- 設定權杖 ------------------------------------------------------- */
   function askToken(){
@@ -644,12 +702,17 @@ tr.here th{font-weight:700}
     return !!v.trim();
   }
 
-  function grabOnline(code){
+  function askGithub(code){
     if(token()) return runOnGithub(code);
     if(askToken()) return runOnGithub(code);
-    return askViaIssue(code);
+    /* 取消了設定權杖。什麼都不做會變成「按了沒反應」——說一聲它為什麼沒動。 */
+    close(); beginPanel();
+    endPanel('還沒設定抓取權杖',
+             '線上抓取要一把 GitHub fine-grained PAT（只勾這個 repo、Actions 讀寫）。\n'
+             + '按頁首的「設定抓取權杖」貼上，之後就不用再貼。');
+    return;
   }
-  window.twsixAskGithub = grabOnline;
+  window.twsixAskGithub = askGithub;
   window.twsixSetToken = askToken;
   window.twsixHasToken = function(){ return !!token(); };
   window.twsixCanAsk = function(){ return !live && !!repo; };
@@ -724,8 +787,7 @@ tr.here th{font-weight:700}
         /* 有完整報告就跳過去；沒有而且本機服務在跑，Enter 就是「去抓」——
            那才是「輸入代號就跑出完整報告」的意思。 */
         if(hits[cur][4]) go(hits[cur]);
-        else if(live) fetchStock(hits[cur][0]);
-        else if(repo) askGithub(hits[cur][0]);
+        else if(live || repo) grabNow(hits[cur][0]);
         else go(hits[cur]);
       }
     } else if(e.key==='Escape'){ close(); box.blur(); }

@@ -166,38 +166,23 @@
   季節性、外資投信、個股新聞——那些需要逐檔向券商鏡像站抓資料，一檔約 20 秒，
   所以只有抓過的股票才有（清單頁上標「完整」的那些）。
 </p>
-{# `twsix serve` 底下這顆按鈕會出現，按了就抓；GitHub Pages 上它是隱藏的，
-   因為瀏覽器不准跨網域抓券商鏡像站——那是同源政策，不是缺功能。 #}
-{# 兩顆按鈕、一個實作：本機服務在跑就當場抓，否則請 GitHub 抓。兩個都不可用
-   （別人 fork、沒設 repo）才退回文字說明。 #}
-<p id="grab-here" hidden>
-  <button type="button" class="btn-grab" id="grab-btn">抓取 {{ stock.stock_id }}</button>
-  <span class="muted" id="grab-note"></span>
-</p>
-<p class="muted" id="grab-how">要讓 {{ stock.stock_id }} 也有：在本機執行
-  <code>twsix serve</code>，然後按「抓取」——或直接跑
+{# 抓取的按鈕在頁首搜尋框旁邊（base.html.j2），這一頁的 data-grab 已經讓它預設
+   指向這一檔。頁面底部那顆是重複的第二個入口，而且離「要抓哪一檔」最遠。 #}
+<p class="muted" id="grab-how">要讓 {{ stock.stock_id }} 也有：按頁首搜尋框旁邊的
+  「抓取 {{ stock.stock_id }}」——或在本機跑
   <code>twsix report {{ stock.stock_id }} --rebuild</code>。</p>
 <script>
 (function(){
-  var code = {{ stock.stock_id|tojson }};
+  /* 按鈕出得來的時候，這段說明就是多餘的。出不來（別人 fork、沒設 repo、
+     本機服務沒開）才留著，因為那時它是唯一的辦法。 */
   var tries = 0;
   (function wait(){
-    var localReady = window.twsixLive && window.twsixLive();
-    var githubReady = window.twsixCanAsk && window.twsixCanAsk();
-    if(localReady || githubReady){
-      var btn = document.getElementById('grab-btn');
-      document.getElementById('grab-note').textContent = localReady
-        ? '　約 20 秒，抓完直接開報告。'
-        : '　會開一張 GitHub issue，送出後約 2~3 分鐘完成，好了這頁會自己跳過去。';
-      btn.addEventListener('click', function(){
-        if(localReady) window.twsixFetch(code);
-        else window.twsixAskGithub(code);
-      });
-      document.getElementById('grab-here').hidden = false;
-      document.getElementById('grab-how').hidden = true;
+    if((window.twsixLive && window.twsixLive()) ||
+       (window.twsixCanAsk && window.twsixCanAsk())){
+      var how = document.getElementById('grab-how');
+      if(how) how.hidden = true;
       return;
     }
-    /* twsixLive/twsixCanAsk 要等 /api/ping 有答案（或逾時）才作數。 */
     if(tries++ < 25) setTimeout(wait, 150);
   })();
 })();
