@@ -34,12 +34,21 @@ from twsix.valuation import ValuationOptions, evaluate
 def _page(grids=None):
     grids = grids if grids is not None else _full_grids()
     settings = Settings.load(None)
-    rating = rate(GridsSource(grids=grids).load(), settings.rules, settings.periods)
+    data = GridsSource(grids=grids).load()
+    rating = rate(data, settings.rules, settings.periods)
     reader = GridSource(grids)
     valuation = evaluate(
         read_valuation_input(reader, stock_id="5439"), ValuationOptions()
     )
-    return build_page(rating, valuation, reader, sheets_present=list(grids)), valuation
+    page = build_page(
+        rating,
+        valuation,
+        reader,
+        data=data,
+        sheets_present=list(grids),
+        settings=settings,
+    )
+    return page, valuation
 
 
 def _full_grids():

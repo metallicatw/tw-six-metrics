@@ -19,6 +19,10 @@
   <a href="#six">六大財務指標評等</a>
   <a href="#eps">EPS預估與估價</a>
   <a href="#yield">殖利率估價</a>
+  <a href="#statements">財報圖表</a>
+  <a href="#river">河流圖</a>
+  <a href="#season">季節性</a>
+  <a href="#scenarios">財務指標評等預估</a>
 </nav>
 
 {# ================= 1. 評價簡表 ================= #}
@@ -254,6 +258,130 @@
   </table>
 </div>
 {% endif %}
+
+
+{# ================= 5. 財報圖表 ================= #}
+<h3 id="statements">財報圖表</h3>
+<p class="muted">六大指標實際評分所依據的數列，逐季呈現。</p>
+{% for key in ["net_income", "operating_margin", "free_cash_flow", "inventory_turnover"] %}
+  {% if p.statements[key] %}{{ p.statements[key]|safe }}{% endif %}
+{% endfor %}
+
+{# ================= 6. 河流圖 ================= #}
+<h3 id="river">河流圖（本益比）</h3>
+{% if p.river %}
+<p class="stale">
+  活頁簿的河流圖用<b>週線</b>收盤價，並在年底之間內插；本專案沒有週線序列，
+  這裡改用交易所公布的<b>年度收盤平均價</b>——同樣的 2.5%～97.5% 信任區間、
+  同樣六個分區，但一年一點而不是一週一點。判斷「現在落在哪一區」不受影響，
+  平滑的曲線則畫不出來。
+</p>
+<div class="cards">
+  <div class="card"><b>{{ "%.2f"|format(p.river.current) if p.river.current else "—" }}</b>
+    <span>目前本益比</span></div>
+  <div class="card"><b>{{ p.river.zone_name }}</b><span>所在分區</span></div>
+  <div class="card"><b>{{ p.river.years }}</b><span>採計年數</span></div>
+</div>
+<div class="scroll">
+  <table>
+    <thead><tr><th>分區</th><th>本益比區間</th><th></th></tr></thead>
+    <tbody>
+      {% for name, rng in p.river.ranges %}
+      <tr class="{{ 'here' if name == p.river.zone_name else '' }}">
+        <th scope="row">{{ name }}</th>
+        <td class="num">{{ rng }}</td>
+        <td>{% if name == p.river.zone_name %}<span class="pick">← 目前</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="stale">歷年本益比不足五年，無法畫出信任區間。</p>
+{% endif %}
+
+{# ================= 7-8. 季節性 ================= #}
+<h3 id="season">營收季節性 / 獲利季節性</h3>
+
+{% if p.revenue_season %}
+{% if p.revenue_season.figure %}{{ p.revenue_season.figure|safe }}{% endif %}
+<div class="scroll">
+  <table>
+    <thead><tr><th>年度</th>
+      {% for c in p.revenue_season.columns %}<th>{{ c }}</th>{% endfor %}
+      <th>全年</th></tr></thead>
+    <tbody>
+      {% for row in p.revenue_season.rows %}
+      <tr>
+        <th scope="row">{{ row.year }}{% if not row.complete %}<span class="muted">*</span>{% endif %}</th>
+        {% for v in row["values"] %}<td class="num">{{ "{:,.0f}".format(v) if v is not none else "" }}</td>{% endfor %}
+        <td class="num">{{ "{:,.0f}".format(row.total) if row.total else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">單位仟元。標 * 的年度尚未完整，不列入比重平均。</p>
+{% else %}
+<p class="stale">沒有月營收資料。</p>
+{% endif %}
+
+{% if p.profit_season %}
+{% if p.profit_season.figure %}{{ p.profit_season.figure|safe }}{% endif %}
+<div class="scroll">
+  <table>
+    <thead><tr><th>年度</th>
+      {% for c in p.profit_season.columns %}<th>Q{{ c }}</th>{% endfor %}
+      <th>全年</th></tr></thead>
+    <tbody>
+      {% for row in p.profit_season.rows %}
+      <tr>
+        <th scope="row">{{ row.year }}{% if not row.complete %}<span class="muted">*</span>{% endif %}</th>
+        {% for v in row["values"] %}<td class="num">{{ "%.2f"|format(v) if v is not none else "" }}</td>{% endfor %}
+        <td class="num">{{ "%.2f"|format(row.total) if row.total else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">單季 EPS（元）。虧損年度不列入比重平均——占比在有負數時沒有意義。</p>
+{% endif %}
+
+{# ================= 9. 財務指標評等預估 ================= #}
+<h3 id="scenarios">財務指標評等預估</h3>
+<p class="muted">
+  這是 what-if 工具：在活頁簿裡輸入預估值，看評等怎麼變。四種情境
+  <b>不可混用</b>——用錯會對一個還沒公布的季度評分。以下列出各自的適用時機，
+  未輸入預估值時，四種情境的評等一律等於上方〔六大財務指標評等〕的結果
+  （綜合 {{ "%.2f"|format(p.latest_composite) if p.latest_composite is not none else "—" }}）。
+</p>
+<div class="scenarios">
+  {% for sc in p.scenarios %}
+  <section>
+    <h4>{{ sc.name }}</h4>
+    <p class="when">{{ sc.when }}</p>
+    <p class="muted">{{ sc.needs }}</p>
+  </section>
+  {% endfor %}
+</div>
+
+{# ================= 尚未建置 ================= #}
+<h3 id="unbuilt">尚未建置的頁面</h3>
+<p class="muted">
+  活頁簿還有四張分頁，本專案<b>沒有</b>取得過任何一次真實回應，因此沒有寫解析器。
+  照文件猜寫解析器正是這次移植前期讓九張表錯六張的原因，所以這四張留白，
+  而不是給出看起來像樣的假資料。
+</p>
+<div class="scroll">
+  <table>
+    <thead><tr><th>頁面</th><th>還缺什麼</th></tr></thead>
+    <tbody>
+      {% for u in p.unbuilt %}
+      <tr><th scope="row">{{ u.name }}</th><td class="reason">{{ u.why }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 <p class="muted">
   本頁為資料整理，非投資建議。估價模型的輸入與門檻見〈評分規則〉。
