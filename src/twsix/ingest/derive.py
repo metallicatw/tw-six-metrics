@@ -46,6 +46,20 @@ RATING_COLS = range(1, 7)
 
 NET_MARGIN_LABEL = "稅後淨利率"
 
+#: 〔EPQ〕 as the page prints it, and the two columns the workbook adds beside it.
+EPQ = "EPQ"
+EPQ_COL_QUARTER = 0  # A 季別
+EPQ_COL_REVENUE = 1  # B 營業收入
+EPQ_COL_NET_INCOME = 9  # J 稅後淨利
+EPQ_COL_NET_INCOME_FLOOR = 11  # L 「稅後淨利0->0.3」
+EPQ_COL_REVENUE_FLOOR = 13  # N 「營業收入0->0.3」
+EPQ_FLOOR = 0.3
+EPQ_HEADERS = {
+    EPQ_COL_NET_INCOME_FLOOR: "稅後淨利0->0.3",
+    EPQ_COL_REVENUE_FLOOR: "營業收入0->0.3",
+}
+QUARTER_LABEL = re.compile(r"^\d+\.\dQ$")
+
 #: 「115/07」 — a month, as opposed to the 「年/月」 header, which also has a slash.
 MONTH_LABEL = re.compile(r"^\d+/\d")
 
@@ -159,6 +173,44 @@ def _fill_net_margins(grids: Grids) -> None:
 
 
 # =========================================================================
+# 〔EPQ〕L / N — 稅後淨利0->0.3、營業收入0->0.3
+# =========================================================================
+
+
+def _fill_epq_floors(grids: Grids) -> None:
+    """Copy 稅後淨利 and 營業收入 across, with zero replaced by 0.3.
+
+    The column headers say exactly this, and the reason is year-on-year: a
+    quarter that netted zero is a legitimate figure but a useless denominator,
+    and 0.3 百萬 is small enough not to move the ratio while keeping the
+    division defined.  The rating engine reads column L, so without these two
+    columns a fetched stock has no 稅後淨利 series at all — the year-on-year
+    indicator would silently grade 「數據不足」 for every period.
+    """
+    grid = grids.get(EPQ)
+    if not grid:
+        return
+    for row_index, row in enumerate(grid):
+        label = (row[EPQ_COL_QUARTER] if row else "").strip()
+        if not QUARTER_LABEL.match(label):
+            continue
+        for source, target in (
+            (EPQ_COL_NET_INCOME, EPQ_COL_NET_INCOME_FLOOR),
+            (EPQ_COL_REVENUE, EPQ_COL_REVENUE_FLOOR),
+        ):
+            value = _number(row[source] if len(row) > source else "")
+            if value is None:
+                continue
+            _put(grid, row_index, target, repr(EPQ_FLOOR if value == 0 else value))
+    header = next(
+        (i for i, row in enumerate(grid) if row and row[0].strip() == "季別"), None
+    )
+    if header is not None:
+        for col, text in EPQ_HEADERS.items():
+            _put(grid, header, col, text)
+
+
+# =========================================================================
 # 〔評價簡表〕B1 / C1 — 代號與名稱
 # =========================================================================
 
@@ -194,5 +246,6 @@ def enrich(grids: Grids, stock_id: str = "") -> Grids:
     """Add the workbook's computed columns to a set of fetched grids, in place."""
     _fill_merged_revenue(grids)
     _fill_net_margins(grids)
+    _fill_epq_floors(grids)
     _fill_identity(grids, stock_id)
     return grids

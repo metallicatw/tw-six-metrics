@@ -13,7 +13,7 @@ that gained a column still reads correctly.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..calendar_tw import Quarter
@@ -79,20 +79,37 @@ def _as_float(v: object) -> float | None:
 
 
 @dataclass
-class WorkbookSource:
-    """Adapter turning one workbook into :class:`FinancialData`."""
+class SheetSource:
+    """Turn a set of sheets into :class:`FinancialData`.
 
-    path: Path
+    The subclasses differ in one method — where a sheet's cells come from —
+    because that is genuinely the only difference.  〔ISQ〕row 104 is 每股盈餘
+    whether it was read out of an ``.xlsm`` or parsed off MoneyDJ ten seconds
+    ago, and :func:`twsix.ingest.moneydj.parse_page` exists precisely to make
+    that true.  So the extraction below is written once and the reconciliation
+    suite (54/54 against the workbook's own scores) covers both paths.
+    """
+
     stock_id: str = ""
     name: str = ""
 
+    def cells(
+        self, sheet: str, min_row: int = 1, max_row: int | None = None
+    ) -> dict[tuple[int, int], object]:
+        """``{(1-based row, 1-based col): value}``; empty when the sheet is absent.
+
+        The row bounds mirror :meth:`twsix.xlsx.extract.Workbook.cached_values`
+        — inclusive, 1-based, ``max_row=None`` meaning "to the end" — so that a
+        caller reading 「just row 1」 writes the same call either way.
+        """
+        raise NotImplementedError
+
     def load(self) -> FinancialData:
-        with Workbook(self.path) as wb:
-            statements = self._statements(wb)
-            revenue = self._revenue(wb)
-            stock_id, name = self._identity(wb)
-            excluded = self._excluded(wb)
-            epq_income, epq_eps, epq_margin = self._epq(wb)
+        statements = self._statements()
+        revenue = self._revenue()
+        stock_id, name = self._identity()
+        excluded = self._excluded()
+        epq_income, epq_eps, epq_margin = self._epq()
 
         ordered = statements.ordered
         op_margin: dict[Quarter, float] = {}
@@ -155,13 +172,12 @@ class WorkbookSource:
 
     # -- pieces -----------------------------------------------------------
 
-    def _statements(self, wb: Workbook) -> StatementSet:
+    def _statements(self) -> StatementSet:
         out = StatementSet(stock_id=self.stock_id)
         collected: dict[Quarter, dict[str, float | None]] = {}
         for sheet, (header_row, rows) in LAYOUT.items():
-            try:
-                cells = wb.cached_values(sheet)
-            except KeyError:
+            cells = self.cells(sheet)
+            if not cells:
                 continue
             periods = self._periods(cells, header_row)
             for col, quarter in periods.items():
@@ -186,7 +202,7 @@ class WorkbookSource:
                 continue
         return found
 
-    def _revenue(self, wb: Workbook) -> RevenueSeries:
+    def _revenue(self) -> RevenueSeries:
         """Monthly filings, with February relabelled as a merged 01-02 figure.
 
         The workbook's 〔營收〕AG column renames the February row to
@@ -196,7 +212,7 @@ class WorkbookSource:
         can contain either or both — so we reproduce exactly that shape rather
         than collapsing the two months.
         """
-        cells = wb.cached_values(REVENUE_SHEET)
+        cells = self.cells(REVENUE_SHEET)
         raw: dict[str, float] = {}
         for (row, col), value in sorted(cells.items()):
             if col != 1 or row <= REVENUE_HEADER_ROW:
@@ -226,14 +242,13 @@ class WorkbookSource:
         return [m for m in labels if not m.endswith("/01")]
 
     def _epq(
-        self, wb: Workbook
+        self,
     ) -> tuple[dict[Quarter, float], dict[Quarter, float], dict[Quarter, float]]:
         income: dict[Quarter, float] = {}
         eps: dict[Quarter, float] = {}
         margin: dict[Quarter, float] = {}
-        try:
-            cells = wb.cached_values(EPQ_SHEET)
-        except KeyError:
+        cells = self.cells(EPQ_SHEET)
+        if not cells:
             return income, eps, margin
         col_a, col_g, col_k, col_l = 1, _col_index("G"), _col_index("K"), _col_index("L")
         for (row, col), value in cells.items():
@@ -254,26 +269,77 @@ class WorkbookSource:
                 margin[q] = round(v * 100, 2)
         return income, eps, margin
 
-    @staticmethod
-    def _identity(wb: Workbook) -> tuple[str, str]:
-        try:
-            cells = wb.cached_values("評價簡表", 1, 1)
-        except KeyError:
+    def _identity(self) -> tuple[str, str]:
+        cells = self.cells("評價簡表", 1, 1)
+        if not cells:
             return "", ""
         code = cells.get((1, 2))
         name = cells.get((1, 3))
         code_s = "" if code is None else str(int(code) if isinstance(code, float) else code)
         return code_s, str(name or "")
 
-    @staticmethod
-    def _excluded(wb: Workbook) -> str:
+    def _excluded(self) -> str:
         """〔評價簡表〕E1 — 金融保險業不適用 / 查無資料."""
-        try:
-            cells = wb.cached_values("評價簡表", 1, 1)
-        except KeyError:
-            return ""
-        value = cells.get((1, 5))
+        cells = self.cells("評價簡表", 1, 1)
+        value = cells.get((1, 5)) if cells else None
         return str(value).strip() if isinstance(value, str) else ""
+
+
+@dataclass
+class WorkbookSource(SheetSource):
+    """Adapter turning one v6.62 workbook into :class:`FinancialData`."""
+
+    path: Path = Path()
+    stock_id: str = ""
+    name: str = ""
+
+    def load(self) -> FinancialData:
+        with Workbook(self.path) as wb:
+            self._open = wb
+            try:
+                return super().load()
+            finally:
+                self._open = None
+
+    def cells(
+        self, sheet: str, min_row: int = 1, max_row: int | None = None
+    ) -> dict[tuple[int, int], object]:
+        wb = getattr(self, "_open", None)
+        if wb is None:
+            return {}
+        try:
+            return wb.cached_values(sheet, min_row, max_row)
+        except KeyError:
+            return {}
+
+
+@dataclass
+class GridsSource(SheetSource):
+    """Adapter turning ``fetch-stock``'s grids into :class:`FinancialData`.
+
+    The grids are already laid out at the sheet rows the workbook writes them
+    to, so nothing here translates coordinates — it only changes strings into
+    the ``{(row, col): value}`` shape the extraction expects.  Blank cells are
+    dropped rather than stored as ``""`` because the period scan walks every
+    cell, and a sheet of empty strings is a hundred times the work.
+    """
+
+    grids: dict[str, list[list[str]]] = field(default_factory=dict)
+    stock_id: str = ""
+    name: str = ""
+
+    def cells(
+        self, sheet: str, min_row: int = 1, max_row: int | None = None
+    ) -> dict[tuple[int, int], object]:
+        grid = self.grids.get(sheet) or []
+        stop = len(grid) if max_row is None else max_row
+        return {
+            (r + 1, c + 1): value
+            for r, row in enumerate(grid)
+            if min_row <= r + 1 <= stop
+            for c, value in enumerate(row)
+            if value != ""
+        }
 
 
 def _col_index(col: str) -> int:
