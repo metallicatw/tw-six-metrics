@@ -141,12 +141,14 @@ def test_the_fetched_path_reproduces_the_workbooks_valuation():
 
     The forecast and the whole dividend-yield model come out equal to the
     workbook's own precision — the only difference is that 〔營收〕AE is stored
-    rounded to four places and recomputed here at full precision.  The P/E band lands within a third of a percent, and the reason
-    is known and single: 〔BASIC2〕's 年度EPS is MoneyDJ's own annual figure,
-    while a fetched stock sums 〔EPQ〕's four quarterly EPS — each already
-    rounded to two places, so 113 年 comes to 3.52 where the workbook has 3.51.
-    Fetching 〔MoneyDJ年財務比率〕 would close it; until that page has been seen,
-    this test pins the gap rather than pretending it is not there.
+    rounded to four places and recomputed here at full precision.
+
+    The P/E band lands within a third of a percent, and this fixture is the
+    *without* case on purpose: it has no 〔年財務比率〕, so annual EPS falls back
+    to summing 〔EPQ〕's quarters.  ``test_the_annual_page_closes_the_pe_gap_exactly``
+    is the same comparison with that page present, and there the band is the
+    workbook's to ten significant digits.  Keeping both means the fallback
+    stays measured rather than merely tolerated.
     """
     grids = fetched()
     grids[YEARLY] = _yearly_grid()
