@@ -179,9 +179,16 @@ def cmd_build(args: argparse.Namespace) -> int:
         return EXIT_FAIL
 
     out = Path(args.out or settings.report.site_dir)
+    valuations = store.read("valuations")
     written = build_site(
-        records, out, site_title=settings.report.title, rules=settings.rules
+        records,
+        out,
+        site_title=settings.report.title,
+        rules=settings.rules,
+        valuations=valuations,
     )
+    if not valuations:
+        print("  （尚無 data/valuations.csv，個股頁不會顯示估值；見 twsix value）")
     for name, n in written.items():
         print(f"  {name:<16} {n}")
     print(f"網站輸出至 {out}")
@@ -307,6 +314,214 @@ def cmd_import_list(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_fetch_stock(args: argparse.Namespace) -> int:
+    """單檔查詢：抓一支股票的九張報表，存成可離線重讀的格線.
+
+    This is 〔評價簡表〕B1's Worksheet_Change, ported: the same nine sheets in
+    the same order, from the same broker mirrors.  The grids are written to
+    disk so a failed parse can be inspected without hitting the sites again —
+    the pages change, and the saved grid is the evidence of what came back.
+    """
+    import json
+
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient
+    from .ingest.moneydj import ORDER, ContractError, MoneyDJ
+
+    # Rotation across eight mirrors *is* the retry strategy, so retrying each
+    # host four times just makes "you are blocked" take a minute to discover.
+    # One attempt per host, then move on.
+    http = HttpClient(
+        cache_dir=Path(settings.ingest.cache_dir),
+        cache_ttl=settings.ingest.cache_ttl_hours * 3600,
+        min_interval=settings.ingest.min_interval_seconds,
+        retries=args.retries,
+    )
+    dj = MoneyDJ(http=http, preferred=args.host or "")
+
+    out_dir = Path(args.out or settings.data_dir) / "sheets" / args.stock
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    sheets = [args.sheet] if args.sheet else list(ORDER)
+    failures = 0
+    contract_failures = 0
+    for name in sheets:
+        try:
+            grid = dj.fetch(args.stock, name)
+        except ContractError as exc:
+            print(f"  {name:<8} 契約不符：{exc}", file=sys.stderr)
+            failures += 1
+            contract_failures += 1
+            continue
+        except Exception as exc:  # noqa: BLE001 - report and carry on
+            print(f"  {name:<8} 失敗：{exc}", file=sys.stderr)
+            failures += 1
+            continue
+        target = out_dir / f"{name}.json"
+        target.write_text(
+            json.dumps(grid, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+        )
+        print(f"  {name:<8} {len(grid):>4} 列 -> {target}")
+
+    if failures:
+        # The two failure modes need different fixes, so say which happened
+        # rather than printing one message that is half wrong either way.
+        print(f"\n{failures}/{len(sheets)} 張表未取得。", file=sys.stderr)
+        if contract_failures:
+            print(
+                f"  其中 {contract_failures} 張是契約不符——頁面抓到了但版面不符預期，"
+                f"多半是站台改版。請對照 reference/ENDPOINTS.md 更新 "
+                f"moneydj.CONTRACTS。",
+                file=sys.stderr,
+            )
+        if failures > contract_failures:
+            print(
+                "  其餘是連線失敗。八個站台全部拒絕通常代表 IP 被擋"
+                "（機房 IP 尤其容易），請改在自己的網路環境執行。",
+                file=sys.stderr,
+            )
+    return EXIT_OK if failures == 0 else EXIT_FAIL
+
+
+def _fetched_reader(root: Path, stock: str):
+    """A CellReader over grids saved by ``fetch-stock``."""
+    import json
+
+    from .ingest.moneydj import GridSource
+
+    base = root / "sheets" / stock
+    if not base.is_dir():
+        return None
+    grids = {
+        p.stem: json.loads(p.read_text(encoding="utf-8"))
+        for p in sorted(base.glob("*.json"))
+    }
+    return GridSource(grids) if grids else None
+
+
+def cmd_value(args: argparse.Namespace) -> int:
+    """估值：EPS 預估、本益比估價、PEG／總報酬、殖利率估價.
+
+    Reads the same sheets the rating engine does, through the same reader the
+    tests exercise, and writes ``data/valuations.csv`` for the site to pick up.
+    """
+    settings = Settings.load(args.config)
+    from .ingest.valuation_source import WorkbookReader, read_valuation_input
+    from .store.snapshots import VALUATION_COLUMNS, valuation_row
+    from .valuation import ValuationOptions, evaluate
+    from .xlsx.extract import Workbook
+
+    if not args.workbook and not args.golden and not args.fetched:
+        print(
+            "請指定資料來源：\n"
+            "  --workbook book.xlsm   從活頁簿讀（已驗證的路徑）\n"
+            "  --golden 5439          從已凍結的樣本讀（見 tests/golden/）\n"
+            "  --fetched 5439         從 `twsix fetch-stock` 存下的格線讀",
+            file=sys.stderr,
+        )
+        return EXIT_FAIL
+
+    opts = ValuationOptions(
+        growth_method=settings.forecast.revenue_growth_method,
+        margin_method=settings.forecast.margin_method,
+        pe_basis=settings.forecast.pe_basis,
+        payout_basis=settings.forecast.payout_basis,
+    )
+
+    if args.fetched:
+        reader = _fetched_reader(Path(args.data or settings.data_dir), args.fetched)
+        if reader is None:
+            print(
+                f"找不到 {args.fetched} 的快取格線，請先執行："
+                f"　twsix fetch-stock {args.fetched}",
+                file=sys.stderr,
+            )
+            return EXIT_FAIL
+        inp = read_valuation_input(
+            reader, stock_id=args.stock or args.fetched, as_of=args.as_of or ""
+        )
+    elif args.golden:
+        import json
+
+        from .ingest.valuation_source import GridReader
+
+        base = REPO_ROOT / "tests" / "golden" / args.golden
+        if not base.is_dir():
+            print(f"找不到樣本 {base}", file=sys.stderr)
+            return EXIT_FAIL
+        reader = GridReader(
+            {
+                p.stem: json.loads(p.read_text(encoding="utf-8"))
+                for p in sorted(base.glob("*.json"))
+            }
+        )
+        inp = read_valuation_input(
+            reader, stock_id=args.stock or args.golden, as_of=args.as_of or ""
+        )
+    else:
+        with Workbook(Path(args.workbook)) as wb:
+            inp = read_valuation_input(
+                WorkbookReader(wb),
+                stock_id=args.stock or "",
+                as_of=args.as_of or "",
+            )
+    result = evaluate(inp, opts)
+
+    if args.json:
+        import json
+
+        print(
+            json.dumps(valuation_row(result), ensure_ascii=False, indent=2, default=str)
+        )
+        return EXIT_OK
+
+    print(f"{result.stock_id} {result.name}　股價 {_g(result.market_price)}")
+    if result.gaps:
+        for key, why in sorted(result.gaps.items()):
+            print(f"  ! {key:<9} {why}")
+    f, p, g, y = result.forecast, result.pe_view, result.growth_view, result.yield_view
+    if f:
+        print(
+            f"  預估      成長率 {f.growth_rate:.2%}　淨利率 {f.net_margin:.2%}"
+            f"　預估EPS {f.eps:.2f}　近四季EPS {_g(result.trailing_eps)}"
+        )
+    if p:
+        risk = "無風險" if p.risk_free else f"{p.expected_risk:.1%}"
+        rr = "—" if p.reward_risk is None else f"{p.reward_risk:.2f}"
+        print(
+            f"  本益比    帶 {result.band.low:.2f}–{result.band.high:.2f}"
+            f"　目標價 {p.target_price:.1f}　下檔 {p.downside_price:.1f}"
+            f"　報酬 {p.expected_return:.1%}　風險 {risk}　報酬風險比 {rr}"
+        )
+    if g:
+        peg = "—" if g.peg is None else f"{g.peg:.2f}"
+        print(
+            f"  成長      預估本益比 {g.forward_pe:.2f}"
+            f"　EPS成長 {g.eps_growth:.1%}　PEG {peg}"
+        )
+    if y:
+        print(
+            f"  殖利率    預估股利 {y.dividend:.2f}　配發率 {y.payout_ratio:.1%}"
+            f"　便宜 {y.cheap:.1f}　合理 {y.fair:.1f}　昂貴 {y.expensive:.1f}"
+            f"　判斷 {result.verdict}"
+        )
+
+    if args.out:
+        store = Store(args.out)
+        existing = {r["stock_id"]: r for r in store.read("valuations")}
+        existing[result.stock_id] = valuation_row(result)  # type: ignore[assignment]
+        n = store.write(
+            "valuations", list(existing.values()), VALUATION_COLUMNS,
+            sort_by=("stock_id",),
+        )
+        print(f"\n寫入 {store.path('valuations')}（{n} 列）")
+    return EXIT_OK
+
+
+def _g(value: object) -> str:
+    return "—" if value is None else f"{float(value):g}"  # type: ignore[arg-type]
+
+
 def cmd_extract_golden(args: argparse.Namespace) -> int:
     import subprocess
 
@@ -357,6 +572,28 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("workbook")
     i.add_argument("--out", help="資料目錄")
     i.set_defaults(func=cmd_import_list)
+
+    val = sub.add_parser("value", help="估值：EPS預估／本益比／PEG／殖利率")
+    val.add_argument("stock", nargs="?", help="股票代號")
+    val.add_argument("--workbook", help="從 .xlsm 讀取資料（離線可用）")
+    val.add_argument("--golden", help="從已凍結的樣本讀取，如 5439")
+    val.add_argument("--fetched", help="從 fetch-stock 存下的格線讀取，如 5439")
+    val.add_argument("--data", help="資料目錄（--fetched 用）")
+    val.add_argument("--as-of", dest="as_of", help="評估日，民國格式如 115/08/27")
+    val.add_argument("--out", help="把結果寫入資料目錄")
+    val.add_argument("--json", action="store_true", help="輸出 JSON")
+    val.set_defaults(func=cmd_value)
+
+    fs = sub.add_parser("fetch-stock", help="單檔查詢：抓一支股票的九張報表")
+    fs.add_argument("stock", help="股票代號")
+    fs.add_argument("--sheet", help="只抓一張表，如 ISQ")
+    fs.add_argument("--host", help="優先使用的券商站台")
+    fs.add_argument(
+        "--retries", type=int, default=1,
+        help="每個站台重試次數（預設 1；輪替八個站台本身就是重試）",
+    )
+    fs.add_argument("--out", help="資料目錄")
+    fs.set_defaults(func=cmd_fetch_stock)
 
     g = sub.add_parser("extract-golden", help="把活頁簿凍結成測試樣本")
     g.add_argument("workbook")

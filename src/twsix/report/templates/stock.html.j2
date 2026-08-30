@@ -1,9 +1,126 @@
 {% extends "base.html.j2" %}
 {% from "_macros.html.j2" import grade %}
+{% macro n(v, digits=2, suffix='') -%}
+{%- if v is none %}<span class="gap">—</span>{% else %}{{ ('%.' ~ digits ~ 'f')|format(v) }}{{ suffix }}{% endif -%}
+{%- endmacro %}
+{% macro pct(v, digits=1) -%}
+{%- if v is none %}<span class="gap">—</span>{% else %}{{ ('%.' ~ digits ~ 'f')|format(v * 100) }}%{% endif -%}
+{%- endmacro %}
 {% block title %}{{ stock.stock_id }} {{ stock.name }} — {{ site_title }}{% endblock %}
 {% block body %}
 <h2>{{ stock.stock_id }}　{{ stock.name }}</h2>
 <p class="muted">{{ stock.market }}　{{ stock.industry }}</p>
+
+{% if valuation and valuation.has_any %}
+<h3>估值
+  {% if valuation.verdict %}<span class="verdict v-{{ valuation.verdict }}">{{ valuation.verdict }}</span>{% endif %}
+</h3>
+<p class="muted">
+  股價 {{ n(valuation.market_price) }} 元
+  {%- if valuation.as_of %}　·　評估日 {{ valuation.as_of }}{% endif %}
+  {%- if valuation.revenue_month %}　·　營收基準 {{ valuation.revenue_month }}{% endif %}
+</p>
+
+<div class="val">
+  <section>
+    <h4>EPS 預估</h4>
+    <dl>
+      <dt>預估 EPS</dt><dd class="big">{{ n(valuation.forecast_eps) }}</dd>
+      <dt>近四季 EPS</dt><dd>{{ n(valuation.trailing_eps) }}</dd>
+      <dt>營收成長率</dt><dd>{{ pct(valuation.growth_rate) }}</dd>
+      <dt>稅後淨利率</dt><dd>{{ pct(valuation.forecast_margin) }}</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h4>本益比估價</h4>
+    {% if valuation.target_price is not none %}
+    <dl>
+      <dt>目標價</dt><dd class="big">{{ n(valuation.target_price, 1) }}</dd>
+      <dt>下檔價</dt><dd>{{ n(valuation.downside_price, 1) }}</dd>
+      <dt>本益比帶</dt><dd>{{ n(valuation.pe_low) }}–{{ n(valuation.pe_high) }}</dd>
+      <dt>預期報酬</dt><dd>{{ pct(valuation.expected_return) }}</dd>
+      <dt>預期風險</dt>
+      <dd>{% if valuation.expected_risk is none %}無風險{% else %}{{ pct(valuation.expected_risk) }}{% endif %}</dd>
+      <dt>報酬風險比</dt>
+      <dd>{{ n(valuation.reward_risk) }}
+        {%- if valuation.reward_risk_label %} <span class="rr rr-{{ valuation.reward_risk_label }}">{{ valuation.reward_risk_label }}</span>{% endif %}</dd>
+    </dl>
+    {% if valuation.reward_risk_rule %}
+    <p class="gap">{{ valuation.reward_risk_rule }}</p>
+    {% endif %}
+    {% else %}
+    <p class="gap">{{ valuation.gaps.pe or '資料不足' }}</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <h4>成長估價（PEG／總報酬）</h4>
+    {% if valuation.forward_pe is not none %}
+    <dl>
+      <dt>預估本益比</dt><dd>{{ n(valuation.forward_pe) }}</dd>
+      <dt>EPS 成長率</dt><dd>{{ pct(valuation.eps_growth) }}</dd>
+      <dt>PEG</dt><dd>{{ n(valuation.peg) }}</dd>
+      <dt>總報酬</dt><dd>{{ n(valuation.total_return) }}</dd>
+    </dl>
+    {% if valuation.peg is none %}
+    <p class="gap">預估 EPS 低於近四季，成長估價不適用。</p>
+    {% endif %}
+    {% else %}
+    <p class="gap">{{ valuation.gaps.growth or '資料不足' }}</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <h4>殖利率估價</h4>
+    {% if valuation.fair_price is not none %}
+    <dl>
+      <dt>合理價</dt><dd class="big">{{ n(valuation.fair_price, 1) }}</dd>
+      <dt>便宜價</dt><dd>{{ n(valuation.cheap_price, 1) }}</dd>
+      <dt>昂貴價</dt><dd>{{ n(valuation.expensive_price, 1) }}</dd>
+      <dt>預估股利</dt><dd>{{ n(valuation.dividend) }}</dd>
+      <dt>配發率</dt><dd>{{ pct(valuation.payout_ratio) }}</dd>
+      <dt>現價殖利率</dt><dd>{{ pct(valuation.current_yield, 2) }}</dd>
+    </dl>
+    {% if valuation.price_position is not none %}
+    <div class="band">
+      <div class="track"><span class="pin" style="left:{{ '%.1f'|format(valuation.price_position * 100) }}%"></span></div>
+      <div class="ends"><span>便宜 {{ n(valuation.cheap_price, 0) }}</span><span>昂貴 {{ n(valuation.expensive_price, 0) }}</span></div>
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="gap">{{ valuation.gaps.yield or '資料不足' }}</p>
+    {% endif %}
+  </section>
+</div>
+<details class="rules">
+  <summary>報酬風險比判斷準則（總大EPS、PER 動態調整推估法）</summary>
+  <div class="scroll"><table>
+  <thead><tr><th>報酬風險比</th><th>準則</th></tr></thead>
+  <tbody>
+    <tr><td>&gt; 2</td><td style="white-space:normal">才有買進的意義</td></tr>
+    <tr><td>0.67 ~ 2</td><td style="white-space:normal">多空不明，靜待股價或預估股價區間之變動</td></tr>
+    <tr><td>&lt; 0.67</td><td style="white-space:normal">考慮減碼或賣出</td></tr>
+    <tr><td>&lt; 0.5（或 0.25）</td><td style="white-space:normal">考慮布局空頭部位</td></tr>
+  </tbody>
+  </table></div>
+  {% for note in valuation.reward_risk_notes %}
+  <p class="warn">※　{{ note }}</p>
+  {% endfor %}
+</details>
+
+<p class="muted">
+  估值為機械式套用活頁簿的公式，並非預測。營收成長率取「最近一月與近六月平均孰低」；
+  本益比帶採「自行計算」（年度最高低價 ÷ 年度EPS），先剔除五年窗格的最高與最低年，
+  再依所選基準平均；殖利率估價以近五年配發率與殖利率推算，股利按盈餘年遞延一年對齊。
+  六大指標與本益比帶均已與活頁簿逐格對帳，詳見<a href="{{ rel }}about.html">評分規則</a>。
+</p>
+{% elif valuation %}
+<h3>估值</h3>
+<p class="gap">
+  估值資料不足：{% for k, why in valuation.gaps.items() %}{{ why }}{% if not loop.last %}、{% endif %}{% endfor %}
+</p>
+{% endif %}
 
 <h3>六大財務指標評等（近九期）</h3>
 <div class="scroll"><table>

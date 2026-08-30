@@ -27,8 +27,8 @@ class ForecastSettings:
     pe_basis: str = "avg_5y"  # K2
     pe_source: str = "computed"  # L2: computed | public
     payout_basis: str = "avg_5y"
-    river_low_percentile: float = 0.10
-    river_high_percentile: float = 0.90
+    river_low_percentile: float = 0.025   # 〔河流圖〕J1
+    river_high_percentile: float = 0.975  # 〔河流圖〕L1
 
 
 @dataclass

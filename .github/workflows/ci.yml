@@ -46,3 +46,4 @@ jobs:
         run: |
           twsix show-rules
           twsix verify
+          twsix value --golden 5439
