@@ -50,6 +50,14 @@ jobs:
       - name: 抓取
         run: twsix fetch-ownership
 
+      # 補課：把每一檔缺的週／月補齊。穩定狀態下幾乎不花時間——上一步已經把這一
+      # 週、這一個月放進檔案庫，所以「缺的」通常是零。真正會補到東西的情況有兩種：
+      # 有一檔是在排程之外加進來的，或是上一次跑到一半被擋。
+      #
+      # 失敗不擋發布：少幾週歷史，比整個排程紅字停掉好。
+      - name: 補齊歷史
+        run: twsix backfill-ownership || true
+
       - name: Commit
         run: |
           git config user.name  "github-actions[bot]"

@@ -404,3 +404,94 @@ def test_the_backfill_also_gives_the_directors_percentage_a_denominator_per_mont
     own.save_stock_history(root, "5439", [parse_week(page, "5439", date(2026, 8, 7))])
     custody = own.custody_shares(root, "5439")
     assert custody["2026/08"] == 92_976_751
+
+
+# ---------------------------------------------------------------------------
+# 單檔回補：公開資訊觀測站的董監月線
+# ---------------------------------------------------------------------------
+
+
+def test_the_monthly_page_gives_the_official_totals_not_a_sum_we_computed():
+    """查詢頁底部直接印著「全體董監持股合計」。
+
+    開放資料只有逐人明細，所以那條路要自己判斷誰算董監、法人代表人要不要扣
+    （見 is_director）。這條路不必——官方自己加好了。那條規則因此從「必須正確」
+    降級成「拿來對帳」，而這裡正好對上：5439 的 115/03 是 7,059,687 股，
+    Goodinfo 那一頁的 2026/03 寫 7,060 張。
+    """
+    from twsix.ingest.mops_insiders import parse
+
+    page = (MARKET / "mops_stapap1_5439_11503.html").read_text("utf-8")
+    t = parse(page, "5439")
+    assert t.month == "2026/03"
+    assert t.held == 7_059_687
+    assert t.pledged == 0
+    assert t.independent_held == 0
+
+    gi = parse_directors(_goodinfo("董監持股"))
+    row = next(r for r in gi.rows if r[0] == "2026/03")
+    assert row[gi.columns.index("全體董監持股-持股張數")] == "7,060"
+
+
+def test_the_label_must_match_the_whole_cell_not_be_contained_in_it():
+    """「全體董監持股合計」「非獨立董監持股合計」「獨立董監持股合計」互相包含。
+
+    用 `in` 去找「獨立董監持股合計」，第一個命中的是「非獨立」那一列——整份數字
+    會安靜地錯成另一個群組的值。5439 這一期剛好可以抓到這個錯：全體是 7,059,687，
+    獨立董監是 0，兩者差很遠。
+    """
+    from twsix.ingest.mops_insiders import parse
+
+    page = (MARKET / "mops_stapap1_5439_11503.html").read_text("utf-8")
+    t = parse(page, "5439")
+    assert t.independent_held == 0            # 不是 7,059,687
+    assert t.held == 7_059_687
+
+
+def test_the_month_is_read_from_the_page_not_from_the_request():
+    """問了 115/03 卻拿到 115/02 的話，抄請求參數會讓錯位的資料看起來正常。"""
+    from twsix.ingest.mops_insiders import NoMonth, parse
+
+    page = (MARKET / "mops_stapap1_5439_11503.html").read_text("utf-8")
+    assert "資料年月:11503" in page.replace(" ", "")
+    assert parse(page, "5439").month == "2026/03"
+    for bad in ("", "<html>查無資料</html>"):
+        try:
+            parse(bad, "5439")
+        except NoMonth:
+            continue
+        raise AssertionError(bad)
+
+
+def test_counting_back_months_crosses_the_year():
+    from twsix.ingest.mops_insiders import roc_months
+
+    assert roc_months("11502", 4) == [
+        ("115", "02"), ("115", "01"), ("114", "12"), ("114", "11"),
+    ]
+    assert len(roc_months("11507", 36)) == 36
+
+
+def test_backfilled_months_and_monthly_snapshots_land_in_one_series():
+    from twsix.ingest.mops_insiders import Totals
+
+    root = _archive(_tmp())
+    own.save_director_history(
+        root,
+        "5439",
+        [
+            Totals("5439", "2026/03", 7_059_687, 0, 0, 0),
+            Totals("5439", "2026/02", 7_300_687, 0, 0, 0),
+        ],
+    )
+    months = own.director_months(root, "5439")
+    assert set(months) == {"2026/02", "2026/03", "2026/07"}  # 快照那一個月也在
+
+    grid = own.directors_grid(root, "5439")
+    assert [r[0] for r in grid[1:]] == ["2026/07", "2026/03", "2026/02"]   # 新到舊
+    at = grid[0].index("全體董監持股-持股張數")
+    assert [r[at] for r in grid[1:]] == ["10,015", "7,060", "7,301"]
+    # 持股增減是相鄰兩列的差，只有在兩列都在手上時才算得出來
+    delta = grid[0].index("全體董監持股-持股增減")
+    assert grid[2][delta] == "-241"       # 7,060 - 7,301
+    assert grid[-1][delta] == ""          # 最舊那一列沒有更早的可以比

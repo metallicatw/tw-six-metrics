@@ -357,8 +357,7 @@ def build_site(
             **base,
             page="stock",
             rel="../",
-            # 這一頁只有評分表。頁首那顆「抓取」預設就指這一檔——完整版不設，
-            # 按鈕也就不出現。
+            # 頁首那顆「抓取」預設就指這一檔。
             grab_code=stock_id,
             stock={
                 "stock_id": stock_id,
@@ -699,6 +698,11 @@ def build_stock_page(
         hidden_pages=sorted(HIDDEN_PAGES),
         repo=repo,
         page="stock",
+        # 完整版也給頁首那顆按鈕一個對象，字改成「重新抓取」：資料會過期，而且
+        # 後來新增的區塊（大戶持股、董監持股就是這樣）只能靠重抓補上。少了這個，
+        # 一檔股票成功抓過一次之後就再也補不到新東西。
+        grab_code=page.stock_id,
+        grab_full=True,
         rel=rel,
         site_title=site_title,
         generated_at=generated_at or stamp(),

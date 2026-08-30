@@ -25,7 +25,7 @@ import gzip
 import io
 from datetime import date
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Any, Iterable, Iterator
 
 from ..ingest import insiders as ins
 from ..ingest import tdcc
@@ -35,10 +35,14 @@ DIRECTORS_DIR = "directors"
 #: 單檔回補的週線。開放資料只給最新一週，集保的查詢頁保留 51 週——那一年的
 #: 歷史是逐檔問來的，所以按股票存，不按週存。
 STOCK_DIR = "stock"
+#: 單檔回補的月線（董監）。開放資料只給最新一個月，公開資訊觀測站的個股查詢
+#: 有 year/month，而且直接給官方加總。同樣按股票存。
+DIRECTOR_STOCK_DIR = "directors_stock"
 
 _HOLDER_FIELDS = ("code", "holders", "shares", *[f"t{i}" for i in range(1, 9)])
 _DIRECTOR_FIELDS = ("code", "name", "held", "pledged", "independent")
 _STOCK_FIELDS = ("date", "holders", "shares", *[f"t{i}" for i in range(1, 9)])
+_DIRECTOR_STOCK_FIELDS = ("month", "held", "pledged", "independent", "independent_pledged")
 
 
 def _write(path: Path, header: tuple[str, ...], rows: list[list[str]]) -> int:
@@ -137,6 +141,43 @@ def stock_history(root: Path, stock_id: str) -> dict[date, tdcc.Snapshot]:
     return out
 
 
+def save_director_history(root: Path, stock_id: str, totals: Iterable[Any]) -> int:
+    """單檔回補的董監月線，和既有的合併（同一個月以新的為準）。"""
+    path = root / DIRECTOR_STOCK_DIR / f"{stock_id}.csv.gz"
+    have: dict[str, list[str]] = {}
+    if path.exists():
+        for row in _read(path):
+            have[row["month"]] = [row[f] for f in _DIRECTOR_STOCK_FIELDS]
+    for t in totals:
+        key = t.month.replace("/", "")
+        have[key] = [
+            key,
+            str(t.held),
+            str(t.pledged),
+            str(t.independent_held),
+            str(t.independent_pledged),
+        ]
+    rows = [have[k] for k in sorted(have)]
+    _write(path, _DIRECTOR_STOCK_FIELDS, rows)
+    return len(rows)
+
+
+def director_history(root: Path, stock_id: str) -> dict[str, tuple[int, int, int]]:
+    """單檔回補的董監月線：月別 -> (持股, 質押, 獨立董監持股)，單位股。"""
+    path = root / DIRECTOR_STOCK_DIR / f"{stock_id}.csv.gz"
+    if not path.exists():
+        return {}
+    out: dict[str, tuple[int, int, int]] = {}
+    for row in _read(path):
+        stamp = row["month"]
+        out[f"{stamp[:4]}/{stamp[4:6]}"] = (
+            int(row["held"] or 0),
+            int(row["pledged"] or 0),
+            int(row["independent"] or 0),
+        )
+    return out
+
+
 # -- 回讀 -----------------------------------------------------------------
 
 
@@ -192,45 +233,53 @@ def custody_shares(root: Path, stock_id: str) -> dict[str, int]:
     return out
 
 
-def directors_grid(root: Path, stock_id: str) -> list[list[str]]:
-    """一檔股票的多月 -> 格線。分母取同一個月的集保庫存。
+def director_months(root: Path, stock_id: str) -> dict[str, tuple[int, int, int]]:
+    """這一檔手上有的每一個月：回補的 + 每月快照累積的。
 
-    檔案裡存的已經是加總後的數字，所以這裡直接排版，不再走
-    :func:`twsix.ingest.insiders.row`——那條路是從逐人明細算總數的，把已經是
-    總數的東西再餵進去，獨立董監會被加第二次（它本來就含在全體裡）。
+    重疊的月以全市場快照為準。兩邊都來自公開資訊觀測站——一個是開放資料的逐人
+    明細自己加總，一個是查詢頁上官方印好的加總。實測相同。
     """
-    custody = custody_shares(root, stock_id)
-    rows: list[list[str]] = []
+    out = director_history(root, stock_id)
     for stamp, path in _snapshots(root, DIRECTORS_DIR):
         month = f"{stamp[:4]}/{stamp[4:6]}"
         for raw in _read(path):
             if raw["code"].strip() != stock_id:
                 continue
-            held = int(raw["held"] or 0)
-            pledged = int(raw["pledged"] or 0)
-            independent = int(raw["independent"] or 0)
-            denom = _nearest(custody, month)
-
-            def lots(shares: int) -> str:
-                return f"{shares / 1000:,.0f}"
-
-            def pct(shares: int) -> str:
-                return f"{shares / denom * 100:.2f}" if denom else ""
-
-            rows.append(
-                [
-                    month,
-                    f"{denom / 10_000_000:.3f}" if denom else "",
-                    lots(held),
-                    pct(held),
-                    "",  # 持股增減：grid() 由相鄰兩列補上
-                    lots(pledged),
-                    f"{pledged / held * 100:.2f}" if held else "",
-                    lots(independent),
-                    pct(independent),
-                ]
+            out[month] = (
+                int(raw["held"] or 0),
+                int(raw["pledged"] or 0),
+                int(raw["independent"] or 0),
             )
             break
+    return out
+
+
+def directors_grid(root: Path, stock_id: str) -> list[list[str]]:
+    """一檔股票的多月 -> 格線。分母取同一個月的集保庫存。"""
+    custody = custody_shares(root, stock_id)
+    rows: list[list[str]] = []
+    for month, (held, pledged, independent) in sorted(director_months(root, stock_id).items()):
+        denom = _nearest(custody, month)
+
+        def lots(shares: int) -> str:
+            return f"{shares / 1000:,.0f}"
+
+        def pct(shares: int, denom: int | None = denom) -> str:
+            return f"{shares / denom * 100:.2f}" if denom else ""
+
+        rows.append(
+            [
+                month,
+                f"{denom / 10_000_000:.3f}" if denom else "",
+                lots(held),
+                pct(held),
+                "",  # 持股增減：grid() 由相鄰兩列補上
+                lots(pledged),
+                f"{pledged / held * 100:.2f}" if held else "",
+                lots(independent),
+                pct(independent),
+            ]
+        )
     return ins.grid(rows) if rows else []
 
 

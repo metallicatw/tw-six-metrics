@@ -296,9 +296,9 @@ tr.here th{font-weight:700}
 @media(max-width:640px){.wrap{padding:0 14px 60px}}
 </style>
 </head>
-{# 停在一個「還沒有完整報告」的個股頁時，頁首那顆按鈕預設就指這一檔——讀者
-   不必再把代號打一次。有完整報告的頁面不設，按鈕就不會出現。 #}
-<body{% if grab_code %} data-grab="{{ grab_code }}"{% endif %}>
+{# 個股頁上，頁首那顆按鈕預設就指這一檔——讀者不必再把代號打一次。已經有完整
+   報告的也給（字改成「重新抓取」）：資料會過期，而且新增的區塊只能靠重抓補上。 #}
+<body{% if grab_code %} data-grab="{{ grab_code }}"{% endif %}{% if grab_full %} data-full="1"{% endif %}>
 <header class="top"><div class="in">
   <h1><a href="{{ rel }}index.html">{{ site_title }}</a></h1>
   {# 三個分頁暫時不連：它們讀的是一年前的全市場快照，而排名和分布用舊資料算出來
@@ -421,9 +421,10 @@ tr.here th{font-weight:700}
       if(r[4]){
         var t=document.createElement('span'); t.className='tag full'; t.textContent='完整';
         li.appendChild(t);
-      } else if(live || repo){
+      }
+      if(live || repo){
         var g=document.createElement('span'); g.className='tag grabbtn';
-        g.textContent = '抓這一檔';
+        g.textContent = r[4] ? '重抓' : '抓這一檔';
         g.addEventListener('mousedown', function(e){
           e.preventDefault(); e.stopPropagation();
           grabNow(r[0]);
@@ -475,22 +476,33 @@ tr.here th{font-weight:700}
    */
   var btn = document.getElementById('grabnow');
   var pageCode = document.body.getAttribute('data-grab') || '';
+  var pageFull = document.body.getAttribute('data-full') === '1';
   var target = '';
 
   function canGrab(){ return live || !!repo; }
-  function offer(code){
+  function offer(code, full){
     target = (code && canGrab()) ? code : '';
     if(!btn) return;
-    if(target){ btn.textContent = '抓取 ' + target; btn.hidden = false; }
+    if(target){ btn.textContent = label(target, full); btn.hidden = false; }
     else btn.hidden = true;
   }
+  /* 「已經完整」不等於「不必再抓」。
+   *
+   * 上一版把有完整報告的那一檔當成沒有對象，按鈕就消失了——於是一檔股票只要成功
+   * 抓過一次，就再也沒有辦法重抓：資料放到過期、或是後來新增了區塊（大戶持股、
+   * 董監持股就是這樣加進來的），舊的那些檔反而是唯一補不到的。
+   *
+   * 所以按鈕永遠在，只換字：沒有報告是「抓取」，有報告是「重新抓取」。
+   */
+  function label(code, full){ return (full ? '重新抓取 ' : '抓取 ') + code; }
+
   function refreshOffer(){
     var q = box.value.trim();
     if(q && hits.length){
       var h = hits[cur > -1 ? cur : 0];
-      offer(h && !h[4] ? h[0] : '');
+      offer(h ? h[0] : '', h && h[4]);
     } else if(!q){
-      offer(pageCode);
+      offer(pageCode, pageFull);
     } else {
       offer('');   /* 打了字卻找不到這一檔：沒有對象可抓 */
     }

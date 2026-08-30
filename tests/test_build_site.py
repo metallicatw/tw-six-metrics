@@ -436,8 +436,14 @@ def test_the_fetch_button_sits_next_to_the_search_box():
 
     thin = (out / "stock" / "2330.html").read_text("utf-8")
     assert 'data-grab="2330"' in thin  # 停在這一頁時按鈕預設指這一檔
+    assert 'data-full="1"' not in thin  # 還沒有完整報告（腳本裡的 getAttribute 不算）
     assert 'id="grab-btn"' not in thin  # 底部那顆已經沒了
     assert "GitHub issue" not in thin  # 連同那句說明
 
+    # 已經完整的那一檔也要能重抓：資料會過期，而且後來新增的區塊（大戶持股、
+    # 董監持股）只能靠重抓補上。上一版把它當成「沒有對象」，按鈕就消失了——
+    # 於是成功抓過一次的股票反而是唯一補不到新東西的。
     full = (out / "stock" / "5439.html").read_text("utf-8")
-    assert "data-grab=" not in full  # 已經完整，沒有東西可抓
+    assert 'data-grab="5439"' in full
+    assert 'data-full="1"' in full
+    assert "重新抓取" in full

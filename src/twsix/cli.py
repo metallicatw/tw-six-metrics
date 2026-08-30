@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -24,6 +24,9 @@ from .store.snapshots import RATING_COLUMNS, Manifest, Store, rating_rows
 
 EXIT_OK = 0
 EXIT_FAIL = 1
+
+#: 資料的時區就是台北時區；用 UTC 算「上個月」會在月初的台北早上算錯一個月。
+_TAIPEI = timezone(timedelta(hours=8))
 
 
 # =========================================================================
@@ -782,6 +785,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     print(f"[2.5/4] 補齊 {stock} 的股權週資料…")
     if not args.no_backfill:
         _backfill_holders(args, stock)
+        _backfill_directors(args, stock)
     _fold_ownership(args, stock)
 
     print(f"[3/4] 產生 {stock} 的個股頁…")
@@ -860,6 +864,86 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> None:
         print(f"  集保週資料：新增 {len(got)} 週，共 {total} 週")
 
 
+#: 董監月線回補幾個月。三年——董監持股是慢變數，看的是「這一年加碼還是減碼、
+#: 質押有沒有升上來」，一年太短、十年多半只是同一個數字重複。
+BACKFILL_MONTHS = 36
+
+
+def _backfill_directors(args: argparse.Namespace, stock: str) -> None:
+    """把這一檔缺的董監月資料補齊。
+
+    開放資料只給最新一個月。公開資訊觀測站的個股查詢有 year/month，而且底部直接
+    印著官方自己的加總（全體董監、獨立董監、設質），所以連「誰算董監」都不必自己
+    判斷。一個月一個請求，約 2 秒。
+
+    只補**缺的**那幾個月，而且不補「查了但那個月本來就沒有」的洞——後者會讓每次
+    執行都重問一次同樣問不到的月份。
+    """
+    from .ingest.base import HttpClient
+    from .ingest.mops_insiders import MopsInsiders, NoMonth, roc_months
+    from .store import ownership as own
+
+    settings = Settings.load(args.config)
+    root = Path(args.data or settings.data_dir) / "ownership"
+    have = set(own.director_months(root, stock))
+    if not have:
+        latest = None
+    else:
+        newest = max(have)
+        latest = f"{int(newest[:4]) - 1911:03d}{newest[5:7]}"
+    if latest is None:
+        # 一個月都沒有：從上個月起算（本月的月報還沒送）。
+        now = datetime.now(_TAIPEI)
+        year, month = now.year, now.month - 1
+        if month == 0:
+            year, month = year - 1, 12
+        latest = f"{year - 1911:03d}{month:02d}"
+
+    wanted = [
+        (y, m)
+        for y, m in roc_months(latest, BACKFILL_MONTHS)
+        if f"{int(y) + 1911}/{m}" not in have
+    ]
+    if not wanted:
+        print(f"  董監月資料已是最新（{len(have)} 個月）")
+        return
+
+    print(f"  補董監月資料：缺 {len(wanted)} 個月，約 {len(wanted) * 2.2:.0f} 秒")
+    http = HttpClient(
+        cache_dir=None,
+        cache_ttl=0,
+        min_interval=1.2,
+        timeout=60.0,
+        retries=4,     # mopsov 偶爾回 307，退避重試就過得去
+        backoff=2.5,
+    )
+    mops = MopsInsiders(http)
+    got: list[Any] = []
+    missing = 0
+    for i, (y, m) in enumerate(wanted, start=1):
+        try:
+            got.append(mops.month(stock, y, m))
+        except NoMonth:
+            # 那個月本來就沒有申報（例如剛上市之前）。再往前問也不會有。
+            missing += 1
+            if missing >= 3:
+                print("    連續三個月查無資料，停止（多半是上市之前）")
+                break
+        except Exception as exc:  # noqa: BLE001 - 一個月抓不到不該讓整批停下
+            print(f"    {y}/{m} 沒拿到：{exc}", file=sys.stderr)
+            missing += 1
+            if missing >= 6:
+                print("    失敗太多次，停止回補", file=sys.stderr)
+                break
+        else:
+            missing = 0
+        if i % 12 == 0 or i == len(wanted):
+            print(f"    {i}/{len(wanted)} 個月")
+    if got:
+        total = own.save_director_history(root, stock, got)
+        print(f"  董監月資料：新增 {len(got)} 個月，共 {total} 個月")
+
+
 def _fold_ownership(args: argparse.Namespace, stock: str) -> None:
     """把已有的股權快照折成這一檔的〔大戶持股〕〔董監持股〕。
 
@@ -914,7 +998,10 @@ def cmd_backfill(args: argparse.Namespace) -> int:
     for code in codes:
         print(f"{code}：")
         ns = argparse.Namespace(config=args.config, data=args.data)
-        _backfill_holders(ns, code)
+        if args.what in ("all", "holders"):
+            _backfill_holders(ns, code)
+        if args.what in ("all", "directors"):
+            _backfill_directors(ns, code)
         _fold_ownership(ns, code)
     return EXIT_OK
 
@@ -1384,10 +1471,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     bf = sub.add_parser(
         "backfill-ownership",
-        help="向集保補齊 51 週的大戶持股歷史（新股票 twsix report 會自動補）",
+        help="補齊股權歷史：集保 51 週的大戶持股 + 公開資訊觀測站 36 個月的董監持股",
     )
     bf.add_argument("stock", nargs="?", help="股票代號；省略則補 data/sheets/ 下的每一檔")
     bf.add_argument("--data", help="資料目錄")
+    bf.add_argument(
+        "--what", choices=["all", "holders", "directors"], default="all",
+        help="只補其中一種（預設兩種都補）",
+    )
     bf.set_defaults(func=cmd_backfill)
 
     pg = sub.add_parser("page", help="個股四頁：評價簡表／六大／EPS預估與估價／殖利率估價")
