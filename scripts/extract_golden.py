@@ -78,14 +78,10 @@ DETAIL_SHEETS = [
 ]
 
 
-def _clean(v: object) -> str:
-    if v is None:
-        return ""
-    if isinstance(v, float):
-        if v == int(v):
-            return str(int(v))
-        return repr(round(v, 10))
-    return str(v).strip()
+#: The fixtures and the live workbook reader must render cells identically —
+#: when they drifted, the reader saw "114.0" where the fixtures said "114" and
+#: a whole valuation model silently went dark.  One definition, imported.
+from twsix.ingest.valuation_source import cell_text as _clean  # noqa: E402
 
 
 def extract_ratings(wb: Workbook) -> list[dict[str, str]]:

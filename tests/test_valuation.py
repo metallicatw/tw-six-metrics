@@ -115,6 +115,66 @@ def test_annual_eps_matches_the_quarters_it_sums():
     assert _close(inp.annual_eps[1], 13.74, tol=1e-9)
 
 
+# =========================================================================
+# the two readers must render a cell identically
+# =========================================================================
+
+
+class _StubWorkbook:
+    """A workbook whose cells are floats, the way Excel actually stores them."""
+
+    def __init__(self, cells):
+        self._cells = cells
+
+    def cached_values(self, sheet):
+        if sheet not in self._cells:
+            raise KeyError(sheet)
+        return self._cells[sheet]
+
+
+def test_workbook_reader_renders_numbers_the_way_the_sheet_shows_them():
+    """Excel stores 5439 as 5439.0; str() would print the stock code wrong.
+
+    This is the bug that only appeared against a real .xlsm: the JSON fixtures
+    are cleaned on the way in, so the test reader saw "114" while the live
+    reader saw "114.0".
+    """
+    from twsix.ingest.valuation_source import WorkbookReader
+
+    r = WorkbookReader(_StubWorkbook({"評價簡表": {(1, 2): 5439.0, (1, 3): "高技"}}))
+    assert r.text("評價簡表", "B", 1) == "5439"
+    assert r.text("評價簡表", "C", 1) == "高技"
+
+
+def test_year_labels_survive_the_isdigit_check():
+    """〔年度交易資訊〕's year column is numeric, and the parser tests isdigit().
+
+    "114.0".isdigit() is False, so every year row was skipped and the whole
+    dividend-yield model reported 缺股利或年度股價 against a real workbook.
+    """
+    from twsix.ingest.valuation_source import WorkbookReader, yearly_prices
+
+    cells = {(r, 1): float(115 - (r - 3)) for r in range(3, 8)}
+    for r in range(3, 8):
+        cells[(r, 5)] = 100.0 + r  # 最高價
+        cells[(r, 7)] = 50.0 + r  # 最低價
+        cells[(r, 9)] = 75.0 + r  # 收盤平均價
+    r = WorkbookReader(_StubWorkbook({"年度交易資訊(上市櫃合併)": cells}))
+    years, hi, lo, avg = yearly_prices(r)
+    assert years == [115, 114, 113, 112, 111]
+    assert all(v is not None for v in hi + lo + avg)
+
+
+def test_cell_text_matches_the_fixture_cleaner():
+    """One definition — the fixtures import it, so they cannot drift again."""
+    from twsix.ingest.valuation_source import cell_text
+
+    assert cell_text(5439.0) == "5439"
+    assert cell_text(14.13) == "14.13"
+    assert cell_text(None) == ""
+    assert cell_text("  高技 ") == "高技"
+
+
 def _basic2():
     return sheets(STOCK)["BASIC2"]
 

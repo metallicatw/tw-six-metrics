@@ -245,6 +245,31 @@ def read_valuation_input(
 # -- the two readers -------------------------------------------------------
 
 
+def cell_text(value: object) -> str:
+    """Render a cell the way the sheet displays it, not the way Python repr's it.
+
+    Excel stores every number as a float, so a stock code comes back as
+    ``5439.0`` and a 民國 year as ``114.0``.  Both matter: the first is printed
+    to the user, and the second is tested with ``.isdigit()`` — which is False
+    for ``"114.0"``, so every year row was silently skipped and the whole
+    dividend-yield model reported "缺股利或年度股價".
+
+    ``scripts/extract_golden.py`` already got this right, which is exactly why
+    the bug never showed in tests: the fixtures are cleaned on the way in, so
+    the JSON-backed reader saw ``"114"`` while the live workbook reader saw
+    ``"114.0"``.  One function now, used by both.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, float):
+        if value == int(value):
+            return str(int(value))
+        return repr(round(value, 10))
+    return str(value).strip()
+
+
 def _to_number(value: object) -> float | None:
     if isinstance(value, bool):
         return None
@@ -307,8 +332,7 @@ class WorkbookReader:
         return bool(self._cells(sheet))
 
     def text(self, sheet: str, col: str, row: int) -> str:
-        v = self._cells(sheet).get((row, col_index(col)))
-        return "" if v is None else str(v)
+        return cell_text(self._cells(sheet).get((row, col_index(col))))
 
     def num(self, sheet: str, col: str, row: int) -> float | None:
         return _to_number(self._cells(sheet).get((row, col_index(col))))
