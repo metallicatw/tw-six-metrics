@@ -1,14 +1,16 @@
 """〔年度交易資訊〕 — the one sheet the mirrors do not serve.
 
-Two oracles, and the file is explicit about which is which.
+Both halves are now real payloads: 5439 (上櫃) from 櫃買 and 2330 (上市) from
+證交所, each with the other exchange's 「查無此檔」 answer beside it.  Having
+both mattered more than expected — they disagree on three things that a parser
+written to one of them alone would get wrong on the other:
 
-櫃買's half is real: ``tests/pages/5439/5439_yearly_tpex.json`` is the payload
-5439 actually returned.  證交所's half is not — 5439 is 上櫃, so 證交所 has
-nothing for it — and there the column labels are still taken from the header
-row the workbook itself scraped off 證交所 (row 2 of
-``tests/golden/5439/年度交易資訊_*.json``), which is evidence but not a
-response.  Fetching any 上市 code with ``twsix fetch-yearly 2330 --save-raw``
-would close that gap.
+* 櫃買 labels the price columns 「盤中最高價」/「盤中最低價」 and inserts an
+  extra 「加權平均價(B/A)」 in the position where 證交所 has 最高價.
+* 櫃買 lists years newest-first; 證交所 lists them oldest-first.
+* 櫃買 includes the running year; 證交所 stops at the last completed one.
+
+The third is the dangerous one, and it is why `yearly_prices` takes an anchor.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from pathlib import Path
 
 from twsix.ingest.base import FetchError
 from twsix.ingest.moneydj import GridSource
-from twsix.ingest.valuation_source import yearly_prices
+from twsix.ingest.valuation_source import current_roc_year, yearly_prices
 from twsix.ingest.yearly_trading import (
     SHEET,
     NotListedHere,
@@ -33,9 +35,63 @@ GOLDEN = Path(__file__).resolve().parent / "golden" / "5439"
 PAGES = Path(__file__).resolve().parent / "pages" / "5439"
 
 
+LISTED = Path(__file__).resolve().parent / "pages" / "2330"
+
+
 def _tpex() -> dict:
     """What 5439 actually returned from 櫃買."""
     return json.load((PAGES / "5439_yearly_tpex.json").open(encoding="utf-8"))
+
+
+def _twse() -> dict:
+    """What 2330 actually returned from 證交所."""
+    return json.load((LISTED / "2330_yearly_twse.json").open(encoding="utf-8"))
+
+
+def test_the_real_twse_response_parses():
+    years = parse(_twse())
+    assert len(years) == 32
+    assert [y.year for y in years[:3]] == [114, 113, 112]
+    assert (years[0].high, years[0].low, years[0].avg) == (1550.0, 780.0, 1163.06)
+
+
+def test_twse_lists_years_oldest_first_and_tpex_newest_first():
+    """證交所 starts at 83 年 and counts up; 櫃買 starts at the newest.
+
+    Trusting either order would reverse the whole series for the other
+    exchange — and a reversed series still looks like a plausible history.
+    """
+    assert _twse()["tables"][0]["data"][0][0] == 83
+    assert _tpex()["tables"][0]["data"][0][0] == 115
+    assert parse(_twse())[0].year == 114  # both come out newest-first
+    assert parse(_tpex())[0].year == 115
+
+
+def test_twse_stops_at_the_last_completed_year():
+    """證交所 has no 115 row in 115 年; 櫃買 does.  This is the anchor's reason."""
+    assert 115 not in [y.year for y in parse(_twse())]
+    assert 115 in [y.year for y in parse(_tpex())]
+
+
+def test_thousands_separators_in_prices_survive():
+    """台積電 crossed 1,000 — 「1,550.00」 must not parse as 1.55 or fail."""
+    assert parse(_twse())[0].high == 1550.0
+
+
+def test_the_other_exchange_answers_not_listed_for_both_stocks():
+    """Each stock is on exactly one exchange, and the other says so politely."""
+    for payload in (_twse_for_otc(), json.load((LISTED / "2330_yearly_tpex.json").open(encoding="utf-8"))):
+        try:
+            parse(payload)
+        except NotListedHere:
+            continue
+        raise AssertionError("應該辨識為「這邊沒有這檔」")
+
+
+def _twse_for_otc() -> dict:
+    """證交所's shape when asked for an OTC code — 5439's own reply had not
+    reached the server (a TLS failure), so this is 櫃買's wording for 2330."""
+    return {"stat": "很抱歉，沒有符合條件的資料!", "tables": []}
 
 
 def test_the_real_tpex_response_parses():
@@ -159,3 +215,60 @@ def test_the_grid_reads_back_through_the_same_coordinates_as_the_workbook():
     assert high[0] == 463.5
     assert low[0] == 183.5
     assert avg[0] == 311.98
+
+
+# -- the anchor ------------------------------------------------------------
+
+
+def _reader_for_2330():
+    """2330's real 證交所 history, beside the labels that name the running year.
+
+    〔營收〕A and 〔EPQ〕A are where 當年度 actually comes from — both say 115
+    while 證交所's yearly table stops at 114.
+    """
+    return GridSource(
+        {
+            SHEET: to_grid(parse(_twse())),
+            "營收": [[], [], [], [], [], [], ["年/月"], ["115/07", "1"]],
+            "EPQ": [[], [], [], [], [], ["季別"], ["115.2Q"] + [""] * 9 + ["1"]],
+        }
+    )
+
+
+def test_the_running_year_is_read_off_the_data_not_the_clock():
+    assert current_roc_year(_reader_for_2330()) == 115
+
+
+def test_a_listed_stock_series_is_anchored_on_the_current_year():
+    """證交所 has no 115 row, so index 0 would otherwise be 114.
+
+    Everything downstream is positional — 當年度本益比 is index 0 and the
+    5-year window is [1:6] — so an unanchored series makes every 上市 stock
+    read one year stale, with nothing on screen to show it.
+    """
+    reader = _reader_for_2330()
+    years, high, low, avg = yearly_prices(reader, current_roc_year(reader))
+    assert years[:3] == [115, 114, 113]
+    assert (high[0], low[0], avg[0]) == (None, None, None)  # 115 not published yet
+    assert high[1] == 1550.0  # 114 stays where 114 belongs
+    assert high[2] == 1100.0
+
+
+def test_an_otc_stock_that_already_has_the_year_is_left_alone():
+    reader = GridSource(
+        {
+            SHEET: to_grid(parse(_tpex())),
+            "營收": [[], [], [], [], [], [], ["年/月"], ["115/07", "1"]],
+        }
+    )
+    years, high, _low, _avg = yearly_prices(reader, current_roc_year(reader))
+    assert years[:2] == [115, 114]
+    assert high[0] == 463.5  # not blanked out by a spurious pad row
+
+
+def test_the_anchor_does_not_shift_a_series_that_runs_ahead():
+    """A stale anchor must never delete or reorder published years."""
+    reader = GridSource({SHEET: to_grid(parse(_tpex()))})
+    years, high, _low, _avg = yearly_prices(reader, 113)
+    assert years[:2] == [115, 114]
+    assert high[0] == 463.5

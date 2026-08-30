@@ -159,14 +159,43 @@ def dividends(reader: CellReader, years: Sequence[int]) -> list[float | None]:
     return [by_year.get(y) for y in years]
 
 
+def current_roc_year(reader: CellReader) -> int | None:
+    """The running 民國 year, taken from the data rather than from the clock.
+
+    Everything downstream is positional: index 0 means 當年度, index 1 去年,
+    and the 5-year P/E window is ``[1:6]``.  So the series has to be anchored
+    on a year, and the newest month of revenue and the newest quarter of EPS
+    both name it — 115/07 and 115.2Q.  Using ``date.today()`` instead would
+    make the same workbook value differently on 12/31 and 01/01.
+    """
+    years = [
+        y
+        for labels in (
+            (label for label, _ in monthly_revenue(reader)),
+            (label for label, _ in quarterly_eps(reader)),
+        )
+        for y in (roc_year(label) for label in labels)
+        if y is not None
+    ]
+    return max(years) if years else None
+
+
 def yearly_prices(
-    reader: CellReader,
+    reader: CellReader, anchor: int | None = None
 ) -> tuple[list[int], list[float | None], list[float | None], list[float | None]]:
     """〔年度交易資訊〕 — (民國 years, 最高價, 最低價, 收盤平均價), newest first.
 
     Completed years sit in one block and the still-running current year in a
     row of its own below it, so the two are stitched into one descending
     series here rather than left for every caller to rediscover.
+
+    ``anchor`` forces index 0 to be 當年度 even when the exchange has not
+    published it.  This is not hypothetical: 櫃買 includes the running year in
+    its yearly table, 證交所 does **not** — 2330's response in 115 年 ends at
+    114.  Without the anchor a 上市 stock's whole series slides up one, so
+    「當年度本益比」 silently reads 去年 and the 5-year window covers 113–109
+    instead of 114–110.  Every listed stock, wrong by one year, with nothing
+    on screen to show it.
     """
     sheet = TRADING if reader.has(TRADING) else TRADING_RAW
     rows: list[tuple[int, float | None, float | None, float | None]] = []
@@ -183,6 +212,12 @@ def yearly_prices(
             )
         )
     rows.sort(key=lambda x: -x[0])
+    if anchor is not None and rows:
+        # Pad, rather than assume exactly one year is missing: a stock that
+        # stopped trading leaves a longer gap, and the gap must stay visible
+        # as empty years rather than pull older prices into recent slots.
+        for year in range(anchor, rows[0][0], -1):
+            rows.insert(0, (year, None, None, None))
     return (
         [r[0] for r in rows],
         [r[1] for r in rows],
@@ -202,7 +237,7 @@ def read_valuation_input(
         v for label, v in months if label.startswith(f"{prior_year}/")
     )
 
-    years, p_hi, p_lo, p_avg = yearly_prices(reader)
+    years, p_hi, p_lo, p_avg = yearly_prices(reader, current_roc_year(reader))
 
     eps_by_year = annual_eps(reader, years)
 
