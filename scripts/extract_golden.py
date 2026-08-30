@@ -66,6 +66,15 @@ DETAIL_SHEETS = [
     "營收",
     "股利",
     "年度交易資訊(上市櫃合併)",
+    # The valuation sheets.  Without these the four valuation models have no
+    # Excel answer to diff against, which is why their outputs were only ever
+    # "input-verified" — the target price and the 便宜/合理/昂貴 prices could
+    # not be reconciled.  Capturing them promotes those tests to real
+    # cell-for-cell reconciliation.
+    "EPS預估與估價",
+    "殖利率估價",
+    "河流圖",
+    "財務指標評等預估",
 ]
 
 

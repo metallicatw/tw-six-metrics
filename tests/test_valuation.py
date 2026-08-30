@@ -115,28 +115,96 @@ def test_annual_eps_matches_the_quarters_it_sums():
     assert _close(inp.annual_eps[1], 13.74, tol=1e-9)
 
 
-# =========================================================================
-# tier 2 — behaviour of our implementation (no Excel answer to diff against)
-# =========================================================================
+def _basic2():
+    return sheets(STOCK)["BASIC2"]
 
 
-def test_pe_band_avg_5y_averages_five_years():
-    inp = valuation_input(STOCK)
-    band = PeBand.from_history(inp.pe_high, inp.pe_low, "avg_5y")
-    assert _close(band.high, sum(inp.pe_high[:5]) / 5)
-    assert _close(band.low, sum(inp.pe_low[:5]) / 5)
+def _pe_series():
+    b = _basic2()
+    cols = "BCDEFGHI"
+    return ([b.num(c, 7) for c in cols], [b.num(c, 8) for c in cols])
+
+
+def test_computed_pe_multiples_match_basic2():
+    """自行計算 = 年度最高/最低價 ÷ 年度EPS, all eight years, cell for cell."""
+    b = _basic2()
+    cols = "BCDEFGHI"
+    hi, lo = PeBand.computed_multiples(
+        [b.num(c, 3) for c in cols],
+        [b.num(c, 4) for c in cols],
+        [b.num(c, 6) for c in cols],
+    )
+    for i, c in enumerate(cols):
+        assert _close(hi[i], b.num(c, 7), tol=1e-9), c
+        assert _close(lo[i], b.num(c, 8), tol=1e-9), c
+
+
+def test_pe_band_all_four_bases_match_basic2():
+    """〔BASIC2〕J7:M8 — 當年度 / 3年平均 / 5年平均 / 當年5年孰低.
+
+    The regression this guards is large: a plain three-year mean gives 32.52
+    where Excel gives 29.26, an 11% error straight into every target price.
+    """
+    hi, lo = _pe_series()
+    expected = {
+        "current_year": (27.6564774381, 7.2197962154),
+        "avg_3y": (29.2621637684, 9.2307692308),
+        "avg_5y": (25.0178705672, 9.8177403230),
+        "min_current_5y": (25.0178705672, 7.2197962154),
+    }
+    for basis, (eh, el) in expected.items():
+        band = PeBand.from_history(hi, lo, basis)
+        assert band is not None, basis
+        assert _close(band.high, eh, tol=1e-9), f"{basis} high"
+        assert _close(band.low, el, tol=1e-9), f"{basis} low"
+
+
+def test_pe_band_drops_the_windows_extremes():
+    """One blow-off year must not drag the band with it."""
+    # 當年 placeholder, then 5 years: 10 and 90 are the extremes to drop.
+    highs = [None, 20.0, 90.0, 30.0, 10.0, 40.0]
+    band = PeBand.from_history(highs, highs, "avg_5y")
+    assert _close(band.high, (20.0 + 30.0 + 40.0) / 3)
+
+
+def test_pe_band_three_year_is_a_subset_of_the_survivors():
+    """3年平均 averages survivors inside the recent three, not its own window."""
+    highs = [None, 20.0, 90.0, 30.0, 10.0, 40.0]
+    band = PeBand.from_history(highs, highs, "avg_3y")
+    # 90 was dropped as the window's extreme, so only 20 and 30 remain.
+    assert _close(band.high, (20.0 + 30.0) / 2)
+
+
+def test_pe_band_current_year_means_last_year():
+    """操作說明:「當年度」是指去年 — index 1, not index 0."""
+    highs = [999.0, 27.0, 30.0, 20.0, 40.0, 10.0]
+    band = PeBand.from_history(highs, highs, "current_year")
+    assert _close(band.high, 27.0)
 
 
 def test_pe_band_needs_a_full_window():
-    assert PeBand.from_history([30, 25], [10, 8], "avg_5y") is None
+    assert PeBand.from_history([None, 30, 25], [None, 10, 8], "avg_5y") is None
 
 
-def test_pe_band_min_current_5y_takes_the_lower_side():
-    band = PeBand.from_history(
-        [10, 40, 40, 40, 40], [5, 20, 20, 20, 20], "min_current_5y"
+def test_forecast_growth_and_band_reproduce_the_eps_sheet():
+    """〔EPS預估與估價〕row 13 — the newest forecast row, end to end."""
+    e = sheets(STOCK)["EPS預估與估價"]
+    v = evaluate(
+        valuation_input(STOCK),
+        ValuationOptions(growth_method="1&6", margin_method="4q_avg", pe_basis="avg_3y"),
     )
-    assert _close(band.high, 10.0)  # current 10 < 5y mean 34
-    assert _close(band.low, 5.0)
+    assert _close(v.growth_rate, e.num("D", 13), tol=1e-9)
+    assert _close(v.band.high, e.num("K", 13), tol=1e-9)
+    assert _close(v.band.low, e.num("L", 13), tol=1e-9)
+    # 預估EPS is within 0.05% — 六大財務指標評等 publishes 稅後淨利率 rounded
+    # to two decimals, so the margin feeding the forecast is very slightly
+    # coarser than the unrounded figure Excel uses internally.
+    assert abs(v.forecast_eps - e.num("I", 13)) / e.num("I", 13) < 5e-4
+
+
+# =========================================================================
+# tier 2 — behaviour of our implementation (no Excel answer to diff against)
+# =========================================================================
 
 
 def test_forecast_is_conservative_by_construction():

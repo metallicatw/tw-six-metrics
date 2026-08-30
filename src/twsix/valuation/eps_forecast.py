@@ -101,30 +101,92 @@ class PeBand:
     ) -> "PeBand | None":
         """``highs``/``lows`` are yearly figures, newest first.
 
-        The workbook's 〔BASIC〕J32:M33 offers the current year, a three-year
-        mean, a five-year mean, or the lower of current and five-year.
-        """
+        〔BASIC2〕J7:M8 offers 當年度 / 3年平均 / 5年平均 / 當年5年孰低 — but
+        none of them is a plain mean, which is what an earlier reading assumed.
+        Row 18/19 of that sheet ("最高本益比(排除極端值)") gives the rule away:
 
-        def mean(vals: Sequence[Number], n: int) -> Number:
-            clean = [v for v in vals[:n] if v is not None]
-            return sum(clean) / len(clean) if len(clean) == n else None
+        1. Take the five-year window.  "當年度" means *last* year, not the
+           running one — 操作說明 says so outright, and BASIC2!J7 holds 114's
+           own figure while the sheet is open on 115.
+        2. Drop that window's single highest and single lowest year.  Those
+           are the 極端值; one blow-off year would otherwise drag the whole
+           band with it.
+        3. 5年平均 averages what survives.
+        4. 3年平均 averages only the survivors that fall in the most recent
+           three years — so it is a *subset* of the same survivor set, not an
+           independent three-year calculation.
+
+        For 5439 this reproduces all four of Excel's figures to ten
+        significant figures; a plain three-year mean was out by 11%.
+        """
+        window5_h = [v for v in highs[1:6] if v is not None]
+        window5_l = [v for v in lows[1:6] if v is not None]
+        if len(window5_h) < 3 or len(window5_l) < 3:
+            return None
+
+        def survivors(window: list[float]) -> list[float]:
+            hi_x, lo_x = max(window), min(window)
+            kept, dropped_hi, dropped_lo = [], False, False
+            for v in window:
+                if v == hi_x and not dropped_hi:
+                    dropped_hi = True
+                    continue
+                if v == lo_x and not dropped_lo:
+                    dropped_lo = True
+                    continue
+                kept.append(v)
+            return kept
+
+        keep_h, keep_l = survivors(window5_h), survivors(window5_l)
+        if not keep_h or not keep_l:
+            return None
+        avg5_h = sum(keep_h) / len(keep_h)
+        avg5_l = sum(keep_l) / len(keep_l)
+
+        def recent3(vals: Sequence[Number], kept: list[float]) -> Number:
+            inner = [v for v in vals[1:4] if v is not None and v in kept]
+            return sum(inner) / len(inner) if inner else None
+
+        cur_h = highs[1] if len(highs) > 1 else None
+        cur_l = lows[1] if len(lows) > 1 else None
 
         if basis == "current_year":
-            hi, lo = highs[0] if highs else None, lows[0] if lows else None
+            hi, lo = cur_h, cur_l
         elif basis == "avg_3y":
-            hi, lo = mean(highs, 3), mean(lows, 3)
+            hi, lo = recent3(highs, keep_h), recent3(lows, keep_l)
         elif basis == "avg_5y":
-            hi, lo = mean(highs, 5), mean(lows, 5)
+            hi, lo = avg5_h, avg5_l
         elif basis == "min_current_5y":
-            cur_h, avg_h = (highs[0] if highs else None), mean(highs, 5)
-            cur_l, avg_l = (lows[0] if lows else None), mean(lows, 5)
-            hi = None if cur_h is None or avg_h is None else min(cur_h, avg_h)
-            lo = None if cur_l is None or avg_l is None else min(cur_l, avg_l)
+            hi = None if cur_h is None else min(cur_h, avg5_h)
+            lo = None if cur_l is None else min(cur_l, avg5_l)
         else:
             raise ValueError(f"unknown P/E basis: {basis!r}")
         if hi is None or lo is None:
             return None
         return cls(high=hi, low=lo)
+
+    @staticmethod
+    def computed_multiples(
+        highs: Sequence[Number],
+        lows: Sequence[Number],
+        annual_eps: Sequence[Number],
+    ) -> tuple[list[Number], list[Number]]:
+        """〔EPS預估與估價〕L2 "自行計算" — 年度最高/最低價 ÷ 年度EPS.
+
+        The alternative, "公開資訊", takes 〔BASIC〕's published P/E straight.
+        The workbook defaults to 自行計算 because the site's figure uses a
+        trailing-four-quarter EPS that runs a quarter behind, which prices
+        growth stocks too dearly.
+        """
+        hi: list[Number] = []
+        lo: list[Number] = []
+        for i, eps in enumerate(annual_eps):
+            h = highs[i] if i < len(highs) else None
+            l = lows[i] if i < len(lows) else None
+            ok = eps is not None and eps > 0
+            hi.append(h / eps if ok and h is not None else None)
+            lo.append(l / eps if ok and l is not None else None)
+        return hi, lo
 
 
 @dataclass(frozen=True)

@@ -1,5 +1,5 @@
 {
-  "source_file": "source_workbook.xlsm",
+  "source_file": "workbook.xlsm",
   "sheet_count": 44,
   "rating_rows": 15669,
   "stock_count": 1741,
@@ -13,10 +13,14 @@
     "CFQ": 880,
     "EPQ": 901,
     "OPQ": 175,
-    "BASIC": 260,
+    "BASIC": 261,
     "BASIC2": 131,
     "營收": 711,
     "股利": 283,
-    "年度交易資訊(上市櫃合併)": 110
+    "年度交易資訊(上市櫃合併)": 110,
+    "EPS預估與估價": 687,
+    "殖利率估價": 332,
+    "河流圖": 80,
+    "財務指標評等預估": 641
   }
 }

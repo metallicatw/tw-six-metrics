@@ -32,6 +32,7 @@ from ..valuation.assemble import ValuationInput
 # -- sheet names -----------------------------------------------------------
 
 BASIC = "BASIC"
+BASIC2 = "BASIC2"
 REVENUE = "營收"
 ISQ = "ISQ"
 EPQ = "EPQ"
@@ -51,6 +52,18 @@ BASIC_ROW_PE = 7  # C — 本益比, used as an anchor, not an input
 BASIC_ROW_YIELD = 9  # C — 殖利率, likewise
 BASIC_ROW_PE_HIGH = 32
 BASIC_ROW_PE_LOW = 33
+
+#: 〔BASIC2〕 rebuilds the P/E history from prices and EPS — the workbook's
+#: "自行計算" source, which 〔EPS預估與估價〕L2 selects by default.  Row 6's
+#: newest EPS is the *forecast*, so the current year's multiple moves with it.
+BASIC2_YEAR_COLS: tuple[str, ...] = ("B", "C", "D", "E", "F", "G", "H", "I")
+BASIC2_ROW_YEAR = 2
+BASIC2_ROW_PRICE_HIGH = 3
+BASIC2_ROW_PRICE_LOW = 4
+BASIC2_ROW_PRICE_AVG = 5
+BASIC2_ROW_EPS = 6
+BASIC2_ROW_PE_HIGH = 7
+BASIC2_ROW_PE_LOW = 8
 
 ISQ_ROW_WEIGHTED_SHARES = 105
 ISQ_COL_NEWEST = "B"
@@ -191,6 +204,14 @@ def read_valuation_input(
 
     years, p_hi, p_lo, p_avg = yearly_prices(reader)
 
+    # 自行計算 (BASIC2) when present, else 公開資訊 (BASIC's published figures).
+    if reader.has(BASIC2):
+        pe_high = _nums(reader, BASIC2, BASIC2_ROW_PE_HIGH, BASIC2_YEAR_COLS)
+        pe_low = _nums(reader, BASIC2, BASIC2_ROW_PE_LOW, BASIC2_YEAR_COLS)
+    else:
+        pe_high = _nums(reader, BASIC, BASIC_ROW_PE_HIGH, BASIC_YEAR_COLS)
+        pe_low = _nums(reader, BASIC, BASIC_ROW_PE_LOW, BASIC_YEAR_COLS)
+
     if not stock_id and reader.has(SUMMARY):
         stock_id = reader.text(SUMMARY, "B", 1).strip()
     if not name and reader.has(SUMMARY):
@@ -211,8 +232,8 @@ def read_valuation_input(
         ],
         weighted_shares=reader.num(ISQ, ISQ_COL_NEWEST, ISQ_ROW_WEIGHTED_SHARES),
         quarterly_eps=[v for _, v in quarterly_eps(reader)],
-        pe_high=_nums(reader, BASIC, BASIC_ROW_PE_HIGH, BASIC_YEAR_COLS),
-        pe_low=_nums(reader, BASIC, BASIC_ROW_PE_LOW, BASIC_YEAR_COLS),
+        pe_high=pe_high,
+        pe_low=pe_low,
         dividends=dividends(reader, years),
         annual_eps=annual_eps(reader, years),
         price_high=p_hi,
