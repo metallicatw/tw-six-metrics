@@ -346,3 +346,34 @@ def test_the_two_extra_mirror_sheets_are_fetched_and_contracted():
     for sheet in ORDER:
         assert sheet in ENDPOINTS
         assert sheet in CONTRACTS, f"{sheet} 沒有契約檢查"
+
+
+def test_a_url_with_chinese_in_it_is_encoded_before_it_is_sent():
+    """Goodinfo's 股權分散表 takes ``SHEET=股數分級``.
+
+    Unencoded, urllib refuses to send it at all and raises
+    「'ascii' codec can't encode characters in position 94-97」 — which reads
+    like a problem decoding the response and is in fact the request never
+    having left the machine.
+    """
+    from twsix.ingest.base import HttpClient
+    from twsix.ingest.pending import SOURCES
+
+    url = SOURCES["holders"].url.format(stock="5439")
+    encoded = HttpClient._encode(url)
+    assert "股數分級" not in encoded
+    assert "SHEET=%E8%82%A1%E6%95%B8%E5%88%86%E7%B4%9A" in encoded
+    encoded.encode("ascii")  # would raise before the fix
+    # An already-ASCII URL must survive untouched, separators and all.
+    plain = "https://x.tw/a.asp?b=1&c=2#d"
+    assert HttpClient._encode(plain) == plain
+
+
+def test_each_pending_source_explains_its_own_failure():
+    """A generic message told a 鉅亨網 reader that Goodinfo was blocking them."""
+    from twsix.ingest.pending import SOURCES, probe
+
+    chrome = "<html>" + "x" * 5000 + "</html>"
+    assert "Goodinfo" in probe(SOURCES["holders"], chrome).why
+    assert "Goodinfo" not in probe(SOURCES["prices"], chrome).why
+    assert "JavaScript" in probe(SOURCES["prices"], chrome).why

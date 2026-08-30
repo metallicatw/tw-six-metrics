@@ -672,7 +672,9 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
         cache_ttl=0,  # a sample is worth a fresh request
         min_interval=settings.ingest.min_interval_seconds,
         retries=1,
+        cookies=True,
     )
+    primed: set[str] = set()
     out_dir = Path(args.save or ".")
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -683,6 +685,13 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
             print(f"未知的來源：{name}　可用：{'、'.join(SOURCES)}", file=sys.stderr)
             return EXIT_FAIL
         url = source.url.format(stock=args.stock)
+        if source.prime and source.prime not in primed:
+            # Knock on the front door first and keep the cookie.
+            try:
+                http.get_text(source.prime, encoding=source.encoding)
+                primed.add(source.prime)
+            except Exception as exc:  # noqa: BLE001 - the data URL may still work
+                print(f"  （{source.sheet} 的首頁沒開成：{exc}）", file=sys.stderr)
         try:
             text = http.get_text(
                 url, encoding=source.encoding, headers=dict(source.headers)
