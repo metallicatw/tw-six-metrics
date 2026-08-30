@@ -85,8 +85,12 @@ SOURCES: dict[str, Source] = {
         title_hint="持股分級",
         headers={**BROWSER_HEADERS, "Referer": GOODINFO + "/tw/index.asp"},
         prime=GOODINFO + "/tw/index.asp",
-        when_empty="Goodinfo 回 403。先確認換過的整組瀏覽器標頭有送出去，再考慮換網路",
-        note="Goodinfo 股權分散表。它看的是 request 長相不只是 IP，所以要送整組瀏覽器標頭。",
+        when_empty="Goodinfo 回 403。這張表已經不必靠它了——見 twsix fetch-ownership",
+        note=(
+            "Goodinfo 股權分散表。**已不是主要來源**：同一份資料在集保結算所"
+            "（opendata.tdcc.com.tw），一個請求給整個市場，見 ingest/tdcc.py。"
+            "這條路留著只為了一件事——Goodinfo 有五年歷史，官方只給最新一週。"
+        ),
     ),
     "directors": Source(
         key="directors",
@@ -96,8 +100,12 @@ SOURCES: dict[str, Source] = {
         title_hint="董事、監察人",
         headers={**BROWSER_HEADERS, "Referer": GOODINFO + "/tw/index.asp"},
         prime=GOODINFO + "/tw/index.asp",
-        when_empty="Goodinfo 回 403。先確認換過的整組瀏覽器標頭有送出去，再考慮換網路",
-        note="Goodinfo 董監持股表，同上。",
+        when_empty="Goodinfo 回 403。這張表已經不必靠它了——見 twsix fetch-ownership",
+        note=(
+            "Goodinfo 董監持股表。**已不是主要來源**：公開資訊觀測站的董監事持股"
+            "餘額明細（上市 + 上櫃兩個請求）連逐人明細都有，見 ingest/insiders.py。"
+            "同樣只為了歷史留著。"
+        ),
     ),
 }
 

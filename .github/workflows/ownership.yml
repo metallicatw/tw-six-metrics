@@ -1,0 +1,78 @@
+name: 股權資料（大戶／董監）
+
+# 每週一次，把整個市場的股權分散與董監持股抓回來存成快照。
+#
+# 這條路取代了「一檔一檔去 Goodinfo 另存 HTML」。差別不是快慢，是成本結構：
+#
+#   Goodinfo    一檔一頁 × 1,741 檔 = 1,741 次請求，而且它對腳本回 403
+#   這裡        每週 3 次請求，涵蓋全市場 4,047 檔
+#
+# 來源是這兩張表的原始出處，Goodinfo 也是拿它們來整理的：
+#   集保結算所 股權分散表（週）      opendata.tdcc.com.tw
+#   公開資訊觀測站 董監持股（月）    openapi.twse.com.tw + tpex.org.tw
+#
+# 兩邊都是政府開放資料，沒有防爬蟲要繞，也沒有服務條款要違反。
+#
+# 歷史是累積出來的：官方只給「最新一期」，所以每跑一次就多一週。跑得愈久，
+# 每一檔的歷史愈長——包括今天還沒進觀察清單、三年後才想看的那一檔，因為存的是
+# 整個市場而不是清單上的那幾檔。
+
+on:
+  schedule:
+    # 集保的資料日是每週五，週日前後上架。台北時間週一 09:30 抓，留足緩衝。
+    - cron: "30 1 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ownership
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[all]"
+
+      # 抓回來的東西要 commit 進 repo，先確認引擎是好的。
+      - name: 測試
+        run: python scripts/run_tests.py
+
+      - name: 抓取
+        run: twsix fetch-ownership
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ownership data/sheets
+          if git diff --cached --quiet; then
+            # 董監是月報，週週跑會有四分之三的次數沒有新資料——那是正常的，
+            # 不是失敗。快照的位元組是穩定的（gzip mtime=0），所以內容一樣就
+            # 真的沒有差異。
+            echo "::notice::這一週沒有新的股權資料"
+            exit 0
+          fi
+          git commit -m "股權快照：$(date -u +%Y-%m-%d)" \
+                     -m "集保股權分散（週）與董監持股（月），全市場。"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+  # 和「加一檔個股」同一個理由：用 GITHUB_TOKEN 推的 commit 不觸發 workflow，
+  # 所以自己呼叫建站，不指望 push 事件。
+  publish:
+    needs: fetch
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml

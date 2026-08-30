@@ -777,6 +777,10 @@ def cmd_report(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
+    # 股權快照存的是整個市場，所以這一檔的歷史多半早就在檔案庫裡了——這裡只是
+    # 把它折成個股表。不連網，也不會因為缺快照而失敗。
+    _fold_ownership(args, stock)
+
     print(f"[3/4] 產生 {stock} 的個股頁…")
     if cmd_page(ns(data=args.data, out=args.out, as_of=args.as_of)) != EXIT_OK:
         return EXIT_FAIL
@@ -787,6 +791,41 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     print("[4/4] 重建網站…")
     return cmd_build(argparse.Namespace(config=args.config, data=args.data, out=None))
+
+
+def _fold_ownership(args: argparse.Namespace, stock: str) -> None:
+    """把已有的股權快照折成這一檔的〔大戶持股〕〔董監持股〕。
+
+    ``fetch-ownership`` 抓的是整個市場，所以一檔股票第一次被加進來的時候，它
+    過去每一週的資料其實已經躺在 ``data/ownership/`` 裡了。這一步不連網。
+    """
+    import json
+
+    from .ingest.tdcc import merge
+    from .store import ownership as own
+
+    settings = Settings.load(args.config)
+    data_dir = Path(args.data or settings.data_dir)
+    root = data_dir / "ownership"
+    if not root.is_dir():
+        return
+    for sheet, fresh in (
+        ("大戶持股", own.holders_grid(root, stock)),
+        ("董監持股", own.directors_grid(root, stock)),
+    ):
+        if not fresh:
+            continue
+        target = data_dir / "sheets" / stock / f"{sheet}.json"
+        existing = []
+        if target.exists():
+            try:
+                existing = json.loads(target.read_text("utf-8"))
+            except ValueError:
+                existing = []
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(merge(existing, fresh), ensure_ascii=False), encoding="utf-8"
+        )
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
@@ -998,6 +1037,82 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
     return EXIT_OK if blocked == 0 else EXIT_FAIL
 
 
+def cmd_fetch_ownership(args: argparse.Namespace) -> int:
+    """〔大戶持股〕〔董監持股〕：兩三個請求，抓完整個市場.
+
+    這是 Goodinfo 那條路的替代品，而且不是「另一種爬法」——是換來源。Goodinfo
+    的這兩張本來就是別人資料的二手整理：股權分散來自集保結算所，董監持股來自
+    公開資訊觀測站，兩邊都是開放資料，都是整批下載。
+
+    差別在成本結構：Goodinfo 一檔一頁，1,741 檔就是 1,741 次請求（而且它不給）；
+    這裡是每週一個請求、每月兩個請求，覆蓋所有股票——包含今天還沒進觀察清單、
+    以後才想看的那些。歷史因此是「累積出來的」而不是「抓回來的」：跑得愈久，
+    每一檔的歷史愈長，而且不必為此多打任何一次別人的站台。
+    """
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient
+    from .ingest.insiders import Insiders
+    from .ingest.tdcc import Tdcc, merge
+    from .store import ownership as own
+
+    data_dir = Path(args.data or settings.data_dir)
+    root = data_dir / "ownership"
+    http = HttpClient(
+        cache_dir=Path(settings.ingest.cache_dir),
+        cache_ttl=0,  # 每週只跑一次，快取只會讓人抓到上週的
+        min_interval=settings.ingest.min_interval_seconds,
+        timeout=120.0,  # TDCC 那份 2.4 MB
+        retries=3,
+    )
+
+    wrote: list[str] = []
+    if args.what in ("all", "holders"):
+        market = Tdcc(http).fetch()
+        path = own.save_holders(root, market)
+        day = next(iter(market.values())).day
+        wrote.append(f"  大戶持股　{len(market):,} 檔　{day:%Y-%m-%d}　-> {path}")
+    if args.what in ("all", "directors"):
+        companies = Insiders(http).fetch()
+        path = own.save_directors(root, companies)
+        month = next(iter(companies.values())).month
+        wrote.append(f"  董監持股　{len(companies):,} 家　{month}　-> {path}")
+    for line in wrote:
+        print(line)
+
+    # 把快照折成個股表。只折已經有目錄的那些——別的股票的歷史留在檔案庫裡，
+    # 哪天加進來的時候一次補齊，這正是「存整個市場」買到的東西。
+    import json
+
+    sheets = data_dir / "sheets"
+    codes = sorted(p.name for p in sheets.glob("*") if p.is_dir()) if sheets.is_dir() else []
+    if args.stock:
+        codes = [args.stock]
+    touched = 0
+    for code in codes:
+        for sheet, fresh in (
+            ("大戶持股", own.holders_grid(root, code)),
+            ("董監持股", own.directors_grid(root, code)),
+        ):
+            if not fresh:
+                continue
+            target = sheets / code / f"{sheet}.json"
+            existing = []
+            if target.exists():
+                try:
+                    existing = json.loads(target.read_text("utf-8"))
+                except ValueError:
+                    existing = []
+            # 既有的可能是使用者從 Goodinfo 匯入的長歷史；官方資料補在它前面，
+            # 同一期以官方為準。欄名一致，所以這一步不需要任何轉換。
+            grid = merge(existing, fresh)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(grid, ensure_ascii=False), encoding="utf-8")
+            touched += 1
+    if codes:
+        print(f"  更新 {touched} 張個股表（{len(codes)} 檔）")
+    return EXIT_OK
+
+
 def cmd_fetch_yearly(args: argparse.Namespace) -> int:
     """年度交易資訊：從證交所、櫃買中心抓歷年最高／最低／收盤平均價.
 
@@ -1163,6 +1278,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fp.add_argument("--data", help="資料目錄（--import 寫進這裡）")
     fp.set_defaults(func=cmd_fetch_page)
+
+    fo = sub.add_parser(
+        "fetch-ownership",
+        help="大戶持股／董監持股：集保與公開資訊觀測站，一次抓整個市場",
+    )
+    fo.add_argument(
+        "--what", choices=["all", "holders", "directors"], default="all",
+        help="只抓其中一種（預設兩種都抓）",
+    )
+    fo.add_argument("--data", help="資料目錄")
+    fo.add_argument("--stock", help="只更新這一檔的個股表（快照照樣整批存）")
+    fo.set_defaults(func=cmd_fetch_ownership)
 
     pg = sub.add_parser("page", help="個股四頁：評價簡表／六大／EPS預估與估價／殖利率估價")
     pg.add_argument("stock", help="股票代號")

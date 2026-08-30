@@ -590,11 +590,12 @@
 <section class="panel" id="panel-unbuilt" role="tabpanel" aria-labelledby="tab-unbuilt" hidden>
 <h3 id="unbuilt">尚未建置的頁面</h3>
 <p class="muted">
-  卡的不是解析器而是來源。Goodinfo 對腳本回 403——先進首頁拿了 session cookie、
-  帶上整組瀏覽器標頭，家用網路也一樣，擋的是 request 的長相不只是 IP。
-  解析器已經寫好了，而且是照兩份真實回應寫的；缺的只是那份回應。
-  用瀏覽器把那一頁另存下來（網頁，僅 HTML），再
-  <code>twsix fetch-page {{ p.stock_id }} --import 檔案</code>，這一頁就會變成分頁。
+  缺的不是來源，是這一檔的快照。〔大戶持股〕〔董監持股〕的原始資料在集保結算所
+  與公開資訊觀測站，都是開放資料、一次給整個市場——
+  <code>twsix fetch-ownership</code> 三個請求就涵蓋 4,047 檔。官方只給最新一期，
+  所以歷史是每週跑一次累積出來的；排程已經在跑，這一頁會自己長出來。
+  想要更長的歷史，可以從 Goodinfo 另存那一頁再
+  <code>twsix fetch-page {{ p.stock_id }} --import 檔案</code>，兩邊會合併。
 </p>
 <div class="scroll">
   <table>

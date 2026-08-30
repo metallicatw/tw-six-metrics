@@ -200,28 +200,25 @@ def _num(value: Number, digits: int = 2) -> str:
     return "—" if value is None else f"{value:,.{digits}f}"
 
 
-#: The four workbook pages this project cannot yet build, and what each one
-#: is waiting for.  Listed on the page rather than silently absent: a reader
-#: who knows the workbook has twelve tabs should be told which four are
-#: missing and why, not left to wonder whether they failed to load.
-#: Two pages left, and the reason is no longer 「還沒寫」.  Goodinfo answers a
-#: request from a datacentre IP with 403 even after a landing-page visit that
-#: banks a session cookie — tested with the cookie jar in place, both URLs,
-#: same result.  That is the source refusing, not a parser missing, so it is
-#: recorded as a limit rather than carried as a task.  A run from a home
-#: connection would very likely get both; the parser is the easy half.
+#: 還沒有資料的頁面，以及缺什麼。
+#:
+#: 這兩張曾經是「Goodinfo 擋住」的代表作。現在不是了——它們的原始資料是集保
+#: 結算所與公開資訊觀測站的開放資料，一次抓整個市場，每週三個請求。Goodinfo
+#: 只是把同一份資料整理過而已。
+#:
+#: 所以缺的不再是「來源不給」，是「這一檔還沒累積到快照」：官方只給最新一期，
+#: 歷史要靠每週跑一次長出來。
 UNBUILT_PAGES: tuple[tuple[str, str], ...] = (
     (
         HOLDERS,
-        "Goodinfo 股權分散表：對腳本回 403（家用網路也一樣，擋的是 request 的長相）。"
-        "用瀏覽器開 EquityDistributionClassHis.asp 另存 HTML，再 "
-        "twsix fetch-page <代號> --import <檔案>",
+        "還沒有這一檔的集保股權分散快照。執行 twsix fetch-ownership（一次抓整個"
+        "市場，之後每週的排程會自己累積），或用 twsix fetch-page --import 匯入"
+        "從 Goodinfo 存下來的歷史",
     ),
     (
         DIRECTORS,
-        "Goodinfo 董監持股表：同一個 403，同一個作法。"
-        "用瀏覽器開 StockDirectorSharehold.asp 另存 HTML，再 "
-        "twsix fetch-page <代號> --import <檔案>",
+        "還沒有這一檔的董監持股快照。同上：twsix fetch-ownership 會從公開資訊"
+        "觀測站抓上市與上櫃兩份，涵蓋全市場",
     ),
 )
 

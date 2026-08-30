@@ -371,8 +371,11 @@ def line(
             # can leave in any direction, and a label sitting on top of it is
             # unreadable exactly when the newest value matters most.
             # 最新點在右邊界上，置中的文字會有一半跑出畫布，所以靠右對齊。
+            # 值貼近上緣時，標籤畫在點的上方會跑出畫布被切掉——新資料剛開始
+            # 累積、只有一兩個點的時候特別容易發生，因為軸的上下界就貼著它。
+            label_y = max(y - 13, f.top + 9)
             parts.append(
-                f'<text x="{min(x, f.left + f.plot_w):.1f}" y="{y - 13:.1f}" '
+                f'<text x="{min(x, f.left + f.plot_w):.1f}" y="{label_y:.1f}" '
                 f'font-size="11" text-anchor="end" fill="var(--ink-2)" '
                 f'font-weight="600" paint-order="stroke" stroke="var(--surface)" '
                 f'stroke-width="3.5" stroke-linejoin="round">'
