@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import http.cookiejar
 import json
 import logging
 import ssl
@@ -77,7 +78,21 @@ class HttpClient:
     backoff: float = 2.0
     user_agent: str = DEFAULT_UA
     default_headers: Mapping[str, str] = field(default_factory=dict)
+    #: Keep cookies across requests.  Some sites hand out a session cookie on
+    #: the landing page and 403 anything that arrives without one, so a fetch
+    #: that visits the front door first only works if the cookie survives.
+    cookies: bool = False
     _last_call: dict[str, float] = field(default_factory=dict, init=False)
+    _opener: object | None = field(default=None, init=False, repr=False)
+
+    def _build_opener(self):  # type: ignore[no-untyped-def]
+        if self._opener is None:
+            handlers = [urllib.request.HTTPSHandler(context=tls_context())]
+            if self.cookies:
+                jar = http.cookiejar.CookieJar()
+                handlers.append(urllib.request.HTTPCookieProcessor(jar))
+            self._opener = urllib.request.build_opener(*handlers)
+        return self._opener
 
     # -- cache ------------------------------------------------------------
 
@@ -99,6 +114,27 @@ class HttpClient:
 
     # -- fetch ------------------------------------------------------------
 
+    @staticmethod
+    def _encode(url: str) -> str:
+        """Percent-encode a URL that carries non-ASCII.
+
+        ``urllib`` refuses one outright: Goodinfo's 股權分散表 takes a
+        ``SHEET=股數分級`` parameter and the request died with
+        「'ascii' codec can't encode characters in position 94-97」 — an error
+        that reads like a decoding problem in the response and is in fact the
+        request never having been sent.
+        """
+        parts = urllib.parse.urlsplit(url)
+        return urllib.parse.urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                urllib.parse.quote(parts.path, safe="/%"),
+                urllib.parse.quote(parts.query, safe="=&%+"),
+                urllib.parse.quote(parts.fragment, safe="%"),
+            )
+        )
+
     def _throttle(self, url: str) -> None:
         host = urllib.parse.urlparse(url).netloc
         last = self._last_call.get(host)
@@ -116,6 +152,7 @@ class HttpClient:
         body: bytes | None = None,
         use_cache: bool = True,
     ) -> bytes:
+        url = self._encode(url)
         cache_path = self._cache_path(url, body)
         if use_cache:
             cached = self._read_cache(cache_path)
@@ -132,10 +169,14 @@ class HttpClient:
             self._throttle(url)
             try:
                 req = urllib.request.Request(url, data=body, headers=dict(merged))
-                with urllib.request.urlopen(
-                    req, timeout=self.timeout, context=tls_context()
-                ) as resp:
-                    data = resp.read()
+                if self.cookies:
+                    with self._build_opener().open(req, timeout=self.timeout) as resp:
+                        data = resp.read()
+                else:
+                    with urllib.request.urlopen(
+                        req, timeout=self.timeout, context=tls_context()
+                    ) as resp:
+                        data = resp.read()
                 if cache_path is not None:
                     cache_path.write_bytes(data)
                 return data
