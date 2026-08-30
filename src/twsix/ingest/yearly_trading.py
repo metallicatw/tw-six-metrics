@@ -8,17 +8,18 @@ default — and what the whole dividend-yield model needs.  Without this sheet a
 fetched stock can still be forecast and priced off the published P/E, but
 〔殖利率估價〕 abstains.
 
-櫃買's response is now a fixture: ``tests/pages/5439/5439_yearly_tpex.json`` is
-what 5439 actually returned, and the tests parse it.  It immediately justified
-the decision to map columns by *name*: 櫃買 labels its price columns
-「盤中最高價」/「盤中最低價」 and carries an extra 「加權平均價(B/A)」 that
-證交所 does not have, so reading by position would have taken the wrong column
-off one of the two exchanges.
+Both exchanges' responses are now fixtures — 5439 (上櫃) from 櫃買 and 2330
+(上市) from 證交所, under ``tests/pages/``.  Having both mattered: they
+disagree on three things, and each disagreement would have been invisible in a
+parser written against only one.
 
-證交所's response is still unseen — 5439 is 上櫃, so 證交所 has nothing for it,
-and the first attempt never reached the server at all (see
-:func:`~twsix.ingest.base.tls_context` for why).  Fetch any 上市 code with
-``twsix fetch-yearly 2330 --save-raw <dir>`` and that half gets a fixture too.
+* 櫃買 labels the price columns 「盤中最高價」/「盤中最低價」 and carries an
+  extra 「加權平均價(B/A)」 in the position where 證交所 has 最高價 — so the
+  columns are matched by name, not index.
+* 櫃買 lists years newest-first, 證交所 oldest-first — so :func:`parse` sorts.
+* 櫃買 includes the running year, 證交所 stops at the last completed one — so
+  :func:`~twsix.ingest.valuation_source.yearly_prices` takes an anchor, without
+  which every 上市 stock's series would sit one year off.
 """
 
 from __future__ import annotations
