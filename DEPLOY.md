@@ -47,16 +47,16 @@ Settings → Actions → General → Workflow permissions →
 
 ## 四、確認排程
 
-| 工作流程 | cron (UTC) | 台北時間 |
-|---|---|---|
-| `daily.yml` | `0 8 * * 1-5` | 週一至週五 16:00 |
-| `monthly.yml` | `0 4 10-16 * *` | 每月 10–16 日 12:00 |
-| `quarterly.yml` | `0 5 29-31 3 *` 等四組 | 財報申報期前後 13:00 |
+只剩兩個工作流程：`ci.yml`（每次 push 跑測試）與 `pages.yml`
+（push 到 main 時測試 → 對帳 → 建站 → 發布）。兩者都不抓資料。
 
-排程工作流程只在**預設分支**上執行，而且 repo 連續 60 天沒有活動時
-GitHub 會自動停用排程——資料快照的 commit 本身就會維持活躍。
+先前的 `daily` / `monthly` / `quarterly` 全市場排程已移除，原因見 README
+的〈排程〉一節——簡短版：官方 OpenAPI 只給最新一期快照、沒有現金流量表，
+而 `twsix rate` 在沒有活頁簿的 CI 裡必定失敗。
 
-先手動跑一次確認：Actions → 選 workflow → **Run workflow**。
+因為不再有排程 commit 資料，repo 也就不需要 Actions 的寫入權限；
+第三節那個設定可以留著，但已非必要。
+
 
 ## 五、第一次抓取會遇到的事
 

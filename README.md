@@ -169,12 +169,25 @@ Goodinfo 的服務條款禁止自動化抓取。`ingest/moneydj.py` 預設停用
 | 工作流程 | 時機 | 做什麼 |
 |---|---|---|
 | `ci.yml` | 每次 push / PR | ruff + mypy + 全部測試（含黃金對帳） |
-| `daily.yml` | 交易日收盤後 | 抓股價與三大法人、重算估價、重建站台 |
-| `monthly.yml` | 每月 10–16 日 | 抓月營收、重算評等 |
-| `quarterly.yml` | 3/31·5/15·8/14·11/14 前後 | 抓三大報表、全市場重評 |
+| `pages.yml` | push 到 main、或手動 | 測試 → 對帳 → 建站 → 發布 Pages |
 
-資料快照會 commit 進 repo，形成天然的稽核軌跡；站台由 `actions/deploy-pages`
-發布到 GitHub Pages。
+**抓取不在 CI 裡跑。** 原本有 `daily` / `monthly` / `quarterly` 三個排程做
+全市場抓取，實際跑了之後證實做不到宣稱的事，已移除：
+
+- 官方 OpenAPI（`t187ap05/06/07`）每家公司只給**最新一期**一列
+  （實測 `twse_income.csv` 1,017 列 = 1,017 家 × 1 季）。六大指標需要
+  4~6 期歷史，一期快照一個指標都算不出來。
+- 那批端點**沒有現金流量表**，自由現金流量從這條路永遠算不出來
+  （現金流量在 MOPS，見 `ingest/mops.py`，但 `twsix fetch` 從未呼叫它）。
+- `twsix rate` 沒有 `--workbook` 會直接失敗，而 CI 裡不會有活頁簿。
+  三個排程都寫成 `twsix rate || true`，於是每次都失敗、每次都被吞掉。
+
+結果是每天 commit 六千多行、沒有任何東西讀的快照。移除它們不是放棄功能，
+是移除從未運作過的東西。
+
+資料更新改由本機的單檔查詢負責——`twsix fetch-stock`，走券商鏡像站，
+那是唯一拿得到股價、歷年本益比與股利的來源。站台仍由
+`actions/deploy-pages` 發布。
 
 ---
 

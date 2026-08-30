@@ -1,0 +1,72 @@
+name: pages
+
+# 只做一件事：建站並發布。
+#
+# 先前有 daily / monthly / quarterly 三個排程在跑全市場抓取，但它們做不到
+# 宣稱的事：
+#
+#   * 官方 OpenAPI（t187ap05/06/07）每家公司只給**最新一期**一列。六大指標
+#     要 4~6 期歷史，一期快照一個指標都算不出來。
+#   * 那批端點裡沒有現金流量表，所以自由現金流量從這條路永遠算不出來。
+#   * `twsix rate` 沒有 --workbook 會直接失敗，而 CI 裡不可能有活頁簿
+#     （.xlsm 已被 gitignore）。三個排程都寫成 `twsix rate || true`，
+#     於是每一次都失敗、每一次都被吞掉。
+#
+# 結果是每天 commit 六千多行沒有任何東西讀的快照。移除它們不是放棄功能，
+# 是移除從未運作過的東西。抓取改由本機的 `twsix fetch-stock` 單檔查詢負責，
+# 那條路才碰得到券商鏡像站上的股價、本益比與股利。
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "reference/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[all]"
+
+      # 零相依，最先跑：引擎壞了就不必建站。
+      - name: 測試
+        run: python scripts/run_tests.py
+
+      - name: 對帳（守門）
+        run: twsix verify
+
+      - name: 建立網站
+        run: twsix build
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
