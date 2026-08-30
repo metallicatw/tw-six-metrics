@@ -1,0 +1,261 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ p.stock_id }} {{ p.name }}｜{{ site_title }}{% endblock %}
+{% block body %}
+
+<div class="ident">
+  <h2 id="top">{{ p.stock_id }}　{{ p.name }}</h2>
+  <p class="muted">
+    財報 {{ p.fiscal_quarter or "—" }}　營收 {{ p.revenue_month or "—" }}
+    {%- if p.market_price %}　股價 {{ "%.2f"|format(p.market_price) }}{% endif %}
+  </p>
+</div>
+
+{% if p.excluded %}
+<p class="stale">{{ p.excluded }}——這一檔不適用六大指標。</p>
+{% endif %}
+
+<nav class="sections" aria-label="頁面區塊">
+  <a href="#summary">評價簡表</a>
+  <a href="#six">六大財務指標評等</a>
+  <a href="#eps">EPS預估與估價</a>
+  <a href="#yield">殖利率估價</a>
+</nav>
+
+{# ================= 1. 評價簡表 ================= #}
+<h3 id="summary">評價簡表</h3>
+
+<div class="cards">
+  <div class="card">
+    <b>{{ "%.2f"|format(p.latest_composite) if p.latest_composite is not none else "—" }}</b>
+    <span>最新綜合評分</span>
+  </div>
+  <div class="card">
+    <b>{{ "%.2f"|format(p.market_price) if p.market_price else "—" }}</b>
+    <span>市價</span>
+  </div>
+  <div class="card">
+    <b>{{ p.pe.reward_risk if p.pe else "—" }}</b>
+    <span>報酬風險比{% if p.pe %}　{{ p.pe.verdict }}{% endif %}</span>
+  </div>
+  <div class="card">
+    <b>{{ p.dividend.verdict if p.dividend else "—" }}</b>
+    <span>殖利率估價判斷</span>
+  </div>
+</div>
+
+<p class="{{ 'verdict-yes' if p.worth_researching else 'verdict-no' }}">
+  {% if p.worth_researching %}
+    綜合評分 {{ "%.2f"|format(p.latest_composite) }} ≥ 3，依〔操作說明〕的建議<b>值得進一步研究</b>。
+  {% else %}
+    〔操作說明〕建議綜合評價 3 分以上才有研究必要；本檔最新綜合評分
+    {{ "%.2f"|format(p.latest_composite) if p.latest_composite is not none else "不足以計算" }}。
+  {% endif %}
+</p>
+
+<div class="scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>期別</th><th>財報季度</th><th>營收月份</th>
+        {% for label in indicator_labels %}<th>{{ label }}</th>{% endfor %}
+        <th>綜合</th><th>價值</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in p.periods %}
+      <tr>
+        <td>{{ row.index }}</td>
+        <td>{{ row.quarter }}</td>
+        <td>{{ row.month }}</td>
+        {% for key in indicator_keys %}
+        <td>
+          {%- if row.grades[key].badge -%}
+            <span class="g g-{{ row.grades[key].text }}">{{ row.grades[key].text }}</span>
+          {%- else -%}
+            <span class="muted">{{ row.grades[key].text }}</span>
+          {%- endif -%}
+        </td>
+        {% endfor %}
+        <td class="num" title="{{ row.composite }}">{{ row.composite_short }}</td>
+        <td>{% if row.value_pick %}<span class="pick">★</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<details class="sources">
+  <summary>資料來源（{{ p.sources|selectattr("ok")|list|length }}/{{ p.sources|length }}）</summary>
+  <ul class="srclist">
+    {% for s in p.sources %}
+    <li class="{{ 'ok' if s.ok else 'missing' }}">{{ s.sheet }}{% if not s.ok %}　未取得{% endif %}</li>
+    {% endfor %}
+  </ul>
+</details>
+
+{# ================= 2. 六大財務指標評等 ================= #}
+<h3 id="six">六大財務指標評等</h3>
+<p class="muted">最新一期（{{ p.fiscal_quarter }} / {{ p.revenue_month }}）各指標的數列與評分理由。</p>
+
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>指標</th><th>評等</th><th>評分</th><th>近六期數列</th><th>理由</th></tr>
+    </thead>
+    <tbody>
+      {% for ind in p.indicators %}
+      <tr>
+        <th scope="row">{{ ind.label }}</th>
+        <td>
+          {%- if ind.badge -%}
+            <span class="g g-{{ ind.letter }}">{{ ind.letter }}</span>
+          {%- else -%}
+            <span class="muted">{{ ind.letter or "—" }}</span>
+          {%- endif -%}
+        </td>
+        <td class="num">{{ ind.display }}</td>
+        <td class="num series">
+          {%- for v in ind["values"] -%}
+            <span>{{ "%.2f"|format(v) if v is not none else "—" }}</span>
+          {%- endfor -%}
+        </td>
+        <td class="reason">{{ ind.reason }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if p.figures.revenue %}{{ p.figures.revenue|safe }}{% endif %}
+{% if p.figures.revenue_yoy %}{{ p.figures.revenue_yoy|safe }}{% endif %}
+{% if p.figures.eps %}{{ p.figures.eps|safe }}{% endif %}
+
+{# ================= 3. EPS預估與估價 ================= #}
+<h3 id="eps">EPS預估與估價</h3>
+
+{% if p.gaps.forecast or p.gaps.pe %}
+<p class="stale">{{ p.gaps.forecast or p.gaps.pe }}——此區塊無法計算。</p>
+{% endif %}
+
+{% if p.forecast %}
+<div class="val">
+  <section>
+    <h4>預估 EPS</h4>
+    <dl>
+      <dt>營收月份</dt><dd>{{ p.forecast.revenue_month }}</dd>
+      <dt>預估成長率</dt><dd>{{ p.forecast.growth_rate }}</dd>
+      <dt>預估營收</dt><dd>{{ p.forecast.projected_revenue }}</dd>
+      <dt>稅後淨利率</dt><dd>{{ p.forecast.net_margin }}</dd>
+      <dt>預估淨利</dt><dd>{{ p.forecast.projected_income }}</dd>
+      <dt>加權平均股數</dt><dd>{{ p.forecast.weighted_shares }}</dd>
+      <dt>預估 EPS</dt><dd class="big">{{ p.forecast.eps }}</dd>
+      <dt>近四季 EPS</dt><dd>{{ p.forecast.trailing_eps }}</dd>
+    </dl>
+  </section>
+  {% if p.pe %}
+  <section>
+    <h4>本益比估價</h4>
+    <dl>
+      <dt>本益比區間</dt><dd>{{ p.pe.band_low }} – {{ p.pe.band_high }}</dd>
+      <dt>目標價</dt><dd class="big">{{ p.pe.target }}</dd>
+      <dt>下檔價</dt><dd>{{ p.pe.downside }}</dd>
+      <dt>預期報酬</dt><dd>{{ p.pe.expected_return }}</dd>
+      <dt>預期風險</dt><dd>{{ p.pe.expected_risk }}</dd>
+      <dt>報酬風險比</dt><dd class="big">{{ p.pe.reward_risk }}</dd>
+    </dl>
+  </section>
+  {% endif %}
+  {% if p.growth %}
+  <section>
+    <h4>成長模型</h4>
+    <dl>
+      <dt>預估本益比</dt><dd>{{ p.growth.forward_pe }}</dd>
+      <dt>EPS 成長率</dt><dd>{{ p.growth.eps_growth }}</dd>
+      <dt>PEG</dt><dd>{{ p.growth.peg }}</dd>
+      <dt>總報酬本益比</dt><dd>{{ p.growth.total_return }}</dd>
+    </dl>
+  </section>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if p.figures.pe_band %}{{ p.figures.pe_band|safe }}{% endif %}
+
+<div class="criteria">
+  <h4>報酬風險比判斷準則<span class="muted">　總大EPS、PER 動態調整推估法</span></h4>
+  <ol>
+    {% for range_text, label, why in reward_risk_rules %}
+    <li class="{{ 'hit' if p.pe and p.pe.verdict == label else '' }}">
+      <b>{{ range_text }}</b>　{{ why }}
+      {%- if p.pe and p.pe.verdict == label %}　<span class="tag">本檔 {{ p.pe.reward_risk }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  <ul class="warnings">
+    {% for note in reward_risk_notes %}<li>{{ note }}</li>{% endfor %}
+  </ul>
+</div>
+
+{# ================= 4. 殖利率估價 ================= #}
+<h3 id="yield">殖利率估價</h3>
+
+{% if p.gaps.yield %}
+<p class="stale">{{ p.gaps.yield }}——此區塊無法計算。</p>
+{% endif %}
+
+{% if p.dividend %}
+<div class="val">
+  <section>
+    <h4>預估股利</h4>
+    <dl>
+      <dt>預估股利</dt><dd class="big">{{ p.dividend.dividend }}</dd>
+      <dt>配發率</dt><dd>{{ p.dividend.payout_ratio }}</dd>
+      <dt>現價殖利率</dt><dd>{{ p.dividend.current_yield }}</dd>
+    </dl>
+  </section>
+  <section>
+    <h4>估價區間</h4>
+    <dl>
+      <dt>便宜價</dt><dd>{{ p.dividend.cheap }}</dd>
+      <dt>合理價</dt><dd>{{ p.dividend.fair }}</dd>
+      <dt>昂貴價</dt><dd>{{ p.dividend.expensive }}</dd>
+      <dt>判斷</dt><dd class="big">{{ p.dividend.verdict }}</dd>
+    </dl>
+  </section>
+</div>
+{% endif %}
+
+{% if p.figures.yield_band %}{{ p.figures.yield_band|safe }}{% endif %}
+
+{% if p.dividend_lag_rows %}
+<h4>歷年股價與股利</h4>
+<p class="muted">
+  「盈餘年」是股利所屬的獲利年度，「發放年」是實際配發的年度——同一筆金額
+  在兩欄之間差一年，這就是估價時股利遞延一年的依據。
+</p>
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>年度</th><th>最高價</th><th>最低價</th><th>收盤平均價</th>
+          <th>現金股利（盈餘年）</th><th>現金股利（發放年）</th></tr>
+    </thead>
+    <tbody>
+      {% for row in p.dividend_lag_rows %}
+      <tr>
+        <th scope="row">{{ row.year }}</th>
+        <td class="num">{{ row.high }}</td>
+        <td class="num">{{ row.low }}</td>
+        <td class="num">{{ row.avg }}</td>
+        <td class="num">{{ row.cash_earned }}</td>
+        <td class="num">{{ row.cash_paid }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<p class="muted">
+  本頁為資料整理，非投資建議。估價模型的輸入與門檻見〈評分規則〉。
+</p>
+{% endblock %}
