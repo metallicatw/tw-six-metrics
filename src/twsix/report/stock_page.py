@@ -30,13 +30,22 @@ from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
+from . import charts
+from .sections import (
+    River,
+    Seasonal,
+    build_pe_river,
+    forecast_scenarios,
+    profit_seasonality,
+    revenue_seasonality,
+    statement_figures,
+)
 
 #: The five letters that get a coloured badge.  Anything else — 「數據不足」,
 #: 「不評分」 — is a sentence, not a grade: it went into a 26px badge whose
 #: class matched no rule, so it rendered as dark text on a transparent chip
 #: and was invisible in dark mode.  Those read as plain muted text instead.
 GRADE_LETTERS = frozenset({"AA", "A", "BB", "B", "C"})
-from . import charts
 
 Number = float | None
 
@@ -107,6 +116,14 @@ class StockPage:
     gaps: dict[str, str] = field(default_factory=dict)
     sources: list[dict[str, Any]] = field(default_factory=list)
 
+    #: The remaining workbook pages — see :mod:`twsix.report.sections`.
+    statements: dict[str, str] = field(default_factory=dict)
+    river: River | None = None
+    revenue_season: Seasonal | None = None
+    profit_season: Seasonal | None = None
+    scenarios: list[Any] = field(default_factory=list)
+    unbuilt: list[dict[str, str]] = field(default_factory=list)
+
     @property
     def worth_researching(self) -> bool:
         """〔操作說明〕: 綜合評價 3 分以上才有研究必要."""
@@ -136,12 +153,26 @@ def _num(value: Number, digits: int = 2) -> str:
     return "—" if value is None else f"{value:,.{digits}f}"
 
 
+#: The four workbook pages this project cannot yet build, and what each one
+#: is waiting for.  Listed on the page rather than silently absent: a reader
+#: who knows the workbook has twelve tabs should be told which four are
+#: missing and why, not left to wonder whether they failed to load.
+UNBUILT_PAGES: tuple[tuple[str, str], ...] = (
+    ("個股新聞", "MoneyLink／Yahoo 新聞頁，尚未取得任何一次真實回應"),
+    ("外資投信", "MoneyDJ 三大法人頁（近 20 日），端點已知但尚未抓過"),
+    ("大戶持股", "Goodinfo 股權分散表，需帶 referer，且擋機房 IP 最嚴"),
+    ("董監持股", "Goodinfo 董監持股表，同上"),
+)
+
+
 def build_page(
     rating: Any,
     valuation: Any,
     reader: Any,
     *,
+    data: Any = None,
     sheets_present: Sequence[str] = (),
+    settings: Any = None,
 ) -> StockPage:
     """Assemble the four sections from one rating and one valuation.
 
@@ -150,12 +181,12 @@ def build_page(
     number (月營收, 歷年股利) without a second source of truth.
     """
     from ..ingest.valuation_source import (
-        DIVIDEND_COL_CASH,
+        annual_eps,
+        current_roc_year,
         dividends,
         monthly_revenue,
         quarterly_eps,
         yearly_prices,
-        current_roc_year,
     )
 
     page = StockPage(
@@ -335,6 +366,26 @@ def build_page(
                 "cash_paid": _num(cash[i + 1]) if i + 1 < len(cash) else "—",
             }
         )
+
+    # -- 財報圖表 / 河流圖 / 季節性 / 評等預估 ------------------------------
+    if data is not None:
+        page.statements = statement_figures(data)
+    page.revenue_season = revenue_seasonality(months)
+    page.profit_season = profit_seasonality(quarterly_eps(reader))
+    page.scenarios = forecast_scenarios(rating, data)  # data is optional here
+
+    low_q = getattr(getattr(settings, "forecast", None), "river_low_percentile", 0.025)
+    high_q = getattr(getattr(settings, "forecast", None), "river_high_percentile", 0.975)
+    annual = annual_eps(reader, years)
+    page.river = build_pe_river(
+        p_avg,
+        annual,
+        market_price=valuation.market_price,
+        current_eps=valuation.trailing_eps,
+        low_q=low_q,
+        high_q=high_q,
+    )
+    page.unbuilt = [{"name": n, "why": w} for n, w in UNBUILT_PAGES]
 
     page.sources = [
         {"sheet": name, "ok": name in set(sheets_present)}

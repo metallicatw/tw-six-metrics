@@ -623,7 +623,14 @@ def cmd_page(args: argparse.Namespace) -> int:
             payout_basis=settings.forecast.payout_basis,
         ),
     )
-    page = build_page(rating, valuation, reader, sheets_present=list(grids))
+    page = build_page(
+        rating,
+        valuation,
+        reader,
+        data=data,
+        sheets_present=list(grids),
+        settings=settings,
+    )
 
     out = Path(args.out) if args.out else Path(settings.report.site_dir) / "stock"
     target = build_stock_page(
