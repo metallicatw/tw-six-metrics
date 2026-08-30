@@ -61,8 +61,14 @@ BAR_GAP = 2.0
 #: Rounded data-ends, anchored to the baseline.
 BAR_RADIUS = 4.0
 LINE_WIDTH = 2.0
-#: 超過這麼多點就不畫標記——白色描邊會把線切成假虛線。
-MARKER_LIMIT = 60
+#: 超過這麼多點就不畫標記。
+#:
+#: 標記外圍那圈 surface 色描邊是為了讓點從線上跳出來，但點一密，那些描邊就把線
+#: 切成假虛線——看起來像資料有斷，其實沒有。門檻不能只看點數：SVG 是
+#: preserveAspectRatio="none"，橫向會被拉寬約 1.7 倍，所以標記在畫面上比在
+#: viewBox 裡寬。留四倍標記直徑的間距反推，654 / (4 × 5) ≈ 32。
+#: 一年的週線（51 點）因此不畫標記，兩年的季線（8 點）會畫。
+MARKER_LIMIT = 30
 MARKER_R = 4.5  # 9px across
 
 
@@ -371,9 +377,9 @@ def line(
             # can leave in any direction, and a label sitting on top of it is
             # unreadable exactly when the newest value matters most.
             # 最新點在右邊界上，置中的文字會有一半跑出畫布，所以靠右對齊。
-            # 值貼近上緣時，標籤畫在點的上方會跑出畫布被切掉——新資料剛開始
-            # 累積、只有一兩個點的時候特別容易發生，因為軸的上下界就貼著它。
-            label_y = max(y - 13, f.top + 9)
+            # 值貼近上緣時，上方沒有位置：夾在框內會把標籤壓在線上（那條線正好
+            # 就在那個高度），看起來像被劃掉。沒位置就畫在點的下方。
+            label_y = y - 13 if y - 13 >= f.top + 9 else y + 17
             parts.append(
                 f'<text x="{min(x, f.left + f.plot_w):.1f}" y="{label_y:.1f}" '
                 f'font-size="11" text-anchor="end" fill="var(--ink-2)" '

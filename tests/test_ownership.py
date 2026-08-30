@@ -292,3 +292,115 @@ def test_periods_sort_by_number_not_by_string():
     assert tdcc.period_key("26W35") > tdcc.period_key("26W9")
     assert tdcc.period_key("2026/07") > tdcc.period_key("2025/12")
     assert tdcc.period_key("看不懂") == (0, 0)
+
+
+# ---------------------------------------------------------------------------
+# 單檔回補：集保查詢頁的 51 週
+# ---------------------------------------------------------------------------
+
+
+def test_the_query_page_and_the_open_data_agree_on_the_same_week():
+    """兩條路、同一週、同一組數字。
+
+    開放資料（全市場、最新一週）和查詢頁（單檔、51 週）是集保的兩個出口。回補
+    來的歷史要能和每週累積的資料接在同一條線上，前提就是這一條——否則圖上會在
+    「回補結束、累積開始」的那一週出現一個接縫。
+
+    fixture 是查詢 20260807 的真實回應；那一週不在開放資料的 fixture 裡（它只有
+    20260828），所以這裡比的是**結構**：解析出來的合計、人數、級距總和自洽，
+    而且級距的併法和開放資料那條路用的是同一個 TIERS。
+    """
+    from twsix.ingest.tdcc_history import parse_week
+
+    page = (MARKET / "tdcc_qrystock_20260807.html").read_text("utf-8")
+    snap = parse_week(page, "5439", date(2026, 8, 7))
+    assert snap.holders == 34_631
+    assert snap.shares == 92_976_751
+    assert sum(snap.tiers.values()) == snap.shares
+    assert snap.adjust == 0
+    # 這一週的 ＞1千張 是 29.13%（查詢頁自己也印這個數字）
+    assert abs(snap.percents["＞1千張"] - 29.13) < 0.01
+    assert tdcc.week_label(snap.day) == "26W32"
+
+
+def test_the_total_row_is_found_by_its_label_not_its_number():
+    """查詢頁的第 16 列是「合計」；開放資料的 16 是「差異數調整」、17 才是合計。
+
+    照序號抓，這條路會把最後一個級距當成合計——分母整個錯掉，比例全部爆炸，
+    而且不會丟出任何例外。所以認的是標籤。
+    """
+    from twsix.ingest.tdcc_history import parse_week
+
+    page = (MARKET / "tdcc_qrystock_20260807.html").read_text("utf-8")
+    rows = [
+        r
+        for r in __import__(
+            "twsix.ingest.tdcc_history", fromlist=["_rows"]
+        )._rows(page)
+        if r[0].strip().isdigit() or "合" in r[1]
+    ]
+    numbered = [r for r in rows if r[0].strip().isdigit()]
+    assert numbered[-1][0] == "16" and "合" in numbered[-1][1], "第 16 列就是合計"
+    snap = parse_week(page, "5439", date(2026, 8, 7))
+    # 合計沒有被當成第 16 個級距塞進 ＞1千張
+    assert snap.tiers["＞1千張"] == 27_087_435
+
+
+def test_a_page_without_the_table_is_refused_rather_than_returning_zeroes():
+    """token 用過就作廢，回來的頁面沒有表格也不報錯——只是安靜地沒有資料。
+
+    那是這條路最危險的失敗模式：不接下一個 token 的話，第二週之後全部是空的，
+    而空的看起來就像「這一檔那幾週沒有股東」。所以沒有表格要當成錯誤。
+    """
+    from twsix.ingest.tdcc_history import NoHistory, parse_week
+
+    for bad in ("", "<html><body>請重新查詢</body></html>"):
+        try:
+            parse_week(bad, "5439", date(2026, 8, 7))
+        except NoHistory:
+            continue
+        raise AssertionError(f"{bad!r} 不該解析成功")
+
+
+def test_backfilled_weeks_and_market_snapshots_land_in_one_series():
+    """回補的和每週累積的是同一條線。
+
+    存法不同（一檔一個檔案 vs 一週一個檔案），但讀出來要是一串連續的週。重疊的
+    那一週以全市場快照為準——兩邊實測相同，這個順序只是為了「同一週永遠只有一
+    個來源說了算」。
+    """
+    from twsix.ingest.tdcc_history import parse_week
+
+    root = _archive(_tmp())
+    page = (MARKET / "tdcc_qrystock_20260807.html").read_text("utf-8")
+    own.save_stock_history(root, "5439", [parse_week(page, "5439", date(2026, 8, 7))])
+
+    weeks = own.weeks(root, "5439")
+    assert set(weeks) == {date(2026, 8, 7), date(2026, 8, 28)}
+    grid = own.holders_grid(root, "5439")
+    assert [r[0] for r in grid[1:]] == ["26W35", "26W32"]      # 新到舊
+
+
+def test_backfilling_twice_does_not_duplicate_a_week():
+    from twsix.ingest.tdcc_history import parse_week
+
+    root = _tmp() / "ownership"
+    page = (MARKET / "tdcc_qrystock_20260807.html").read_text("utf-8")
+    snap = parse_week(page, "5439", date(2026, 8, 7))
+    assert own.save_stock_history(root, "5439", [snap]) == 1
+    assert own.save_stock_history(root, "5439", [snap]) == 1
+
+
+def test_the_backfill_also_gives_the_directors_percentage_a_denominator_per_month():
+    """回補的週線同時餵給董監那張表。
+
+    董監持股的分母是集保庫存合計。只有最新一週時，三年前的董監持股只能拿今天的
+    股本去除；有了一年的週線，每個月都有自己的分母。
+    """
+    from twsix.ingest.tdcc_history import parse_week
+
+    root = _archive(_tmp())
+    page = (MARKET / "tdcc_qrystock_20260807.html").read_text("utf-8")
+    own.save_stock_history(root, "5439", [parse_week(page, "5439", date(2026, 8, 7))])
+    custody = own.custody_shares(root, "5439")
+    assert custody["2026/08"] == 92_976_751

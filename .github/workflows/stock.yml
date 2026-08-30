@@ -77,6 +77,8 @@ jobs:
       - name: 測試
         run: python scripts/run_tests.py
 
+      # report 會順便向集保補這一檔的 51 週股權歷史（第一次約一分鐘，之後
+      # 只補新的那一週）。沒有那一年的走勢，〔大戶持股〕只有一個點。
       - name: 抓取並產生報告
         run: twsix report "${{ steps.pick.outputs.code }}"
 
@@ -85,7 +87,9 @@ jobs:
           code="${{ steps.pick.outputs.code }}"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "data/sheets/$code"
+          # 集保的 51 週歷史是逐檔問來的，和個股表一起 commit——否則下次在
+          # runner 上跑同一檔又要重問一次。
+          git add "data/sheets/$code" "data/ownership/stock/$code.csv.gz" || true
           if git diff --cached --quiet; then
             echo "::notice::$code 的資料沒有變化，不需要 commit"
             exit 0

@@ -25,16 +25,20 @@ import gzip
 import io
 from datetime import date
 from pathlib import Path
-from typing import Iterator
+from typing import Iterable, Iterator
 
 from ..ingest import insiders as ins
 from ..ingest import tdcc
 
 HOLDERS_DIR = "holders"
 DIRECTORS_DIR = "directors"
+#: 單檔回補的週線。開放資料只給最新一週，集保的查詢頁保留 51 週——那一年的
+#: 歷史是逐檔問來的，所以按股票存，不按週存。
+STOCK_DIR = "stock"
 
 _HOLDER_FIELDS = ("code", "holders", "shares", *[f"t{i}" for i in range(1, 9)])
 _DIRECTOR_FIELDS = ("code", "name", "held", "pledged", "independent")
+_STOCK_FIELDS = ("date", "holders", "shares", *[f"t{i}" for i in range(1, 9)])
 
 
 def _write(path: Path, header: tuple[str, ...], rows: list[list[str]]) -> int:
@@ -88,6 +92,51 @@ def save_directors(root: Path, market: dict[str, ins.Company]) -> Path:
     return path
 
 
+def save_stock_history(root: Path, stock_id: str, snapshots: Iterable[tdcc.Snapshot]) -> int:
+    """單檔回補的週線，和既有的合併（同一週以新的為準）。
+
+    存成一檔一個檔案而不是併進每週的全市場快照：那些快照是「那一週整個市場」，
+    塞一檔進去會讓它變成一份看起來完整、其實只有一檔的資料。
+    """
+    path = root / STOCK_DIR / f"{stock_id}.csv.gz"
+    have: dict[str, list[str]] = {}
+    if path.exists():
+        for row in _read(path):
+            have[row["date"]] = [row[f] for f in _STOCK_FIELDS]
+    for snap in snapshots:
+        have[f"{snap.day:%Y%m%d}"] = [
+            f"{snap.day:%Y%m%d}",
+            str(snap.holders),
+            str(snap.shares),
+            *[str(snap.tiers[name]) for name, _ in tdcc.TIERS],
+        ]
+    rows = [have[k] for k in sorted(have)]
+    _write(path, _STOCK_FIELDS, rows)
+    return len(rows)
+
+
+def stock_history(root: Path, stock_id: str) -> dict[date, tdcc.Snapshot]:
+    """單檔回補的週線，依日期索引。沒有就回空的。"""
+    path = root / STOCK_DIR / f"{stock_id}.csv.gz"
+    if not path.exists():
+        return {}
+    out: dict[date, tdcc.Snapshot] = {}
+    for row in _read(path):
+        stamp = row["date"]
+        day = date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]))
+        out[day] = tdcc.Snapshot(
+            stock_id=stock_id,
+            day=day,
+            holders=int(row["holders"] or 0),
+            shares=int(row["shares"] or 0),
+            tiers={
+                name: int(row[f"t{i}"] or 0)
+                for i, (name, _) in enumerate(tdcc.TIERS, start=1)
+            },
+        )
+    return out
+
+
 # -- 回讀 -----------------------------------------------------------------
 
 
@@ -99,27 +148,35 @@ def _snapshots(root: Path, kind: str) -> Iterator[tuple[str, Path]]:
         yield path.name.split(".")[0], path
 
 
-def holders_grid(root: Path, stock_id: str) -> list[list[str]]:
-    """一檔股票的多週 -> 格線。沒有任何快照就回空的。"""
-    snaps: list[tdcc.Snapshot] = []
+def weeks(root: Path, stock_id: str) -> dict[date, tdcc.Snapshot]:
+    """這一檔手上有的每一週：回補的 + 每週快照累積的。
+
+    重疊的週以全市場快照為準。兩邊都來自集保、實測逐格相同，所以這個順序不是
+    為了正確性，是為了「同一週永遠只有一個來源說了算」。
+    """
+    out = stock_history(root, stock_id)
     for stamp, path in _snapshots(root, HOLDERS_DIR):
         day = date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]))
         for row in _read(path):
             if row["code"].strip() != stock_id:
                 continue
-            snaps.append(
-                tdcc.Snapshot(
-                    stock_id=stock_id,
-                    day=day,
-                    holders=int(row["holders"] or 0),
-                    shares=int(row["shares"] or 0),
-                    tiers={
-                        name: int(row[f"t{i}"] or 0)
-                        for i, (name, _) in enumerate(tdcc.TIERS, start=1)
-                    },
-                )
+            out[day] = tdcc.Snapshot(
+                stock_id=stock_id,
+                day=day,
+                holders=int(row["holders"] or 0),
+                shares=int(row["shares"] or 0),
+                tiers={
+                    name: int(row[f"t{i}"] or 0)
+                    for i, (name, _) in enumerate(tdcc.TIERS, start=1)
+                },
             )
             break
+    return out
+
+
+def holders_grid(root: Path, stock_id: str) -> list[list[str]]:
+    """一檔股票的多週 -> 格線。沒有任何快照就回空的。"""
+    snaps = list(weeks(root, stock_id).values())
     return tdcc.grid(snaps) if snaps else []
 
 
@@ -130,13 +187,8 @@ def custody_shares(root: Path, stock_id: str) -> dict[str, int]:
     過的公司上把比例壓低，而那條線正好是要看的東西。
     """
     out: dict[str, int] = {}
-    for stamp, path in _snapshots(root, HOLDERS_DIR):
-        month = f"{stamp[:4]}/{stamp[4:6]}"
-        for row in _read(path):
-            if row["code"].strip() != stock_id:
-                continue
-            out[month] = int(row["shares"] or 0)  # 同月後面的覆蓋前面的
-            break
+    for day, snap in sorted(weeks(root, stock_id).items()):
+        out[f"{day:%Y/%m}"] = snap.shares  # 同月後面的覆蓋前面的
     return out
 
 

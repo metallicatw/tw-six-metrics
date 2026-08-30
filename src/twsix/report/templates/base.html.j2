@@ -657,8 +657,9 @@ tr.here th{font-weight:700}
     });
   }
 
-  /* runner 排隊、跑測試、抓資料、建站，全部加起來約兩三分鐘。每 4 秒問一次
-     狀態，把 GitHub 自己的字串翻成人看得懂的一行，讀者才知道它在哪一步。 */
+  /* runner 排隊、跑測試、抓資料、補股權歷史、建站，加起來約三到四分鐘——新加
+     的一檔要向集保逐週問滿 51 週，那是〔大戶持股〕有沒有走勢的差別。每 4 秒問
+     一次狀態，把 GitHub 自己的字串翻成人看得懂的一行，讀者才知道它在哪一步。 */
   function pollRun(code, since, tries){
     if(tries <= 0){ step('狀態查不到了，改用網站本身判斷…'); watch(code, 40); return; }
     gh('/actions/workflows/' + WORKFLOW + '/runs?per_page=5&created=%3E' +
@@ -668,7 +669,8 @@ tr.here th{font-weight:700}
         var run = j && j.workflow_runs && j.workflow_runs[0];
         if(!run){ setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000); return; }
         if(run.status === 'queued') step('排隊中…');
-        else if(run.status === 'in_progress') step('執行中：抓取報表、產生報告、重建網站');
+        else if(run.status === 'in_progress') step(
+          '執行中：抓報表 → 補集保 51 週股權歷史（約 1 分鐘）→ 產生報告 → 重建網站');
         else if(run.status === 'completed'){
           if(run.conclusion === 'success'){
             step('Actions 完成，等網站發布…');

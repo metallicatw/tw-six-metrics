@@ -777,8 +777,11 @@ def cmd_report(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    # 股權快照存的是整個市場，所以這一檔的歷史多半早就在檔案庫裡了——這裡只是
-    # 把它折成個股表。不連網，也不會因為缺快照而失敗。
+    # 股權快照存的是整個市場，所以這一檔的歷史多半早就在檔案庫裡了。缺的那幾週
+    # 向集保的查詢頁補齊——一年 51 週，只在第一次抓這一檔時付這個成本。
+    print(f"[2.5/4] 補齊 {stock} 的股權週資料…")
+    if not args.no_backfill:
+        _backfill_holders(args, stock)
     _fold_ownership(args, stock)
 
     print(f"[3/4] 產生 {stock} 的個股頁…")
@@ -791,6 +794,70 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     print("[4/4] 重建網站…")
     return cmd_build(argparse.Namespace(config=args.config, data=args.data, out=None))
+
+
+#: 回補到幾週為止就算夠。集保的查詢頁目前提供 51 週，所以這是「全部」。
+BACKFILL_WEEKS = 51
+
+
+def _backfill_holders(args: argparse.Namespace, stock: str) -> None:
+    """把這一檔缺的集保週資料補齊——一年 51 週。
+
+    開放資料一個請求給整個市場，但只給最新一週。所以一檔股票剛加進來時，
+    〔大戶持股〕只有一個點：一條沒有走勢的線，看不出籌碼往哪邊集中，那一頁也就
+    沒有判斷的依據。集保自己的查詢頁保留 51 週，逐檔問一次就補回來。
+
+    只補**缺的**那幾週：第一次 51 次請求（約一分鐘），之後每次 0~1 次。所以這是
+    「加入一檔新股票」的成本，不是「每次更新」的成本。
+
+    失敗不影響報告：這一頁少幾週，比整份報告產不出來好得多。
+    """
+    from .ingest.base import HttpClient
+    from .ingest.tdcc_history import History
+    from .store import ownership as own
+
+    settings = Settings.load(args.config)
+    root = Path(args.data or settings.data_dir) / "ownership"
+    have = set(own.weeks(root, stock))
+
+    http = HttpClient(
+        cache_dir=None,       # token 每次都不同，快取只會佔空間
+        cache_ttl=0,
+        min_interval=0.8,
+        timeout=60.0,
+        retries=2,
+        cookies=True,         # 查詢頁認 session，少了 cookie token 永遠對不上
+    )
+    history = History(http)
+    try:
+        available = history.dates()[:BACKFILL_WEEKS]
+    except Exception as exc:  # noqa: BLE001 - 補不到就算了
+        print(f"  （集保週歷史沒補成：{exc}）", file=sys.stderr)
+        return
+
+    missing = [d for d in available if d not in have]
+    if not missing:
+        print(f"  集保週資料已是最新（{len(have)} 週）")
+        return
+
+    print(f"  補集保週資料：缺 {len(missing)} 週，約 {len(missing) * 1.6:.0f} 秒")
+    got: list[Any] = []
+    failed = 0
+    for i, day in enumerate(missing, start=1):
+        try:
+            got.append(history.week(stock, day))
+        except Exception as exc:  # noqa: BLE001 - 一週抓不到不該讓整批停下
+            failed += 1
+            if failed <= 3:
+                print(f"    {day:%Y-%m-%d} 沒拿到：{exc}", file=sys.stderr)
+            if failed >= 5:
+                print("    連續失敗太多次，停止回補", file=sys.stderr)
+                break
+        if i % 10 == 0 or i == len(missing):
+            print(f"    {i}/{len(missing)} 週")
+    if got:
+        total = own.save_stock_history(root, stock, got)
+        print(f"  集保週資料：新增 {len(got)} 週，共 {total} 週")
 
 
 def _fold_ownership(args: argparse.Namespace, stock: str) -> None:
@@ -826,6 +893,30 @@ def _fold_ownership(args: argparse.Namespace, stock: str) -> None:
         target.write_text(
             json.dumps(merge(existing, fresh), ensure_ascii=False), encoding="utf-8"
         )
+
+
+def cmd_backfill(args: argparse.Namespace) -> int:
+    """把一檔（或每一檔）的集保週歷史補到 51 週。
+
+    ``twsix report`` 已經會自動補新加入的那一檔；這個指令是給「之前加的那些」
+    補課用的，也可以在集保換版之後拿來重跑。
+    """
+    settings = Settings.load(args.config)
+    data_dir = Path(args.data or settings.data_dir)
+    if args.stock:
+        codes = [args.stock]
+    else:
+        sheets = data_dir / "sheets"
+        codes = sorted(p.name for p in sheets.glob("*") if p.is_dir()) if sheets.is_dir() else []
+    if not codes:
+        print("沒有要補的股票", file=sys.stderr)
+        return EXIT_FAIL
+    for code in codes:
+        print(f"{code}：")
+        ns = argparse.Namespace(config=args.config, data=args.data)
+        _backfill_holders(ns, code)
+        _fold_ownership(ns, code)
+    return EXIT_OK
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
@@ -1291,6 +1382,14 @@ def build_parser() -> argparse.ArgumentParser:
     fo.add_argument("--stock", help="只更新這一檔的個股表（快照照樣整批存）")
     fo.set_defaults(func=cmd_fetch_ownership)
 
+    bf = sub.add_parser(
+        "backfill-ownership",
+        help="向集保補齊 51 週的大戶持股歷史（新股票 twsix report 會自動補）",
+    )
+    bf.add_argument("stock", nargs="?", help="股票代號；省略則補 data/sheets/ 下的每一檔")
+    bf.add_argument("--data", help="資料目錄")
+    bf.set_defaults(func=cmd_backfill)
+
     pg = sub.add_parser("page", help="個股四頁：評價簡表／六大／EPS預估與估價／殖利率估價")
     pg.add_argument("stock", help="股票代號")
     pg.add_argument("--data", help="資料目錄")
@@ -1323,6 +1422,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="把抓到的原始 HTML 存到這個目錄（解析出錯時用來對照）",
     )
     rp.add_argument("--retries", type=int, default=1, help="每個站台重試次數")
+    rp.add_argument(
+        "--no-backfill", dest="no_backfill", action="store_true",
+        help="不要向集保補 51 週的歷史（快一分鐘，但〔大戶持股〕會只有一個點）",
+    )
     rp.add_argument(
         "--rebuild", action="store_true",
         help="順便重建整個網站，讓首頁搜尋框找得到這一檔",
