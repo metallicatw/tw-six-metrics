@@ -97,10 +97,24 @@ def statement_figures(data: Any) -> dict[str, str]:
     )
     for key, source, title, unit, digits in specs:
         values = series(source)
-        if any(v is not None for v in values):
-            out[key] = charts.bars(
-                labels, values, title=title, unit=unit, digits=digits, label_every=2
-            )
+        # Each series reaches back a different distance — 存貨周轉率 needs a
+        # prior quarter's inventory and so starts a quarter later, and 自由
+        # 現金流量 only exists where the cash-flow statement does.  Padding
+        # them all to twenty quarters drew seven bars crammed against the left
+        # of an empty frame; trim to the span that has data.
+        last = max(
+            (i for i, v in enumerate(values) if v is not None), default=None
+        )
+        if last is None:
+            continue
+        out[key] = charts.bars(
+            labels[: last + 1],
+            values[: last + 1],
+            title=title,
+            unit=unit,
+            digits=digits,
+            label_every=2,
+        )
     return out
 
 
