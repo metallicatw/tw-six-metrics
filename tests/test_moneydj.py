@@ -31,6 +31,7 @@ from twsix.ingest.moneydj import (
     _offset_grid,
     _to_number,
     check_contract,
+    parse_html_table,
     parse_main_table,
 )
 
@@ -78,15 +79,25 @@ def test_parse_reads_only_the_main_table():
 
 def test_parse_finds_every_row_and_cell():
     t = parse_main_table(PAGE)
-    assert len(t.rows) == 3
-    assert t.rows[0] == ["期別", "2026.2Q", "2026.1Q"]
-    assert t.rows[1] == ["營業收入", "2,559,000", "2,258,000"]
+    # rows[0] and [1] are the 財報名稱 / 單位 lines the VBA writes above the body.
+    assert t.rows[2] == ["期別", "2026.2Q", "2026.1Q"]
+    assert t.rows[3] == ["營業收入", "2,559,000", "2,258,000"]
 
 
 def test_parse_picks_up_title_and_unit():
     t = parse_main_table(PAGE)
     assert t.title.startswith("高技")
-    assert "仟元" in t.unit
+    assert "仟元" in t.rows[1][0]
+
+
+def test_void_tags_do_not_break_the_nesting_count():
+    """<br> has no closing tag; counting it as nesting broke every later row.
+
+    The first real run parsed nothing at all from a page whose heading
+    contained a <br>, because the depth counter only ever went up.
+    """
+    t = parse_main_table(PAGE)
+    assert len(t.rows) == 5  # 2 heading lines + 3 data rows
 
 
 def test_grid_reproduces_the_workbook_row_offset():
@@ -95,10 +106,62 @@ def test_grid_reproduces_the_workbook_row_offset():
     assert grid[4][0] == "期別"
 
 
-def test_revenue_sheet_starts_two_rows_lower():
-    """〔營收〕keeps a chart above its table, so its header sits at row 7."""
-    grid = _offset_grid("營收", parse_main_table(PAGE))
-    assert grid[6][0] == "期別"
+RATIO_PAGE = """
+<html><body><table id="oMainTable"><tr><td>
+  <div class="table-header">高技(5439) 財務比率表</div>
+  <div class="table-header">獲利能力指標<br>單位：%</div>
+  <div class="table-row"><span>期別</span><span>2026.2Q</span></div>
+  <div class="table-row"><span>種類</span><span>合併</span></div>
+  <div class="table-row"><span>ROA(C)稅前息前折舊前</span><span>5.24</span></div>
+</td></tr></table></body></html>
+"""
+
+
+def test_ratio_layout_keeps_section_headings_inline():
+    """〔FRQ〕's 期別 sits at sheet row 6, not 5.
+
+    The section heading (獲利能力指標 / 單位：%) occupies two rows *between*
+    the title and the data.  Lumping headings at the top shifted the whole
+    sheet up by one — the first real run reported "第 6 列預期含「期別」，
+    實際為「種類」", which is precisely an off-by-one.
+    """
+    grid = _offset_grid("FRQ", parse_main_table(RATIO_PAGE, "ratio"))
+    assert grid[5][0] == "期別"
+    assert grid[6][0] == "種類"
+    # Not check_contract() here — this fixture is three rows long and FRQ's
+    # contract wants thirty.  The contract is exercised against the real
+    # workbook grid in test_contracts_pass_on_the_workbooks_own_sheets.
+
+
+TABLE_PAGE = """
+<html><body>
+<table><tr><td>版面用的表格</td></tr></table>
+<table><tr><td>還是版面</td></tr></table>
+<table>
+  <tr><td>高技(5439)月營收明細</td></tr>
+  <tr><td>單位：仟元</td></tr>
+  <tr><td>年/月</td><td>營收</td></tr>
+  <tr><td>115/07</td><td>1,050,323</td></tr>
+</table>
+</body></html>
+"""
+
+
+def test_query_tables_era_sheets_parse_plain_html_tables():
+    """〔BASIC〕〔營收〕〔股利〕〔OPQ〕〔EPQ〕 are <table>, not div.table-row.
+
+    They were never converted off Excel's QueryTables.  Feeding them to the
+    div parser produced four rows of nothing on the first real run.
+    """
+    t = parse_html_table(TABLE_PAGE, 3)
+    assert t.rows[2] == ["年/月", "營收"]
+    assert t.rows[3] == ["115/07", "1,050,323"]
+
+
+def test_table_index_falls_back_to_the_largest_table():
+    """A wrong index must not silently return a layout table's one cell."""
+    t = parse_html_table(TABLE_PAGE, 1)
+    assert len(t.rows) == 4  # fell back to the real one
 
 
 def test_missing_table_yields_nothing_rather_than_garbage():
