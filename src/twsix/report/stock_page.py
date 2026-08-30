@@ -121,6 +121,7 @@ class StockPage:
     #: The remaining workbook pages — see :mod:`twsix.report.sections`.
     statements: dict[str, str] = field(default_factory=dict)
     river: River | None = None
+    news: Any = None
     institutional: Institutional | None = None
     revenue_season: Seasonal | None = None
     profit_season: Seasonal | None = None
@@ -134,6 +135,43 @@ class StockPage:
             self.latest_composite is not None
             and self.latest_composite >= RESEARCH_THRESHOLD
         )
+
+
+def _weekly_closes(reader: Any) -> list[tuple[str, float]]:
+    """〔股價(週)〕's close, trimmed to the window the river is drawn over.
+
+    The mirror hands back everything it has — 5439 reaches to 2000 — and the
+    first draft plotted all 1347 weeks.  It was legible only in the sense that
+    nothing overlapped: twenty-six years of a stock that spent twenty of them
+    under 60 and the last three above 200 compresses the whole early history
+    into a flat line along the bottom, and the part a reader came for into the
+    right-hand eighth of the frame.
+
+    〔河流圖〕's own combo box exists for exactly this and defaults to seven
+    years back, so that is the window.  The zones are unaffected — they come
+    from the yearly series, which still spans everything the exchange has.
+    """
+    from ..ingest import weekly_prices  # noqa: PLC0415
+
+    grid = reader.grid(weekly_prices.SHEET) if hasattr(reader, "grid") else []
+    if not grid:
+        return []
+    series = weekly_prices.closes(grid)
+    if not series:
+        return []
+    latest = int(series[-1][0][:4])
+    start = latest - weekly_prices.DEFAULT_YEARS + 1
+    return [(d, v) for d, v in series if int(d[:4]) >= start]
+
+
+def _news(reader: Any) -> Any:
+    """〔個股新聞〕, if it was fetched.  See :mod:`twsix.ingest.news`."""
+    from ..ingest import news as news_mod  # noqa: PLC0415
+
+    grid = reader.grid(news_mod.SHEET) if hasattr(reader, "grid") else []
+    if not grid:
+        return None
+    return news_mod.describe(news_mod.from_grid(grid))
 
 
 def _merged_yoy(reader: Any) -> list[tuple[str, Number]]:
@@ -160,10 +198,15 @@ def _num(value: Number, digits: int = 2) -> str:
 #: is waiting for.  Listed on the page rather than silently absent: a reader
 #: who knows the workbook has twelve tabs should be told which four are
 #: missing and why, not left to wonder whether they failed to load.
+#: Two pages left, and the reason is no longer 「還沒寫」.  Goodinfo answers a
+#: request from a datacentre IP with 403 even after a landing-page visit that
+#: banks a session cookie — tested with the cookie jar in place, both URLs,
+#: same result.  That is the source refusing, not a parser missing, so it is
+#: recorded as a limit rather than carried as a task.  A run from a home
+#: connection would very likely get both; the parser is the easy half.
 UNBUILT_PAGES: tuple[tuple[str, str], ...] = (
-    ("個股新聞", "MoneyLink／Yahoo 新聞頁，尚未取得任何一次真實回應"),
-    ("大戶持股", "Goodinfo 股權分散表，需帶 referer，且擋機房 IP 最嚴"),
-    ("董監持股", "Goodinfo 董監持股表，同上"),
+    ("大戶持股", "Goodinfo 股權分散表：帶了 session cookie 與 referer 仍回 403，來源端擋機房 IP"),
+    ("董監持股", "Goodinfo 董監持股表：同一個 403，同一個原因"),
 )
 
 
@@ -386,9 +429,11 @@ def build_page(
         current_eps=valuation.trailing_eps,
         low_q=low_q,
         high_q=high_q,
+        weekly=_weekly_closes(reader),
     )
     inst_grid = reader.grid("三大法人") if hasattr(reader, "grid") else []
     page.institutional = institutional(inst_grid)
+    page.news = _news(reader)
     page.unbuilt = [{"name": n, "why": w} for n, w in UNBUILT_PAGES]
 
     page.sources = [

@@ -328,14 +328,14 @@ def test_a_blocked_goodinfo_response_is_not_saved_as_a_sample():
 def test_a_short_response_is_treated_as_an_error_page():
     from twsix.ingest.pending import SOURCES, probe
 
-    assert not probe(SOURCES["prices"], "<html>404</html>").ok
-    assert not probe(SOURCES["prices"], "").ok
+    assert not probe(SOURCES["directors"], "<html>404</html>").ok
+    assert not probe(SOURCES["directors"], "").ok
 
 
 def test_every_pending_source_names_what_it_is_waiting_for():
     from twsix.ingest.pending import SOURCES
 
-    assert set(SOURCES) == {"prices", "news", "holders", "directors"}
+    assert set(SOURCES) == {"holders", "directors"}
     for source in SOURCES.values():
         assert source.anchor and source.note and "{stock}" in source.url
 
@@ -370,10 +370,17 @@ def test_a_url_with_chinese_in_it_is_encoded_before_it_is_sent():
 
 
 def test_each_pending_source_explains_its_own_failure():
-    """A generic message told a 鉅亨網 reader that Goodinfo was blocking them."""
+    """A generic message told a 鉅亨網 reader that Goodinfo was blocking them.
+
+    Both survivors are Goodinfo now, so the thing to hold on to is that the
+    advice matches what actually happened: this container gets a 403, not a
+    table-less page, and the note says to try another network rather than to
+    tune headers.
+    """
     from twsix.ingest.pending import SOURCES, probe
 
     chrome = "<html>" + "x" * 5000 + "</html>"
-    assert "Goodinfo" in probe(SOURCES["holders"], chrome).why
-    assert "Goodinfo" not in probe(SOURCES["prices"], chrome).why
-    assert "JavaScript" in probe(SOURCES["prices"], chrome).why
+    for source in SOURCES.values():
+        why = probe(source, chrome).why
+        assert "Goodinfo" in why
+        assert "403" in why or "機房" in why

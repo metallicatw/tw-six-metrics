@@ -16,3 +16,8 @@ site/
 # everything the project needs from it is already frozen in tests/golden/.
 *.xlsm
 *.xlsx
+
+# `twsix fetch-stock` output.  It is a cache of what the mirrors said today,
+# it goes stale, and nothing depends on it: the tests read the frozen samples
+# in tests/pages/ instead, which is the point of having them.
+data/sheets/

@@ -1,10 +1,24 @@
 """The sources that still have no parser, and one command to go get them.
 
-Four workbook pages are still unbuilt — 個股新聞, 大戶持股, 董監持股, and the
-weekly price series 〔河流圖〕 wants.  They are unbuilt for one reason: nobody
-has saved a real response.  Every parser in this project that was written from
-documentation instead was wrong, so the way in is always the same — fetch once,
-save the bytes, then write the parser against them.
+Two are left, and both are Goodinfo.  The other two graduated:
+
+〔個股新聞〕 was only ever waiting for a saved response; it has one now, and
+:mod:`twsix.ingest.news` was written against it.
+
+〔股價(週)〕 was worse than unfetched — it was pointed at the wrong site.  This
+module had it on 鉅亨網's ``ps_historyprice.aspx``, which today serves a
+Next.js shell with no table in it, and the fetch dutifully reported 「可疑」.
+鉅亨網 does appear in the workbook — as one of two options for 〔股價(日)〕, already
+noted as flaky in a 110/1/10 comment — but 〔股價(週)〕 always came from
+``Module1.MoneyDJ_TW_PRICE_New``, i.e. the same mirrors as everything else.
+Reading the macro would have cost a minute and saved the wrong URL entirely.
+See :mod:`twsix.ingest.weekly_prices`.
+
+What is left is not a missing parser.  Goodinfo answers this container's IP
+with 403 on both URLs even after a landing-page visit banks a session cookie,
+so there is nothing to write a parser against and no amount of header-tuning
+that changes it from here.  The command stays because the same call from a
+home connection very likely succeeds, and then the parser is the easy half.
 
 This module is that fetch.  It knows each source's URL, its encoding, the
 headers it needs, and — the part that matters — what a *successful* response
@@ -51,25 +65,6 @@ class Source:
 
 
 SOURCES: dict[str, Source] = {
-    "prices": Source(
-        key="prices",
-        sheet="股價(週)",
-        url="https://www.cnyes.com/twstock/ps_historyprice.aspx?code={stock}",
-        anchor="收盤",
-        when_empty=(
-            "鉅亨網這個網址是舊版頁面，內容很可能已改由 JavaScript 載入——"
-            "如果是這樣，抓回來的 HTML 本來就不會有表格，要換端點而不是換網路"
-        ),
-        note="鉅亨網週線收盤價——〔河流圖〕要畫成活頁簿那種平滑曲線就缺這個。",
-    ),
-    "news": Source(
-        key="news",
-        sheet="個股新聞",
-        url="https://ww2.money-link.com.tw/TWStock/StockNews.aspx?SymId={stock}",
-        anchor="新聞",
-        when_empty="MoneyLink 可能改版；Yahoo 是備援，見 reference/ENDPOINTS.md",
-        note="MoneyLink 個股新聞；Yahoo 是備援，見 reference/ENDPOINTS.md。",
-    ),
     "holders": Source(
         key="holders",
         sheet="大戶持股",
@@ -80,8 +75,8 @@ SOURCES: dict[str, Source] = {
         anchor="持股分級",
         headers={"Referer": GOODINFO + "/tw/index.asp"},
         prime=GOODINFO + "/tw/index.asp",
-        when_empty="Goodinfo 擋 IP 的時候就是回一頁沒有表格的正常頁面",
-        note="Goodinfo 股權分散表。擋 IP 最兇，且擋的時候會回一頁沒有表格的正常頁面。",
+        when_empty="Goodinfo 對機房 IP 直接回 403；帶了 session cookie 也一樣。換成家用網路再試",
+        note="Goodinfo 股權分散表。擋 IP 最兇——本專案在雲端跑到的是 403，不是空表。",
     ),
     "directors": Source(
         key="directors",
@@ -90,7 +85,7 @@ SOURCES: dict[str, Source] = {
         anchor="董監",
         headers={"Referer": GOODINFO + "/tw/index.asp"},
         prime=GOODINFO + "/tw/index.asp",
-        when_empty="Goodinfo 擋 IP 的時候就是回一頁沒有表格的正常頁面",
+        when_empty="Goodinfo 對機房 IP 直接回 403；帶了 session cookie 也一樣。換成家用網路再試",
         note="Goodinfo 董監持股表，同上。",
     ),
 }

@@ -1,11 +1,16 @@
 """〔財報圖表〕〔河流圖〕〔營收季節性〕〔獲利季節性〕〔財務指標評等預估〕.
 
-The river is the one worth reading carefully.  It is deliberately *not* the
-workbook's calculation — the workbook samples weekly closes off 鉅亨網 and this
-project has no weekly series — so the test that matters is not "does it equal
-the sheet" but "does it land the stock in the same zone".  It does: the sheet
-puts 5439 in 合理區 and so does this, from a tenth as many data points.  The
-band edges differ and are expected to.
+The river is the one worth reading carefully, and it changed.  The earlier
+version of this file said the workbook 「samples weekly closes off 鉅亨網」 and
+that this project had no weekly series.  Both halves were wrong: the workbook
+asks the same MoneyDJ mirrors as every other sheet
+(``Module1.MoneyDJ_TW_PRICE_New``), and reading that macro is what got the
+series.  The line is now the workbook's own data.
+
+What did not change is where the *zones* come from — the yearly closes, one
+point per year — so the test that matters is still 「does it land the stock in
+the same zone」.  It does: the sheet puts 5439 in 合理區 and so does this.  The
+band edges differ from the sheet's and are expected to.
 """
 
 from __future__ import annotations
@@ -168,7 +173,7 @@ def test_the_unbuilt_pages_are_listed_with_a_reason():
     """
     page, _ = _page()
     names = {u["name"] for u in page.unbuilt}
-    assert names == {"個股新聞", "大戶持股", "董監持股"}
+    assert names == {"大戶持股", "董監持股"}
     assert all(u["why"] for u in page.unbuilt)
 
 
@@ -212,3 +217,73 @@ def test_a_hidden_input_does_not_swallow_the_rest_of_the_page():
         Path(__file__).resolve().parent / "pages" / "5439" / "5439_三大法人.html"
     ).read_text(encoding="utf-8")
     assert len(parse_page(html).rows) > 20
+
+
+# -- 河流圖：週線 ----------------------------------------------------------
+
+
+def test_the_river_is_drawn_from_weekly_closes_when_they_are_there():
+    """The workbook's chart is 股價(週) A:C, and now so is this one.
+
+    〔河流圖〕's macro copies 年度／日期／收盤價 out of 股價(週) and plots them
+    against horizontal band lines.  The zones still come from the yearly
+    series — that part never needed weeks — so the zone assertions above hold
+    either way, and this is only about whether the picture exists.
+    """
+    page, _ = _page()
+    assert page.river.weeks > 300
+    assert "river-fig" in page.river.figure
+    assert "本益比河流圖" in page.river.figure
+    assert "<details" in page.river.figure  # numbers, not only a picture
+
+
+def test_the_river_window_is_seven_years_not_the_whole_history():
+    """The mirror serves 1347 weeks back to 2000; plotting all of them lies.
+
+    5439 spent twenty years under 60 and the last three above 200, so the full
+    series flattens two decades into the bottom rule and squeezes the part
+    worth reading into the right-hand eighth.  〔河流圖〕's own combo box
+    defaults to seven years back; that is the window.
+    """
+    from twsix.ingest.weekly_prices import DEFAULT_YEARS
+
+    page, _ = _page()
+    assert page.river.weeks < 52 * (DEFAULT_YEARS + 1)
+    assert page.river.weeks > 52 * (DEFAULT_YEARS - 1)
+
+
+def test_without_the_weekly_sheet_the_zones_are_unchanged_and_the_chart_is_absent():
+    """A missing series costs the line and nothing else — no silent fallback."""
+    from test_stock_page import _full_grids  # noqa: PLC0415
+    from twsix.ingest.weekly_prices import SHEET  # noqa: PLC0415
+
+    grids = _full_grids()
+    del grids[SHEET]
+    bare, _ = _page(grids)
+    full, _ = _page()
+
+    assert bare.river.figure == ""
+    assert bare.river.weeks == 0
+    assert bare.river.levels == full.river.levels
+    assert bare.river.zone_name == full.river.zone_name == "合理區"
+
+
+# -- 個股新聞 --------------------------------------------------------------
+
+
+def test_the_news_section_counts_the_wire_round_ups_separately():
+    page, _ = _page()
+    assert page.news is not None
+    assert len(page.news.items) == 10
+    assert page.news.roundups == 9
+    assert page.news.specific == 1
+
+
+def test_without_the_news_sheet_the_section_is_none_rather_than_empty():
+    from test_stock_page import _full_grids  # noqa: PLC0415
+    from twsix.ingest.news import SHEET  # noqa: PLC0415
+
+    grids = _full_grids()
+    del grids[SHEET]
+    page, _ = _page(grids)
+    assert page.news is None

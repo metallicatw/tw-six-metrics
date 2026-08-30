@@ -366,3 +366,123 @@ def price_band(
         f'<div class="track"></div>{stops}{marker}</div>'
     )
     return _figure(title, "", body, "", extra=f"band-fig band-{scale}")
+
+
+def river(
+    points: Sequence[tuple[str, float]],
+    levels: Sequence[float],
+    zone_names: Sequence[str],
+    *,
+    title: str,
+    current: float | None = None,
+) -> str:
+    """〔河流圖〕 — the weekly close, drawn through the valuation zones.
+
+    The workbook's chart is this and nothing else: 股價(週) A:C from a start
+    year, with the band boundaries as horizontal series behind it.  They are
+    horizontal because the bands are *this year's* multiples applied to *this
+    year's* forecast EPS — one EPS, so one set of prices.  Sloping them to
+    follow historical EPS would make a prettier picture of a different claim.
+
+    The zones are painted rather than ruled.  Five dashed lines across a price
+    series is five things competing with the series for attention; five quiet
+    fills behind it is a background the eye reads once.  Each still carries its
+    name at the right edge, so the colour is never the only cue.
+    """
+    series = [(label, float(v)) for label, v in points if v is not None]
+    edges = sorted(float(v) for v in levels)
+    if len(series) < 8 or len(edges) < 2:
+        return f'<p class="muted">{escape(title)}：資料不足</p>'
+
+    f = Frame(height=280.0, left=48.0, right=64.0, bottom=24.0)
+    values = [v for _, v in series] + edges + ([current] if current else [])
+    lo, hi = min(values), max(values)
+    pad = (hi - lo) * 0.08 or 1.0
+    lo, hi = max(0.0, lo - pad), hi + pad
+    span = hi - lo
+
+    def y_of(value: float) -> float:
+        return f.top + f.plot_h * (1 - (value - lo) / span)
+
+    last = series[-1][1]
+    parts = _open(
+        f, title, f"{series[0][0]} 至 {series[-1][0]} 共 {len(series)} 週，收盤 {_fmt(last, 2)}"
+    )
+    #: The right margin holds both the zone names and the latest close, and
+    #: the close naturally sits inside whichever zone the stock is in — so
+    #: they landed on top of each other, 「264.50」 printed through 「合理區」.
+    #: The close wins: it is the one number a reader is looking for, and the
+    #: zone it falls in is already named on the card below the chart.
+    label_y = y_of(last)
+
+    # -- zones ------------------------------------------------------------
+    bounds = [lo] + edges + [hi]
+    for i, name in enumerate(zone_names[: len(bounds) - 1]):
+        top_y = y_of(bounds[i + 1])
+        height = y_of(bounds[i]) - top_y
+        if height <= 0.5:
+            continue
+        parts.append(
+            f'<rect x="{f.left:.1f}" y="{top_y:.1f}" '
+            f'width="{f.plot_w:.1f}" height="{height:.1f}" '
+            f'fill="var(--zone-{i})" />'
+        )
+        name_y = top_y + height / 2
+        if height >= 13 and abs(name_y - label_y) > 11:
+            parts.append(
+                f'<text x="{f.width - f.right + 6:.1f}" y="{name_y + 3.5:.1f}" '
+                f'font-size="10" fill="var(--muted)">{escape(name)}</text>'
+            )
+
+    # -- zone boundaries, with their price ---------------------------------
+    for value in edges:
+        y = y_of(value)
+        parts.append(
+            f'<line x1="{f.left:.1f}" y1="{y:.1f}" x2="{f.width - f.right:.1f}" '
+            f'y2="{y:.1f}" stroke="var(--rule)" stroke-width="1" '
+            f'stroke-dasharray="3 4" />'
+        )
+        parts.append(
+            f'<text x="{f.left - 6:.1f}" y="{y + 3.5:.1f}" text-anchor="end" '
+            f'font-size="10" fill="var(--muted)">{_fmt(value, 0)}</text>'
+        )
+
+    # -- the price line ----------------------------------------------------
+    slot = f.plot_w / len(series)
+    coords = [
+        (f.left + slot * (i + 0.5), y_of(v)) for i, (_, v) in enumerate(series)
+    ]
+    path = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    parts.append(
+        f'<polyline points="{path}" fill="none" stroke="var(--accent)" '
+        f'stroke-width="{LINE_WIDTH}" stroke-linejoin="round" stroke-linecap="round" />'
+    )
+    # The latest close, labelled outside the plot rather than on top of it.
+    # Inside, the halo still had the line running through the digits — the
+    # series ends at the right edge, which is exactly where the label wants to
+    # be.  The right margin already holds the zone names, and one more line of
+    # text there costs nothing.
+    end_x, end_y = coords[-1]
+    parts.append(
+        f'<circle cx="{end_x:.1f}" cy="{end_y:.1f}" r="3.5" fill="var(--accent)" />'
+    )
+    parts.append(
+        f'<line x1="{end_x:.1f}" y1="{end_y:.1f}" x2="{f.width - f.right + 3:.1f}" '
+        f'y2="{end_y:.1f}" stroke="var(--accent)" stroke-width="1" />'
+    )
+    parts.append(
+        f'<text x="{f.width - f.right + 6:.1f}" y="{end_y + 4:.1f}" '
+        f'font-size="11" font-weight="700" fill="var(--accent)" '
+        f'stroke="var(--surface)" stroke-width="3.5" paint-order="stroke">'
+        f"{_fmt(last, 2)}</text>"
+    )
+
+    parts += _x_labels(f, [label[:7] for label, _ in series], max(1, len(series) // 8))
+    parts.append("</svg>")
+
+    table = _table(
+        [label for label, _ in series[-12:]],
+        [("收盤價", [v for _, v in series[-12:]])],
+        2,
+    )
+    return _figure(title, "", "".join(parts), table, extra="river-fig")

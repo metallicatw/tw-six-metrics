@@ -2,21 +2,26 @@
 
 〔財報圖表〕〔河流圖〕〔營收季節性〕〔獲利季節性〕〔財務指標評等預估〕.
 
-〔外資投信〕 joined them once its page was saved.  The three still missing —
-個股新聞, 大戶持股, 董監持股 — need MoneyLink and Goodinfo, neither of which
-this project has ever fetched a real response from.  Writing those parsers from documentation is exactly the
-mistake that cost six of nine sheets earlier in this port, so they stay
-unwritten until someone runs the fetch and saves a page.  ``reference/
-ENDPOINTS.md`` records where they come from and what is missing.
+〔外資投信〕 and 〔個股新聞〕 joined them once their pages were saved.  Two are
+still missing — 大戶持股 and 董監持股 — and the reason is no longer that nobody
+has looked: Goodinfo answers this project's IP with 403 on both, cookie jar
+and referer included.  Writing those parsers from documentation instead is
+exactly the mistake that cost six of nine sheets earlier in this port, so they
+stay unwritten until a run from a network Goodinfo will serve saves a page.
+``reference/ENDPOINTS.md`` records where they come from and what is missing.
 
-〔河流圖〕 deserves its own note.  The workbook builds it from **weekly**
-closes off 鉅亨網, interpolating book value and EPS between year ends so the
-bands bend smoothly.  This project has no weekly price series, so the river
-here is built from the **yearly** 收盤平均價 the exchanges publish — the same
-2.5%–97.5% confidence interval and the same six zones, at one point per year
-instead of one per week.  The zone a stock currently sits in is the part that
-drives a decision and it survives the coarser sampling; the smooth curve does
-not, and this module does not pretend otherwise.
+〔河流圖〕 deserves its own note, and it is shorter than it used to be.  This
+module once explained at length why the river was drawn from yearly points
+instead of the workbook's weekly ones.  The premise was wrong: the weekly
+series comes from the same MoneyDJ mirrors as everything else here
+(``Module1.MoneyDJ_TW_PRICE_New``), and the earlier note had it attributed to
+鉅亨網 — a site the workbook uses for 〔股價(日)〕, not this.
+
+So the line is now the workbook's own weekly close.  The **zones** are still
+built from the yearly 收盤平均價 the exchanges publish, which is not a
+compromise: the band edges are percentiles of one P/E multiple per year, and
+sampling the same years weekly would weight a year by how often it traded
+rather than counting it once.
 """
 
 from __future__ import annotations
@@ -132,6 +137,11 @@ class River:
     zone: int | None
     prices: tuple[float, ...]
     years: int
+    #: The weekly close drawn through the zones, when 〔股價(週)〕 was fetched.
+    #: Empty is not a failure — it is the yearly-point fallback, and the page says
+    #: which one it is rather than showing the same picture either way.
+    figure: str = ""
+    weeks: int = 0
 
     @property
     def zone_name(self) -> str:
@@ -162,12 +172,20 @@ def build_pe_river(
     current_eps: Number,
     low_q: float,
     high_q: float,
+    weekly: Sequence[tuple[str, float]] = (),
 ) -> River | None:
-    """〔河流圖〕's P/E band, from one point per year rather than per week.
+    """〔河流圖〕's P/E band, and the price line drawn through it.
 
-    ``prices`` and ``eps`` are aligned newest-first over the same years.  A
-    year with a loss contributes no multiple at all — a negative P/E is not a
-    cheap one, and letting it into the percentile drags the whole river down.
+    ``prices`` and ``eps`` are aligned newest-first over the same years and
+    decide *where the zones are*: a year with a loss contributes no multiple
+    at all — a negative P/E is not a cheap one, and letting it into the
+    percentile drags the whole river down.
+
+    ``weekly`` decides *what is drawn inside them*.  It is 〔股價(週)〕's
+    close, which is what the workbook plots; without it the zones are still
+    right and the chart is simply not drawn.  Note that the boundaries are
+    horizontal in both cases, and deliberately: they are this year's multiples
+    applied to this year's forecast EPS, so there is one price per boundary.
     """
     from ..valuation.pe_band import Bands
 
@@ -190,13 +208,25 @@ def build_pe_river(
             (i for i, level in enumerate(bands.levels) if current < level),
             len(RIVER_ZONES) - 1,
         )
+    band_prices = bands.prices(current_eps) if current_eps else ()
+    figure = ""
+    if weekly and band_prices:
+        figure = charts.river(
+            weekly,
+            band_prices,
+            RIVER_ZONES,
+            title="本益比河流圖（週收盤價）",
+            current=market_price,
+        )
     return River(
         kind="本益比",
         levels=bands.levels,
         current=current,
         zone=zone,
-        prices=bands.prices(current_eps) if current_eps else (),
+        prices=band_prices,
         years=len(multiples),
+        figure=figure,
+        weeks=len(weekly),
     )
 
 

@@ -54,7 +54,27 @@ def _page(grids=None):
 def _full_grids():
     grids = fetched()
     grids["年度交易資訊_上市櫃合併_"] = _yearly_grid()
+    grids.update(_extra_grids())
     return grids
+
+
+def _extra_grids():
+    """〔股價(週)〕 and 〔個股新聞〕, from the two saved responses.
+
+    Kept separate from ``fetched()`` because neither is a MoneyDJ HTML table:
+    one is a ``.djbcd`` block, the other a different site entirely.  Tests
+    that want the without-them case ask for ``fetched()`` and skip this.
+    """
+    from twsix.ingest import news as news_mod  # noqa: PLC0415
+    from twsix.ingest import weekly_prices  # noqa: PLC0415
+
+    pages = Path(__file__).resolve().parent / "pages" / "5439"
+    bars = weekly_prices.parse((pages / "5439_股價週.djbcd").read_text("cp950"))
+    items = news_mod.parse((pages / "5439_個股新聞.html").read_text("utf-8"))
+    return {
+        weekly_prices.SHEET: weekly_prices.to_grid(bars),
+        news_mod.SHEET: news_mod.to_grid(items),
+    }
 
 
 def _render(page, tmp: Path) -> str:

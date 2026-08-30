@@ -416,6 +416,9 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
         )
         print(f"  {name:<8} {len(grid):>4} 列 -> {target}")
 
+    if not args.sheet:
+        failures += _fetch_extras(http, args.stock, out_dir, bool(args.from_html))
+
     if failures:
         # The two failure modes need different fixes, so say which happened
         # rather than printing one message that is half wrong either way.
@@ -434,6 +437,65 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
     return EXIT_OK if failures == 0 else EXIT_FAIL
+
+
+def _fetch_extras(http, stock: str, out_dir: Path, offline: bool) -> int:
+    """〔股價(週)〕 and 〔個股新聞〕 — same run, different shapes.
+
+    These two are not in ``ORDER`` because neither is an HTML table: the
+    weekly price is a ``.djbcd`` block from the same mirrors, and the news is
+    a different site altogether.  They ride along with ``fetch-stock`` anyway
+    because a user who wants one wants all of them, and because making them a
+    separate command was how they stayed unfetched for three weeks.
+
+    Neither is fatal.  A missing weekly series costs the river chart its line
+    and nothing else; missing news costs one section.  So a failure here is
+    reported and counted, and the eleven sheets that matter are already saved.
+    """
+    import json
+
+    from .ingest import news as news_mod
+    from .ingest import weekly_prices
+    from .ingest.moneydj import HOSTS
+
+    if offline:
+        return 0  # --from-html replays saved MoneyDJ tables only
+
+    failures = 0
+
+    def save(sheet: str, grid: list[list[str]]) -> None:
+        target = out_dir / f"{sheet}.json"
+        target.write_text(
+            json.dumps(grid, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+        )
+        print(f"  {sheet:<8} {len(grid):>4} 列 -> {target}")
+
+    # -- 股價(週) ---------------------------------------------------------
+    path = weekly_prices.PATH.format(stock=stock)
+    for host in HOSTS:
+        try:
+            text = http.get_text(host + path, encoding="cp950")
+            bars = weekly_prices.parse(text)
+        except Exception:  # noqa: BLE001 - try the next mirror
+            continue
+        save(weekly_prices.SHEET, weekly_prices.to_grid(bars))
+        break
+    else:
+        print(f"  {weekly_prices.SHEET:<8} 八個站台都沒給到週線價格", file=sys.stderr)
+        failures += 1
+
+    # -- 個股新聞 ---------------------------------------------------------
+    try:
+        html = http.get_text(news_mod.URL.format(stock=stock), encoding="utf-8")
+        items = news_mod.parse(html)
+        if not items:
+            raise ValueError("頁面回來了但一則新聞都沒有")
+        save(news_mod.SHEET, news_mod.to_grid(items))
+    except Exception as exc:  # noqa: BLE001 - report and carry on
+        print(f"  {news_mod.SHEET:<8} 失敗：{exc}", file=sys.stderr)
+        failures += 1
+
+    return failures
 
 
 def _fetched_grids(root: Path, stock: str):
@@ -861,7 +923,7 @@ def build_parser() -> argparse.ArgumentParser:
     fs.set_defaults(func=cmd_fetch_stock)
 
     fp = sub.add_parser(
-        "fetch-page", help="抓一張還沒有解析器的頁面（鉅亨網週線、Goodinfo、新聞）"
+        "fetch-page", help="抓一張還沒有解析器的頁面（Goodinfo 大戶／董監持股）"
     )
     fp.add_argument("stock", help="股票代號")
     fp.add_argument(

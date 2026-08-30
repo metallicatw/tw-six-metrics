@@ -12,6 +12,9 @@
   --up:#ae2b1e; --down:#146b47;
   --g4:#0d5348; --g3:#2c7a6c; --g2:#5a6b74; --g1:#92682a; --g0:#8f3b2c;
   --badge-ink:#fff;
+  /* 河流圖分區底色：只是背景，每一區另有虛線與右側名稱，顏色不單獨承載意義 */
+  --zone-0:#e6f1ed; --zone-1:#eef5f1; --zone-2:#f2f5f7;
+  --zone-3:#faf3e5; --zone-4:#f9ebe6; --zone-5:#f5e0da;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
   --ground:#0d1116; --surface:#151b21; --surface-2:#1c232a;
@@ -20,6 +23,8 @@
   --up:#e4695b; --down:#4eb884;
   --g4:#6fd3c2; --g3:#43a795; --g2:#8e9aa4; --g1:#d0a44e; --g0:#e07a63;
   --badge-ink:#10161c;
+  --zone-0:#152e2a; --zone-1:#172826; --zone-2:#1a2129;
+  --zone-3:#2b2620; --zone-4:#31241f; --zone-5:#39231e;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);
@@ -68,6 +73,27 @@ footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);
   border-radius:4px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
 .stale{background:var(--surface);border:1px solid var(--g1);border-left:4px solid var(--g1);
   border-radius:4px;padding:11px 14px;font-size:13.5px;color:var(--ink-2);max-width:none}
+.note{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--accent);
+  border-radius:4px;padding:11px 14px;font-size:13.5px;color:var(--ink-2);max-width:none}
+/* -- 個股新聞 --------------------------------------------------------- */
+ol.news{list-style:none;padding:0;margin:16px 0 0;display:grid;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+ol.news li{background:var(--surface);padding:13px 16px}
+/* Wire round-ups stay in the list but step back: they are evidence of thin
+   coverage, not coverage.  Opacity alone would fail a contrast check, so the
+   tag carries the meaning and this only softens the ground. */
+ol.news li.roundup{background:var(--surface-2)}
+ol.news .meta{display:flex;flex-wrap:wrap;gap:9px;align-items:center;
+  font-size:11.5px;color:var(--muted);margin-bottom:5px}
+ol.news .meta time{font-variant-numeric:tabular-nums}
+ol.news .tag{padding:0 7px;border-radius:3px;border:1px solid var(--rule);
+  background:var(--ground);color:var(--muted)}
+ol.news .head{font-size:14.5px;font-weight:600;line-height:1.5;color:var(--ink);
+  text-decoration:none;display:inline-block}
+ol.news a.head:hover{color:var(--accent-2);text-decoration:underline}
+ol.news .sum{margin:6px 0 0;font-size:12.5px;line-height:1.65;color:var(--muted)}
+/* -- 河流圖 ----------------------------------------------------------- */
+.river-fig svg{height:auto;max-height:340px}
 /* -- valuation ------------------------------------------------------- */
 .val{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1px;
   background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:18px}

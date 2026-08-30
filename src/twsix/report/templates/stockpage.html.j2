@@ -24,6 +24,7 @@
   <a href="#season">季節性</a>
   <a href="#scenarios">財務指標評等預估</a>
   <a href="#inst">外資投信</a>
+  <a href="#news">個股新聞</a>
 </nav>
 
 {# ================= 1. 評價簡表 ================= #}
@@ -271,17 +272,29 @@
 {# ================= 6. 河流圖 ================= #}
 <h3 id="river">河流圖（本益比）</h3>
 {% if p.river %}
+{% if p.river.figure %}
+<p class="note">
+  分區高度來自<b>年度</b>資料——每年的收盤均價除以當年 EPS，取
+  2.5%～97.5% 信任區間；線是<b>週</b>收盤價，和活頁簿同一個來源。
+  分區邊界是水平的，因為它們是今年的本益比倍數乘上今年的預估 EPS，
+  一個倍數對應一個價位。
+</p>
+{{ p.river.figure }}
+{% else %}
 <p class="stale">
-  活頁簿的河流圖用<b>週線</b>收盤價，並在年底之間內插；本專案沒有週線序列，
-  這裡改用交易所公布的<b>年度收盤平均價</b>——同樣的 2.5%～97.5% 信任區間、
-  同樣六個分區，但一年一點而不是一週一點。判斷「現在落在哪一區」不受影響，
+  活頁簿的河流圖用<b>週線</b>收盤價；這次沒抓到週線序列，
+  這裡只列出分區與目前位置。判斷「現在落在哪一區」不受影響，
   平滑的曲線則畫不出來。
 </p>
+{% endif %}
 <div class="cards">
   <div class="card"><b>{{ "%.2f"|format(p.river.current) if p.river.current else "—" }}</b>
     <span>目前本益比</span></div>
   <div class="card"><b>{{ p.river.zone_name }}</b><span>所在分區</span></div>
   <div class="card"><b>{{ p.river.years }}</b><span>採計年數</span></div>
+  {% if p.river.weeks %}
+  <div class="card"><b>{{ p.river.weeks }}</b><span>週線點數</span></div>
+  {% endif %}
 </div>
 <div class="scroll">
   <table>
@@ -410,12 +423,46 @@
 <p class="stale">尚未取得〔三大法人〕，請執行 <code>twsix fetch-stock {{ p.stock_id }}</code>。</p>
 {% endif %}
 
+{# ================= 個股新聞 ================= #}
+<h3 id="news">個股新聞</h3>
+{% if p.news %}
+{% set n = p.news %}
+<p class="note">
+  MoneyLink 富聯網的個股新聞，{{ n.items|length }} 則，最新一則是 {{ n.latest }}。
+  {% if n.roundups %}
+  其中 <b>{{ n.roundups }}</b> 則是《外資》買賣超之類的通訊社名單——那種稿子一次點四十檔，
+  只是剛好把這支也念到，不算對這家公司的報導；真正談到公司本身的有 <b>{{ n.specific }}</b> 則。
+  一家小型股新聞量少，本身就是關於它的一項事實，所以照列不隱藏。
+  {% endif %}
+</p>
+<p class="stale">
+  這個來源更新得比財報慢。本頁其他數字是最新一期財報與月營收，新聞停在 {{ n.latest }}，
+  兩者不同步——看新聞判斷近況前請先確認日期。
+</p>
+<ol class="news">
+  {% for it in n.items %}
+  <li class="{{ 'roundup' if it.is_roundup else '' }}">
+    <div class="meta">
+      <time>{{ it.date }}{% if it.time %} {{ it.time }}{% endif %}</time>
+      <span class="src">{{ it.source }}</span>
+      {% if it.is_roundup %}<span class="tag">通訊社名單</span>{% endif %}
+    </div>
+    {% if it.url %}<a class="head" href="{{ it.url }}" rel="noopener">{{ it.title }}</a>
+    {% else %}<b class="head">{{ it.title }}</b>{% endif %}
+    {% if it.summary %}<p class="sum">{{ it.summary }}</p>{% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="stale">尚未取得〔個股新聞〕，請執行 <code>twsix fetch-page {{ p.stock_id }}</code>。</p>
+{% endif %}
+
 {# ================= 尚未建置 ================= #}
 <h3 id="unbuilt">尚未建置的頁面</h3>
 <p class="muted">
-  活頁簿還有三張分頁，本專案<b>沒有</b>取得過任何一次真實回應，因此沒有寫解析器。
-  照文件猜寫解析器正是這次移植前期讓九張表錯六張的原因，所以這三張留白，
-  而不是給出看起來像樣的假資料。
+  剩下兩張，卡的不是解析器而是來源。Goodinfo 對機房 IP 回 403——先進首頁拿了
+  session cookie、帶上 referer，兩個網址還是同一個 403。沒有真實回應就不寫解析器：
+  照文件猜寫正是這次移植前期讓九張表錯六張的原因。從家用網路跑很可能兩張都拿得到。
 </p>
 <div class="scroll">
   <table>
