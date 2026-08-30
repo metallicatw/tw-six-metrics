@@ -75,7 +75,7 @@ def test_the_list_marks_which_codes_lead_to_a_full_page(tmp_path=None):
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp))
 
-    listing = (out / "list.html").read_text(encoding="utf-8")
+    listing = (out / "index.html").read_text(encoding="utf-8")
     assert 'class="tag full"' in listing
     # The mark is a word, so it survives greyscale and forced colours.
     assert "完整" in listing
@@ -96,7 +96,7 @@ def test_the_mark_follows_the_render_not_the_directory(tmp_path=None):
     written = build_site(_records(), out, sheets_dir=sheets)
 
     assert written.get("  其中完整版") is None
-    assert 'class="tag full"' not in (out / "list.html").read_text(encoding="utf-8")
+    assert 'class="tag full"' not in (out / "index.html").read_text(encoding="utf-8")
     assert (out / "stock" / "2330.html").is_file()
 
 
@@ -177,7 +177,7 @@ def test_every_page_carries_the_search_box(tmp_path=None):
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp))
 
-    for name in ("index.html", "list.html", "stats.html", "about.html"):
+    for name in ("index.html", "picks.html", "stats.html", "about.html"):
         page = (out / name).read_text(encoding="utf-8")
         assert 'id="find"' in page, f"{name} 沒有搜尋框"
         assert "search.json" in page, f"{name} 沒有載入索引"
@@ -196,7 +196,7 @@ def test_the_search_box_still_goes_somewhere_without_javascript():
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp))
     page = (out / "index.html").read_text(encoding="utf-8")
-    assert 'action="list.html"' in page
+    assert 'action="index.html"' in page
     assert 'name="q"' in page
 
 
@@ -207,7 +207,7 @@ def test_the_stock_page_search_box_resolves_paths_from_its_own_depth():
     build_site(_records(), out, sheets_dir=_sheets(tmp))
     page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
     assert "'../'+'search.json'" in page or "base='../'" in page.replace(" ", "")
-    assert 'action="../list.html"' in page
+    assert 'action="../index.html"' in page
 
 
 # -- 這一輪的版面決定 ------------------------------------------------------
@@ -228,11 +228,14 @@ def test_the_three_stale_pages_are_unlinked_but_still_built():
 
     import re
 
-    nav = re.search(r"<nav>(.*?)</nav>", (out / "list.html").read_text("utf-8"), re.S)
+    nav = re.search(r"<nav>(.*?)</nav>", (out / "index.html").read_text("utf-8"), re.S)
     labels = re.findall(r">([^<>]+)</a>", nav.group(1))
     assert labels == ["評等清單"]
-    for name in ("index.html", "stats.html", "about.html"):
+    for name in ("picks.html", "stats.html", "about.html"):
         assert (out / name).is_file(), f"{name} 不該被刪掉，只是不連過去"
+    # 評等清單 is the front door now; the old URL still resolves.
+    old = (out / "list.html").read_text("utf-8")
+    assert "index.html" in old and "refresh" in old
 
 
 def test_the_stock_page_is_tabs_rather_than_one_long_scroll():
@@ -256,7 +259,7 @@ def test_the_build_stamp_is_taipei_time():
     tmp = _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp))
-    text = (out / "list.html").read_text("utf-8")
+    text = (out / "index.html").read_text("utf-8")
     assert "台北時間" in text
     assert "UTC" not in text
 

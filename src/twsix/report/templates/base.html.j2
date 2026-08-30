@@ -284,15 +284,15 @@ tr.here th{font-weight:700}
 </head>
 <body>
 <header class="top"><div class="in">
-  <h1><a href="{{ rel }}list.html">{{ site_title }}</a></h1>
+  <h1><a href="{{ rel }}index.html">{{ site_title }}</a></h1>
   {# 三個分頁暫時不連：它們讀的是一年前的全市場快照，而排名和分布用舊資料算出來
      不只是過時，是理直氣壯地過時。個股頁不同，那是現抓的。頁面照樣產生，直接
      開網址還是看得到，只是導覽不指過去。#}
   <nav>
-    {% if 'index' not in hidden_pages %}
-    <a href="{{ rel }}index.html"{% if page=='index' %} aria-current="page"{% endif %}>具投資價值</a>
+    <a href="{{ rel }}index.html"{% if page=='list' %} aria-current="page"{% endif %}>評等清單</a>
+    {% if 'picks' not in hidden_pages %}
+    <a href="{{ rel }}picks.html"{% if page=='picks' %} aria-current="page"{% endif %}>具投資價值</a>
     {% endif %}
-    <a href="{{ rel }}list.html"{% if page=='list' %} aria-current="page"{% endif %}>評等清單</a>
     {% if 'stats' not in hidden_pages %}
     <a href="{{ rel }}stats.html"{% if page=='stats' %} aria-current="page"{% endif %}>評等統計</a>
     {% endif %}
@@ -300,7 +300,7 @@ tr.here th{font-weight:700}
     <a href="{{ rel }}about.html"{% if page=='about' %} aria-current="page"{% endif %}>評分規則</a>
     {% endif %}
   </nav>
-  <form class="find" role="search" action="{{ rel }}list.html" method="get">
+  <form class="find" role="search" action="{{ rel }}index.html" method="get">
     {# The form's action is the fallback, and it is a real one: with scripting
        off, submitting takes the reader to 評等清單, which has its own filter
        and lists every stock.  The combobox below is an enhancement on top of

@@ -18,10 +18,28 @@ from typing import Any, Iterable
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
 
 ENGINE_VERSION = "0.1.0"
+TEMPLATE_DIR = Path(__file__).parent / "templates"
+
+
+def _redirect(target: str, label: str) -> str:
+    """A standalone page that sends the reader on.
+
+    Both a meta refresh and a real link: the refresh moves anyone who has
+    scripting or a normal browser, and the link means a reader whose browser
+    ignores the refresh — or a crawler — still has somewhere to go rather than
+    a blank page.
+    """
+    return (
+        '<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">'
+        f'<meta http-equiv="refresh" content="0; url={target}">'
+        f'<title>{label}</title></head><body>'
+        f'<p>已移至 <a href="{target}">{label}</a>。</p></body></html>\n'
+    )
+
 
 #: Pages built but not linked, and why.
 #:
-#: 〔具投資價值〕〔評等統計〕〔評分規則〕 all read the whole-market snapshot in
+#: 〔具投資價值〕（picks）〔評等統計〕〔評分規則〕 all read the whole-market snapshot in
 #: ``data/ratings.csv``, which is a year old and cannot be refreshed — see
 #: 〈全市場清單的難題〉.  A ranked pick list and a market-wide distribution
 #: computed from stale data are not merely out of date, they are *confidently*
@@ -33,8 +51,7 @@ ENGINE_VERSION = "0.1.0"
 #: reader who has one of these URLs should still get the page rather than a
 #: 404 — with the site's own staleness banner on it, which is the thing the
 #: nav could not say in one word.
-HIDDEN_PAGES: frozenset[str] = frozenset({"index", "stats", "about"})
-TEMPLATE_DIR = Path(__file__).parent / "templates"
+HIDDEN_PAGES: frozenset[str] = frozenset({"picks", "stats", "about"})
 
 GRADE_KEYS = ["AA", "A", "BB", "B", "C", "不評分", "數據不足"]
 
@@ -362,21 +379,33 @@ def build_site(
     base["rich_ids"] = rich_ids
 
 
+    # 〔評等清單〕 is the front door.  It used to be 〔具投資價值〕, which ranks
+    # the market from a snapshot a year old — a ranked list is the single worst
+    # shape for stale data, because it reads as a recommendation rather than as
+    # a record.  The listing is the same data without the ranking, and it is
+    # where the search box and the per-stock pages actually lead.
+    env.get_template("list.html.j2").stream(
+        **base, page="list", rel="", rows=rows
+    ).dump(str(out_dir / "index.html"))
+    written["index.html（評等清單）"] = 1
+
+    # Old links and bookmarks still resolve.  A redirect rather than a second
+    # copy: two files with the same table drift the moment one is edited.
+    (out_dir / "list.html").write_text(
+        _redirect("index.html", "評等清單"), encoding="utf-8"
+    )
+    written["list.html → index"] = 1
+
     env.get_template("index.html.j2").stream(
         **base,
-        page="index",
+        page="picks",
         rel="",
         picks=picks,
         top=rows[:top_n],
         avg_composite=sum(composites) / len(composites) if composites else 0.0,
         grade_counts={4: sum(1 for c in composites if c >= 3.5)},
-    ).dump(str(out_dir / "index.html"))
-    written["index.html"] = 1
-
-    env.get_template("list.html.j2").stream(
-        **base, page="list", rel="", rows=rows
-    ).dump(str(out_dir / "list.html"))
-    written["list.html"] = 1
+    ).dump(str(out_dir / "picks.html"))
+    written["picks.html（未連結）"] = 1
 
     # -- statistics -------------------------------------------------------
     distribution: list[tuple[str, dict[str, int]]] = []
