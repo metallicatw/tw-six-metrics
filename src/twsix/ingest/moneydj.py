@@ -29,6 +29,8 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Iterable, Literal, Sequence
 
+from pathlib import Path
+
 from .base import FetchError, HttpClient
 
 Layout = Literal["statement", "ratio"]
@@ -287,6 +289,10 @@ class MoneyDJ:
     http: HttpClient
     hosts: Sequence[str] = HOSTS
     preferred: str = ""
+    #: When set, every page fetched is written here before parsing.  The pages
+    #: change without notice, so when a parse goes wrong the raw HTML is the
+    #: only evidence of what actually came back.
+    save_html: "Path | None" = None
     _blocked: set[str] = field(default_factory=set, init=False)
 
     def _ordered(self) -> list[str]:
@@ -312,6 +318,10 @@ class MoneyDJ:
                 self._blocked.add(host)
                 errors.append(f"{host}: {exc}")
                 continue
+            if self.save_html is not None:
+                self.save_html.mkdir(parents=True, exist_ok=True)
+                target = self.save_html / f"{stock_id}_{sheet}.html"
+                target.write_text(html, encoding="utf-8")
             table = parse_main_table(html, layout)
             grid = _offset_grid(sheet, table)
             try:
