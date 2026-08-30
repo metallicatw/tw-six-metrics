@@ -116,15 +116,34 @@ Goodinfo 的請求會帶 `referer`；`設定!G1` 可整組關掉 Goodinfo 年財
 | 〔評價簡表〕B1/C1 代號與名稱 | 任一頁的標題 | — |
 | 〔BASIC2〕最高／最低本益比 | 年度最高低價 ÷ 年度EPS | 相差 0.3%，原因見下 |
 
-**還缺的一塊：** 〔年度交易資訊(上市櫃合併)〕不在鏡像站上，要走證交所
-`FMNPTK` 與櫃買 `yearlyStock`。`twsix fetch-yearly` 已寫好，但**尚未對照過
-真實回應**——這是全專案唯一一支照文件而非照實際頁面寫的解析器。請執行
+**〔年度交易資訊(上市櫃合併)〕** 不在鏡像站上，走證交所 `FMNPTK` 與櫃買
+`yearlyStock`。櫃買那半邊已對照真實回應
+（`tests/pages/5439/5439_yearly_tpex.json`），並立刻證明「依欄位名稱對應」
+是對的決定：
+
+| | 證交所 | 櫃買 |
+|---|---|---|
+| 第 5 欄 | 最高價 | **加權平均價(B/A)** |
+| 高低價欄名 | 最高價／最低價 | **盤中最高價／盤中最低價** |
+| 表格數 | 1 | **2**（第 2 張是「近年最高價／最低價」，欄名也會誤中） |
+
+依位置讀會把 115 年的最高價讀成 331.33（加權平均價）而不是 463.50——
+數字合理、契約檢查抓不到。
+
+證交所那半邊仍未見過真實回應（5439 是上櫃，證交所沒有這檔）。抓任一檔
+上市股即可補上：`twsix fetch-yearly 2330 --save-raw <dir>`。
+
+**Python 3.13 的 TLS 陷阱：** 3.13 讓 `ssl.create_default_context()` 預設開啟
+`VERIFY_X509_STRICT`，而證交所憑證鏈有一張中介憑證缺 Subject Key Identifier，
+於是每個 TWSE 請求都會死在
 
 ```
-twsix fetch-yearly 5439 --save-raw D:\tmp\yearly
+[SSL: CERTIFICATE_VERIFY_FAILED] Missing Subject Key Identifier
 ```
 
-存下的兩個 JSON 就是它缺的樣本。
+同一個網址在瀏覽器與 Python 3.12 都正常。`ingest.base.tls_context()` 把該旗標
+關掉——憑證鏈仍然驗證、主機名稱仍然檢查，放棄的只是一項我們無權修改的
+憑證格式符合性檢查。
 
 **已知的 0.3% 差距：** 〔BASIC2〕的年度EPS 是 MoneyDJ 自己的年度數字，
 單檔查詢是把〔EPQ〕四季 EPS 相加——每季已經四捨五入到小數兩位，所以

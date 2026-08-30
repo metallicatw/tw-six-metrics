@@ -12,9 +12,11 @@ it handles HTTP/2 and connection reuse better than ``urllib``.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 import logging
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -33,6 +35,30 @@ DEFAULT_UA = (
 
 class FetchError(RuntimeError):
     """A request failed after every retry."""
+
+
+@functools.lru_cache(maxsize=1)
+def tls_context() -> ssl.SSLContext:
+    """Verify certificates, but without RFC 5280 strict mode.
+
+    Python 3.13 turned ``VERIFY_X509_STRICT`` on inside
+    ``ssl.create_default_context()``.  證交所's chain has an intermediate with
+    no Subject Key Identifier, which that flag rejects — so on a 3.13 machine
+    every TWSE request dies with::
+
+        [SSL: CERTIFICATE_VERIFY_FAILED] Missing Subject Key Identifier
+
+    while the same URL opens fine in a browser and on Python 3.12.  Turning the
+    flag back off is the narrow fix: the chain is still verified against the
+    system trust store and the hostname is still checked.  What is given up is
+    an extra conformance check on a certificate the exchange controls and we
+    cannot change.
+    """
+    ctx = ssl.create_default_context()
+    strict = getattr(ssl, "VERIFY_X509_STRICT", 0)
+    if strict:
+        ctx.verify_flags &= ~strict
+    return ctx
 
 
 @dataclass
@@ -106,7 +132,9 @@ class HttpClient:
             self._throttle(url)
             try:
                 req = urllib.request.Request(url, data=body, headers=dict(merged))
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                with urllib.request.urlopen(
+                    req, timeout=self.timeout, context=tls_context()
+                ) as resp:
                     data = resp.read()
                 if cache_path is not None:
                     cache_path.write_bytes(data)
