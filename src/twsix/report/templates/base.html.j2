@@ -41,6 +41,10 @@ nav{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:13px}
 nav a{color:var(--ink-2);text-decoration:none}
 nav a[aria-current=page]{color:var(--accent-2);font-weight:600}
 .stamp{font-size:11.5px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
+.stamp:empty{display:none}
+.linkish{appearance:none;border:none;background:none;padding:0;font:inherit;
+  font-size:11.5px;color:var(--accent-2);cursor:pointer;text-decoration:underline;
+  text-underline-offset:2px}
 h2{font-size:18px;margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--ink)}
 h3{font-size:15px;margin:16px 0 6px}
 h4{margin:14px 0 6px}
@@ -319,6 +323,11 @@ tr.here th{font-weight:700}
       <pre class="log" aria-live="polite"></pre>
     </div>
   </form>
+  {# 動作，不是頁面，所以放在 nav 外面。只有線上版才需要——本機服務在跑的
+     時候不必給權杖。 #}
+  <p class="stamp">
+    <button type="button" id="tokenlink" class="linkish" hidden>設定抓取權杖</button>
+  </p>
   <p class="stamp">
     網站產生：{{ generated_at }}　·　{{ stock_count }} 檔　·
     資料截止：財報 {{ latest_quarter or '—' }}　/　營收 {{ latest_revenue_month or '—' }}
@@ -393,7 +402,7 @@ tr.here th{font-weight:700}
         li.appendChild(t);
       } else if(live || repo){
         var g=document.createElement('span'); g.className='tag grabbtn';
-        g.textContent = live ? '立即抓取' : '抓這一檔';
+        g.textContent = '抓這一檔';
         g.addEventListener('mousedown', function(e){
           e.preventDefault(); e.stopPropagation();
           if(live) fetchStock(r[0]); else askGithub(r[0]);
@@ -438,53 +447,99 @@ tr.here th{font-weight:700}
     .then(function(j){ live = !!(j && j.service==='twsix'); })
     .catch(function(){ live=false; });
 
-  /* 線上版的抓取路徑。
+  /* 線上版的抓取路徑：按下去就跑，不換頁。
    *
-   * 靜態網站自己抓不到券商鏡像站，但它可以「請這個 repo 去抓」：開一張標題就是
-   * 股號的 issue，.github/workflows/stock.yml 接手。issue 網址可以預先填好標題
-   * 與標籤，所以對使用者是一次點擊加一次送出，手機上也一樣。
+   * 靜態網站沒辦法自己抓券商鏡像站，但它可以**直接叫 GitHub Actions 去跑**——
+   * REST API 支援跨域，所以 workflow_dispatch 一個 POST 就送得出去，再輪詢
+   * 執行狀態把進度畫在同一頁上。這就是桌機版那個面板，只是背後換成 runner。
    *
-   * 送出之後不是叫人自己等：頁面每 15 秒重讀一次 search.json（同源，不碰 API，
-   * 沒有跨域也沒有速率限制），看那一檔的「有無完整頁」旗標翻過來沒有，翻了就
-   * 直接跳過去。GitHub Pages 的 CDN 會快取，所以帶一個時間戳當作不同網址。
+   * 代價是那個 POST 要一把權杖，而靜態網站沒有地方藏秘密。所以權杖由使用者
+   * 自己貼一次，存在**這台瀏覽器的 localStorage**：不進 repo、不進產生出來的
+   * HTML、不經過任何第三方，只會送到 api.github.com。別人打開這個網站沒有
+   * 權杖，就沒有按鈕，也就按不到任何東西——這比開放 issue 更關得住。
+   *
+   * 建議用 fine-grained PAT，只勾這一個 repo、只給 Actions 讀寫。那把權杖能做
+   * 的事就只有「在這個 repo 跑 workflow」。
+   *
+   * 沒有權杖時退回開 issue 那條路，一次點擊加一次送出，手機上也能用。
    */
-  function issueUrl(code){
-    return 'https://github.com/' + repo + '/issues/new'
-      + '?title=' + encodeURIComponent(code)
-      + '&labels=' + encodeURIComponent('抓取個股')
-      + '&body=' + encodeURIComponent(
-          '由網站上的「抓這一檔」按鈕開啟。\n\n'
-          + '送出後 workflow 會抓取 ' + code + ' 的報表、產生完整報告並重建網站，'
-          + '完成後會在這張 issue 留言並關閉。\n\n'
-          + '標題只放股號，不要加其他文字。');
+  var TOKEN_KEY = 'twsix.token';
+  var WORKFLOW = 'stock.yml';
+  var API = 'https://api.github.com/repos/' + repo;
+
+  function token(){
+    try{ return localStorage.getItem(TOKEN_KEY) || ''; }catch(e){ return ''; }
+  }
+  function setToken(v){
+    try{ v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY); }
+    catch(e){}
+  }
+  function gh(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({
+      'Accept': 'application/vnd.github+json',
+      'Authorization': 'Bearer ' + token(),
+      'X-GitHub-Api-Version': '2022-11-28'
+    }, opts.headers || {});
+    return fetch(API + path, opts);
   }
 
-  /* 等待狀態放進 sessionStorage，因為讀者不會乖乖停在原地。
-   *
-   * 3711 那次就是：按了「抓這一檔」，然後從 issue 的留言連結點進
-   * stock/3711.html——換頁，計時器沒了，那一頁又還是舊的薄版本，看起來就像
-   * 卡住。狀態存起來之後，不管跳到站內哪一頁，等待都會接著跑，而剛好停在
-   * 那一檔自己的頁面上時，好了就直接重新整理。
-   */
+  /* ---- 進度面板 ------------------------------------------------------- */
+  var started = 0, ticker = null, steps = [];
+
+  function elapsed(){
+    var s = Math.round((Date.now() - started) / 1000);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+  function step(text){
+    if(steps[steps.length - 1] !== text) steps.push(text);
+    paint();
+  }
+  function paint(){
+    if(!grab || !started) return;
+    grab.hidden = false;
+    /* 每秒重畫一次，讀者才看得出它還活著。一分半沒有任何動靜，看起來就是當掉
+       ——那正是這個計時器存在的唯一理由。 */
+    grab.querySelector('.head').textContent = '抓取中… ' + elapsed();
+    grab.querySelector('.log').textContent = steps.join('\n');
+  }
+  function beginPanel(){
+    started = Date.now(); steps = [];
+    clearInterval(ticker);
+    ticker = setInterval(paint, 1000);
+    paint();
+  }
+  function endPanel(head, note){
+    clearInterval(ticker); ticker = null;
+    if(!grab) return;
+    grab.hidden = false;
+    grab.querySelector('.head').textContent = head;
+    if(note) steps.push(note);
+    grab.querySelector('.log').textContent = steps.join('\n');
+  }
+
+  /* ---- 站內輪詢：資料進網站了沒 --------------------------------------- */
   var PENDING = 'twsix.pending';
   function remember(code){
     try{ sessionStorage.setItem(PENDING, JSON.stringify(
-      {code: code, until: Date.now() + 6*60*1000})); }catch(e){}
+      {code: code, until: Date.now() + 8*60*1000})); }catch(e){}
   }
-  function forget(){
-    try{ sessionStorage.removeItem(PENDING); }catch(e){}
-  }
-  function pending(){
+  function forget(){ try{ sessionStorage.removeItem(PENDING); }catch(e){} }
+  function pendingJob(){
     try{
-      var raw = sessionStorage.getItem(PENDING);
-      if(!raw) return null;
-      var j = JSON.parse(raw);
+      var j = JSON.parse(sessionStorage.getItem(PENDING) || 'null');
       if(!j || !j.code || Date.now() > j.until){ forget(); return null; }
       return j;
     }catch(e){ return null; }
   }
 
   var watching = null;
+  function arrive(code){
+    forget();
+    endPanel(code + ' 好了，正在開啟報告…');
+    if(location.pathname.replace(/^.*\//, '') === code + '.html') location.reload();
+    else location.href = base + 'stock/' + code + '.html';
+  }
   function watch(code, tries){
     if(watching && watching !== code) return;
     watching = code;
@@ -492,95 +547,166 @@ tr.here th{font-weight:700}
       .then(function(r){ return r.json(); })
       .then(function(rows){
         for(var i=0;i<rows.length;i++){
-          if(rows[i][0] === code && rows[i][4]){
-            forget();
-            say(code + ' 好了，正在開啟報告…', []);
-            var target = base + 'stock/' + code + '.html';
-            /* 已經站在那一頁上（多半是從 issue 的連結點進來的），換網址不會
-               重新載入，要真的重整才看得到新版本。 */
-            if(location.pathname.replace(/^.*\//, '') === code + '.html') {
-              location.reload();
-            } else {
-              location.href = target;
-            }
-            return;
-          }
+          if(rows[i][0] === code && rows[i][4]){ arrive(code); return; }
         }
-        next(code, tries);
+        nextWatch(code, tries);
       })
-      .catch(function(){ next(code, tries); });
+      .catch(function(){ nextWatch(code, tries); });
   }
-  function next(code, tries){
+  function nextWatch(code, tries){
     if(tries <= 0){
-      forget();
-      say('還在等 GitHub 建置 ' + code + '。到 Actions 看一下「加一檔個股」跑完了沒；'
-          + '跑完了就重新整理這一頁。', []);
-      watching = null;
+      forget(); watching = null;
+      endPanel('等太久了，' + code + ' 還沒出現',
+               '到 Actions 看一下「加一檔個股」跑完了沒；跑完了重新整理這一頁。');
       return;
     }
-    var mins = Math.round(tries * 15 / 60);
-    say('已送出 ' + code + '，等 GitHub 抓取並重建網站…（最多再等約 '
-        + mins + ' 分鐘，好了會自動跳過去）', []);
-    setTimeout(function(){ watch(code, tries - 1); }, 15000);
+    setTimeout(function(){ watch(code, tries - 1); }, 10000);
   }
 
-  function askGithub(code){
+  /* ---- 直接跑 workflow ------------------------------------------------ */
+  function runOnGithub(code){
     close();
-    window.open(issueUrl(code), '_blank', 'noopener');
+    beginPanel();
     remember(code);
-    say('已開啟 GitHub 的 issue 頁面——按綠色的 Submit new issue 就會開始抓。', []);
-    /* 20 次 × 15 秒 = 五分鐘。抓一檔約 20 秒，建站約半分鐘，加上 runner 排隊，
-       五分鐘沒好通常是 workflow 失敗，那時叫人去看 Actions 比繼續轉圈有用。 */
-    setTimeout(function(){ watch(code, 20); }, 15000);
-  }
-  window.twsixAskGithub = askGithub;
-  window.twsixCanAsk = function(){ return !live && !!repo; };
-
-  function say(head, log){
-    if(!grab) return;
-    grab.hidden=false;
-    grab.querySelector('.head').textContent=head;
-    grab.querySelector('.log').textContent=(log||[]).join('\n');
-  }
-
-  function poll(code){
-    fetch(base+'api/job/'+code).then(function(r){return r.json();}).then(function(j){
-      if(j.error){ say('抓取失敗：'+j.error, []); return; }
-      if(!j.done){
-        say('正在抓取 '+code+'…（'+j.seconds+' 秒）', j.lines);
-        setTimeout(function(){ poll(code); }, 800);
+    step('送出 ' + code + ' 給 GitHub Actions…');
+    var since = new Date(Date.now() - 60000).toISOString();
+    gh('/actions/workflows/' + WORKFLOW + '/dispatches', {
+      method: 'POST',
+      body: JSON.stringify({ref: 'main', inputs: {stock: code}})
+    }).then(function(r){
+      if(r.status === 204){ step('已排入佇列，等 runner 接手…'); pollRun(code, since, 90); return; }
+      if(r.status === 401 || r.status === 403){
+        setToken('');
+        endPanel('權杖無效或權限不足', '請重新設定一把 fine-grained PAT，勾選這個 repo 的 Actions 讀寫。');
         return;
       }
-      if(j.ok){
-        say('完成，正在開啟報告…', j.lines);
-        location.href = base+'stock/'+code+'.html';
-      } else {
-        say('抓取失敗 — 八個鏡像站都拒絕通常代表 IP 被擋，換個網路再試。', j.lines);
-      }
-    }).catch(function(){ say('抓取中斷：連不上本機服務', []); });
+      return r.text().then(function(t){
+        endPanel('送出失敗（HTTP ' + r.status + '）', t.slice(0, 300));
+      });
+    }).catch(function(e){
+      endPanel('送不出去', String(e));
+    });
   }
 
-  function fetchStock(code){
-    close();
-    say('正在抓取 '+code+'…', []);
-    fetch(base+'api/fetch/'+code, {method:'POST'})
-      .then(function(r){return r.json();})
+  /* runner 排隊、跑測試、抓資料、建站，全部加起來約兩三分鐘。每 4 秒問一次
+     狀態，把 GitHub 自己的字串翻成人看得懂的一行，讀者才知道它在哪一步。 */
+  function pollRun(code, since, tries){
+    if(tries <= 0){ step('狀態查不到了，改用網站本身判斷…'); watch(code, 40); return; }
+    gh('/actions/workflows/' + WORKFLOW + '/runs?per_page=5&created=%3E' +
+       encodeURIComponent(since))
+      .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(j){
-        if(j.error){ say('抓取失敗：'+j.error, []); return; }
-        poll(code);
+        var run = j && j.workflow_runs && j.workflow_runs[0];
+        if(!run){ setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000); return; }
+        if(run.status === 'queued') step('排隊中…');
+        else if(run.status === 'in_progress') step('執行中：抓取報表、產生報告、重建網站');
+        else if(run.status === 'completed'){
+          if(run.conclusion === 'success'){
+            step('Actions 完成，等網站發布…');
+            watch(code, 40);
+          } else {
+            forget();
+            endPanel('抓取失敗（' + run.conclusion + '）',
+                     '執行紀錄：' + run.html_url);
+          }
+          return;
+        }
+        setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000);
       })
-      .catch(function(){ say('抓取中斷：連不上本機服務', []); });
+      .catch(function(){ setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000); });
   }
-  window.twsixFetch = fetchStock;   /* 個股頁的「立即抓取」也用這個 */
+
+  /* ---- 沒有權杖時的退路：開一張 issue -------------------------------- */
+  function issueUrl(code){
+    return 'https://github.com/' + repo + '/issues/new'
+      + '?title=' + encodeURIComponent(code)
+      + '&labels=' + encodeURIComponent('抓取個股')
+      + '&body=' + encodeURIComponent(
+          '由網站上的「抓這一檔」按鈕開啟。標題只放股號，不要加其他文字。');
+  }
+  function askViaIssue(code){
+    close(); beginPanel(); remember(code);
+    window.open(issueUrl(code), '_blank', 'noopener');
+    step('已開啟 GitHub issue 頁面——按綠色的 Submit new issue 就會開始抓。');
+    setTimeout(function(){ watch(code, 40); }, 15000);
+  }
+
+  /* ---- 設定權杖 ------------------------------------------------------- */
+  function askToken(){
+    var now = token();
+    var msg = now
+      ? '目前已設定權杖。貼上新的可以更換，留空並按確定則清除。'
+      : '貼上 GitHub fine-grained PAT（只勾這一個 repo、Actions 讀寫）。\n'
+        + '它只存在這台瀏覽器，不會進 repo，也只會送到 api.github.com。';
+    var v = window.prompt(msg, '');
+    if(v === null) return false;
+    setToken(v.trim());
+    return !!v.trim();
+  }
+
+  function grabOnline(code){
+    if(token()) return runOnGithub(code);
+    if(askToken()) return runOnGithub(code);
+    return askViaIssue(code);
+  }
+  window.twsixAskGithub = grabOnline;
+  window.twsixSetToken = askToken;
+  window.twsixHasToken = function(){ return !!token(); };
+  window.twsixCanAsk = function(){ return !live && !!repo; };
+  /* ---- 本機服務（twsix serve）：同一個面板，不同的後端 ---------------- */
+  function pollLocal(code){
+    fetch(base + 'api/job/' + code).then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j.error){ endPanel('抓取失敗', j.error); return; }
+        if(!j.done){
+          /* 本機那條路每一行都是 twsix report 自己印的，直接照抄。 */
+          steps = j.lines.slice(); paint();
+          setTimeout(function(){ pollLocal(code); }, 800);
+          return;
+        }
+        steps = j.lines.slice();
+        if(j.ok) arrive(code);
+        else endPanel('抓取失敗', '八個鏡像站都拒絕通常代表 IP 被擋，換個網路再試。');
+      })
+      .catch(function(){ endPanel('抓取中斷', '連不上本機服務'); });
+  }
+  function fetchStock(code){
+    close(); beginPanel(); remember(code);
+    step('正在抓取 ' + code + '…');
+    fetch(base + 'api/fetch/' + code, {method: 'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j.error){ endPanel('抓取失敗', j.error); return; }
+        pollLocal(code);
+      })
+      .catch(function(){ endPanel('抓取中斷', '連不上本機服務'); });
+  }
+  window.twsixFetch = fetchStock;
   window.twsixLive = function(){ return live; };
 
-  /* 換頁之後把等待接回來。 */
+  /* 換頁之後把等待接回來。計時器從零重新起算——真正的起點已經不在這一頁上，
+     顯示一個假的總時間比顯示這一頁等了多久更誤導。 */
   (function resume(){
-    var j = pending();
+    var j = pendingJob();
     if(!j) return;
-    var left = Math.max(1, Math.round((j.until - Date.now()) / 15000));
-    setTimeout(function(){ watch(j.code, left); }, 1200);
+    setTimeout(function(){
+      beginPanel();
+      step('等 ' + j.code + ' 的資料進到網站…');
+      watch(j.code, 40);
+    }, 1200);
   })();
+
+  /* 權杖入口。放在導覽列而不是藏在按鈕裡，因為換一把、清掉都要找得到。 */
+  var tl = document.getElementById('tokenlink');
+  if(tl){
+    setTimeout(function(){
+      if(live || !repo) return;
+      tl.hidden = false;
+      var mark = function(){ tl.textContent = token() ? '抓取權杖 ✓' : '設定抓取權杖'; };
+      mark();
+      tl.addEventListener('click', function(e){ e.preventDefault(); askToken(); mark(); });
+    }, 1000);
+  }
 
   box.addEventListener('focus', load);
   box.addEventListener('input', run);
