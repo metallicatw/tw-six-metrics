@@ -114,3 +114,97 @@ def _tmp() -> Path:
     import tempfile
 
     return Path(tempfile.mkdtemp(prefix="twsix-site-"))
+
+
+# -- 全站個股搜尋 ----------------------------------------------------------
+
+
+def test_the_search_index_lists_every_stock_not_only_the_fetched_ones(tmp_path=None):
+    """Typing 2330 must say what the site knows, even with no full page.
+
+    「找不到」 for a stock that is plainly in 評等清單 reads as a broken search
+    rather than as missing data, so the index is the whole market and the
+    fifth field is what separates the two.
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    index = json.loads((out / "search.json").read_text(encoding="utf-8"))
+    codes = {row[0] for row in index}
+    assert codes == {"5439", "2330"}
+    by_code = {row[0]: row for row in index}
+    assert by_code["5439"][4] == 1  # has the full page
+    assert by_code["2330"][4] == 0  # listed, but only the grade table
+
+
+def test_the_index_row_is_the_shape_the_script_reads():
+    """[代號, 名稱, 產業, 綜合評分, 有無完整頁] — the order is a contract.
+
+    It is read back in exactly one place, an inline script in base.html.j2,
+    which cannot import anything.  Pinning it here is the only thing standing
+    between a reordered field and a search box that shows industries where
+    names should be.
+    """
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    row = next(
+        r
+        for r in json.loads((out / "search.json").read_text(encoding="utf-8"))
+        if r[0] == "5439"
+    )
+    assert len(row) == 5
+    assert row[1] == "高技"
+    assert row[2] and not row[2][0].isdigit()  # 產業, not a number
+    assert row[3].count(".") == 1 and len(row[3].split(".")[1]) == 2  # 兩位小數
+    assert row[4] in (0, 1)
+
+
+def test_the_score_is_rounded_in_the_file_not_in_the_browser():
+    """Ten digits shipped to be formatted away on arrival wastes them twice."""
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    text = (out / "search.json").read_text(encoding="utf-8")
+    assert "3333333" not in text
+    assert "6666666" not in text
+
+
+def test_every_page_carries_the_search_box(tmp_path=None):
+    """Including the stock pages — that is the point of putting it in base."""
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    for name in ("index.html", "list.html", "stats.html", "about.html"):
+        page = (out / name).read_text(encoding="utf-8")
+        assert 'id="find"' in page, f"{name} 沒有搜尋框"
+        assert "search.json" in page, f"{name} 沒有載入索引"
+    for code in ("5439", "2330"):
+        page = (out / "stock" / f"{code}.html").read_text(encoding="utf-8")
+        assert 'id="find"' in page, f"{code} 的頁面沒有搜尋框"
+
+
+def test_the_search_box_still_goes_somewhere_without_javascript():
+    """A form wrapping the input, pointing at a page that lists everything.
+
+    The combobox is an enhancement; with scripting off, submitting must still
+    reach 評等清單, which has its own filter and every stock in it.
+    """
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "index.html").read_text(encoding="utf-8")
+    assert 'action="list.html"' in page
+    assert 'name="q"' in page
+
+
+def test_the_stock_page_search_box_resolves_paths_from_its_own_depth():
+    """stock/5439.html is one level down; its links must not 404."""
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
+    assert "'../'+'search.json'" in page or "base='../'" in page.replace(" ", "")
+    assert 'action="../list.html"' in page

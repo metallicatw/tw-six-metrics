@@ -156,4 +156,20 @@
 {% endfor %}
 </tbody>
 </table></div>
+
+{# 這一頁是評分表；完整版還有十個區塊。與其讓讀者以為本站只有這些，不如把
+   差別和取得方式講清楚——尤其是搜尋框會把每一檔都帶到這裡來。 #}
+<h3 id="more">這一檔還沒有完整報告</h3>
+<p class="note">
+  上面是<b>評分表</b>，由全市場評等資料產生，每一檔都有。<b>完整報告</b>還多十個
+  區塊——EPS預估與估價、殖利率估價、本益比河流圖（週線）、財報圖表、營收與獲利
+  季節性、外資投信、個股新聞——那些需要逐檔向券商鏡像站抓資料，一檔約 20 秒，
+  所以只有抓過的股票才有（清單頁上標「完整」的那些）。
+</p>
+<p class="muted">要讓 {{ stock.stock_id }} 也有，兩條路都可以：</p>
+<ul class="muted how">
+  <li>在 GitHub 的 <b>Actions → 加一檔個股</b> 輸入 <code>{{ stock.stock_id }}</code>，
+      跑完網站會自動重建。</li>
+  <li>或在本機執行 <code>twsix report {{ stock.stock_id }} --rebuild</code>。</li>
+</ul>
 {% endblock %}

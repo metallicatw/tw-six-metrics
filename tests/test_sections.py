@@ -287,3 +287,38 @@ def test_without_the_news_sheet_the_section_is_none_rather_than_empty():
     del grids[SHEET]
     page, _ = _page(grids)
     assert page.news is None
+
+
+def test_band_labels_are_dropped_rather_than_printed_on_top_of_each_other():
+    """2454 sits at 65× against a band topping near 24×; its edges collapse.
+
+    The y range stretches to wherever the price went, but the five boundaries
+    are evenly spaced in *multiple*, so a stock far outside its own band lands
+    all five inside thirty pixels — 「1,455」「1,269」「876」「683」 rendered as one
+    smudge.  The lines stay (they are what make the bands readable); only an
+    unreadable label is dropped, top-down, so the boundary nearest the price
+    is the one kept.
+    """
+    from twsix.report import charts  # noqa: PLC0415
+
+    import re  # noqa: PLC0415
+
+    edges = [683.0, 876.0, 1069.0, 1262.0, 1455.0]
+    labels = ("1,455", "1,262", "1,069", "876", "683")
+
+    def drawn(low: float, high: float) -> list[str]:
+        weeks = [
+            (f"2026/{(i % 12) + 1:02d}/01", low + (high - low) * i / 59)
+            for i in range(60)
+        ]
+        svg = charts.river(weeks, edges, RIVER_ZONES, title="河流圖", current=high)
+        assert svg.count('stroke-dasharray="3 4"') >= len(edges), "五條分區線都要在"
+        return re.findall(r'fill="var\(--muted\)">([\d,]+)<', svg)
+
+    # A price living inside its own band: every boundary has room, print them.
+    assert set(drawn(600, 900)) == set(labels)
+
+    # A price far outside it: the five boundaries land inside thirty pixels.
+    crowded = drawn(50, 8000)
+    assert len(crowded) < 5, "擠在一起時應該要有被略過的"
+    assert "1,455" in crowded, "最高的那條——離股價最近的——要留著"

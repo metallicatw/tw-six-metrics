@@ -68,6 +68,30 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;
 .card span{display:block;font-size:12.5px;color:var(--muted);margin-top:6px}
 footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);
   font-size:12.5px;color:var(--muted)}
+/* -- 頁首個股搜尋 ----------------------------------------------------- */
+.find{position:relative;margin:10px 0 0;max-width:420px}
+.find input{width:100%;padding:8px 12px;border:1px solid var(--rule);border-radius:5px;
+  background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
+.find input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px;
+  border-color:var(--accent-2)}
+.find ul{position:absolute;z-index:40;left:0;right:0;top:calc(100% + 4px);
+  margin:0;padding:4px;list-style:none;background:var(--surface);
+  border:1px solid var(--rule);border-radius:5px;
+  box-shadow:0 8px 24px rgba(0,0,0,.16);max-height:56vh;overflow:auto}
+.find li{display:flex;align-items:baseline;gap:8px;padding:6px 9px;border-radius:4px;
+  font-size:13px;cursor:pointer;white-space:nowrap}
+/* The first hit is pre-selected so Enter goes somewhere, which means the
+   selection has to be visible at a glance — --surface-2 alone was a shade
+   apart from the panel in dark mode.  A left bar in the accent colour reads
+   in both themes and does not rely on the fill. */
+.find li.on{background:var(--surface-2);box-shadow:inset 3px 0 0 var(--accent-2)}
+.find li b{font-variant-numeric:tabular-nums;color:var(--accent-2);min-width:3.4em}
+.find li .nm{font-weight:600;color:var(--ink)}
+.find li .ind{color:var(--muted);font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
+.find li .sc{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+ul.how{padding-left:20px;font-size:13.5px;line-height:1.9}
+ul.how code{background:var(--surface-2);padding:1px 6px;border-radius:3px;
+  font-size:12.5px;color:var(--ink)}
 .searchbar{margin:0 0 14px}
 .searchbar input{width:100%;max-width:340px;padding:8px 11px;border:1px solid var(--rule);
   border-radius:4px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
@@ -208,6 +232,17 @@ tr.here th{font-weight:700}
     <a href="{{ rel }}stats.html"{% if page=='stats' %} aria-current="page"{% endif %}>評等統計</a>
     <a href="{{ rel }}about.html"{% if page=='about' %} aria-current="page"{% endif %}>評分規則</a>
   </nav>
+  <form class="find" role="search" action="{{ rel }}list.html" method="get">
+    {# The form's action is the fallback, and it is a real one: with scripting
+       off, submitting takes the reader to 評等清單, which has its own filter
+       and lists every stock.  The combobox below is an enhancement on top of
+       a page that already worked. #}
+    <input id="find" name="q" type="search" autocomplete="off" spellcheck="false"
+           placeholder="輸入代號或名稱…　（按 / 跳到這裡）" aria-label="搜尋個股"
+           role="combobox" aria-expanded="false" aria-controls="find-list"
+           aria-autocomplete="list">
+    <ul id="find-list" role="listbox" aria-label="搜尋結果" hidden></ul>
+  </form>
   <p class="stamp">
     網站產生：{{ generated_at }}　·　{{ stock_count }} 檔　·
     資料截止：財報 {{ latest_quarter or '—' }}　/　營收 {{ latest_revenue_month or '—' }}
@@ -223,5 +258,112 @@ tr.here th{font-weight:700}
   規則來源：六大財務指標評等 v6.62 · 引擎版本 {{ engine_version }}
 </footer>
 </div>
+<script>
+/* 全站個股搜尋。
+ *
+ * search.json 是 [代號, 名稱, 產業, 綜合評分, 有無完整頁] 的陣列，順序固定，
+ * 只有這裡讀它。索引是延後載入的：訪客多半只是看清單頁，不該為了一個可能
+ * 不會用到的搜尋框先付 85 KB。第一次聚焦才抓，抓過就留著。
+ *
+ * 排序刻意分三段而不是算一個相似度分數：使用者打「23」時要的是 2330 那一類，
+ * 不是名字裡有 23 的公司。代號開頭 > 名稱 > 代號中間 > 產業，段內照代號排。
+ */
+(function(){
+  var box=document.getElementById('find'); if(!box) return;
+  var list=document.getElementById('find-list');
+  var data=null, hits=[], cur=-1, base='{{ rel }}';
+
+  function load(){
+    if(data) return Promise.resolve(data);
+    return fetch(base+'search.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; return j; })
+      .catch(function(){ data=[]; return data; });
+  }
+
+  function score(row, q){
+    if(row[0].indexOf(q)===0) return 0;
+    if(row[1].toLowerCase().indexOf(q)>-1) return 1;
+    if(row[0].indexOf(q)>-1) return 2;
+    if(row[2].toLowerCase().indexOf(q)>-1) return 3;
+    return -1;
+  }
+
+  function search(q){
+    var out=[], i, s;
+    for(i=0;i<data.length;i++){
+      s=score(data[i], q);
+      if(s>=0) out.push([s, data[i]]);
+    }
+    out.sort(function(a,b){ return a[0]-b[0] || (a[1][0]<b[1][0]?-1:1); });
+    return out.slice(0,12).map(function(x){return x[1];});
+  }
+
+  function draw(){
+    list.innerHTML='';
+    if(!hits.length){ close(); return; }
+    hits.forEach(function(r,i){
+      var li=document.createElement('li');
+      li.id='find-o'+i;
+      li.setAttribute('role','option');
+      li.setAttribute('aria-selected', i===cur ? 'true':'false');
+      if(i===cur) li.className='on';
+      var b=document.createElement('b'); b.textContent=r[0];
+      var nm=document.createElement('span'); nm.className='nm'; nm.textContent=r[1];
+      var ind=document.createElement('span'); ind.className='ind'; ind.textContent=r[2];
+      var sc=document.createElement('span'); sc.className='sc'; sc.textContent=r[3];
+      li.appendChild(b); li.appendChild(nm); li.appendChild(ind); li.appendChild(sc);
+      if(r[4]){
+        var t=document.createElement('span'); t.className='tag full'; t.textContent='完整';
+        li.appendChild(t);
+      }
+      li.addEventListener('mousedown', function(e){ e.preventDefault(); go(r); });
+      list.appendChild(li);
+    });
+    list.hidden=false;
+    box.setAttribute('aria-expanded','true');
+    if(cur>=0) box.setAttribute('aria-activedescendant','find-o'+cur);
+    else box.removeAttribute('aria-activedescendant');
+  }
+
+  function close(){
+    list.hidden=true; list.innerHTML='';
+    box.setAttribute('aria-expanded','false');
+    box.removeAttribute('aria-activedescendant');
+    cur=-1;
+  }
+
+  function go(r){ location.href = base+'stock/'+r[0]+'.html'; }
+
+  function run(){
+    var q=box.value.trim().toLowerCase();
+    if(!q){ hits=[]; close(); return; }
+    load().then(function(){
+      if(box.value.trim().toLowerCase()!==q) return;  /* 打字比抓索引快 */
+      hits=search(q); cur=hits.length?0:-1; draw();
+    });
+  }
+
+  box.addEventListener('focus', load);
+  box.addEventListener('input', run);
+  box.addEventListener('blur', function(){ setTimeout(close, 150); });
+  box.addEventListener('keydown', function(e){
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      if(!hits.length) return;
+      e.preventDefault();
+      cur=(cur + (e.key==='ArrowDown'?1:hits.length-1)) % hits.length;
+      draw();
+    } else if(e.key==='Enter'){
+      /* 有選中就跳轉；沒有就讓 form 送到清單頁，那是無 JS 時走的同一條路。 */
+      if(cur>-1 && hits[cur]){ e.preventDefault(); go(hits[cur]); }
+    } else if(e.key==='Escape'){ close(); box.blur(); }
+  });
+  document.addEventListener('keydown', function(e){
+    var el=document.activeElement;
+    if(e.key==='/' && el!==box && !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)){
+      e.preventDefault(); box.focus(); box.select();
+    }
+  });
+})();
+</script>
 </body>
 </html>

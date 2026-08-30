@@ -1,0 +1,83 @@
+name: 加一檔個股
+
+# 在網頁上輸入股票代號，抓完資料、產出完整報告、併進網站。
+#
+# 這是 `twsix report <代號> --rebuild` 的線上版。存在的理由是「輸入一檔代號，
+# 跑出完整報告」不該需要一台裝好 Python 的電腦。
+#
+# 會不會被擋是這條路唯一的未知數。券商鏡像站對機房 IP 目前是放行的（本專案在
+# 雲端容器裡抓得到），GitHub runner 也是機房 IP，所以有理由樂觀，但沒有實測
+# 過。真的被擋的話這個 workflow 會紅字失敗並說原因，不會默默產生一份空報告；
+# 那時就退回本機跑 `twsix report`。
+#
+# Goodinfo 是另一回事：它對機房 IP 回 403，實測過。所以〔大戶持股〕〔董監持股〕
+# 不在這條路上，也不在本機以外的任何一條路上。
+
+on:
+  workflow_dispatch:
+    inputs:
+      stock:
+        description: "股票代號（例如 2330）。一次一檔。"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: add-stock
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 檢查代號
+        run: |
+          code="${{ inputs.stock }}"
+          if ! printf '%s' "$code" | grep -Eq '^[0-9]{4,6}$'; then
+            echo "::error::「$code」不是股票代號，要 4~6 位數字"
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[all]"
+
+      # 抓取之前先確認引擎是好的。抓回來的資料要 commit 進 repo，用一個壞掉
+      # 的引擎去解析等於把垃圾存成事實。
+      - name: 測試
+        run: python scripts/run_tests.py
+
+      - name: 抓取並產生報告
+        run: twsix report "${{ inputs.stock }}"
+
+      - name: Commit
+        run: |
+          code="${{ inputs.stock }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "data/sheets/$code"
+          if git diff --cached --quiet; then
+            echo "::notice::$code 的資料沒有變化，不需要 commit"
+            exit 0
+          fi
+          git commit -m "watchlist: $code" -m "由「加一檔個股」workflow 抓取。"
+          # 這期間可能有別的 commit 進來（例如另一次抓取），rebase 再推。
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      # push 會觸發 pages.yml，網站在那裡重建。這裡只負責把資料放進 repo，
+      # 兩件事分開比較好查：抓取失敗和建站失敗長得完全不一樣。
+      - name: 說明
+        run: |
+          echo "### ${{ inputs.stock }} 已加入觀察清單" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "pages 工作流程會接手重建網站，完成後可在這裡看到：" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "<https://metallicatw.github.io/tw-six-metrics/stock/${{ inputs.stock }}.html>" >> $GITHUB_STEP_SUMMARY

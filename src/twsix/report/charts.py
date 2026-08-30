@@ -435,13 +435,27 @@ def river(
             )
 
     # -- zone boundaries, with their price ---------------------------------
-    for value in edges:
+    #
+    # The five edges are evenly spaced in *multiple*, not in price, and the
+    # y range has to stretch to wherever the price actually went.  2454 sits
+    # at 65× earnings against a band topping out near 24×, so its five
+    # boundaries land inside thirty pixels and printed 「1,455」「1,269」「876」
+    # 「683」 on top of each other — four numbers rendered as one smudge.
+    #
+    # The lines all stay: they are what make the zones readable as bands.
+    # Only a label that cannot be read is dropped, top-down so the highest
+    # boundary — the one nearest a price in 警示區 — is the one kept.
+    last_label_y = -1e9
+    for value in sorted(edges, reverse=True):
         y = y_of(value)
         parts.append(
             f'<line x1="{f.left:.1f}" y1="{y:.1f}" x2="{f.width - f.right:.1f}" '
             f'y2="{y:.1f}" stroke="var(--rule)" stroke-width="1" '
             f'stroke-dasharray="3 4" />'
         )
+        if y - last_label_y < 11:
+            continue
+        last_label_y = y
         parts.append(
             f'<text x="{f.left - 6:.1f}" y="{y + 3.5:.1f}" text-anchor="end" '
             f'font-size="10" fill="var(--muted)">{_fmt(value, 0)}</text>'

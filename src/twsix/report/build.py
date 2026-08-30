@@ -385,8 +385,52 @@ def build_site(
     written["about.html"] = 1
 
 
+    _write_search_index(out_dir, rows, rich_ids)
+    written["search.json"] = 1
+
     (out_dir / ".nojekyll").write_text("", encoding="utf-8")
     return written
+
+
+#: How many characters of a stock name are worth indexing.  Every listed name
+#: in Taiwan fits well inside this; the cap is here so one malformed record
+#: cannot inflate the index everyone downloads.
+NAME_CAP = 24
+
+
+def _write_search_index(out_dir: Path, rows: list[Row], rich_ids: set[str]) -> None:
+    """``search.json`` — what the header search box matches against.
+
+    Arrays, not objects, and in a fixed order: ``[代號, 名稱, 產業, 綜合評分,
+    有無完整頁]``.  With 1,741 stocks the difference between arrays and objects
+    with five keys each is roughly 70 KB against 190 KB, and this file is
+    downloaded by every visitor on every page.  The order is documented here
+    and read back in exactly one place (the script in ``base.html.j2``).
+
+    Every listed stock goes in, not only the ones with a full page: a reader
+    who types 2330 wants to be told what the site knows about 2330, and 「找不
+    到」 for a stock that is plainly in the list would read as a broken search
+    rather than as missing data.
+    """
+    import json
+
+    index = [
+        [
+            r.stock_id,
+            r.name[:NAME_CAP],
+            r.industry,
+            # Rounded here rather than in the browser: the raw mean of six
+            # integers is 「2.3333333333」, and shipping ten digits to format
+            # them away on arrival wastes the bytes twice over.
+            f"{r.composite_value:.2f}" if r.composite_value is not None else "",
+            1 if r.stock_id in rich_ids else 0,
+        ]
+        for r in sorted(rows, key=lambda x: x.stock_id)
+    ]
+    (out_dir / "search.json").write_text(
+        json.dumps(index, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
+    )
 
 
 def _thresholds(rules: Any) -> list[tuple[str, Any]]:

@@ -16,7 +16,7 @@ import argparse
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from .config import REPO_ROOT, Settings
 from .models import INDICATOR_ORDER, INDICATOR_LABELS
@@ -717,6 +717,72 @@ def cmd_page(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    """一個代號，一份完整報告：抓 → 估值 → 產頁 → 併進網站.
+
+    Three commands did this already — ``fetch-stock``, ``fetch-yearly``,
+    ``page`` — and the reason to add a fourth that only calls them is that
+    「輸入一檔股票代號，跑出像高技那樣的完整報告」 is one thought, and making
+    someone hold three commands and their order in their head is where a tool
+    stops being usable by the person who asked for it.
+
+    The order is not arbitrary and the failures are not equal:
+
+    * 〔年度交易資訊〕 comes from the exchanges, not the mirrors, and without
+      it the dividend-yield model and the P/E band have no yearly prices.  A
+      failure here still leaves eight of ten sections standing, so it is a
+      warning, not an exit.
+    * The mirror sheets are the report.  If those fail there is nothing to
+      render and the command says so rather than writing an empty page.
+
+    ``--rebuild`` then puts the stock into the site proper, so the page is
+    reachable from the search box rather than only as a loose file.
+    """
+    stock = args.stock.strip()
+    if not stock.isdigit() or not 4 <= len(stock) <= 6:
+        print(f"「{stock}」看起來不是股票代號（要 4~6 位數字）", file=sys.stderr)
+        return EXIT_FAIL
+
+    # Each sub-command reads a different ``--out``: the sheets directory, the
+    # html directory, the site directory.  Passing this command's namespace
+    # straight through would silently hand one meaning to all three, so each
+    # gets its own namespace with the fields it actually reads.
+    def ns(**kw: Any) -> argparse.Namespace:
+        return argparse.Namespace(config=args.config, stock=stock, **kw)
+
+    print(f"[1/4] 抓取 {stock} 的報表…")
+    rc = cmd_fetch_stock(
+        ns(sheet=None, host=args.host, save_html=args.save_html,
+           from_html=None, retries=args.retries, out=args.data)
+    )
+    if rc != EXIT_OK:
+        print(
+            "\n報表沒抓齊，不產生報告——半份資料算出來的估值比沒有估值更糟。\n"
+            "  八個券商鏡像站全部失敗通常代表 IP 被擋，請換網路環境再試。",
+            file=sys.stderr,
+        )
+        return EXIT_FAIL
+
+    print(f"[2/4] 抓取 {stock} 的年度交易資訊…")
+    if cmd_fetch_yearly(ns(save_raw=None, out=args.data)) != EXIT_OK:
+        print(
+            "  年度交易資訊沒拿到——殖利率估價與本益比河流圖的分區會缺，"
+            "其餘照常。",
+            file=sys.stderr,
+        )
+
+    print(f"[3/4] 產生 {stock} 的個股頁…")
+    if cmd_page(ns(data=args.data, out=args.out, as_of=args.as_of)) != EXIT_OK:
+        return EXIT_FAIL
+
+    if not args.rebuild:
+        print("\n（加 --rebuild 可以順便重建整個網站，讓搜尋框找得到這一檔）")
+        return EXIT_OK
+
+    print("[4/4] 重建網站…")
+    return cmd_build(argparse.Namespace(config=args.config, data=args.data, out=None))
+
+
 def cmd_fetch_page(args: argparse.Namespace) -> int:
     """抓一張還沒有解析器的頁面，存成樣本.
 
@@ -939,6 +1005,26 @@ def build_parser() -> argparse.ArgumentParser:
     pg.add_argument("--out", help="輸出目錄（預設 site/stock）")
     pg.add_argument("--as-of", dest="as_of", help="估價日期，民國 115/08/28")
     pg.set_defaults(func=cmd_page)
+
+    rp = sub.add_parser(
+        "report",
+        help="一個代號跑出完整報告：抓取 → 估值 → 個股頁（= fetch-stock + fetch-yearly + page）",
+    )
+    rp.add_argument("stock", help="股票代號")
+    rp.add_argument("--data", help="資料目錄")
+    rp.add_argument("--out", help="個股頁輸出目錄（預設 site/stock）")
+    rp.add_argument("--as-of", dest="as_of", help="估價日期，民國 115/08/28")
+    rp.add_argument("--host", help="優先使用的券商站台")
+    rp.add_argument(
+        "--save-html", dest="save_html",
+        help="把抓到的原始 HTML 存到這個目錄（解析出錯時用來對照）",
+    )
+    rp.add_argument("--retries", type=int, default=1, help="每個站台重試次數")
+    rp.add_argument(
+        "--rebuild", action="store_true",
+        help="順便重建整個網站，讓首頁搜尋框找得到這一檔",
+    )
+    rp.set_defaults(func=cmd_report)
 
     fy = sub.add_parser(
         "fetch-yearly", help="年度交易資訊：歷年最高／最低／收盤平均價（證交所、櫃買）"
