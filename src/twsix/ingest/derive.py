@@ -46,6 +46,10 @@ RATING_COLS = range(1, 7)
 
 NET_MARGIN_LABEL = "稅後淨利率"
 
+ANNUAL_RATIOS = "年財務比率"
+ANNUAL_EPS_LABEL = "每股盈餘"
+ANNUAL_PERIOD_LABEL = "期別"
+
 #: 〔EPQ〕 as the page prints it, and the two columns the workbook adds beside it.
 EPQ = "EPQ"
 EPQ_COL_QUARTER = 0  # A 季別
@@ -208,6 +212,51 @@ def _fill_epq_floors(grids: Grids) -> None:
     if header is not None:
         for col, text in EPQ_HEADERS.items():
             _put(grid, header, col, text)
+
+
+# =========================================================================
+# 〔年財務比率〕 — 年度每股盈餘
+# =========================================================================
+
+
+def annual_eps_by_year(grid: Grid) -> dict[int, float]:
+    """MoneyDJ's own annual 每股盈餘, keyed by 民國 year.
+
+    Worth a whole extra page because summing the four quarterly EPS is not
+    the same number, and the difference is not rounding.  Annual EPS divides
+    the year's profit by the year's *weighted-average* share count; a sum of
+    quarterly EPS divides each quarter by that quarter's own count.  When the
+    share count moves during the year the two diverge, and by however much
+    the issue was — it is not a bounded error.
+
+    5439 in 110 年 is the case in hand: its quarterly EPS imply about 86.6M
+    shares in Q2 and 88.3M in Q4, so the four quarters sum to 4.67 where the
+    annual figure is 4.61.  That one year is a survivor of the 5-year P/E
+    window, so the whole band inherits the error — 24.95 instead of 25.02.
+    """
+    periods: list[str] = []
+    out: dict[int, float] = {}
+    for row in grid:
+        label = (row[0] if row else "").strip()
+        if label == ANNUAL_PERIOD_LABEL and not periods:
+            periods = [c.strip() for c in row[1:]]
+        elif label == ANNUAL_EPS_LABEL and periods:
+            for period, cell in zip(periods, row[1:]):
+                year = _roc_year(period)
+                value = _number(cell)
+                if year is not None and value is not None:
+                    out.setdefault(year, value)
+            break
+    return out
+
+
+def _roc_year(period: str) -> int | None:
+    """「2025」 or 「2025.4Q」 -> 114.  The sheet counts in 民國."""
+    head = period.split(".")[0].strip()
+    if not head.isdigit():
+        return None
+    year = int(head)
+    return year - 1911 if year > 1911 else year
 
 
 # =========================================================================

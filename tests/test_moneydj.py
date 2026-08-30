@@ -302,3 +302,47 @@ def test_host_rotation_skips_a_refusing_mirror():
     grid = MoneyDJ(http=http).fetch("5439", "OPQ")
     assert len(http.tried) == 2
     assert grid[4][0] == "季別"
+
+
+# -- the sources that still have no parser ---------------------------------
+
+
+def test_a_blocked_goodinfo_response_is_not_saved_as_a_sample():
+    """Goodinfo answers a blocked request with a full page and no table.
+
+    Saving that and writing a parser against it produces a parser that "works"
+    and returns nothing — worse than a parser that fails, because nothing ever
+    says so.  The probe judges the response before it becomes a fixture.
+    """
+    from twsix.ingest.pending import SOURCES, probe
+
+    holders = SOURCES["holders"]
+    chrome = "<html>" + "x" * 5000 + "</html>"
+    assert not probe(holders, chrome).ok
+    assert holders.anchor in probe(holders, chrome).why
+
+    real = "<html>" + holders.anchor + "y" * 5000 + "</html>"
+    assert probe(holders, real).ok
+
+
+def test_a_short_response_is_treated_as_an_error_page():
+    from twsix.ingest.pending import SOURCES, probe
+
+    assert not probe(SOURCES["prices"], "<html>404</html>").ok
+    assert not probe(SOURCES["prices"], "").ok
+
+
+def test_every_pending_source_names_what_it_is_waiting_for():
+    from twsix.ingest.pending import SOURCES
+
+    assert set(SOURCES) == {"prices", "news", "holders", "directors"}
+    for source in SOURCES.values():
+        assert source.anchor and source.note and "{stock}" in source.url
+
+
+def test_the_two_extra_mirror_sheets_are_fetched_and_contracted():
+    """〔三大法人〕 and 〔年財務比率〕 ride along with the nine."""
+    assert "三大法人" in ORDER and "年財務比率" in ORDER
+    for sheet in ORDER:
+        assert sheet in ENDPOINTS
+        assert sheet in CONTRACTS, f"{sheet} 沒有契約檢查"

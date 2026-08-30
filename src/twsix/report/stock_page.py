@@ -395,7 +395,7 @@ def build_page(
         {"sheet": name, "ok": name in set(sheets_present)}
         for name in (
             "FRQ", "CFQ", "ISQ", "BSQ", "BASIC", "營收", "OPQ", "EPQ", "股利",
-            "三大法人", "年度交易資訊_上市櫃合併_",
+            "三大法人", "年財務比率", "年度交易資訊_上市櫃合併_",
         )
     ]
     return page

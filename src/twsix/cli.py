@@ -654,6 +654,61 @@ def cmd_page(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_fetch_page(args: argparse.Namespace) -> int:
+    """抓一張還沒有解析器的頁面，存成樣本.
+
+    The four remaining workbook pages are unbuilt because nobody has saved a
+    real response.  This is the one command that gets one — and it judges what
+    came back before saving it, because Goodinfo answers a blocked request with
+    a normal-looking page that has no table in it.
+    """
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient
+    from .ingest.pending import SOURCES, probe
+
+    names = [args.source] if args.source else list(SOURCES)
+    http = HttpClient(
+        cache_dir=Path(settings.ingest.cache_dir),
+        cache_ttl=0,  # a sample is worth a fresh request
+        min_interval=settings.ingest.min_interval_seconds,
+        retries=1,
+    )
+    out_dir = Path(args.save or ".")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    blocked = 0
+    for name in names:
+        source = SOURCES.get(name)
+        if source is None:
+            print(f"未知的來源：{name}　可用：{'、'.join(SOURCES)}", file=sys.stderr)
+            return EXIT_FAIL
+        url = source.url.format(stock=args.stock)
+        try:
+            text = http.get_text(
+                url, encoding=source.encoding, headers=dict(source.headers)
+            )
+        except Exception as exc:  # noqa: BLE001 - report and carry on
+            print(f"  {source.sheet:<8} 連線失敗：{exc}", file=sys.stderr)
+            blocked += 1
+            continue
+        result = probe(source, text)
+        target = out_dir / f"{args.stock}_{source.sheet}.html"
+        target.write_text(text, encoding="utf-8")
+        mark = "OK  " if result.ok else "可疑"
+        print(f"  {mark} {source.sheet:<8} {result.why}")
+        print(f"       -> {target}")
+        if not result.ok:
+            blocked += 1
+
+    if blocked:
+        print(
+            f"\n{blocked}/{len(names)} 個來源沒拿到可用的樣本。"
+            f"　被擋的話換個網路再試；拿到的檔案還是可以傳給我看。",
+            file=sys.stderr,
+        )
+    return EXIT_OK if blocked == 0 else EXIT_FAIL
+
+
 def cmd_fetch_yearly(args: argparse.Namespace) -> int:
     """年度交易資訊：從證交所、櫃買中心抓歷年最高／最低／收盤平均價.
 
@@ -795,6 +850,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fs.add_argument("--out", help="資料目錄")
     fs.set_defaults(func=cmd_fetch_stock)
+
+    fp = sub.add_parser(
+        "fetch-page", help="抓一張還沒有解析器的頁面（鉅亨網週線、Goodinfo、新聞）"
+    )
+    fp.add_argument("stock", help="股票代號")
+    fp.add_argument(
+        "--source", help="prices / news / holders / directors；省略則全部試一次"
+    )
+    fp.add_argument("--save", help="存檔目錄（預設為目前目錄）")
+    fp.set_defaults(func=cmd_fetch_page)
 
     pg = sub.add_parser("page", help="個股四頁：評價簡表／六大／EPS預估與估價／殖利率估價")
     pg.add_argument("stock", help="股票代號")

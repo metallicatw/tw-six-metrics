@@ -90,7 +90,11 @@ ENDPOINTS: dict[str, Endpoint] = {
     # keeps two header rows above the others, and this project has no frozen
     # copy of its 三大法人 sheet to match, so the page's own layout is used.
     "三大法人": Endpoint("/z/zc/zcl/zcl.djhtm?a={stock}&b=3", origin=1),
-    "MoneyDJ年財務比率": Endpoint("/z/zc/zcr/zcr0.djhtm?b=Y&a={stock}"),
+    # The annual 財務比率 table — the *same page* as 〔FRQ〕 with a different
+    # period.  〔FRQ〕's own <SELECT> offers 季表 / 累計季表 / 年表 pointing at
+    # this URL, so the markup is the template's, not a new one; the contract
+    # below is 〔FRQ〕's and will fail loudly if that assumption is wrong.
+    "年財務比率": Endpoint("/z/zc/zcr/zcr0.djhtm?b=Y&a={stock}"),
 }
 
 #: The pages are Big5.  cp950 is the superset Windows actually ships, and is
@@ -606,6 +610,8 @@ CONTRACTS: dict[str, Contract] = {
     "三大法人": Contract(
         "三大法人", 12, ((6, 2, "買賣超"), (7, 1, "日期"), (7, 10, "外資"))
     ),
+    # Same template as 〔FRQ〕, one row of periods holding years not quarters.
+    "年財務比率": Contract("年財務比率", 30, ((6, 1, "期別"),)),
 }
 
 
@@ -723,10 +729,11 @@ ORDER: tuple[str, ...] = (
     "OPQ",
     "EPQ",
     "股利",
-    # Not one of 〔評價簡表〕's nine — the workbook fetches it for its own
-    # sheet — but it comes from the same mirrors and the 外資投信 section
-    # needs it, so one extra request buys a whole page.
+    # Not one of 〔評價簡表〕's nine — the workbook fetches these for its own
+    # sheets — but they come from the same mirrors, and one extra request each
+    # buys a whole page (外資投信) and the last 0.3% of the P/E band.
     "三大法人",
+    "年財務比率",
 )
 
 def _offset_grid(sheet: str, table: Table) -> list[list[str]]:
