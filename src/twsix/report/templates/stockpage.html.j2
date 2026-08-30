@@ -23,6 +23,7 @@
   <a href="#river">河流圖</a>
   <a href="#season">季節性</a>
   <a href="#scenarios">財務指標評等預估</a>
+  <a href="#inst">外資投信</a>
 </nav>
 
 {# ================= 1. 評價簡表 ================= #}
@@ -365,11 +366,55 @@
   {% endfor %}
 </div>
 
+{# ================= 10. 外資投信 ================= #}
+<h3 id="inst">外資投信</h3>
+{% if p.institutional %}
+{% set i = p.institutional %}
+<div class="cards">
+  <div class="card"><b>{{ "{:,.0f}".format(i.totals["外資"]) if i.totals["外資"] is not none else "—" }}</b>
+    <span>近 20 日外資買賣超（張）</span></div>
+  <div class="card"><b>{{ "{:,.0f}".format(i.totals["投信"]) if i.totals["投信"] is not none else "—" }}</b>
+    <span>近 20 日投信買賣超（張）</span></div>
+  <div class="card"><b>{{ "%.2f"|format(i.latest.share["外資"] * 100) if i.latest.share["外資"] is not none else "—" }}%</b>
+    <span>外資持股比重（{{ i.latest.date }}）</span></div>
+  <div class="card"><b>{{ "%.2f"|format(i.latest.share["三大法人"] * 100) if i.latest.share["三大法人"] is not none else "—" }}%</b>
+    <span>三大法人持股比重</span></div>
+</div>
+{{ i.figures.foreign_net|safe }}
+{{ i.figures.foreign_share|safe }}
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>日期</th><th>外資</th><th>投信</th><th>自營商</th><th>單日合計</th>
+          <th>外資持股</th><th>外資比重</th><th>三大法人比重</th></tr>
+    </thead>
+    <tbody>
+      {% for d in i.days %}
+      <tr>
+        <th scope="row">{{ d.date }}</th>
+        {% for k in ["外資", "投信", "自營商", "合計"] %}
+        <td class="num">{{ "{:,.0f}".format(d.net[k]) if d.net[k] is not none else "" }}</td>
+        {% endfor %}
+        <td class="num">{{ "{:,.0f}".format(d.holding["外資"]) if d.holding["外資"] is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(d.share["外資"] * 100) ~ "%" if d.share["外資"] is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(d.share["三大法人"] * 100) ~ "%" if d.share["三大法人"] is not none else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">
+  買賣超單位為張。投信與自營商的庫存交易所並未公告，MoneyDJ 的數值為估計值。
+</p>
+{% else %}
+<p class="stale">尚未取得〔三大法人〕，請執行 <code>twsix fetch-stock {{ p.stock_id }}</code>。</p>
+{% endif %}
+
 {# ================= 尚未建置 ================= #}
 <h3 id="unbuilt">尚未建置的頁面</h3>
 <p class="muted">
-  活頁簿還有四張分頁，本專案<b>沒有</b>取得過任何一次真實回應，因此沒有寫解析器。
-  照文件猜寫解析器正是這次移植前期讓九張表錯六張的原因，所以這四張留白，
+  活頁簿還有三張分頁，本專案<b>沒有</b>取得過任何一次真實回應，因此沒有寫解析器。
+  照文件猜寫解析器正是這次移植前期讓九張表錯六張的原因，所以這三張留白，
   而不是給出看起來像樣的假資料。
 </p>
 <div class="scroll">

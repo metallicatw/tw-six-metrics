@@ -32,10 +32,12 @@ from typing import Any, Sequence
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
 from . import charts
 from .sections import (
+    Institutional,
     River,
     Seasonal,
     build_pe_river,
     forecast_scenarios,
+    institutional,
     profit_seasonality,
     revenue_seasonality,
     statement_figures,
@@ -119,6 +121,7 @@ class StockPage:
     #: The remaining workbook pages — see :mod:`twsix.report.sections`.
     statements: dict[str, str] = field(default_factory=dict)
     river: River | None = None
+    institutional: Institutional | None = None
     revenue_season: Seasonal | None = None
     profit_season: Seasonal | None = None
     scenarios: list[Any] = field(default_factory=list)
@@ -159,7 +162,6 @@ def _num(value: Number, digits: int = 2) -> str:
 #: missing and why, not left to wonder whether they failed to load.
 UNBUILT_PAGES: tuple[tuple[str, str], ...] = (
     ("個股新聞", "MoneyLink／Yahoo 新聞頁，尚未取得任何一次真實回應"),
-    ("外資投信", "MoneyDJ 三大法人頁（近 20 日），端點已知但尚未抓過"),
     ("大戶持股", "Goodinfo 股權分散表，需帶 referer，且擋機房 IP 最嚴"),
     ("董監持股", "Goodinfo 董監持股表，同上"),
 )
@@ -385,13 +387,15 @@ def build_page(
         low_q=low_q,
         high_q=high_q,
     )
+    inst_grid = reader.grid("三大法人") if hasattr(reader, "grid") else []
+    page.institutional = institutional(inst_grid)
     page.unbuilt = [{"name": n, "why": w} for n, w in UNBUILT_PAGES]
 
     page.sources = [
         {"sheet": name, "ok": name in set(sheets_present)}
         for name in (
             "FRQ", "CFQ", "ISQ", "BSQ", "BASIC", "營收", "OPQ", "EPQ", "股利",
-            "年度交易資訊_上市櫃合併_",
+            "三大法人", "年度交易資訊_上市櫃合併_",
         )
     ]
     return page

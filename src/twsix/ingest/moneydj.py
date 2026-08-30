@@ -86,13 +86,19 @@ ENDPOINTS: dict[str, Endpoint] = {
     "股利": Endpoint("/z/zc/zcc/zcc_{stock}.djhtm"),
     "OPQ": Endpoint("/z/zc/zce/zcd_{stock}.djhtm"),
     "EPQ": Endpoint("/z/zc/zce/zce_{stock}.djhtm"),
-    "三大法人": Endpoint("/z/zc/zcl/zcl.djhtm?a={stock}&b=3"),
+    # 〔三大法人〕 is the only sheet whose body starts at row 1: the workbook
+    # keeps two header rows above the others, and this project has no frozen
+    # copy of its 三大法人 sheet to match, so the page's own layout is used.
+    "三大法人": Endpoint("/z/zc/zcl/zcl.djhtm?a={stock}&b=3", origin=1),
     "MoneyDJ年財務比率": Endpoint("/z/zc/zcr/zcr0.djhtm?b=Y&a={stock}"),
 }
 
 #: The pages are Big5.  cp950 is the superset Windows actually ships, and is
 #: what the workbook's ``convertraw(.responseBody, "Big5")`` effectively does.
 ENCODING = "cp950"
+
+#: Whitespace that crosses a line break — markup indentation, not content.
+_INDENT = re.compile(r"[ \t]*\n\s*")
 
 MAIN_TABLE_ID = "oMainTable"
 #: Every data page — all three markup eras — wraps its body in ``class="t01"``.
@@ -101,7 +107,8 @@ MAIN_TABLE_ID = "oMainTable"
 DATA_TABLE_CLASS = "t01"
 
 #: Void elements have no closing tag, so treating them as containers makes the
-#: element stack drift and never unwind.
+#: element stack drift and never unwind — and treating one as *skippable*
+#: content is worse: the skip never ends and the rest of the page disappears.
 VOID_TAGS = frozenset(
     {"br", "img", "hr", "input", "meta", "link", "col", "base", "area", "param"}
 )
@@ -109,8 +116,14 @@ VOID_TAGS = frozenset(
 #: Excel's HTML import drops form controls and script bodies rather than
 #: writing their text into the sheet — 〔BASIC〕's title cell contains a
 #: three-option ``<select>`` and the sheet holds only 「基本資料」.
+#:
+#: These all have closing tags.  ``<input>`` deliberately is *not* here: it is
+#: void, so entering "skip until the close" on one skips the rest of the
+#: document.  〔三大法人〕 has two ``<input type='hidden'>`` in its date form and
+#: parsed to four rows because of exactly that.  It is in :data:`VOID_TAGS`
+#: instead, which drops it without opening anything.
 SKIP_TAGS = frozenset(
-    {"script", "style", "select", "option", "textarea", "button", "input", "noscript"}
+    {"script", "style", "select", "option", "textarea", "button", "noscript"}
 )
 
 #: Block-level content starts a new sheet row inside a cell.  This is the rule
@@ -207,12 +220,14 @@ class _Dom(HTMLParser):
         tag = tag.lower()
         if self._skip:
             return
+        if tag in VOID_TAGS:
+            # Checked first, and it must stay first: a void tag can never open
+            # a skip region because nothing will ever close it.
+            self._stack[-1].children.append(_El(tag, dict(attrs)))
+            return
         if tag in SKIP_TAGS:
             self._skip = 1
             self._skip_tag = tag
-            return
-        if tag in VOID_TAGS:
-            self._stack[-1].children.append(_El(tag, dict(attrs)))
             return
         if tag in ("td", "th") and not any(
             e.tag == "tr" for e in self._stack[self._table_floor():]
@@ -320,8 +335,16 @@ Block = tuple[list[dict[int, str]], int]
 
 
 def _text(value: str) -> str:
-    """``&nbsp;`` is a space in the sheet, and the markup's indentation is not."""
-    return value.replace("\xa0", " ").strip()
+    """``&nbsp;`` is a space in the sheet, and the markup's indentation is not.
+
+    Runs of whitespace *containing a newline* collapse to one space — those
+    are the source file's own line breaks between inline elements, and
+    〔三大法人〕's date-range controls otherwise arrive as a cell with eight
+    embedded newlines.  Runs without a newline are left alone: 〔BASIC〕's
+    「最近交易日:08/28   市值單位:百萬」 has three real spaces in it, written
+    as ``&nbsp;``, and they are part of the value.
+    """
+    return _INDENT.sub(" ", value.replace("\xa0", " ")).strip()
 
 
 def _cell_lines(cell: _El) -> list[str | Block]:
@@ -578,6 +601,11 @@ CONTRACTS: dict[str, Contract] = {
     # 〔營收〕's header sits at row 7 because the sheet keeps a chart above it.
     "營收": Contract("營收", 20, ((7, 1, "年/月"),)),
     "股利": Contract("股利", 10, ((6, 1, "股利所屬年度"),)),
+    # 〔三大法人〕's two header rows are stacked: 買賣超 / 估計持股 / 持股比重
+    # spanning four, four and two columns, then the eleven column names.
+    "三大法人": Contract(
+        "三大法人", 12, ((6, 2, "買賣超"), (7, 1, "日期"), (7, 10, "外資"))
+    ),
 }
 
 
@@ -695,6 +723,10 @@ ORDER: tuple[str, ...] = (
     "OPQ",
     "EPQ",
     "股利",
+    # Not one of 〔評價簡表〕's nine — the workbook fetches it for its own
+    # sheet — but it comes from the same mirrors and the 外資投信 section
+    # needs it, so one extra request buys a whole page.
+    "三大法人",
 )
 
 def _offset_grid(sheet: str, table: Table) -> list[list[str]]:
@@ -725,6 +757,15 @@ class GridSource:
 
     def has(self, sheet: str) -> bool:
         return sheet in self._g
+
+    def grid(self, sheet: str) -> list[list[str]]:
+        """The raw grid, for a section that reads a whole sheet at once.
+
+        〔三大法人〕 is twenty rows of eleven columns read together; addressing
+        it cell by cell through :meth:`text` would be the same loop written
+        twice as long.
+        """
+        return list(self._g.get(sheet) or [])
 
     def text(self, sheet: str, col: str, row: int) -> str:
         grid = self._g.get(sheet) or []
