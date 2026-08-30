@@ -25,9 +25,10 @@ pe_source = "computed"
 # 〔殖利率估價〕 payout basis: "avg_5y" | "last_1y" | "lower_of_both"
 payout_basis = "avg_5y"
 
-# 河流圖 percentile bounds
-river_low_percentile  = 0.10
-river_high_percentile = 0.90
+# 河流圖 信任區間 — the workbook's〔河流圖〕J1/L1, and its 操作說明 says
+# "請勿更動信任區間2.5%~97.5%".  An earlier 10/90 guess narrowed every band.
+river_low_percentile  = 0.025
+river_high_percentile = 0.975
 
 [ingest]
 cache_dir            = ".cache/http"

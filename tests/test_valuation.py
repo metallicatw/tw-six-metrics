@@ -248,6 +248,37 @@ def test_percentile_matches_excel_linear_interpolation():
     assert _close(percentile([10, 20, 30], 0.25), 15.0)
 
 
+def test_river_confidence_interval_matches_the_workbook():
+    """〔河流圖〕J1/L1 = 2.5% / 97.5%, and 操作說明 says not to change them.
+
+    An earlier 10/90 guess pulled both ends inward, narrowing every band and
+    pushing prices toward the middle zones.
+    """
+    from twsix.config import ForecastSettings
+
+    f = ForecastSettings()
+    assert (f.river_low_percentile, f.river_high_percentile) == (0.025, 0.975)
+
+
+def test_river_zone_count_is_six():
+    """六區間：警示區、高估區、偏高區、合理區、偏低區、低估區."""
+    from twsix.valuation.pe_band import BAND_COUNT, ZONE_COUNT
+
+    assert BAND_COUNT == 5 and ZONE_COUNT == 6
+
+
+def test_dividend_lag_matches_the_yield_sheet():
+    """〔殖利率估價〕rows 75/76 list the same dividend under two year labels.
+
+    現金股利(發放年) 2026 = 現金股利(盈餘年) 2025 = 7.19992263 — the workbook
+    itself stating that a dividend earned in year X is paid in X+1, which is
+    the lag :func:`derive_yields` applies.
+    """
+    from twsix.valuation.assemble import DIVIDEND_LAG
+
+    assert DIVIDEND_LAG == 1
+
+
 def test_river_bands_are_five_evenly_spaced_levels():
     bands = Bands.from_multiples([10, 12, 14, 16, 18, 20], 0.1, 0.9)
     assert len(bands.levels) == 5
