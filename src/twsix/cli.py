@@ -187,6 +187,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         site_title=settings.report.title,
         rules=settings.rules,
         valuations=valuations,
+        sheets_dir=store.root / "sheets",
     )
     if not valuations:
         print("  （尚無 data/valuations.csv，個股頁不會顯示估值；見 twsix value）")

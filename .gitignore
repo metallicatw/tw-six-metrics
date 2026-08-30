@@ -17,7 +17,14 @@ site/
 *.xlsm
 *.xlsx
 
-# `twsix fetch-stock` output.  It is a cache of what the mirrors said today,
-# it goes stale, and nothing depends on it: the tests read the frozen samples
-# in tests/pages/ instead, which is the point of having them.
-data/sheets/
+# `twsix fetch-stock` output stays TRACKED, and the reason is worth writing
+# down because it was ignored for about an hour on the opposite reasoning.
+#
+# The argument for ignoring it was "nothing depends on it — the tests read the
+# frozen samples in tests/pages/".  True of the tests, false of the site:
+# `twsix build` renders the ten-section page for exactly those stocks whose
+# sheets are on disk, so this directory *is* the watchlist.  Ignoring it meant
+# CI had nothing to build from and every stock got the thin grade table.
+#
+# It is a cache and it does go stale — that is what the 資料截止 line on every
+# page is for.

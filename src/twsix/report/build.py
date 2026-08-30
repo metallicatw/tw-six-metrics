@@ -224,6 +224,7 @@ def build_site(
     rules: Any = None,
     top_n: int = 50,
     valuations: list[dict[str, str]] | None = None,
+    sheets_dir: Path | None = None,
 ) -> dict[str, int]:
     env = _env()
     rows = rows_from_store(records)
@@ -257,6 +258,79 @@ def build_site(
 
     picks = [r for r in rows if r.value_pick]
     written: dict[str, int] = {}
+
+    # -- per-stock pages --------------------------------------------------
+    grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for r in records:
+        grouped[r["stock_id"]].append(r)
+
+    count = 0
+    rich_ids: set[str] = set()
+    template = env.get_template("stock.html.j2")
+    for stock_id, group in grouped.items():
+        # A stock whose sheets were fetched gets the full page — the ten
+        # sections, the river, the news — instead of the grade table.
+        #
+        # This was the gap that made the deployed site look unchanged for a
+        # month: every section built since 〔評價簡表〕 lived only in
+        # ``twsix page``, and ``twsix build`` never called it, so the work was
+        # real, tested, and invisible to anyone who had not cloned the repo.
+        if sheets_dir is not None:
+            full = _full_stock_page(
+                stock_id, sheets_dir, out_dir, base, rules=rules
+            )
+            if full:
+                count += 1
+                rich_ids.add(stock_id)
+                continue
+        group.sort(key=lambda x: int(x.get("period_index") or 0))
+        head = group[0]
+        snapshots = [
+            {
+                "fiscal_quarter": g.get("fiscal_quarter", ""),
+                "revenue_month": g.get("revenue_month", ""),
+                "grades": {k: g.get(f"{k}_grade", "") for k in INDICATOR_ORDER},
+                "composite": g.get("composite", ""),
+                "value_pick": g.get("value_pick", "") == "1",
+            }
+            for g in group
+        ]
+        detail = [
+            {
+                "label": INDICATOR_LABELS[k],
+                "letter": head.get(f"{k}_grade", ""),
+                "reason": head.get(f"{k}_reason", ""),
+                "values": head.get(f"{k}_values", ""),
+            }
+            for k in INDICATOR_ORDER
+        ]
+        template.stream(
+            **base,
+            page="stock",
+            rel="../",
+            stock={
+                "stock_id": stock_id,
+                "name": head.get("name", ""),
+                "market": head.get("market", ""),
+                "industry": head.get("industry", ""),
+            },
+            snapshots=snapshots,
+            detail=detail,
+            indicator_order=list(INDICATOR_ORDER),
+            valuation=valuation_by_stock.get(stock_id),
+        ).dump(str(out_dir / "stock" / f"{stock_id}.html"))
+        count += 1
+    written["stock/*.html"] = count
+    if rich_ids:
+        written["  其中完整版"] = len(rich_ids)
+
+    # Rendered before index and list on purpose: those two mark which codes
+    # lead to a full page, and the only honest source for that mark is which
+    # renders actually succeeded — a stock whose cache is stale or partial
+    # falls back to the grade table, and a link promising more than it
+    # delivers is the one thing worse than the plain page.
+    base["rich_ids"] = rich_ids
+
 
     env.get_template("index.html.j2").stream(
         **base,
@@ -310,52 +384,6 @@ def build_site(
     ).dump(str(out_dir / "about.html"))
     written["about.html"] = 1
 
-    # -- per-stock pages --------------------------------------------------
-    grouped: dict[str, list[dict[str, str]]] = defaultdict(list)
-    for r in records:
-        grouped[r["stock_id"]].append(r)
-
-    count = 0
-    template = env.get_template("stock.html.j2")
-    for stock_id, group in grouped.items():
-        group.sort(key=lambda x: int(x.get("period_index") or 0))
-        head = group[0]
-        snapshots = [
-            {
-                "fiscal_quarter": g.get("fiscal_quarter", ""),
-                "revenue_month": g.get("revenue_month", ""),
-                "grades": {k: g.get(f"{k}_grade", "") for k in INDICATOR_ORDER},
-                "composite": g.get("composite", ""),
-                "value_pick": g.get("value_pick", "") == "1",
-            }
-            for g in group
-        ]
-        detail = [
-            {
-                "label": INDICATOR_LABELS[k],
-                "letter": head.get(f"{k}_grade", ""),
-                "reason": head.get(f"{k}_reason", ""),
-                "values": head.get(f"{k}_values", ""),
-            }
-            for k in INDICATOR_ORDER
-        ]
-        template.stream(
-            **base,
-            page="stock",
-            rel="../",
-            stock={
-                "stock_id": stock_id,
-                "name": head.get("name", ""),
-                "market": head.get("market", ""),
-                "industry": head.get("industry", ""),
-            },
-            snapshots=snapshots,
-            detail=detail,
-            indicator_order=list(INDICATOR_ORDER),
-            valuation=valuation_by_stock.get(stock_id),
-        ).dump(str(out_dir / "stock" / f"{stock_id}.html"))
-        count += 1
-    written["stock/*.html"] = count
 
     (out_dir / ".nojekyll").write_text("", encoding="utf-8")
     return written
@@ -450,6 +478,93 @@ def copy_static(src: Path, dest: Path) -> None:
 # =========================================================================
 # one stock, four sections
 # =========================================================================
+
+
+def _full_stock_page(
+    stock_id: str,
+    sheets_dir: Path,
+    out_dir: Path,
+    base: dict[str, Any],
+    *,
+    rules: Any = None,
+) -> bool:
+    """Render the ten-section page for one stock, if its sheets are on disk.
+
+    Returns False — not raises — when the stock has no fetched sheets, which
+    is the normal case for 1,740 of 1,741.  The site is a market-wide screener
+    built from ``ratings.csv``; the full page is what a *watched* stock gets,
+    and which stocks those are is decided by what someone bothered to fetch.
+    That is the watchlist 〈全市場清單的難題〉 recommends, expressed as the
+    contents of a directory rather than as a list to maintain.
+
+    A stock whose sheets are present but incomplete falls back too.  A page
+    that renders half its sections and blames the reader's browser is worse
+    than the grade table it replaced.
+    """
+    base_dir = sheets_dir / stock_id
+    if not base_dir.is_dir():
+        return False
+
+    import json
+
+    from ..config import Settings
+    from ..ingest.derive import enrich
+    from ..ingest.moneydj import GridSource
+    from ..ingest.valuation_source import read_valuation_input
+    from ..ingest.workbook import GridsSource
+    from ..rating.engine import rate
+    from ..valuation import ValuationOptions, evaluate
+    from .stock_page import build_page
+
+    grids = {
+        p.stem: json.loads(p.read_text(encoding="utf-8"))
+        for p in sorted(base_dir.glob("*.json"))
+    }
+    if not grids:
+        return False
+
+    try:
+        grids = enrich(grids, stock_id)
+        settings = Settings.load(None)
+        data = GridsSource(grids=grids, stock_id=stock_id).load()
+        rating = rate(data, settings.rules, settings.periods)
+        reader = GridSource(grids)
+        valuation = evaluate(
+            read_valuation_input(reader, stock_id=stock_id),
+            ValuationOptions(
+                growth_method=settings.forecast.revenue_growth_method,
+                margin_method=settings.forecast.margin_method,
+                pe_basis=settings.forecast.pe_basis,
+                payout_basis=settings.forecast.payout_basis,
+            ),
+        )
+        page = build_page(
+            rating,
+            valuation,
+            reader,
+            data=data,
+            sheets_present=list(grids),
+            settings=settings,
+        )
+    except Exception:  # noqa: BLE001 - a bad cache must not fail the build
+        return False
+
+    # Not raising is not the same as having something to show.  A directory
+    # holding one truncated sheet runs the whole pipeline without error and
+    # produces a page with an empty grade matrix and ten empty sections — and
+    # then gets marked 完整 in the listing, which is the one outcome worse
+    # than the plain page.  The matrix is the floor: no periods, no page.
+    if not page.periods:
+        return False
+
+    build_stock_page(
+        page,
+        out_dir / "stock" / f"{stock_id}.html",
+        site_title=base.get("site_title", ""),
+        generated_at=base.get("generated_at", ""),
+        rel="../",
+    )
+    return True
 
 
 def build_stock_page(

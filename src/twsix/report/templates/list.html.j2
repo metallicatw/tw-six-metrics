@@ -9,7 +9,7 @@
 </div>
 <div class="scroll"><table id="t">
 {{ table_head() }}
-<tbody>{% for r in rows %}{{ row(r, rel) }}{% endfor %}</tbody>
+<tbody>{% for r in rows %}{{ row(r, rel, rich_ids) }}{% endfor %}</tbody>
 </table></div>
 <script>
 (function(){

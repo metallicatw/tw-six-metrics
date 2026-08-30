@@ -28,9 +28,14 @@
 {%- endif -%}
 {%- endmacro %}
 
-{% macro row(r, rel) -%}
+{# `rich_ids` is the set of stocks whose sheets were fetched, so their page is
+   the ten-section one rather than the grade table.  Marked because otherwise
+   the only way to find them is to click through 1,741 codes — and the mark is
+   a word, not a colour, so it survives a greyscale print. #}
+{% macro row(r, rel, rich_ids=None) -%}
 <tr>
-  <td><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a></td>
+  <td><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a>
+    {%- if rich_ids and r.stock_id in rich_ids %} <span class="tag full" title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞">完整</span>{% endif %}</td>
   <td>{{ r.name }}</td>
   <td class="muted">{{ r.industry }}</td>
   <td>{{ grade(r.grades.revenue_yoy) }}</td>

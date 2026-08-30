@@ -17,7 +17,7 @@
 {% if picks %}
 <div class="scroll"><table>
 {{ table_head() }}
-<tbody>{% for r in picks %}{{ row(r, rel) }}{% endfor %}</tbody>
+<tbody>{% for r in picks %}{{ row(r, rel, rich_ids) }}{% endfor %}</tbody>
 </table></div>
 {% else %}
 <p>本期沒有個股同時符合四項條件。</p>
@@ -26,6 +26,6 @@
 <h2>綜合評分前 {{ top|length }} 名</h2>
 <div class="scroll"><table>
 {{ table_head() }}
-<tbody>{% for r in top %}{{ row(r, rel) }}{% endfor %}</tbody>
+<tbody>{% for r in top %}{{ row(r, rel, rich_ids) }}{% endfor %}</tbody>
 </table></div>
 {% endblock %}
