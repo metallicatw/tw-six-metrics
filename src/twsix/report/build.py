@@ -445,3 +445,45 @@ RULE_TEXT = [
 def copy_static(src: Path, dest: Path) -> None:
     if src.exists():
         shutil.copytree(src, dest, dirs_exist_ok=True)
+
+
+# =========================================================================
+# one stock, four sections
+# =========================================================================
+
+
+def build_stock_page(
+    page: Any,
+    out_file: Path,
+    *,
+    site_title: str = "台股六大財務指標評等",
+    generated_at: str = "",
+    rel: str = "",
+) -> Path:
+    """Render 〔評價簡表〕〔六大財務指標評等〕〔EPS預估與估價〕〔殖利率估價〕.
+
+    The four are one document because they are four views of one fetch; the
+    section nav at the top is the workbook's own tab strip.
+    """
+    from .stock_page import REWARD_RISK_NOTES, REWARD_RISK_RULES
+
+    env = _env()
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    env.get_template("stockpage.html.j2").stream(
+        p=page,
+        page="stock",
+        rel=rel,
+        site_title=site_title,
+        generated_at=generated_at
+        or datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M %Z"),
+        stock_count=1,
+        latest_quarter=page.fiscal_quarter,
+        latest_revenue_month=page.revenue_month,
+        data_age_note=vintage_note(page.revenue_month),
+        engine_version=SiteContext.engine_version,
+        indicator_keys=list(INDICATOR_ORDER),
+        indicator_labels=[INDICATOR_LABELS[k] for k in INDICATOR_ORDER],
+        reward_risk_rules=REWARD_RISK_RULES,
+        reward_risk_notes=REWARD_RISK_NOTES,
+    ).dump(str(out_file))
+    return out_file

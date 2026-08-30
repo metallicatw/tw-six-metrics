@@ -10,14 +10,16 @@
   --ink:#111820; --ink-2:#3b4854; --muted:#6a7885;
   --rule:#d9e0e6; --accent:#0e5a52; --accent-2:#12766b;
   --up:#ae2b1e; --down:#146b47;
-  --g4:#0e5a52; --g3:#3a8579; --g2:#7fa9a1; --g1:#b8934f; --g0:#9c5b4c;
+  --g4:#0d5348; --g3:#2c7a6c; --g2:#5a6b74; --g1:#92682a; --g0:#8f3b2c;
+  --badge-ink:#fff;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
   --ground:#0d1116; --surface:#151b21; --surface-2:#1c232a;
   --ink:#e5ebf1; --ink-2:#b2bec9; --muted:#84919e;
   --rule:#273038; --accent:#57c4b4; --accent-2:#79d4c6;
   --up:#e4695b; --down:#4eb884;
-  --g4:#57c4b4; --g3:#3e9a8d; --g2:#6e8a86; --g1:#b8934f; --g0:#c4695a;
+  --g4:#6fd3c2; --g3:#43a795; --g2:#8e9aa4; --g1:#d0a44e; --g0:#e07a63;
+  --badge-ink:#10161c;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);
@@ -47,7 +49,7 @@ tbody tr:hover{background:var(--surface-2)}
 td.num{text-align:right;font-variant-numeric:tabular-nums;
   font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
 .g{display:inline-block;min-width:26px;text-align:center;padding:1px 6px;border-radius:3px;
-  font-size:12px;font-weight:600;color:#fff;font-family:ui-monospace,Menlo,monospace}
+  font-size:12px;font-weight:600;color:var(--badge-ink);font-family:ui-monospace,Menlo,monospace}
 .g-AA{background:var(--g4)}.g-A{background:var(--g3)}.g-BB{background:var(--g2)}
 .g-B{background:var(--g1)}.g-C{background:var(--g0)}
 .g-na{background:transparent;color:var(--muted);border:1px solid var(--rule)}
@@ -82,17 +84,79 @@ footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);
 .band .pin{position:absolute;top:-4px;width:2px;height:16px;background:var(--ink);border-radius:1px}
 .band .ends{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:5px;
   font-variant-numeric:tabular-nums}
-.verdict{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;font-weight:600;color:#fff}
+.verdict{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;font-weight:600;color:var(--badge-ink)}
 .v-便宜{background:var(--g4)}.v-合理{background:var(--g1)}.v-昂貴{background:var(--g0)}
 .gap{color:var(--muted);font-size:13px;font-style:normal}
 .rr{display:inline-block;margin-left:6px;padding:0 6px;border-radius:3px;font-size:11.5px;
-  font-weight:600;color:#fff;font-family:inherit}
+  font-weight:600;color:var(--badge-ink);font-family:inherit}
 .rr-可買進{background:var(--g4)}.rr-多空不明{background:var(--g1)}
 .rr-減碼{background:var(--g0)}.rr-空方{background:var(--g0)}
 details.rules{margin:0 0 18px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);padding:10px 14px}
 details.rules summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink-2)}
 details.rules[open] summary{margin-bottom:10px}
 .warn{font-size:12.5px;color:var(--g1);margin:6px 0 0;max-width:none}
+
+/* -- single-stock page ------------------------------------------------ */
+.ident h2{margin-top:8px;border-bottom:none;padding-bottom:0}
+.ident p{margin-top:2px}
+nav.sections{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 26px;
+  border-bottom:1px solid var(--rule);padding-bottom:12px}
+nav.sections a{font-size:13.5px;padding:5px 12px;border:1px solid var(--rule);border-radius:999px;
+  background:var(--surface);color:var(--ink-2);text-decoration:none}
+nav.sections a:hover{border-color:var(--accent-2);color:var(--accent-2)}
+h3[id]{scroll-margin-top:16px}
+.verdict-yes,.verdict-no{border-left:4px solid;padding:10px 14px;border-radius:0 4px 4px 0;
+  background:var(--surface);font-size:14px;max-width:none}
+.verdict-yes{border-color:var(--g4)}
+.verdict-no{border-color:var(--rule);color:var(--ink-2)}
+td.series{white-space:nowrap}
+td.series span{display:inline-block;min-width:52px;text-align:right;
+  padding-left:8px;color:var(--ink-2)}
+td.series span:first-child{color:var(--ink);font-weight:600}
+td.reason{white-space:normal;font-size:12.5px;color:var(--muted);min-width:220px}
+details.sources{margin:0 0 8px;font-size:13px}
+details.sources summary{cursor:pointer;color:var(--ink-2)}
+.srclist{list-style:none;display:flex;flex-wrap:wrap;gap:6px;padding:10px 0 0;margin:0}
+.srclist li{font-size:12px;padding:2px 9px;border-radius:3px;border:1px solid var(--rule);
+  background:var(--surface);color:var(--ink-2)}
+.srclist li.missing{border-color:var(--g0);color:var(--g0)}
+/* -- charts ------------------------------------------------------------ */
+figure.chart-fig{margin:22px 0 26px}
+figure.chart-fig figcaption{font-size:13.5px;font-weight:600;color:var(--ink-2);margin-bottom:8px}
+svg.chart{display:block;width:100%;height:190px;background:var(--surface);
+  border:1px solid var(--rule);border-radius:4px}
+details.chart-data{margin-top:8px;font-size:12.5px}
+details.chart-data summary{cursor:pointer;color:var(--muted)}
+details.chart-data table{min-width:0}
+details.chart-data .scroll{margin-top:8px;max-height:260px;overflow-y:auto}
+.pband{position:relative;height:74px;margin:6px 0 2px}
+.pband .track{position:absolute;top:14px;left:0;right:0;height:8px;border-radius:4px;
+  background:var(--surface-2);border:1px solid var(--rule)}
+.band-valuation .pband .track{border:none;opacity:.55;
+  background:linear-gradient(90deg,var(--g4) 0%,var(--g2) 50%,var(--g0) 100%)}
+.pband .stop{position:absolute;top:0;transform:translateX(-50%);text-align:center;
+  font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pband .stop i{display:block;width:2px;height:20px;margin:8px auto 0;background:var(--rule)}
+.pband .stop b{display:block;margin-top:4px;font-weight:600;color:var(--ink-2)}
+.pband .stop em{display:block;font-style:normal;font-family:ui-monospace,Menlo,monospace}
+.pband .here{position:absolute;top:6px;transform:translateX(-50%);text-align:center}
+.pband .here i{display:block;width:2px;height:28px;margin:0 auto;background:var(--ink)}
+.pband .here b{display:block;margin-top:3px;font-size:11.5px;font-weight:600;color:var(--ink);
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+/* -- reward/risk criteria ---------------------------------------------- */
+.criteria{border:1px solid var(--rule);border-radius:4px;background:var(--surface);
+  padding:14px 18px;margin:22px 0}
+.criteria h4{margin:0 0 10px;font-size:14px}
+.criteria ol{margin:0;padding-left:22px;font-size:13.5px;color:var(--ink-2)}
+.criteria ol li{margin-bottom:5px}
+.criteria ol li b{font-family:ui-monospace,Menlo,monospace;color:var(--ink)}
+.criteria ol li.hit{color:var(--ink);font-weight:600}
+.criteria .tag{display:inline-block;padding:0 7px;border-radius:3px;font-size:11.5px;
+  background:var(--g4);color:var(--badge-ink);font-weight:600}
+.criteria .warnings{margin:12px 0 0;padding-left:20px;font-size:12.5px;color:var(--g1);
+  list-style:"※ "}
+.criteria .warnings li{margin-top:4px}
+@media(max-width:640px){svg.chart{height:160px}}
 @media(max-width:640px){.wrap{padding:0 14px 60px}}
 </style>
 </head>

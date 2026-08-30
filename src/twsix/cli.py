@@ -436,11 +436,9 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
     return EXIT_OK if failures == 0 else EXIT_FAIL
 
 
-def _fetched_reader(root: Path, stock: str):
-    """A CellReader over grids saved by ``fetch-stock``."""
+def _fetched_grids(root: Path, stock: str):
+    """The grids ``fetch-stock``/``fetch-yearly`` saved, with formula columns filled."""
     import json
-
-    from .ingest.moneydj import GridSource
 
     from .ingest.derive import enrich
 
@@ -451,11 +449,17 @@ def _fetched_reader(root: Path, stock: str):
         p.stem: json.loads(p.read_text(encoding="utf-8"))
         for p in sorted(base.glob("*.json"))
     }
-    if not grids:
-        return None
-    # The pages carry what MoneyDJ printed; the workbook's sheets carry more.
-    # `enrich` puts the formula columns back before anything reads them.
-    return GridSource(enrich(grids, stock))
+    return enrich(grids, stock) if grids else None
+
+
+def _fetched_reader(root: Path, stock: str):
+    """A CellReader over grids saved by ``fetch-stock``."""
+    import json
+
+    from .ingest.moneydj import GridSource
+
+    grids = _fetched_grids(root, stock)
+    return GridSource(grids) if grids else None
 
 
 def cmd_value(args: argparse.Namespace) -> int:
@@ -579,6 +583,68 @@ def cmd_value(args: argparse.Namespace) -> int:
 
 def _g(value: object) -> str:
     return "—" if value is None else f"{float(value):g}"  # type: ignore[arg-type]
+
+
+def cmd_page(args: argparse.Namespace) -> int:
+    """個股四頁：評價簡表、六大財務指標評等、EPS預估與估價、殖利率估價.
+
+    Reads what ``fetch-stock`` and ``fetch-yearly`` left in
+    ``data/sheets/<code>/`` and renders one page holding all four, in the order
+    〔操作說明〕 gives them.
+    """
+    settings = Settings.load(args.config)
+    from .ingest.moneydj import GridSource
+    from .ingest.valuation_source import read_valuation_input
+    from .ingest.workbook import GridsSource
+    from .rating.engine import rate
+    from .report.build import build_stock_page
+    from .report.stock_page import build_page
+    from .valuation import ValuationOptions, evaluate
+
+    root = Path(args.data or settings.data_dir)
+    grids = _fetched_grids(root, args.stock)
+    if grids is None:
+        print(
+            f"找不到 {args.stock} 的快取格線，請先執行："
+            f"　twsix fetch-stock {args.stock}",
+            file=sys.stderr,
+        )
+        return EXIT_FAIL
+
+    data = GridsSource(grids=grids, stock_id=args.stock).load()
+    rating = rate(data, settings.rules, settings.periods)
+    reader = GridSource(grids)
+    valuation = evaluate(
+        read_valuation_input(reader, stock_id=args.stock, as_of=args.as_of or ""),
+        ValuationOptions(
+            growth_method=settings.forecast.revenue_growth_method,
+            margin_method=settings.forecast.margin_method,
+            pe_basis=settings.forecast.pe_basis,
+            payout_basis=settings.forecast.payout_basis,
+        ),
+    )
+    page = build_page(rating, valuation, reader, sheets_present=list(grids))
+
+    out = Path(args.out) if args.out else Path(settings.report.site_dir) / "stock"
+    target = build_stock_page(
+        page,
+        out / f"{args.stock}.html",
+        site_title=settings.report.title,
+        rel="../",
+    )
+    composite = (
+        f"　綜合 {page.latest_composite:.2f}"
+        if page.latest_composite is not None
+        else "　綜合 不足以計算"
+    )
+    print(f"  {page.stock_id} {page.name}{composite}")
+    missing = [s["sheet"] for s in page.sources if not s["ok"]]
+    if missing:
+        print(f"  缺少：{'、'.join(missing)}", file=sys.stderr)
+    for name, why in (page.gaps or {}).items():
+        print(f"  ! {name:<9} {why}", file=sys.stderr)
+    print(f"寫入 {target}")
+    return EXIT_OK
 
 
 def cmd_fetch_yearly(args: argparse.Namespace) -> int:
@@ -722,6 +788,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fs.add_argument("--out", help="資料目錄")
     fs.set_defaults(func=cmd_fetch_stock)
+
+    pg = sub.add_parser("page", help="個股四頁：評價簡表／六大／EPS預估與估價／殖利率估價")
+    pg.add_argument("stock", help="股票代號")
+    pg.add_argument("--data", help="資料目錄")
+    pg.add_argument("--out", help="輸出目錄（預設 site/stock）")
+    pg.add_argument("--as-of", dest="as_of", help="估價日期，民國 115/08/28")
+    pg.set_defaults(func=cmd_page)
 
     fy = sub.add_parser(
         "fetch-yearly", help="年度交易資訊：歷年最高／最低／收盤平均價（證交所、櫃買）"
