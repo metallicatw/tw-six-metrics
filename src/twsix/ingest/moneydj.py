@@ -34,7 +34,7 @@ from pathlib import Path
 from .base import FetchError, HttpClient
 from .valuation_source import cell_text
 
-Layout = Literal["statement", "ratio"]
+Layout = Literal["statement", "ratio", "table"]
 
 #: `Module1.GetHost()`, in its own order.  Any one of them can be down or can
 #: block a given IP, so the client walks the list.  Four more are named in the
@@ -52,21 +52,48 @@ HOSTS: tuple[str, ...] = (
     "https://djinfo.cathaysec.com.tw",
 )
 
-#: sheet -> (path template, parser layout).  The workbook's own sheet names are
-#: the keys so a fetched grid drops straight into the same reader the workbook
-#: adapter feeds.
-ENDPOINTS: dict[str, tuple[str, Layout]] = {
-    "FRQ": ("/z/zc/zcr/zcr_{stock}.djhtm", "ratio"),
-    "ISQ": ("/z/zc/zcq/zcq_{stock}.djhtm", "statement"),
-    "BSQ": ("/z/zc/zcp/zcpa/zcpa_{stock}.djhtm", "statement"),
-    "CFQ": ("/z/zc/zc3/zc3_{stock}.djhtm", "statement"),
-    "BASIC": ("/z/zc/zca/zca_{stock}.djhtm", "statement"),
-    "OPQ": ("/z/zc/zce/zcd_{stock}.djhtm", "statement"),
-    "EPQ": ("/z/zc/zce/zce_{stock}.djhtm", "statement"),
-    "營收": ("/z/zc/zch/zch_{stock}.djhtm", "statement"),
-    "股利": ("/z/zc/zcc/zcc_{stock}.djhtm", "statement"),
-    "三大法人": ("/z/zc/zcl/zcl.djhtm?a={stock}&b=3", "statement"),
-    "MoneyDJ年財務比率": ("/z/zc/zcr/zcr0.djhtm?b=Y&a={stock}", "ratio"),
+@dataclass(frozen=True)
+class Endpoint:
+    """How one sheet is fetched and laid out.
+
+    ``layout`` follows the workbook's three eras, and they are not
+    interchangeable — this is the whole reason six of nine sheets failed on
+    the first real run:
+
+    ``statement``  `MoneyDJ_財報三表_New` — `div.table-row` / `span`.
+    ``ratio``      `MoneyDJ_財務比率_New` — same markup, but section headings
+                   are emitted *inline* as two rows each (指標 then 單位), so
+                   the body drifts down as sections accumulate.
+    ``table``      No MoneyDJ_* helper at all: these sheets were never
+                   converted off Excel's QueryTables, which grabs the Nth
+                   plain ``<table>``.  `table_index` is that N, straight from
+                   the VBA's ``.WebTables`` setting.
+
+    ``origin`` is the 1-based sheet row the body lands on — the VBA's
+    ``Destination:=Range("A3")`` and friends.
+    """
+
+    path: str
+    layout: Layout
+    origin: int = 3
+    table_index: int = 0
+
+
+#: Transcribed from Module1: the parser each Get_* actually calls, and for the
+#: QueryTables ones the .WebTables index and Destination row.
+ENDPOINTS: dict[str, Endpoint] = {
+    "ISQ": Endpoint("/z/zc/zcq/zcq_{stock}.djhtm", "statement"),
+    "BSQ": Endpoint("/z/zc/zcp/zcpa/zcpa_{stock}.djhtm", "statement"),
+    "CFQ": Endpoint("/z/zc/zc3/zc3_{stock}.djhtm", "statement"),
+    "FRQ": Endpoint("/z/zc/zcr/zcr_{stock}.djhtm", "ratio"),
+    # QueryTables era — plain HTML tables.
+    "BASIC": Endpoint("/z/zc/zca/zca_{stock}.djhtm", "table", origin=3, table_index=3),
+    "營收": Endpoint("/z/zc/zch/zch_{stock}.djhtm", "table", origin=1, table_index=3),
+    "股利": Endpoint("/z/zc/zcc/zcc_{stock}.djhtm", "table", origin=3, table_index=2),
+    "OPQ": Endpoint("/z/zc/zce/zcd_{stock}.djhtm", "table", origin=3, table_index=2),
+    "EPQ": Endpoint("/z/zc/zce/zce_{stock}.djhtm", "table", origin=3, table_index=2),
+    "三大法人": Endpoint("/z/zc/zcl/zcl.djhtm?a={stock}&b=3", "statement"),
+    "MoneyDJ年財務比率": Endpoint("/z/zc/zcr/zcr0.djhtm?b=Y&a={stock}", "ratio"),
 }
 
 #: The pages are Big5.  cp950 is the superset Windows actually ships, and is
@@ -76,6 +103,11 @@ ENCODING = "cp950"
 MAIN_TABLE_ID = "oMainTable"
 ROW_CLASS = "table-row"
 
+#: Void elements have no closing tag, so counting them as nesting makes the
+#: depth drift upwards and never come back — after the first <br> inside a
+#: heading, no element ever appeared to close again.
+VOID_TAGS = frozenset({"br", "img", "hr", "input", "meta", "link", "col"})
+
 
 # =========================================================================
 # parsing
@@ -83,49 +115,52 @@ ROW_CLASS = "table-row"
 
 
 class _MainTableParser(HTMLParser):
-    """Pull `#oMainTable`'s `div.table-row` rows and their `span` cells.
+    """Pull `#oMainTable`'s rows in document order.
 
-    Mirrors the VBA exactly:
+    Two kinds of item come out, and keeping their **order** is the point:
 
-    * `oTable = oHTML.getElementById("oMainTable")`
-    * `oRows = oTable.getElementsByTagName("div")`, kept when
-      `oRow.className = "table-row"`
-    * `oCells = oRow.getElementsByTagName("span")`, one cell per span
+    * a data row — `div.table-row`, one cell per `span`
+    * a heading — a `div` inside the table with text but no spans
 
-    Anything outside `#oMainTable` is ignored, which is what makes the parse
-    survive navigation chrome and advertising markup changing around it.
+    The first version lumped every heading at the top, which silently shifted
+    〔FRQ〕 down by a row: its section headings (獲利能力指標 / 單位：%) sit
+    *between* row groups, and each one occupies two sheet rows.
     """
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.rows: list[list[str]] = []
-        self.header_lines: list[str] = []
-        self._depth = 0  # nesting depth inside the main table, 0 = outside
+        #: ("row", cells) | ("head", lines) in document order
+        self.items: list[tuple[str, list[str]]] = []
+        self._depth = 0
         self._row: list[str] | None = None
         self._row_depth = 0
         self._in_span = 0
         self._buf: list[str] = []
-        self._loose: list[str] = []  # text in a row that has no spans
+        self._loose: list[str] = []
+        self._div_depth = 0
 
     @staticmethod
-    def _classes(attrs: Sequence[tuple[str, str | None]]) -> set[str]:
+    def _classes(attrs) -> set:  # type: ignore[no-untyped-def]
         for k, v in attrs:
             if k == "class" and v:
                 return set(v.split())
         return set()
 
     def handle_starttag(self, tag: str, attrs) -> None:  # type: ignore[no-untyped-def]
-        ident = dict(attrs).get("id")
         if self._depth == 0:
-            if ident == MAIN_TABLE_ID:
+            if dict(attrs).get("id") == MAIN_TABLE_ID:
                 self._depth = 1
+            return
+        if tag in VOID_TAGS:
+            if tag == "br" and self._row is not None and not self._in_span:
+                self._loose.append("\n")
             return
         self._depth += 1
         if tag == "div" and self._row is None:
-            if ROW_CLASS in self._classes(attrs):
-                self._row = []
-                self._loose = []
-                self._row_depth = self._depth
+            self._row = []
+            self._loose = []
+            self._row_depth = self._depth
+            self._is_row = ROW_CLASS in self._classes(attrs)
         elif tag == "span" and self._row is not None:
             self._in_span += 1
             self._buf = []
@@ -140,13 +175,11 @@ class _MainTableParser(HTMLParser):
                 self._buf = []
         if self._row is not None and self._depth == self._row_depth and tag == "div":
             if self._row:
-                self.rows.append(self._row)
-            elif self._loose:
-                # A heading row: no spans, just text.  The VBA reads these as
-                # the 財報名稱 / 單位 lines.
-                self.header_lines.extend(
-                    t for t in (s.strip() for s in self._loose) if t
-                )
+                self.items.append(("row", self._row))
+            else:
+                lines = [t for t in "".join(self._loose).split("\n") if t.strip()]
+                if lines:
+                    self.items.append(("head", [t.strip() for t in lines]))
             self._row = None
         self._depth -= 1
         if self._depth <= 0:
@@ -159,51 +192,115 @@ class _MainTableParser(HTMLParser):
             self._buf.append(data)
         elif self._row is not None:
             self._loose.append(data)
-        elif data.strip():
-            self.header_lines.append(data.strip())
+
+
+class _HtmlTableParser(HTMLParser):
+    """Every plain ``<table>`` on the page, as rows of cell text.
+
+    〔BASIC〕〔營收〕〔股利〕〔OPQ〕〔EPQ〕 were never converted off Excel's
+    QueryTables, so they are ordinary HTML tables rather than the div/span
+    layout.  Feeding them to the div parser yields four or five rows of
+    nothing, which is exactly what the first real run reported.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.tables: list[list[list[str]]] = []
+        self._stack: list[list[list[str]]] = []
+        self._row: list[str] | None = None
+        self._cell: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # type: ignore[no-untyped-def]
+        if tag == "table":
+            self._stack.append([])
+        elif tag == "tr" and self._stack:
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._cell = []
+        elif tag == "br" and self._cell is not None:
+            self._cell.append(" ")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("td", "th") and self._cell is not None:
+            if self._row is not None:
+                self._row.append("".join(self._cell).strip())
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            if self._stack and self._row:
+                self._stack[-1].append(self._row)
+            self._row = None
+        elif tag == "table" and self._stack:
+            done = self._stack.pop()
+            # Nested tables are used for layout; keep them all and let the
+            # caller pick by index, the way Excel's WebTables did.
+            self.tables.append(done)
+
+    def handle_data(self, data: str) -> None:
+        if self._cell is not None:
+            self._cell.append(data)
 
 
 @dataclass
 class Table:
-    """A parsed page: the title/unit lines plus the data grid."""
+    """A parsed page as the grid the workbook writes into its sheet."""
 
-    title: str = ""
-    unit: str = ""
     rows: list[list[str]] = field(default_factory=list)
 
-    def grid(self, layout: Layout = "statement") -> list[list[str]]:
-        """Lay the parse out the way the workbook writes it into a sheet.
+    @property
+    def title(self) -> str:
+        return self.rows[0][0] if self.rows and self.rows[0] else ""
 
-        `MoneyDJ_財報三表_New` builds `arrData` with the 財報名稱 on line 1 and
-        the 單位 on line 2, then dumps it starting at the sheet's **A3** — so
-        the sheet gets the title at row 3, the unit at row 4, and the first
-        data row at row 5.  Reproducing that offset here is what lets a
-        fetched page and a workbook sheet share one reader.
-        """
-        out: list[list[str]] = [[self.title], [self.unit]]
-        out.extend(self.rows)
-        return out
+
+def _lay_out(items: list[tuple[str, list[str]]], layout: Layout) -> list[list[str]]:
+    """Turn parsed items into sheet rows, following the VBA's own bookkeeping."""
+    out: list[list[str]] = []
+    seen_title = False
+    for kind, payload in items:
+        if kind == "row":
+            out.append(payload)
+            continue
+        if not seen_title:
+            # 財報名稱 then 單位 — the first heading carries both.
+            out.append([payload[0].split(" ")[0]])
+            if layout == "statement":
+                out.append([payload[1] if len(payload) > 1 else ""])
+            elif len(payload) > 1:
+                out.append([payload[1]])
+            seen_title = True
+            continue
+        if layout == "ratio":
+            # Each later heading is a section: 指標 then 單位, two sheet rows.
+            out.append([payload[0]])
+            out.append([payload[1] if len(payload) > 1 else ""])
+    return out
 
 
 def parse_main_table(html: str, layout: Layout = "statement") -> Table:
-    """Parse one `.djhtm` page into a :class:`Table`.
-
-    ``layout`` follows the workbook's split between `MoneyDJ_財報三表_New` and
-    `MoneyDJ_財務比率_New`; the two differ only in how the non-row headings are
-    treated, so the difference lives here rather than in two parsers.
-    """
+    """Parse one `.djhtm` page into the grid its sheet holds."""
+    if layout == "table":
+        raise ValueError("use parse_html_table() for QueryTables-era sheets")
     p = _MainTableParser()
     p.feed(html)
-    heads = [h for h in p.header_lines if h]
-    title = heads[0].split(" ")[0] if heads else ""
-    unit = ""
-    for h in heads[1:]:
-        if "單位" in h:
-            unit = h
-            break
-    else:
-        unit = heads[1] if len(heads) > 1 else ""
-    return Table(title=title, unit=unit, rows=p.rows)
+    return Table(rows=_lay_out(p.items, layout))
+
+
+def parse_html_table(html: str, index: int) -> Table:
+    """The ``index``-th plain ``<table>``, 1-based, as Excel's WebTables counted.
+
+    Nested layout tables make the raw index brittle, so a table that yields
+    nothing falls back to the largest one on the page — the data table is
+    reliably the biggest, and a wrong-but-present index is the failure mode
+    most likely to survive a redesign.
+    """
+    p = _HtmlTableParser()
+    p.feed(html)
+    tables = [t for t in p.tables if t]
+    if not tables:
+        return Table()
+    chosen = tables[index - 1] if 0 < index <= len(tables) else []
+    if len(chosen) < 3:
+        chosen = max(tables, key=len)
+    return Table(rows=chosen)
 
 
 # =========================================================================
@@ -309,10 +406,10 @@ class MoneyDJ:
         """Return one sheet's grid, laid out as the workbook writes it."""
         if sheet not in ENDPOINTS:
             raise KeyError(f"unknown sheet: {sheet!r}")
-        path, layout = ENDPOINTS[sheet]
+        spec = ENDPOINTS[sheet]
         errors: list[str] = []
         for host in self._ordered():
-            url = host + path.format(stock=stock_id)
+            url = host + spec.path.format(stock=stock_id)
             try:
                 html = self.http.get_text(url, encoding=ENCODING)
             except Exception as exc:  # noqa: BLE001 - try the next mirror
@@ -323,7 +420,10 @@ class MoneyDJ:
                 self.save_html.mkdir(parents=True, exist_ok=True)
                 target = self.save_html / f"{stock_id}_{sheet}.html"
                 target.write_text(html, encoding="utf-8")
-            table = parse_main_table(html, layout)
+            if spec.layout == "table":
+                table = parse_html_table(html, spec.table_index)
+            else:
+                table = parse_main_table(html, spec.layout)
             grid = _offset_grid(sheet, table)
             try:
                 check_contract(sheet, grid)
@@ -364,16 +464,11 @@ ORDER: tuple[str, ...] = (
     "股利",
 )
 
-#: Where each sheet's parsed body starts, 1-based.  Most pages are dumped at
-#: A3 (title, unit, then data); 〔營收〕keeps a chart above its table.
-SHEET_ORIGIN: dict[str, int] = {sheet: 3 for sheet in ENDPOINTS}
-SHEET_ORIGIN["營收"] = 5
-
-
 def _offset_grid(sheet: str, table: Table) -> list[list[str]]:
     """Pad a parsed table down to the row the workbook writes it at."""
-    origin = SHEET_ORIGIN.get(sheet, 3)
-    return [[] for _ in range(origin - 1)] + table.grid()
+    spec = ENDPOINTS.get(sheet)
+    origin = spec.origin if spec else 3
+    return [[] for _ in range(origin - 1)] + table.rows
 
 
 class GridSource:
