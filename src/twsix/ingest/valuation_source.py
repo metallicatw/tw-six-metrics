@@ -136,16 +136,50 @@ def quarterly_eps(reader: CellReader) -> list[tuple[str, float | None]]:
     return out
 
 
+ANNUAL_RATIOS = "年財務比率"
+
+
 def annual_eps(reader: CellReader, years: Sequence[int]) -> list[float | None]:
-    """Sum EPQ's four quarters into a full-year EPS.  A short year stays ``None``."""
+    """Full-year EPS: MoneyDJ's own annual figure when we have it, else a sum.
+
+    The two are not the same number and the gap is not rounding.  Annual EPS
+    divides the year's profit by the year's *weighted-average* share count;
+    summing four quarterly EPS divides each quarter by its own count.  The two
+    agree only while the share count is still — and diverge by however large
+    the issue was when it is not.
+
+    So 〔年財務比率〕 wins wherever it reaches, and the quarterly sum fills in
+    behind it.  With the page absent nothing changes; with it present 5439's
+    P/E band moves from 24.95 to 25.0179, which is the workbook's own figure
+    to ten significant digits.
+    """
+    published = _published_annual_eps(reader)
     buckets: dict[int, list[float]] = {}
     for label, value in quarterly_eps(reader):
         y = roc_year(label)
         if y is not None and value is not None:
             buckets.setdefault(y, []).append(value)
-    return [
-        sum(buckets[y]) if len(buckets.get(y, [])) == 4 else None for y in years
-    ]
+    out: list[float | None] = []
+    for y in years:
+        if y in published:
+            out.append(published[y])
+        elif len(buckets.get(y, [])) == 4:
+            out.append(sum(buckets[y]))
+        else:
+            out.append(None)
+    return out
+
+
+def _published_annual_eps(reader: CellReader) -> dict[int, float]:
+    """〔年財務比率〕's 每股盈餘 row, keyed by 民國 year — empty when unfetched."""
+    if not reader.has(ANNUAL_RATIOS):
+        return {}
+    grid = reader.grid(ANNUAL_RATIOS) if hasattr(reader, "grid") else []
+    if not grid:
+        return {}
+    from .derive import annual_eps_by_year
+
+    return annual_eps_by_year(grid)
 
 
 def dividends(reader: CellReader, years: Sequence[int]) -> list[float | None]:
@@ -336,6 +370,15 @@ def _to_number(value: object) -> float | None:
     return None
 
 
+def _col_letter(index: int) -> str:
+    """1 -> "A", 31 -> "AE"."""
+    out = ""
+    while index:
+        index, rem = divmod(index - 1, 26)
+        out = chr(65 + rem) + out
+    return out
+
+
 def col_index(col: str) -> int:
     """``"A"`` -> 1, ``"AE"`` -> 31."""
     n = 0
@@ -361,6 +404,20 @@ class GridReader:
 
     def row_numbers(self, sheet: str) -> list[int]:
         return sorted(int(r) for r in self._grids.get(sheet, {}))
+
+    def grid(self, sheet: str) -> list[list[str]]:
+        """The sheet as dense rows — for a section that reads it whole."""
+        cells = self._grids.get(sheet, {})
+        if not cells:
+            return []
+        width = max(
+            (col_index(c) for row in cells.values() for c in row), default=0
+        )
+        out: list[list[str]] = []
+        for r in range(1, max(int(k) for k in cells) + 1):
+            row = cells.get(str(r), {})
+            out.append([row.get(_col_letter(c), "") for c in range(1, width + 1)])
+        return out
 
 
 class WorkbookReader:

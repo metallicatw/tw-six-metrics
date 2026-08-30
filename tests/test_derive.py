@@ -141,12 +141,14 @@ def test_the_fetched_path_reproduces_the_workbooks_valuation():
 
     The forecast and the whole dividend-yield model come out equal to the
     workbook's own precision — the only difference is that 〔營收〕AE is stored
-    rounded to four places and recomputed here at full precision.  The P/E band lands within a third of a percent, and the reason
-    is known and single: 〔BASIC2〕's 年度EPS is MoneyDJ's own annual figure,
-    while a fetched stock sums 〔EPQ〕's four quarterly EPS — each already
-    rounded to two places, so 113 年 comes to 3.52 where the workbook has 3.51.
-    Fetching 〔MoneyDJ年財務比率〕 would close it; until that page has been seen,
-    this test pins the gap rather than pretending it is not there.
+    rounded to four places and recomputed here at full precision.
+
+    The P/E band lands within a third of a percent, and this fixture is the
+    *without* case on purpose: it has no 〔年財務比率〕, so annual EPS falls back
+    to summing 〔EPQ〕's quarters.  ``test_the_annual_page_closes_the_pe_gap_exactly``
+    is the same comparison with that page present, and there the band is the
+    workbook's to ten significant digits.  Keeping both means the fallback
+    stays measured rather than merely tolerated.
     """
     grids = fetched()
     grids[YEARLY] = _yearly_grid()
@@ -185,3 +187,95 @@ def test_the_fetched_path_reproduces_the_workbooks_valuation():
         fetched_result.pe_view.target_price / book_result.pe_view.target_price - 1
     )
     assert drift < 0.005, f"本益比目標價偏離 {drift:.2%}，超出已知的 EPS 四捨五入差"
+
+
+# -- 年財務比率 ------------------------------------------------------------
+
+
+def _annual_ratio_grid() -> list[list[str]]:
+    """〔年財務比率〕 as 〔FRQ〕's parser produces it, from the workbook's own EPS.
+
+    A stand-in until someone saves the page: the annual table is 〔FRQ〕's
+    template with years in the period row, and the values here are the
+    workbook's 〔BASIC2〕 row 6 — MoneyDJ's published annual 每股盈餘, which is
+    exactly what the page carries.
+    """
+    sheet = json.load((GOLDEN / "BASIC2.json").open(encoding="utf-8"))
+    cols = "BCDEFGHI"
+    years = [int(sheet["2"][c]) for c in cols]
+    return [
+        [], [], ["年財務比率"], ["獲利能力指標"], ["單位：%"],
+        ["期別"] + [str(y + 1911) for y in years],
+        ["種類"] + ["合併"] * len(years),
+        ["每股盈餘"] + [sheet["6"][c] for c in cols],
+    ]
+
+
+def test_annual_eps_is_not_the_sum_of_four_quarterly_eps():
+    """And the difference is not rounding — it is the share count moving.
+
+    Annual EPS divides the year's profit by the year's weighted-average share
+    count; a sum of quarterly EPS divides each quarter by its own.  5439 in
+    110 年 issued shares mid-year — its quarterly EPS imply about 86.6M shares
+    in Q2 and 88.3M in Q4 — so the quarters sum to 4.67 where the published
+    annual figure is 4.61.  A 0.06 gap is four times what rounding four
+    two-decimal numbers can produce.
+    """
+    from twsix.ingest.derive import annual_eps_by_year
+
+    published = annual_eps_by_year(_annual_ratio_grid())
+    assert published[110] == 4.61
+    assert published[113] == 3.51
+
+    grids = fetched()
+    grids[YEARLY] = _yearly_grid()
+    src = GridSource(grids)
+    from twsix.ingest.valuation_source import (  # noqa: PLC0415
+        current_roc_year,
+        quarterly_eps,
+        yearly_prices,
+    )
+
+    years, *_ = yearly_prices(src, current_roc_year(src))
+    quarters = [v for label, v in quarterly_eps(src) if label.startswith("110.")]
+    assert abs(sum(quarters) - 4.67) < 1e-9
+    assert abs(sum(quarters) - published[110]) > 0.02  # beyond rounding
+
+
+def test_the_annual_page_closes_the_pe_gap_exactly():
+    """With 〔年財務比率〕 present the P/E band is the workbook's, to 10 digits.
+
+    This is the 0.3% that ``test_the_fetched_path_reproduces_the_workbooks_valuation``
+    pins as a known gap.  The page is what closes it.
+    """
+    grids = fetched()
+    grids[YEARLY] = _yearly_grid()
+
+    without = evaluate(
+        read_valuation_input(GridSource(dict(grids)), stock_id="5439"),
+        ValuationOptions(),
+    )
+    grids["年財務比率"] = _annual_ratio_grid()
+    with_page = evaluate(
+        read_valuation_input(GridSource(grids), stock_id="5439"), ValuationOptions()
+    )
+
+    assert abs(without.band.high - 24.9471) < 1e-3
+    assert abs(with_page.band.high - 25.0178705672) < 1e-9  # 〔BASIC2〕L7
+    assert abs(with_page.pe_view.target_price - 392.8) < 0.1
+
+
+def test_the_annual_page_only_fills_the_years_it_covers():
+    """Absent, nothing changes; present, the quarterly sum fills in behind it."""
+    from twsix.ingest.valuation_source import annual_eps  # noqa: PLC0415
+
+    grids = fetched()
+    grids[YEARLY] = _yearly_grid()
+    grids["年財務比率"] = _annual_ratio_grid()
+    src = GridSource(grids)
+    from twsix.ingest.valuation_source import current_roc_year, yearly_prices  # noqa
+
+    years, *_ = yearly_prices(src, current_roc_year(src))
+    values = annual_eps(src, years)
+    assert values[years.index(110)] == 4.61  # from the page
+    assert values[years.index(107)] is not None  # older than the page: summed
