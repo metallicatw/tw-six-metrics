@@ -23,6 +23,13 @@ on:
       - "**.md"
       - "reference/**"
   workflow_dispatch:
+  # 讓別的 workflow 直接呼叫這一份，而不是指望 push 會觸發它。
+  #
+  # GitHub **不會**因為用 GITHUB_TOKEN 推的 commit 而觸發 workflow——那是防止
+  # 遞迴的規則。所以〔加一檔個股〕commit 完資料之後，這個 push 事件根本不存在，
+  # 網站就停在上一次人類推送的版本：資料進了 repo，頁面卻還是薄的那張。
+  # 從 3711 那次看得很清楚，commit 在、頁面沒更新。
+  workflow_call:
 
 permissions:
   contents: read
@@ -37,7 +44,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # main 的最新狀態，不是觸發這次執行的那個 commit。
+      #
+      # 被〔加一檔個股〕呼叫時，github.sha 是 issue 事件當下的 SHA——也就是
+      # bot 把資料 commit 進來**之前**。照那個 SHA 建站會建出一份沒有新資料的
+      # 網站，而且完全不會報錯：workflow 全綠，頁面照樣是薄的那張。
+      # push 觸發時 main 的頂端就是 github.sha，所以這樣寫三種觸發都對。
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-python@v5
         with:

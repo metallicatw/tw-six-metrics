@@ -459,6 +459,31 @@ tr.here th{font-weight:700}
           + '標題只放股號，不要加其他文字。');
   }
 
+  /* 等待狀態放進 sessionStorage，因為讀者不會乖乖停在原地。
+   *
+   * 3711 那次就是：按了「抓這一檔」，然後從 issue 的留言連結點進
+   * stock/3711.html——換頁，計時器沒了，那一頁又還是舊的薄版本，看起來就像
+   * 卡住。狀態存起來之後，不管跳到站內哪一頁，等待都會接著跑，而剛好停在
+   * 那一檔自己的頁面上時，好了就直接重新整理。
+   */
+  var PENDING = 'twsix.pending';
+  function remember(code){
+    try{ sessionStorage.setItem(PENDING, JSON.stringify(
+      {code: code, until: Date.now() + 6*60*1000})); }catch(e){}
+  }
+  function forget(){
+    try{ sessionStorage.removeItem(PENDING); }catch(e){}
+  }
+  function pending(){
+    try{
+      var raw = sessionStorage.getItem(PENDING);
+      if(!raw) return null;
+      var j = JSON.parse(raw);
+      if(!j || !j.code || Date.now() > j.until){ forget(); return null; }
+      return j;
+    }catch(e){ return null; }
+  }
+
   var watching = null;
   function watch(code, tries){
     if(watching && watching !== code) return;
@@ -468,8 +493,16 @@ tr.here th{font-weight:700}
       .then(function(rows){
         for(var i=0;i<rows.length;i++){
           if(rows[i][0] === code && rows[i][4]){
+            forget();
             say(code + ' 好了，正在開啟報告…', []);
-            location.href = base + 'stock/' + code + '.html';
+            var target = base + 'stock/' + code + '.html';
+            /* 已經站在那一頁上（多半是從 issue 的連結點進來的），換網址不會
+               重新載入，要真的重整才看得到新版本。 */
+            if(location.pathname.replace(/^.*\//, '') === code + '.html') {
+              location.reload();
+            } else {
+              location.href = target;
+            }
             return;
           }
         }
@@ -479,7 +512,9 @@ tr.here th{font-weight:700}
   }
   function next(code, tries){
     if(tries <= 0){
-      say('還在等 GitHub 建置 ' + code + '。可以先關掉這頁，過幾分鐘再搜尋一次。', []);
+      forget();
+      say('還在等 GitHub 建置 ' + code + '。到 Actions 看一下「加一檔個股」跑完了沒；'
+          + '跑完了就重新整理這一頁。', []);
       watching = null;
       return;
     }
@@ -492,6 +527,7 @@ tr.here th{font-weight:700}
   function askGithub(code){
     close();
     window.open(issueUrl(code), '_blank', 'noopener');
+    remember(code);
     say('已開啟 GitHub 的 issue 頁面——按綠色的 Submit new issue 就會開始抓。', []);
     /* 20 次 × 15 秒 = 五分鐘。抓一檔約 20 秒，建站約半分鐘，加上 runner 排隊，
        五分鐘沒好通常是 workflow 失敗，那時叫人去看 Actions 比繼續轉圈有用。 */
@@ -537,6 +573,14 @@ tr.here th{font-weight:700}
   }
   window.twsixFetch = fetchStock;   /* 個股頁的「立即抓取」也用這個 */
   window.twsixLive = function(){ return live; };
+
+  /* 換頁之後把等待接回來。 */
+  (function resume(){
+    var j = pending();
+    if(!j) return;
+    var left = Math.max(1, Math.round((j.until - Date.now()) / 15000));
+    setTimeout(function(){ watch(j.code, left); }, 1200);
+  })();
 
   box.addEventListener('focus', load);
   box.addEventListener('input', run);

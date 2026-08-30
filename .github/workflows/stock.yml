@@ -95,8 +95,6 @@ jobs:
           git pull --rebase origin main
           git push origin HEAD:main
 
-      # push 會觸發 pages.yml，網站在那裡重建。這裡只負責把資料放進 repo，
-      # 兩件事分開比較好查：抓取失敗和建站失敗長得完全不一樣。
       - name: 說明
         env:
           CODE: ${{ steps.pick.outputs.code }}
@@ -105,7 +103,7 @@ jobs:
           {
             echo "### $CODE 已加入觀察清單"
             echo ""
-            echo "pages 工作流程會接手重建網站，完成後在這裡："
+            echo "接下來 publish 工作會重建並發布網站，完成後在這裡："
             echo ""
             echo "<$url>"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -134,3 +132,14 @@ jobs:
           gh issue comment "$NUM" --body "抓取失敗了，詳情在這次執行紀錄：$RUN
 
           常見原因：股號不存在、或券商鏡像站當下拒絕連線。過幾分鐘重開一張就好。"
+
+  # 自己把網站建起來，不指望 push 會觸發 pages.yml——它不會。用 GITHUB_TOKEN
+  # 推的 commit 不產生 workflow 事件（GitHub 的遞迴防護），所以上面那個 commit
+  # 對 pages.yml 來說等於沒發生過。直接呼叫同一份定義，建站的邏輯只有一處。
+  publish:
+    needs: fetch
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml

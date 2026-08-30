@@ -335,3 +335,22 @@ def test_the_unfetched_stock_page_offers_both_paths_from_one_implementation():
 
     assert "twsixLive" in page and "twsixCanAsk" in page
     assert "twsixFetch" in page and "twsixAskGithub" in page
+
+
+def test_the_wait_survives_navigating_away():
+    """3711's failure mode: press the button, follow the issue link, lose it.
+
+    The timer lives in one page's JavaScript, and the reader does not stay
+    put — the bot's comment links straight to the stock page, so the very
+    action the flow invites is the one that killed the wait.  sessionStorage
+    carries it across, and landing on the stock's own page means a reload
+    rather than a navigation to where you already are.
+    """
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
+    page = (out / "stock" / "2330.html").read_text("utf-8")
+
+    assert "sessionStorage" in page
+    assert "twsix.pending" in page
+    assert "location.reload" in page
