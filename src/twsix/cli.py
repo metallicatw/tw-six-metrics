@@ -783,6 +783,28 @@ def cmd_report(args: argparse.Namespace) -> int:
     return cmd_build(argparse.Namespace(config=args.config, data=args.data, out=None))
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    """把網站跑在本機，並讓網頁上的搜尋框真的能去抓資料.
+
+    The static site cannot fetch — see :mod:`twsix.serve` for why that is a
+    browser rule rather than a missing feature.  This is the same site with a
+    machine behind it.
+    """
+    settings = Settings.load(args.config)
+    from .serve import DEFAULT_PORT, serve  # noqa: PLC0415
+
+    root = Path(args.site or settings.report.site_dir)
+    if not (root / "index.html").is_file():
+        print(f"{root} 裡沒有網站，請先執行：　twsix build", file=sys.stderr)
+        return EXIT_FAIL
+    serve(
+        root,
+        port=args.port or DEFAULT_PORT,
+        open_browser=not args.no_open,
+    )
+    return EXIT_OK
+
+
 def cmd_fetch_page(args: argparse.Namespace) -> int:
     """抓一張還沒有解析器的頁面，存成樣本.
 
@@ -1005,6 +1027,17 @@ def build_parser() -> argparse.ArgumentParser:
     pg.add_argument("--out", help="輸出目錄（預設 site/stock）")
     pg.add_argument("--as-of", dest="as_of", help="估價日期，民國 115/08/28")
     pg.set_defaults(func=cmd_page)
+
+    sv = sub.add_parser(
+        "serve",
+        help="把網站跑在本機，網頁上輸入代號就會自動抓取並產出完整報告",
+    )
+    sv.add_argument("--site", help="網站目錄（預設 site）")
+    sv.add_argument("--port", type=int, help="連接埠（預設 8765）")
+    sv.add_argument(
+        "--no-open", dest="no_open", action="store_true", help="不要自動開瀏覽器"
+    )
+    sv.set_defaults(func=cmd_serve)
 
     rp = sub.add_parser(
         "report",

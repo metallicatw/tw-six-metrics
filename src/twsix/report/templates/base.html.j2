@@ -89,6 +89,23 @@ footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);
 .find li .nm{font-weight:600;color:var(--ink)}
 .find li .ind{color:var(--muted);font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
 .find li .sc{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+/* -- 本機抓取 --------------------------------------------------------- */
+.grab{position:absolute;z-index:45;left:0;right:0;top:calc(100% + 4px);
+  background:var(--surface);border:1px solid var(--accent);border-radius:5px;
+  padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.grab .head{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--ink)}
+.grab .log{margin:0;max-height:180px;overflow:auto;font-size:11px;line-height:1.6;
+  color:var(--muted);white-space:pre-wrap;word-break:break-all;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.tag.grabbtn{margin-left:6px;padding:1px 8px;border-radius:3px;font-size:10.5px;
+  border:1px solid var(--accent);color:var(--accent);background:var(--surface);
+  cursor:pointer}
+.tag.grabbtn:hover{background:var(--accent);color:var(--surface)}
+.btn-grab{display:inline-block;padding:7px 16px;border-radius:5px;border:none;
+  background:var(--accent);color:#fff;font:inherit;font-size:14px;font-weight:600;
+  cursor:pointer}
+.btn-grab:hover{background:var(--accent-2)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .btn-grab{color:#10161c}}
 ul.how{padding-left:20px;font-size:13.5px;line-height:1.9}
 ul.how code{background:var(--surface-2);padding:1px 6px;border-radius:3px;
   font-size:12.5px;color:var(--ink)}
@@ -242,6 +259,14 @@ tr.here th{font-weight:700}
            role="combobox" aria-expanded="false" aria-controls="find-list"
            aria-autocomplete="list">
     <ul id="find-list" role="listbox" aria-label="搜尋結果" hidden></ul>
+    {# 進度面板要跟搜尋框對齊，所以必須待在 .find 裡面——它是 position:relative
+       的那一層。放在外面會拿 header 當定位基準，掉到畫面上量不到的地方去。
+       只有在 `twsix serve` 底下才會用到：載入時問一次 /api/ping，GitHub Pages
+       上問不到就永遠不顯示。同一份 HTML，兩種行為。 #}
+    <div id="grab" class="grab" hidden>
+      <p class="head"></p>
+      <pre class="log" aria-live="polite"></pre>
+    </div>
   </form>
   <p class="stamp">
     網站產生：{{ generated_at }}　·　{{ stock_count }} 檔　·
@@ -315,6 +340,12 @@ tr.here th{font-weight:700}
       if(r[4]){
         var t=document.createElement('span'); t.className='tag full'; t.textContent='完整';
         li.appendChild(t);
+      } else if(live){
+        var g=document.createElement('span'); g.className='tag grabbtn'; g.textContent='立即抓取';
+        g.addEventListener('mousedown', function(e){
+          e.preventDefault(); e.stopPropagation(); fetchStock(r[0]);
+        });
+        li.appendChild(g);
       }
       li.addEventListener('mousedown', function(e){ e.preventDefault(); go(r); });
       list.appendChild(li);
@@ -343,6 +374,54 @@ tr.here th{font-weight:700}
     });
   }
 
+  /* ---- 本機抓取 -------------------------------------------------------
+   * 靜態站台抓不到券商鏡像站（瀏覽器的同源政策，不是缺功能），所以抓取這件事
+   * 只在 `twsix serve` 底下才成立。頁面載入時問一次 /api/ping：問得到就把
+   * 「立即抓取」放進搜尋結果，問不到就當作沒有這回事。
+   */
+  var live=false, grab=document.getElementById('grab');
+  fetch(base+'api/ping').then(function(r){return r.ok?r.json():null;})
+    .then(function(j){ live = !!(j && j.service==='twsix'); })
+    .catch(function(){ live=false; });
+
+  function say(head, log){
+    if(!grab) return;
+    grab.hidden=false;
+    grab.querySelector('.head').textContent=head;
+    grab.querySelector('.log').textContent=(log||[]).join('\n');
+  }
+
+  function poll(code){
+    fetch(base+'api/job/'+code).then(function(r){return r.json();}).then(function(j){
+      if(j.error){ say('抓取失敗：'+j.error, []); return; }
+      if(!j.done){
+        say('正在抓取 '+code+'…（'+j.seconds+' 秒）', j.lines);
+        setTimeout(function(){ poll(code); }, 800);
+        return;
+      }
+      if(j.ok){
+        say('完成，正在開啟報告…', j.lines);
+        location.href = base+'stock/'+code+'.html';
+      } else {
+        say('抓取失敗 — 八個鏡像站都拒絕通常代表 IP 被擋，換個網路再試。', j.lines);
+      }
+    }).catch(function(){ say('抓取中斷：連不上本機服務', []); });
+  }
+
+  function fetchStock(code){
+    close();
+    say('正在抓取 '+code+'…', []);
+    fetch(base+'api/fetch/'+code, {method:'POST'})
+      .then(function(r){return r.json();})
+      .then(function(j){
+        if(j.error){ say('抓取失敗：'+j.error, []); return; }
+        poll(code);
+      })
+      .catch(function(){ say('抓取中斷：連不上本機服務', []); });
+  }
+  window.twsixFetch = fetchStock;   /* 個股頁的「立即抓取」也用這個 */
+  window.twsixLive = function(){ return live; };
+
   box.addEventListener('focus', load);
   box.addEventListener('input', run);
   box.addEventListener('blur', function(){ setTimeout(close, 150); });
@@ -354,7 +433,13 @@ tr.here th{font-weight:700}
       draw();
     } else if(e.key==='Enter'){
       /* 有選中就跳轉；沒有就讓 form 送到清單頁，那是無 JS 時走的同一條路。 */
-      if(cur>-1 && hits[cur]){ e.preventDefault(); go(hits[cur]); }
+      if(cur>-1 && hits[cur]){
+        e.preventDefault();
+        /* 有完整報告就跳過去；沒有而且本機服務在跑，Enter 就是「去抓」——
+           那才是「輸入代號就跑出完整報告」的意思。 */
+        if(!hits[cur][4] && live) fetchStock(hits[cur][0]);
+        else go(hits[cur]);
+      }
     } else if(e.key==='Escape'){ close(); box.blur(); }
   });
   document.addEventListener('keydown', function(e){

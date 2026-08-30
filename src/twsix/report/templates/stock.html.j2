@@ -166,10 +166,30 @@
   季節性、外資投信、個股新聞——那些需要逐檔向券商鏡像站抓資料，一檔約 20 秒，
   所以只有抓過的股票才有（清單頁上標「完整」的那些）。
 </p>
-<p class="muted">要讓 {{ stock.stock_id }} 也有，兩條路都可以：</p>
-<ul class="muted how">
-  <li>在 GitHub 的 <b>Actions → 加一檔個股</b> 輸入 <code>{{ stock.stock_id }}</code>，
-      跑完網站會自動重建。</li>
-  <li>或在本機執行 <code>twsix report {{ stock.stock_id }} --rebuild</code>。</li>
-</ul>
+{# `twsix serve` 底下這顆按鈕會出現，按了就抓；GitHub Pages 上它是隱藏的，
+   因為瀏覽器不准跨網域抓券商鏡像站——那是同源政策，不是缺功能。 #}
+<p id="grab-here" hidden>
+  <button type="button" class="btn-grab"
+          onclick="window.twsixFetch &amp;&amp; window.twsixFetch('{{ stock.stock_id }}')">
+    立即抓取 {{ stock.stock_id }}
+  </button>
+  <span class="muted">　約 20 秒，抓完直接開報告。</span>
+</p>
+<p class="muted" id="grab-how">要讓 {{ stock.stock_id }} 也有：在本機執行
+  <code>twsix serve</code>，然後在這個網頁上按「立即抓取」——
+  或直接跑 <code>twsix report {{ stock.stock_id }} --rebuild</code>。</p>
+<script>
+(function(){
+  /* 上面那個 window.twsixFetch 是 base.html.j2 的搜尋框定義的，同一份實作。 */
+  var tries=0;
+  (function wait(){
+    if(window.twsixLive && window.twsixLive()){
+      document.getElementById('grab-here').hidden=false;
+      document.getElementById('grab-how').hidden=true;
+      return;
+    }
+    if(tries++ < 20) setTimeout(wait, 150);
+  })();
+})();
+</script>
 {% endblock %}
