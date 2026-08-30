@@ -21,9 +21,7 @@ from pathlib import Path
 from test_stock_page import _page
 from twsix.report.sections import (
     RIVER_ZONES,
-    SCENARIOS,
     build_pe_river,
-    forecast_scenarios,
     profit_seasonality,
     revenue_seasonality,
 )
@@ -143,25 +141,6 @@ def test_the_statement_charts_are_the_series_the_grades_use():
         assert "<details" in svg  # numbers, not only a picture
 
 
-# -- 財務指標評等預估 ------------------------------------------------------
-
-
-def test_all_four_scenarios_state_when_they_apply():
-    """Using the wrong one grades a quarter nobody has filed."""
-    blocks = forecast_scenarios(None, None)
-    assert len(blocks) == 4 == len(SCENARIOS)
-    for block in blocks:
-        assert block.when and block.needs
-    assert "任何月份" in blocks[0].when
-    assert "季報尚未公布" in blocks[1].when
-
-
-def test_the_scenarios_do_not_repeat_the_grade_table():
-    """With nothing entered all four are the grades already shown above."""
-    blocks = forecast_scenarios(None, None)
-    assert not any(hasattr(b, "grades") for b in blocks)
-
-
 # -- what is deliberately absent -------------------------------------------
 
 
@@ -271,12 +250,13 @@ def test_without_the_weekly_sheet_the_zones_are_unchanged_and_the_chart_is_absen
 # -- 個股新聞 --------------------------------------------------------------
 
 
-def test_the_news_section_counts_the_wire_round_ups_separately():
+def test_the_news_section_keeps_two_months_and_separates_the_price_ticks():
     page, _ = _page()
     assert page.news is not None
-    assert len(page.news.items) == 10
-    assert page.news.roundups == 9
-    assert page.news.specific == 1
+    assert len(page.news.items) == 25
+    assert page.news.tickers == 17
+    assert page.news.substantive == 8
+    assert page.news.dropped == 5
 
 
 def test_without_the_news_sheet_the_section_is_none_rather_than_empty():
@@ -290,35 +270,95 @@ def test_without_the_news_sheet_the_section_is_none_rather_than_empty():
 
 
 def test_band_labels_are_dropped_rather_than_printed_on_top_of_each_other():
-    """2454 sits at 65× against a band topping near 24×; its edges collapse.
+    """A stock far outside its band puts every boundary in the same few pixels.
 
-    The y range stretches to wherever the price went, but the five boundaries
-    are evenly spaced in *multiple*, so a stock far outside its own band lands
-    all five inside thirty pixels — 「1,455」「1,269」「876」「683」 rendered as one
-    smudge.  The lines stay (they are what make the bands readable); only an
-    unreadable label is dropped, top-down, so the boundary nearest the price
-    is the one kept.
+    2454 traded at 65x against a band topping near 24x, which landed its five
+    boundaries inside thirty pixels and rendered four numbers as one smudge.
+    The ribbons all stay — they are what make the zones readable — and only an
+    unreadable label is dropped, highest first, so the boundary nearest the
+    price survives.
+    """
+    import re  # noqa: PLC0415
+
+    from twsix.report import charts  # noqa: PLC0415
+
+    n = 60
+    weeks = [(f"2026/{(i % 12) + 1:02d}/01", 3900.0 + i) for i in range(n)]
+    pattern = 'fill="var\\(--muted\\)">([0-9,]+)<'
+
+    def drawn(eps):
+        bands = [[m * eps] * n for m in (10.0, 15.0, 20.0, 25.0, 30.0)]
+        svg = charts.river(weeks, bands, RIVER_ZONES, title="河流圖", current=3983.0)
+        return re.findall(pattern, svg)
+
+    # Earnings that put the price inside its own band: every boundary has room.
+    assert len(drawn(160.0)) == 5
+    # Earnings a fortieth of that: the five boundaries collapse together.
+    crowded = drawn(4.0)
+    assert len(crowded) < 5, "擠在一起時應該要有被略過的"
+    assert "120" in crowded, "最高的那條——離股價最近的——要留著"
+
+
+# -- 左舊右新 --------------------------------------------------------------
+
+
+def test_charts_run_oldest_left_newest_right():
+    """Taiwan reads a time axis the same way everyone does: the past is left.
+
+    Every series in this project arrives newest-first, because that is how the
+    sheets and the mirrors hand them over.  Drawing them in that order put
+    2026.2Q at the left edge and inverted every trend on the page — a rising
+    series read as a falling one, and nothing about it looked broken.
     """
     from twsix.report import charts  # noqa: PLC0415
 
-    import re  # noqa: PLC0415
+    newest_first = ["2026.2Q", "2026.1Q", "2025.4Q"]
+    svg = charts.bars(newest_first, [3.0, 2.0, 1.0], title="測試", label_every=1)
+    order = [s for s in newest_first if s in svg]
+    assert svg.index("2025.4Q") < svg.index("2026.2Q"), "最舊的要畫在最左邊"
+    assert len(order) == 3
 
-    edges = [683.0, 876.0, 1069.0, 1262.0, 1455.0]
-    labels = ("1,455", "1,262", "1,069", "876", "683")
+    # A series that is already chronological must not be flipped.
+    months = ["01 月", "02 月", "03 月"]
+    seasonal = charts.bars(
+        months, [1.0, 2.0, 3.0], title="測試", label_every=1, newest_first=False
+    )
+    assert seasonal.index("01 月") < seasonal.index("03 月")
 
-    def drawn(low: float, high: float) -> list[str]:
-        weeks = [
-            (f"2026/{(i % 12) + 1:02d}/01", low + (high - low) * i / 59)
-            for i in range(60)
-        ]
-        svg = charts.river(weeks, edges, RIVER_ZONES, title="河流圖", current=high)
-        assert svg.count('stroke-dasharray="3 4"') >= len(edges), "五條分區線都要在"
-        return re.findall(r'fill="var\(--muted\)">([\d,]+)<', svg)
 
-    # A price living inside its own band: every boundary has room, print them.
-    assert set(drawn(600, 900)) == set(labels)
+def test_the_number_table_under_a_chart_follows_the_picture():
+    """Otherwise the table and the bars above it disagree about which end is now."""
+    from twsix.report import charts  # noqa: PLC0415
 
-    # A price far outside it: the five boundaries land inside thirty pixels.
-    crowded = drawn(50, 8000)
-    assert len(crowded) < 5, "擠在一起時應該要有被略過的"
-    assert "1,455" in crowded, "最高的那條——離股價最近的——要留著"
+    svg = charts.bars(["2026.2Q", "2025.4Q"], [2.0, 1.0], title="測試")
+    body = svg[svg.index("<details") :]
+    assert body.index("2025.4Q") < body.index("2026.2Q")
+
+
+def test_roc_years_sort_as_numbers_not_as_strings():
+    """「99」 sorts after 「115」 as text, which is how 97/98/99 crowded out
+    three recent years from a table that keeps the ten newest."""
+    from twsix.report.sections import _roc  # noqa: PLC0415
+
+    years = ["115", "114", "99", "98", "97", "113"]
+    assert sorted(years, key=_roc, reverse=True)[:3] == ["115", "114", "113"]
+
+
+def test_the_seasonal_table_keeps_recent_years_not_the_ones_that_sort_high():
+    page, _ = _page()
+    years = [r["year"] for r in page.profit_season.rows]
+    assert years[0] == max(years, key=int)
+    assert "97" not in years and "99" not in years
+
+
+def test_every_indicator_series_says_which_periods_it_covers():
+    """Six bare numbers cannot be read: 營收年增率 counts months, the rest quarters."""
+    page, _ = _page()
+    for ind in page.indicators:
+        assert ind["periods"], f"{ind['label']} 沒有期別"
+        assert len(ind["periods"]) == len(ind["values"])
+        # Oldest first, matching the charts and welded to their own numbers.
+        assert ind["periods"] == sorted(ind["periods"])
+    by_label = {i["label"]: i for i in page.indicators}
+    assert by_label["營收年增率"]["periods"][-1] == "115/07"
+    assert by_label["每股盈餘EPS"]["periods"][-1] == "2026.2Q"

@@ -63,6 +63,13 @@ class IndicatorResult:
     grade: Grade | None = None
     #: which rule fired, e.g. ``"AA.1"`` — kept so a score can be audited
     reason: str = ""
+    #: What each entry in ``values`` is a period *of*, newest first, aligned
+    #: one-to-one with it.  Six numbers printed in a row are unreadable without
+    #: this: 營收年增率 counts in months and the other five count in quarters,
+    #: so the reader cannot even tell which unit they are looking at.  Optional
+    #: because grading never needs it — nothing in the rules depends on the
+    #: label, only on the order.
+    periods: tuple[str, ...] = ()
 
     @property
     def score(self) -> int | None:

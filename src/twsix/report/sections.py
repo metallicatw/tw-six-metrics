@@ -1,6 +1,6 @@
 """The remaining workbook pages, built from data the project already has.
 
-〔財報圖表〕〔河流圖〕〔營收季節性〕〔獲利季節性〕〔財務指標評等預估〕.
+〔財報圖表〕〔河流圖〕〔營收季節性〕〔獲利季節性〕〔外資投信〕〔個股新聞〕.
 
 〔外資投信〕 and 〔個股新聞〕 joined them once their pages were saved.  Two are
 still missing — 大戶持股 and 董監持股 — and the reason is no longer that nobody
@@ -40,37 +40,25 @@ Number = float | None
 #: twenty-row grid gets scrolled past rather than read.
 TABLE_YEARS = 10
 
+def _roc(year: str) -> int:
+    """民國年 as a number, for sorting.
+
+    ``sorted(reverse=True)`` on the raw strings put 99, 98, 97 *above* 115 —
+    「9」 sorts after 「1」 — so the seasonality tables, which keep the ten most
+    recent years, were keeping three years from 2008-2010 and dropping three
+    recent ones off the bottom.  It looked like a display preference and was a
+    comparison on the wrong type.
+    """
+    try:
+        return int(year)
+    except ValueError:
+        return -1
+
+
 #: 〔河流圖〕's six zones, cheapest first.  The names are the workbook's.
 RIVER_ZONES: tuple[str, ...] = (
     "低估區", "偏低區", "合理區", "偏高區", "高估區", "警示區",
 )
-
-#: 〔財務指標評等預估〕's four scenarios and when each one applies.  These are
-#: not interchangeable — the sheet says so, and using the wrong one silently
-#: grades a quarter that has not been filed.
-SCENARIOS: tuple[tuple[str, str, str], ...] = (
-    (
-        "情境 1",
-        "任何月份皆可。只預估下個月營收，財報季度相關指標不動。",
-        "只需要一個輸入：下個月的預估營收。",
-    ),
-    (
-        "情境 2",
-        "已公布 4／7／10／2 月營收，但對應的 Q1／Q2／Q3／Q4 季報尚未公布。",
-        "預估該季的營收與各項財報指標。",
-    ),
-    (
-        "情境 3",
-        "4 月營收與 Q1 季報都尚未公布（7月／Q2、10月／Q3、2月／Q4 同理）。",
-        "同時預估月營收與整季財報。",
-    ),
-    (
-        "情境 4",
-        "3、4 月營收與 Q1 季報都尚未公布（6、7月／Q2 等同理）。",
-        "要預估兩個月的營收，再加整季財報。",
-    ),
-)
-
 
 # =========================================================================
 # 財報圖表
@@ -173,6 +161,7 @@ def build_pe_river(
     low_q: float,
     high_q: float,
     weekly: Sequence[tuple[str, float]] = (),
+    quarterly: Sequence[tuple[str, Number]] = (),
 ) -> River | None:
     """〔河流圖〕's P/E band, and the price line drawn through it.
 
@@ -181,11 +170,11 @@ def build_pe_river(
     at all — a negative P/E is not a cheap one, and letting it into the
     percentile drags the whole river down.
 
-    ``weekly`` decides *what is drawn inside them*.  It is 〔股價(週)〕's
-    close, which is what the workbook plots; without it the zones are still
-    right and the chart is simply not drawn.  Note that the boundaries are
-    horizontal in both cases, and deliberately: they are this year's multiples
-    applied to this year's forecast EPS, so there is one price per boundary.
+    ``weekly`` and ``quarterly`` decide *what is drawn inside them*: the
+    〔股價(週)〕 close, and the bands, which are those same multiples applied to
+    the trailing EPS at each week rather than to one current figure.  That is
+    what makes them bend, and it is the difference between a chart that says
+    「現在算貴嗎」 and one that says 「當時算貴嗎」.
     """
     from ..valuation.pe_band import Bands
 
@@ -210,14 +199,25 @@ def build_pe_river(
         )
     band_prices = bands.prices(current_eps) if current_eps else ()
     figure = ""
-    if weekly and band_prices:
-        figure = charts.river(
-            weekly,
-            band_prices,
-            RIVER_ZONES,
-            title="本益比河流圖（週收盤價）",
-            current=market_price,
-        )
+    if weekly and quarterly:
+        # The bands move with the trailing EPS a reader had at the time —
+        # Goodinfo's ShowK_ChartFlow shape, not five horizontal rules.  See
+        # :mod:`twsix.report.river` for the filing-date handling that decides
+        # *when* each quarter's figure enters the calculation.
+        from . import river as river_mod  # noqa: PLC0415
+
+        trailing = river_mod.trailing_series(list(quarterly))
+        if trailing:
+            aligned = river_mod.align(list(weekly), trailing)
+            series = river_mod.bands(aligned, list(bands.levels))
+            if any(any(v is not None for v in b) for b in series):
+                figure = charts.river(
+                    weekly,
+                    series,
+                    RIVER_ZONES,
+                    title="本益比河流圖（週收盤價，分區隨近四季 EPS 變動）",
+                    current=market_price,
+                )
     return River(
         kind="本益比",
         levels=bands.levels,
@@ -269,7 +269,7 @@ def revenue_seasonality(months: Sequence[tuple[str, float]]) -> Seasonal | None:
     shares: dict[str, list[float]] = {c: [] for c in columns}
     #: The average is over every year on file; the table shows the recent ten,
     #: because a twenty-row grid is scrolled past rather than read.
-    for rank, year in enumerate(sorted(by_year, reverse=True)):
+    for rank, year in enumerate(sorted(by_year, key=_roc, reverse=True)):
         values = by_year[year]
         total = sum(values.values())
         if rank < TABLE_YEARS:
@@ -294,6 +294,7 @@ def revenue_seasonality(months: Sequence[tuple[str, float]]) -> Seasonal | None:
             [f"{c} 月" for c in columns],
             averaged,
             title="各月營收占全年比重（完整年度平均）",
+            newest_first=False,  # 1 月…12 月 already reads left to right
             unit="%",
             digits=1,
             label_every=1,
@@ -315,7 +316,7 @@ def profit_seasonality(eps: Sequence[tuple[str, Number]]) -> Seasonal | None:
     columns = ["1", "2", "3", "4"]
     rows: list[dict[str, Any]] = []
     shares: dict[str, list[float]] = {c: [] for c in columns}
-    for rank, year in enumerate(sorted(by_year, reverse=True)):
+    for rank, year in enumerate(sorted(by_year, key=_roc, reverse=True)):
         values = by_year[year]
         total = sum(values.values())
         if rank < TABLE_YEARS:
@@ -342,6 +343,7 @@ def profit_seasonality(eps: Sequence[tuple[str, Number]]) -> Seasonal | None:
             [f"Q{c}" for c in columns],
             averaged,
             title="各季 EPS 占全年比重（獲利完整年度平均）",
+            newest_first=False,  # Q1…Q4 already reads left to right
             unit="%",
             digits=1,
             label_every=1,
@@ -441,33 +443,3 @@ def institutional(grid: Sequence[Sequence[str]]) -> Institutional | None:
 
 # =========================================================================
 # 財務指標評等預估
-# =========================================================================
-
-
-@dataclass
-class ScenarioBlock:
-    """One what-if: when it applies, and what it needs entered."""
-
-    name: str
-    when: str
-    needs: str
-
-
-def forecast_scenarios(rating: Any, data: Any) -> list[ScenarioBlock]:
-    """〔財務指標評等預估〕 — the four scenarios, with their 適用時機.
-
-    The sheet is a what-if tool: the user types a forecast into one cell and
-    watches the grades move.  A static page has no cell to type into, so what
-    is rendered is each scenario's 適用時機 (which is the part people get
-    wrong) beside the grades as they stand with nothing entered — the
-    workbook's own state when its input cells are empty.
-
-    An earlier draft repeated the six current grades inside each of the four
-    boxes.  It was accurate and useless: with nothing entered, all four are by
-    definition the same grades already shown two sections up, so the page said
-    the same thing five times.  What differs between the scenarios — and what
-    people actually get wrong — is *when each one applies*, so that is what
-    the boxes carry.
-    """
-    del rating, data  # the grades are shown once, above; see the docstring
-    return [ScenarioBlock(name=n, when=w, needs=x) for n, w, x in SCENARIOS]

@@ -70,7 +70,7 @@ def _extra_grids():
 
     pages = Path(__file__).resolve().parent / "pages" / "5439"
     bars = weekly_prices.parse((pages / "5439_股價週.djbcd").read_text("cp950"))
-    items = news_mod.parse((pages / "5439_個股新聞.html").read_text("utf-8"))
+    items = news_mod.parse((pages / "5439_個股新聞.json").read_text("utf-8"))
     return {
         weekly_prices.SHEET: weekly_prices.to_grid(bars),
         news_mod.SHEET: news_mod.to_grid(items),

@@ -36,7 +36,6 @@ from .sections import (
     River,
     Seasonal,
     build_pe_river,
-    forecast_scenarios,
     institutional,
     profit_seasonality,
     revenue_seasonality,
@@ -125,7 +124,6 @@ class StockPage:
     institutional: Institutional | None = None
     revenue_season: Seasonal | None = None
     profit_season: Seasonal | None = None
-    scenarios: list[Any] = field(default_factory=list)
     unbuilt: list[dict[str, str]] = field(default_factory=list)
 
     @property
@@ -289,10 +287,14 @@ def build_page(
                     "badge": result.letter in GRADE_LETTERS,
                     "display": result.display,
                     "reason": result.reason,
+                    # Reversed, both of them, together: the row reads left to
+                    # right like every chart on the page, and the labels stay
+                    # welded to their own numbers.
                     "values": [
                         None if v is None else round(float(v), 2)
-                        for v in (result.values or ())
+                        for v in reversed(result.values or ())
                     ],
+                    "periods": list(reversed(result.periods or ())),
                 }
             )
 
@@ -417,7 +419,6 @@ def build_page(
         page.statements = statement_figures(data)
     page.revenue_season = revenue_seasonality(months)
     page.profit_season = profit_seasonality(quarterly_eps(reader))
-    page.scenarios = forecast_scenarios(rating, data)  # data is optional here
 
     low_q = getattr(getattr(settings, "forecast", None), "river_low_percentile", 0.025)
     high_q = getattr(getattr(settings, "forecast", None), "river_high_percentile", 0.975)
@@ -430,6 +431,7 @@ def build_page(
         low_q=low_q,
         high_q=high_q,
         weekly=_weekly_closes(reader),
+        quarterly=quarterly_eps(reader),
     )
     inst_grid = reader.grid("三大法人") if hasattr(reader, "grid") else []
     page.institutional = institutional(inst_grid)

@@ -487,10 +487,14 @@ def _fetch_extras(http, stock: str, out_dir: Path, offline: bool) -> int:
 
     # -- 個股新聞 ---------------------------------------------------------
     try:
-        html = http.get_text(news_mod.URL.format(stock=stock), encoding="utf-8")
-        items = news_mod.parse(html)
+        payload = http.get_text(
+            news_mod.URL.format(stock=stock),
+            encoding="utf-8",
+            headers=dict(news_mod.HEADERS),
+        )
+        items = news_mod.parse(payload)
         if not items:
-            raise ValueError("頁面回來了但一則新聞都沒有")
+            raise ValueError("回應回來了但一則新聞都沒有")
         save(news_mod.SHEET, news_mod.to_grid(items))
     except Exception as exc:  # noqa: BLE001 - report and carry on
         print(f"  {news_mod.SHEET:<8} 失敗：{exc}", file=sys.stderr)

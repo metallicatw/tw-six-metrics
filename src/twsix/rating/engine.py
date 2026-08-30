@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from dataclasses import replace
+
 from ..calendar_tw import Quarter, RocMonth, latest_quarter_for_month
 from ..models import INDICATOR_ORDER, Number, Snapshot, StockRating
 from .indicators import (
@@ -196,6 +198,29 @@ def build_snapshot(
             rules=rules,
         ),
     }
+    # Label the series the sheet grades.  The windows are already computed
+    # above; this only records which period each number came from, so the
+    # page can print 「115/07 115/06 …」 over the row instead of six bare
+    # numbers whose unit the reader has to guess.
+    quarters = {
+        "operating_margin": rules.margin_quarters,
+        "net_income_yoy": rules.income_quarters,
+        "eps": rules.eps_quarters,
+        "inventory_turnover": rules.inventory_quarters,
+        "free_cash_flow": rules.fcf_long_quarters,
+    }
+    labelled = {
+        "revenue_yoy": tuple(labels),
+        **{
+            key: tuple(str(quarter.shift(-i)) for i in range(n))
+            for key, n in quarters.items()
+        },
+    }
+    indicators = {
+        key: replace(result, periods=labelled.get(key, ())[: len(result.values)])
+        for key, result in indicators.items()
+    }
+
     assert set(indicators) == set(INDICATOR_ORDER)
     return Snapshot(
         stock_id=data.stock_id,

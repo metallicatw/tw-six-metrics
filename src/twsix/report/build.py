@@ -11,16 +11,47 @@ from __future__ import annotations
 import shutil
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
 
 ENGINE_VERSION = "0.1.0"
+
+#: Pages built but not linked, and why.
+#:
+#: 〔具投資價值〕〔評等統計〕〔評分規則〕 all read the whole-market snapshot in
+#: ``data/ratings.csv``, which is a year old and cannot be refreshed — see
+#: 〈全市場清單的難題〉.  A ranked pick list and a market-wide distribution
+#: computed from stale data are not merely out of date, they are *confidently*
+#: out of date: nothing on those pages says 「這是去年的排名」 loudly enough to
+#: stop someone acting on it.  The per-stock pages are different, because those
+#: are rebuilt from a live fetch.
+#:
+#: They are still written to disk.  Hiding is a link-level decision, and a
+#: reader who has one of these URLs should still get the page rather than a
+#: 404 — with the site's own staleness banner on it, which is the thing the
+#: nav could not say in one word.
+HIDDEN_PAGES: frozenset[str] = frozenset({"index", "stats", "about"})
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 
 GRADE_KEYS = ["AA", "A", "BB", "B", "C", "不評分", "數據不足"]
+
+#: The site is about Taiwanese stocks, read in Taiwan, against 民國 quarters
+#: and 月營收 filed to a Taiwanese calendar.  Stamping it in UTC — or in
+#: whatever zone the build machine happens to sit in, which for GitHub Actions
+#: is also UTC — made the reader do arithmetic to answer 「這是多久以前的」.
+#: Fixed offset rather than a zoneinfo lookup: Taiwan has had no DST since
+#: 1979, and this must not depend on a tzdata package being installed.
+TAIPEI = timezone(timedelta(hours=8), "台北")
+
+
+def stamp(now: datetime | None = None) -> str:
+    """The build time, in Taiwan."""
+    return (now or datetime.now(timezone.utc)).astimezone(TAIPEI).strftime(
+        "%Y-%m-%d %H:%M 台北時間"
+    )
 
 
 @dataclass
@@ -240,13 +271,12 @@ def build_site(
     quarter, month = data_vintage(rows)
     ctx = SiteContext(
         site_title=site_title,
-        generated_at=datetime.now(timezone.utc)
-        .astimezone()
-        .strftime("%Y-%m-%d %H:%M %Z"),
+        generated_at=stamp(),
         stock_count=len(rows),
         latest_quarter=quarter,
     )
     base = dict(
+        hidden_pages=sorted(HIDDEN_PAGES),
         site_title=ctx.site_title,
         generated_at=ctx.generated_at,
         stock_count=ctx.stock_count,
@@ -630,11 +660,11 @@ def build_stock_page(
     out_file.parent.mkdir(parents=True, exist_ok=True)
     env.get_template("stockpage.html.j2").stream(
         p=page,
+        hidden_pages=sorted(HIDDEN_PAGES),
         page="stock",
         rel=rel,
         site_title=site_title,
-        generated_at=generated_at
-        or datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M %Z"),
+        generated_at=generated_at or stamp(),
         stock_count=1,
         latest_quarter=page.fiscal_quarter,
         latest_revenue_month=page.revenue_month,

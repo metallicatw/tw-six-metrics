@@ -34,6 +34,28 @@ from typing import Sequence
 
 Number = float | None
 
+def _chronological(
+    labels: Sequence[str], values: Sequence[Number], newest_first: bool
+) -> tuple[list[str], list[Number]]:
+    """Time runs left to right, always.
+
+    Almost every series in this project arrives newest-first, because that is
+    how the sheets and the mirrors hand them over and how a table wants to
+    read.  A *chart* is the other way round in Taiwan and everywhere else: the
+    past is on the left.  Drawing 2026.2Q at the left edge and 2024.3Q at the
+    right inverts every trend the reader sees — a rising series looks like a
+    falling one — which is the most expensive kind of chart error, because
+    nothing about it looks broken.
+
+    Reversing here rather than at each call site means the ordering decision
+    lives in one place and the accompanying number table cannot fall out of
+    step with the picture above it.
+    """
+    if not newest_first:
+        return list(labels), list(values)
+    return list(reversed(labels)), list(reversed(values))
+
+
 #: Bars are drawn with a 2px gap so adjacent ones never merge into a block.
 BAR_GAP = 2.0
 #: Rounded data-ends, anchored to the baseline.
@@ -200,13 +222,17 @@ def bars(
     digits: int = 0,
     label_every: int = 3,
     frame: Frame | None = None,
+    newest_first: bool = True,
 ) -> str:
-    """Magnitude over an ordered axis.  One series, baseline at zero.
+    """Magnitude over an ordered axis, oldest on the left.
+
+    One series, baseline at zero.
 
     Each bar carries its own ``<title>``, which is the browser's native
     tooltip — a hover layer that costs no JavaScript and works when scripting
     is off.
     """
+    labels, values = _chronological(labels, values, newest_first)
     present = [float(v) for v in values if v is not None]
     if not present:
         return f'<p class="muted">{escape(title)}：無資料</p>'
@@ -247,12 +273,16 @@ def line(
     digits: int = 1,
     label_every: int = 3,
     frame: Frame | None = None,
+    newest_first: bool = True,
 ) -> str:
-    """A rate over an ordered axis.  Sign is read against the zero rule.
+    """A rate over an ordered axis, oldest on the left.
+
+    Sign is read against the zero rule.
 
     Gaps are gaps: a missing month breaks the path rather than being bridged,
     because a straight line across a hole is a claim the data does not make.
     """
+    labels, values = _chronological(labels, values, newest_first)
     present = [float(v) for v in values if v is not None]
     if not present:
         return f'<p class="muted">{escape(title)}：無資料</p>'
@@ -370,133 +400,180 @@ def price_band(
 
 def river(
     points: Sequence[tuple[str, float]],
-    levels: Sequence[float],
+    band_series: Sequence[Sequence[Number]],
     zone_names: Sequence[str],
     *,
     title: str,
     current: float | None = None,
 ) -> str:
-    """〔河流圖〕 — the weekly close, drawn through the valuation zones.
+    """〔河流圖〕 — the weekly close drawn through bands that move with earnings.
 
-    The workbook's chart is this and nothing else: 股價(週) A:C from a start
-    year, with the band boundaries as horizontal series behind it.  They are
-    horizontal because the bands are *this year's* multiples applied to *this
-    year's* forecast EPS — one EPS, so one set of prices.  Sloping them to
-    follow historical EPS would make a prettier picture of a different claim.
+    ``band_series`` is one price series per zone boundary, cheapest first, each
+    aligned week-for-week with ``points``.  They come from
+    :mod:`twsix.report.river`: a fixed set of P/E multiples applied to the
+    trailing EPS *a reader had that week*, which is what makes the bands bend.
 
-    The zones are painted rather than ruled.  Five dashed lines across a price
-    series is five things competing with the series for attention; five quiet
-    fills behind it is a background the eye reads once.  Each still carries its
-    name at the right edge, so the colour is never the only cue.
+    The zones are painted as filled ribbons between consecutive boundaries
+    rather than ruled with five lines.  Five curves competing with the price
+    series is five things to disentangle; five quiet fills is a background the
+    eye reads once.  Each still carries its name at the right edge, so colour
+    is never the only cue, and every boundary's latest value is printed there
+    too — the numbers a horizontal-band chart used to put on the y axis.
     """
     series = [(label, float(v)) for label, v in points if v is not None]
-    edges = sorted(float(v) for v in levels)
-    if len(series) < 8 or len(edges) < 2:
+    if len(series) < 8 or not band_series:
         return f'<p class="muted">{escape(title)}：資料不足</p>'
 
-    f = Frame(height=280.0, left=48.0, right=64.0, bottom=24.0)
-    values = [v for _, v in series] + edges + ([current] if current else [])
+    f = Frame(height=300.0, left=46.0, right=78.0, bottom=24.0)
+    values = [v for _, v in series]
+    for band in band_series:
+        values += [float(v) for v in band if v is not None]
+    if current:
+        values.append(float(current))
     lo, hi = min(values), max(values)
-    pad = (hi - lo) * 0.08 or 1.0
+    pad = (hi - lo) * 0.06 or 1.0
     lo, hi = max(0.0, lo - pad), hi + pad
-    span = hi - lo
+    span = hi - lo or 1.0
+    n = len(series)
+    slot = f.plot_w / n
+
+    def x_of(i: int) -> float:
+        return f.left + slot * (i + 0.5)
 
     def y_of(value: float) -> float:
         return f.top + f.plot_h * (1 - (value - lo) / span)
 
     last = series[-1][1]
     parts = _open(
-        f, title, f"{series[0][0]} 至 {series[-1][0]} 共 {len(series)} 週，收盤 {_fmt(last, 2)}"
+        f,
+        title,
+        f"{series[0][0]} 至 {series[-1][0]} 共 {n} 週，收盤 {_fmt(last, 2)}",
     )
-    #: The right margin holds both the zone names and the latest close, and
-    #: the close naturally sits inside whichever zone the stock is in — so
-    #: they landed on top of each other, 「264.50」 printed through 「合理區」.
-    #: The close wins: it is the one number a reader is looking for, and the
-    #: zone it falls in is already named on the card below the chart.
-    label_y = y_of(last)
 
-    # -- zones ------------------------------------------------------------
-    bounds = [lo] + edges + [hi]
-    for i, name in enumerate(zone_names[: len(bounds) - 1]):
-        top_y = y_of(bounds[i + 1])
-        height = y_of(bounds[i]) - top_y
-        if height <= 0.5:
-            continue
-        parts.append(
-            f'<rect x="{f.left:.1f}" y="{top_y:.1f}" '
-            f'width="{f.plot_w:.1f}" height="{height:.1f}" '
-            f'fill="var(--zone-{i})" />'
-        )
-        name_y = top_y + height / 2
-        if height >= 13 and abs(name_y - label_y) > 11:
+    # -- the ribbons -------------------------------------------------------
+    #
+    # Between the chart floor and band 0, between band 0 and band 1, and so on
+    # up to the ceiling: one polygon per zone.  Runs of weeks where the bands
+    # are undefined (no trailing EPS yet) break the ribbon rather than being
+    # bridged, because a bridged ribbon claims a valuation nobody could compute.
+    # Only the space *between* boundaries is painted.  Filling from the chart
+    # floor up to the lowest band, and from the highest band to the ceiling,
+    # gave 5439 a page of one colour: its earnings in 2020 were a tenth of
+    # today's, so the bands sat near the axis and everything above them — most
+    # of the frame — became 警示區 pink.  Correct, and unreadable.  Goodinfo
+    # leaves the outside plain and so does this.
+    edges: list[list[Number]] = [list(b) for b in band_series]
+    for gap in range(len(edges) - 1):
+        lower, upper = edges[gap], edges[gap + 1]
+        zone = gap + 1  # zone 0 is below the lowest band and stays unpainted
+        run: list[tuple[float, float, float]] = []
+        for i in range(n):
+            a, b = lower[i], upper[i]
+            if a is None or b is None:
+                if len(run) > 1:
+                    parts.append(_ribbon(run, zone))
+                run = []
+                continue
+            run.append((x_of(i), y_of(float(a)), y_of(float(b))))
+        if len(run) > 1:
+            parts.append(_ribbon(run, zone))
+
+    # -- the boundaries, thin, over the fills -------------------------------
+    for band in band_series:
+        run: list[str] = []
+        for i, value in enumerate(band):
+            if value is None:
+                if len(run) > 1:
+                    parts.append(
+                        f'<polyline points="{" ".join(run)}" fill="none" '
+                        f'stroke="var(--rule)" stroke-width="1" />'
+                    )
+                run = []
+                continue
+            run.append(f"{x_of(i):.1f},{y_of(float(value)):.1f}")
+        if len(run) > 1:
             parts.append(
-                f'<text x="{f.width - f.right + 6:.1f}" y="{name_y + 3.5:.1f}" '
-                f'font-size="10" fill="var(--muted)">{escape(name)}</text>'
+                f'<polyline points="{" ".join(run)}" fill="none" '
+                f'stroke="var(--rule)" stroke-width="1" />'
             )
 
-    # -- zone boundaries, with their price ---------------------------------
+    # -- right-edge labels: where each boundary stands today ----------------
     #
-    # The five edges are evenly spaced in *multiple*, not in price, and the
-    # y range has to stretch to wherever the price actually went.  2454 sits
-    # at 65× earnings against a band topping out near 24×, so its five
-    # boundaries land inside thirty pixels and printed 「1,455」「1,269」「876」
-    # 「683」 on top of each other — four numbers rendered as one smudge.
-    #
-    # The lines all stay: they are what make the zones readable as bands.
-    # Only a label that cannot be read is dropped, top-down so the highest
-    # boundary — the one nearest a price in 警示區 — is the one kept.
-    last_label_y = -1e9
-    for value in sorted(edges, reverse=True):
-        y = y_of(value)
-        parts.append(
-            f'<line x1="{f.left:.1f}" y1="{y:.1f}" x2="{f.width - f.right:.1f}" '
-            f'y2="{y:.1f}" stroke="var(--rule)" stroke-width="1" '
-            f'stroke-dasharray="3 4" />'
-        )
-        if y - last_label_y < 11:
-            continue
-        last_label_y = y
-        parts.append(
-            f'<text x="{f.left - 6:.1f}" y="{y + 3.5:.1f}" text-anchor="end" '
-            f'font-size="10" fill="var(--muted)">{_fmt(value, 0)}</text>'
-        )
-
-    # -- the price line ----------------------------------------------------
-    slot = f.plot_w / len(series)
-    coords = [
-        (f.left + slot * (i + 0.5), y_of(v)) for i, (_, v) in enumerate(series)
+    # Numbers only.  Zone names went here too and collided with them — the
+    # boundary and the middle of the zone above it are a dozen pixels apart —
+    # and the names are already carried twice below the chart, by the 所在分區
+    # card and by the ranges table.  The legend line under the figure keeps
+    # the colours decodable.
+    marks = [
+        (y_of(value), _fmt(value, 0))
+        for value in (_last_number(b) for b in band_series)
+        if value is not None
     ]
-    path = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    parts += _right_labels(f, marks)
+
+    # -- the price ---------------------------------------------------------
+    path = " ".join(f"{x_of(i):.1f},{y_of(v):.1f}" for i, (_, v) in enumerate(series))
     parts.append(
         f'<polyline points="{path}" fill="none" stroke="var(--accent)" '
         f'stroke-width="{LINE_WIDTH}" stroke-linejoin="round" stroke-linecap="round" />'
     )
-    # The latest close, labelled outside the plot rather than on top of it.
-    # Inside, the halo still had the line running through the digits — the
-    # series ends at the right edge, which is exactly where the label wants to
-    # be.  The right margin already holds the zone names, and one more line of
-    # text there costs nothing.
-    end_x, end_y = coords[-1]
+    end_x, end_y = x_of(n - 1), y_of(last)
     parts.append(
         f'<circle cx="{end_x:.1f}" cy="{end_y:.1f}" r="3.5" fill="var(--accent)" />'
     )
-    parts.append(
-        f'<line x1="{end_x:.1f}" y1="{end_y:.1f}" x2="{f.width - f.right + 3:.1f}" '
-        f'y2="{end_y:.1f}" stroke="var(--accent)" stroke-width="1" />'
-    )
-    parts.append(
-        f'<text x="{f.width - f.right + 6:.1f}" y="{end_y + 4:.1f}" '
-        f'font-size="11" font-weight="700" fill="var(--accent)" '
-        f'stroke="var(--surface)" stroke-width="3.5" paint-order="stroke">'
-        f"{_fmt(last, 2)}</text>"
-    )
 
-    parts += _x_labels(f, [label[:7] for label, _ in series], max(1, len(series) // 8))
-    parts.append("</svg>")
+    parts += _x_labels(f, [label[:7] for label, _ in series], max(1, n // 8))
 
+    legend = "".join(
+        f'<span class="key"><i style="background:var(--zone-{i})"></i>'
+        f"{escape(name)}</span>"
+        for i, name in enumerate(zone_names[: len(band_series) + 1])
+    )
+    parts.append(f'</svg><p class="zonekey">{legend}</p>')
+
+    rows = list(range(max(0, n - 12), n))
     table = _table(
-        [label for label, _ in series[-12:]],
-        [("收盤價", [v for _, v in series[-12:]])],
+        [series[i][0] for i in rows],
+        [("收盤價", [series[i][1] for i in rows])]
+        + [
+            (f"{name}上緣", [band_series[j][i] for i in rows])
+            for j, name in enumerate(zone_names[: len(band_series)])
+        ],
         2,
     )
     return _figure(title, "", "".join(parts), table, extra="river-fig")
+
+
+def _ribbon(run: Sequence[tuple[float, float, float]], zone: int) -> str:
+    """One filled zone, from a run of (x, y_lower, y_upper)."""
+    top = " ".join(f"{x:.1f},{hi:.1f}" for x, _, hi in run)
+    bottom = " ".join(f"{x:.1f},{lo:.1f}" for x, lo, _ in reversed(run))
+    return f'<polygon points="{top} {bottom}" fill="var(--zone-{zone})" />'
+
+
+def _last_number(values: Sequence[Number]) -> float | None:
+    for v in reversed(list(values)):
+        if v is not None:
+            return float(v)
+    return None
+
+
+def _right_labels(frame: Frame, marks: Sequence[tuple[float, str]]) -> list[str]:
+    """Labels stacked down the right margin, dropping any that would collide.
+
+    A stock trading far outside its own band pushes every boundary into the
+    same few pixels — 2454 put five of them inside thirty — and five numbers
+    drawn there render as one smudge.  Highest first, so the boundary nearest
+    a price above the band is the one that survives.
+    """
+    out: list[str] = []
+    last = -1e9
+    for y, text in sorted(marks):
+        if y - last < 11:
+            continue
+        last = y
+        out.append(
+            f'<text x="{frame.width - frame.right + 6:.1f}" y="{y + 3.5:.1f}" '
+            f'font-size="10" fill="var(--muted)">{escape(text)}</text>'
+        )
+    return out

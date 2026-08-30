@@ -1,93 +1,102 @@
-"""〔個股新聞〕, against MoneyLink's real page.
+"""〔個股新聞〕, against 鉅亨網's real search response.
 
-Ten items, nine of them 《外資》買賣超 wire round-ups, dated 2026/05–06 while
-the rest of the page reports 115 年 8 月 data.  Both of those are asserted
-here on purpose: they are what the section has to tell the reader, so if the
-feed changes shape the tests should notice before the page starts lying about
-how current it is.
+The fixture is what ``ess.api.cnyes.com/ess/api/v1/news/keyword?q=5439``
+returned: thirty items reaching from 2026/06/17 to 2026/08/27.  Both ends
+matter.  The newest is the same week as the市價 the rest of the page shows,
+which is the whole reason this source replaced MoneyLink; the oldest is
+outside the two-month window, which is what proves the window is applied.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from twsix.ingest.news import describe, from_grid, parse, to_grid
+from twsix.ingest.news import describe, from_grid, parse, to_grid, within
 
-PAGE = Path(__file__).resolve().parent / "pages" / "5439" / "5439_個股新聞.html"
+PAGE = Path(__file__).resolve().parent / "pages" / "5439" / "5439_個股新聞.json"
 
 
-def page() -> str:
+def payload() -> str:
     return PAGE.read_text(encoding="utf-8")
 
 
-def test_all_ten_items_come_out_whole():
-    """The three divs are nested, not siblings — the naive parse loses nine.
+def test_the_response_becomes_dated_headlines():
+    items = parse(payload())
+    assert len(items) == 30
+    assert all(i.title and i.date and i.url for i in items)
+    assert items[0].date == "2026/08/27"  # newest first, as the API returns
+    assert items[-1].date == "2026/06/17"
+    assert all(i.url.startswith("https://news.cnyes.com/news/id/") for i in items)
 
-    ``NewsContent`` and ``NewsDate`` live *inside* ``NewsTitle``, so closing
-    the item on the first ``</div>`` ends it before its own date and leaves
-    one item holding everything.  Ten is the count that proves the depth
-    counter works.
+
+def test_this_feed_is_current_where_the_old_one_was_a_quarter_behind():
+    """MoneyLink's newest was 2026/06 against 115/08 financials.
+
+    That mismatch is why the source changed, so it is worth asserting rather
+    than remembering: the newest headline has to be in the same month as the
+    data the rest of the page reports.
     """
-    items = parse(page())
-    assert len(items) == 10
-    assert all(i.title for i in items)
-    assert all(i.date for i in items)
-    assert all(i.url.startswith("https://ww2.money-link.com.tw/") for i in items)
+    assert parse(payload())[0].date.startswith("2026/08")
 
 
-def test_the_date_line_splits_into_source_date_and_time():
-    """「時報新聞&nbsp;2026/06/05&nbsp;07:35」 — one string, three fields."""
-    first = parse(page())[0]
-    assert first.source == "時報新聞"
-    assert first.date == "2026/06/05"
-    assert first.time == "07:35"
-    assert first.title == "《外資》賣超股：中信金、宏捷科、瑞軒(2-1)"
+def test_the_search_highlight_markup_is_not_shown_to_the_reader():
+    """Titles come back with <mark> around the matched code."""
+    items = parse(payload())
+    assert all("<mark>" not in i.title and "<" not in i.title for i in items)
+    assert "(5439-TW)" in items[0].title
 
 
-def test_the_read_more_link_text_is_not_part_of_the_summary():
-    """(詳全文) is an anchor inside the summary div, not a sentence."""
-    items = parse(page())
-    assert all("詳全文" not in i.summary for i in items)
-    assert items[0].summary.startswith("【時報-台北電】")
-
-
-def test_nine_of_ten_are_wire_round_ups_not_company_news():
-    """Thin coverage is a fact about a small-cap, so it is counted, not hidden.
-
-    A 《外資》買賣超 list names forty tickers; this stock happening to appear
-    in one is not reporting on the company.  The digest separates the counts
-    so the page can say so instead of presenting ten headlines as coverage.
-    """
-    digest = describe(parse(page()))
+def test_only_the_last_two_months_are_kept():
+    """Five of the thirty are older, and dropping them is counted, not silent."""
+    items = parse(payload())
+    digest = describe(items)
     assert digest is not None
-    assert len(digest.items) == 10
-    assert digest.roundups == 9
-    assert digest.specific == 1
-    only = next(i for i in digest.items if not i.is_roundup)
-    assert only.title == "《台北股市》15檔上櫃中小尖兵 外資青睞"
+    assert len(digest.items) == 25
+    assert digest.dropped == 5
+    assert min(i.date for i in digest.items) >= "2026/06/26"
 
 
-def test_the_feed_runs_a_quarter_behind_the_financials():
-    """115/08 data next to 2026/06 news is the mismatch the page must admit.
+def test_the_window_is_measured_from_the_newest_item_not_the_clock():
+    """A page rebuilt in December from an August cache still shows August.
 
-    2026/06 is 115/06 in ROC years — three months older than the 115/08 月營收
-    the rest of the page reports.  A news box that looks live but is a quarter
-    stale is worse than none, so the latest date is printed beside the heading.
+    Measuring from ``date.today()`` would empty the section and imply the
+    company went quiet, which is a claim the cache cannot support.
     """
-    digest = describe(parse(page()))
-    assert digest.latest == "2026/06/05"
-    assert digest.latest < "2026/08"
+    items = parse(payload())
+    assert len(within(items, days=62)) == 25
+    assert len(within(items, days=7)) < 25
+    assert within(items, days=7)[0].date == "2026/08/27"
 
 
-def test_no_items_gives_no_digest_rather_than_an_empty_one():
+def test_price_ticks_are_counted_apart_from_news():
+    """「盤中速報 - 高技(5439)大漲7.46%」 is a quote with a headline on it.
+
+    Real, published, and not something anyone reads as news — so it is kept
+    and labelled rather than dropped, the way the wire round-ups were.
+    """
+    digest = describe(parse(payload()))
+    assert digest.tickers == 17
+    assert digest.substantive == 8
+    ticks = [i for i in digest.items if i.is_ticker]
+    assert all("盤中速報" in i.title for i in ticks)
+    real = [i for i in digest.items if not i.is_ticker]
+    assert any("財務報告" in i.title for i in real)
+
+
+def test_the_category_becomes_the_source_line():
+    items = parse(payload())
+    assert items[0].source == "專家觀點"
+    assert {i.source for i in items} >= {"台股盤中", "台股公告"}
+
+
+def test_nothing_usable_gives_no_digest_rather_than_an_empty_one():
     assert describe([]) is None
-    assert parse("<html><body><p>沒有資料</p></body></html>") == []
+    assert parse("") == []
+    assert parse('{"data":{"items":[]}}') == []
 
 
 def test_the_grid_round_trips():
-    """〔個股新聞〕 is stored as a sheet like everything else fetch-stock saves."""
-    items = parse(page())
+    items = parse(payload())
     grid = to_grid(items)
     assert grid[0] == ["日期", "時間", "來源", "標題", "摘要", "連結"]
-    assert len(grid) == 11
     assert from_grid(grid) == items

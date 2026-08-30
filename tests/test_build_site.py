@@ -208,3 +208,64 @@ def test_the_stock_page_search_box_resolves_paths_from_its_own_depth():
     page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
     assert "'../'+'search.json'" in page or "base='../'" in page.replace(" ", "")
     assert 'action="../list.html"' in page
+
+
+# -- 這一輪的版面決定 ------------------------------------------------------
+
+
+def test_the_three_stale_pages_are_unlinked_but_still_built():
+    """〔具投資價值〕〔評等統計〕〔評分規則〕 all read a year-old snapshot.
+
+    A ranked pick list computed from stale data is not merely out of date, it
+    is confidently out of date, and no nav label says 「這是去年的」 loudly
+    enough.  So the links go.  The files stay: hiding is a link-level
+    decision, and someone holding one of these URLs should get the page — with
+    the site's own staleness banner on it — rather than a 404.
+    """
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    import re
+
+    nav = re.search(r"<nav>(.*?)</nav>", (out / "list.html").read_text("utf-8"), re.S)
+    labels = re.findall(r">([^<>]+)</a>", nav.group(1))
+    assert labels == ["評等清單"]
+    for name in ("index.html", "stats.html", "about.html"):
+        assert (out / name).is_file(), f"{name} 不該被刪掉，只是不連過去"
+
+
+def test_the_stock_page_is_tabs_rather_than_one_long_scroll():
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "stock" / "5439.html").read_text("utf-8")
+
+    assert page.count('role="tab"') == 10
+    assert page.count('class="panel"') == 10
+    # Exactly one panel open on arrival, and it is the first.
+    assert page.count('role="tabpanel" aria-labelledby="tab-summary">') == 1
+    assert page.count("hidden>") >= 9
+    # The three rows a reader needs on every tab stay put.
+    assert 'class="ident sticky"' in page
+
+
+def test_the_build_stamp_is_taipei_time():
+    """民國 quarters and 月營收 read against a UTC clock made the reader do
+    arithmetic to answer 「這是多久以前的」."""
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    text = (out / "list.html").read_text("utf-8")
+    assert "台北時間" in text
+    assert "UTC" not in text
+
+
+def test_the_dropped_section_is_gone_from_the_page_and_the_code():
+    """〔財務指標評等預估〕 showed four scenarios and no numbers."""
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "stock" / "5439.html").read_text("utf-8")
+    assert "財務指標評等預估" not in page
+    assert 'id="tab-scenarios"' not in page

@@ -13,8 +13,8 @@
   --g4:#0d5348; --g3:#2c7a6c; --g2:#5a6b74; --g1:#92682a; --g0:#8f3b2c;
   --badge-ink:#fff;
   /* 河流圖分區底色：只是背景，每一區另有虛線與右側名稱，顏色不單獨承載意義 */
-  --zone-0:#e6f1ed; --zone-1:#eef5f1; --zone-2:#f2f5f7;
-  --zone-3:#faf3e5; --zone-4:#f9ebe6; --zone-5:#f5e0da;
+  --zone-0:#d5e9e1; --zone-1:#e3f0e8; --zone-2:#e9eef2;
+  --zone-3:#f6ead0; --zone-4:#f4dcd2; --zone-5:#eec9bf;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
   --ground:#0d1116; --surface:#151b21; --surface-2:#1c232a;
@@ -23,31 +23,37 @@
   --up:#e4695b; --down:#4eb884;
   --g4:#6fd3c2; --g3:#43a795; --g2:#8e9aa4; --g1:#d0a44e; --g0:#e07a63;
   --badge-ink:#10161c;
-  --zone-0:#152e2a; --zone-1:#172826; --zone-2:#1a2129;
-  --zone-3:#2b2620; --zone-4:#31241f; --zone-5:#39231e;
+  --zone-0:#1b423a; --zone-1:#1c3630; --zone-2:#242c34;
+  --zone-3:#3a3122; --zone-4:#432c22; --zone-5:#4d2a20;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);
-  font:16px/1.7 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  font:15px/1.55 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
   -webkit-font-smoothing:antialiased}
 a{color:var(--accent-2);text-underline-offset:2px}
 a:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
-.wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px}
-header.top{background:var(--surface);border-bottom:1px solid var(--rule);margin-bottom:32px}
-header.top .in{max-width:1180px;margin:0 auto;padding:22px 20px}
-header.top h1{margin:0;font-size:21px;letter-spacing:-.01em}
+.wrap{max-width:1240px;margin:0 auto;padding:0 20px 44px}
+header.top{background:var(--surface);border-bottom:1px solid var(--rule);margin-bottom:14px}
+header.top .in{max-width:1240px;margin:0 auto;padding:12px 20px 10px}
+header.top h1{margin:0;font-size:17px;letter-spacing:-.01em}
 header.top h1 a{color:inherit;text-decoration:none}
-nav{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:14px}
+nav{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:13px}
 nav a{color:var(--ink-2);text-decoration:none}
 nav a[aria-current=page]{color:var(--accent-2);font-weight:600}
-.stamp{font-size:12.5px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums}
-h2{font-size:20px;margin:36px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--ink)}
-h3{font-size:16px;margin:26px 0 8px}
-p{margin:0 0 14px;max-width:70ch}
-.muted{color:var(--muted);font-size:13.5px}
-.scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:4px;background:var(--surface);margin-bottom:20px}
-table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:560px}
-th,td{padding:7px 11px;text-align:left;border-bottom:1px solid var(--rule);white-space:nowrap}
+.stamp{font-size:11.5px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
+h2{font-size:18px;margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--ink)}
+h3{font-size:15px;margin:16px 0 6px}
+h4{margin:14px 0 6px}
+p{margin:0 0 10px;max-width:78ch}
+.muted{color:var(--muted);font-size:12.5px}
+.scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:5px;background:var(--surface);margin-bottom:14px}
+table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:560px}
+/* 對齊規則只有兩條，套在所有表格上：
+   文字靠左、數字靠右，而標題永遠跟著它那一欄的內容走。
+   標題置中、數字置左那種混搭，是掃一欄數字時最花眼力的排版。 */
+th,td{padding:5px 10px;text-align:left;border-bottom:1px solid var(--rule);
+  white-space:nowrap;vertical-align:baseline}
+th.num,thead th.num,td.series{text-align:right}
 thead th{background:var(--surface-2);font-size:12px;font-weight:600;color:var(--ink-2);position:sticky;top:0}
 tbody tr:last-child td{border-bottom:none}
 tbody tr:hover{background:var(--surface-2)}
@@ -60,13 +66,13 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;
 .g-na{background:transparent;color:var(--muted);border:1px solid var(--rule)}
 .pick{color:var(--accent-2);font-weight:600}
 .up{color:var(--up)}.down{color:var(--down)}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;
-  background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:24px}
-.card{background:var(--surface);padding:16px 18px}
-.card b{display:block;font-size:25px;color:var(--accent);line-height:1.15;
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:5px;overflow:hidden;margin-bottom:14px}
+.card{background:var(--surface);padding:10px 14px}
+.card b{display:block;font-size:21px;color:var(--accent);line-height:1.2;
   font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
-.card span{display:block;font-size:12.5px;color:var(--muted);margin-top:6px}
-footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);
+.card span{display:block;font-size:11.5px;color:var(--muted);margin-top:3px}
+footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--rule);
   font-size:12.5px;color:var(--muted)}
 /* -- 頁首個股搜尋 ----------------------------------------------------- */
 .find{position:relative;margin:10px 0 0;max-width:420px}
@@ -109,13 +115,49 @@ footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--rule);
 ul.how{padding-left:20px;font-size:13.5px;line-height:1.9}
 ul.how code{background:var(--surface-2);padding:1px 6px;border-radius:3px;
   font-size:12.5px;color:var(--ink)}
+/* 近六期數列：期別列與數值列共用同一組欄，所以標籤永遠落在自己的數字上面。 */
+/* max-content, not 1fr: with 1fr the six columns split whatever the table
+   hands the cell — 94px each here — which stretched the series across half
+   the table and pushed 理由 against the right edge.  Sized to their contents
+   they take exactly the room the numbers need. */
+td.series{width:1%}
+td.series .cells{display:grid;grid-template-columns:repeat(var(--n),max-content);
+  gap:1px 14px;justify-content:end}
+td.series .p{font-size:10.5px;color:var(--muted);text-align:right;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+td.series .v{text-align:right;font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+/* -- 個股頁：固定頁首與分頁 ------------------------------------------ */
+.ident.sticky{position:sticky;top:0;z-index:30;background:var(--ground);
+  margin:0 -20px 16px;padding:12px 20px 0;
+  box-shadow:0 1px 0 var(--rule),0 6px 14px -12px rgba(0,0,0,.4)}
+.ident.sticky h2{margin:0;font-size:19px;border:none;padding:0;letter-spacing:-.01em}
+.ident .facts{display:flex;flex-wrap:wrap;gap:4px 18px;margin:5px 0 9px;
+  font-size:12.5px;color:var(--muted);max-width:none}
+.ident .facts b{color:var(--ink);font-weight:600;
+  font-variant-numeric:tabular-nums;margin-left:3px}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;
+  border-bottom:1px solid var(--rule)}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;appearance:none;border:none;background:transparent;
+  font:inherit;font-size:13px;color:var(--muted);cursor:pointer;
+  padding:7px 12px;border-bottom:2px solid transparent;margin-bottom:-1px;
+  white-space:nowrap;border-radius:4px 4px 0 0}
+.tab:hover{color:var(--ink-2);background:var(--surface-2)}
+.tab[aria-selected=true]{color:var(--accent-2);font-weight:600;
+  border-bottom-color:var(--accent-2)}
+.tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+/* 分頁自己的標題和分頁標籤是同一句話，重複一次只是佔掉一行。 */
+.panel > h3:first-child{position:absolute;width:1px;height:1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap}
 .searchbar{margin:0 0 14px}
 .searchbar input{width:100%;max-width:340px;padding:8px 11px;border:1px solid var(--rule);
   border-radius:4px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
-.stale{background:var(--surface);border:1px solid var(--g1);border-left:4px solid var(--g1);
-  border-radius:4px;padding:11px 14px;font-size:13.5px;color:var(--ink-2);max-width:none}
-.note{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--accent);
-  border-radius:4px;padding:11px 14px;font-size:13.5px;color:var(--ink-2);max-width:none}
+.stale,.note{background:var(--surface);border:1px solid var(--rule);
+  border-radius:5px;padding:8px 12px;font-size:12.5px;line-height:1.6;
+  color:var(--ink-2);max-width:none;margin-bottom:12px}
+.stale{border-left:3px solid var(--g1)}
+.note{border-left:3px solid var(--accent)}
 .tag.full{display:inline-block;padding:0 6px;margin-left:5px;border-radius:3px;
   font-size:10.5px;line-height:1.6;vertical-align:1px;
   border:1px solid var(--accent);color:var(--accent);background:transparent}
@@ -137,7 +179,12 @@ ol.news .head{font-size:14.5px;font-weight:600;line-height:1.5;color:var(--ink);
 ol.news a.head:hover{color:var(--accent-2);text-decoration:underline}
 ol.news .sum{margin:6px 0 0;font-size:12.5px;line-height:1.65;color:var(--muted)}
 /* -- 河流圖 ----------------------------------------------------------- */
-.river-fig svg{height:auto;max-height:340px}
+.river-fig svg{height:auto;max-height:360px}
+.zonekey{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0 0;padding:0 2px;
+  font-size:11.5px;color:var(--muted);max-width:none}
+.zonekey .key{display:inline-flex;align-items:center;gap:5px}
+.zonekey i{width:11px;height:11px;border-radius:2px;border:1px solid var(--rule);
+  display:inline-block}
 /* -- valuation ------------------------------------------------------- */
 .val{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1px;
   background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:18px}
@@ -183,7 +230,8 @@ td.series{white-space:nowrap}
 td.series span{display:inline-block;min-width:52px;text-align:right;
   padding-left:8px;color:var(--ink-2)}
 td.series span:first-child{color:var(--ink);font-weight:600}
-td.reason{white-space:normal;font-size:12.5px;color:var(--muted);min-width:220px}
+td.reason{white-space:normal;font-size:12px;color:var(--muted);
+  min-width:180px;max-width:340px;line-height:1.5}
 details.sources{margin:0 0 8px;font-size:13px}
 details.sources summary{cursor:pointer;color:var(--ink-2)}
 .srclist{list-style:none;display:flex;flex-wrap:wrap;gap:6px;padding:10px 0 0;margin:0}
@@ -228,13 +276,7 @@ details.chart-data .scroll{margin-top:8px;max-height:260px;overflow-y:auto}
 .criteria .warnings li{margin-top:4px}
 tr.here{background:var(--surface-2)}
 tr.here th{font-weight:700}
-.scenarios{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;
   background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:20px}
-.scenarios section{background:var(--surface);padding:14px 17px}
-.scenarios h4{margin:0 0 8px;font-size:14px}
-.scenarios .when{font-size:13px;color:var(--ink-2);margin-bottom:6px;max-width:none}
-.scenarios ul.grades{list-style:none;margin:10px 0 6px;padding:0;font-size:12.5px}
-.scenarios ul.grades li{display:flex;justify-content:space-between;align-items:center;
   padding:2px 0;color:var(--ink-2)}
 @media(max-width:640px){svg.chart{height:160px}}
 @media(max-width:640px){.wrap{padding:0 14px 60px}}
@@ -242,12 +284,21 @@ tr.here th{font-weight:700}
 </head>
 <body>
 <header class="top"><div class="in">
-  <h1><a href="{{ rel }}index.html">{{ site_title }}</a></h1>
+  <h1><a href="{{ rel }}list.html">{{ site_title }}</a></h1>
+  {# 三個分頁暫時不連：它們讀的是一年前的全市場快照，而排名和分布用舊資料算出來
+     不只是過時，是理直氣壯地過時。個股頁不同，那是現抓的。頁面照樣產生，直接
+     開網址還是看得到，只是導覽不指過去。#}
   <nav>
+    {% if 'index' not in hidden_pages %}
     <a href="{{ rel }}index.html"{% if page=='index' %} aria-current="page"{% endif %}>具投資價值</a>
+    {% endif %}
     <a href="{{ rel }}list.html"{% if page=='list' %} aria-current="page"{% endif %}>評等清單</a>
+    {% if 'stats' not in hidden_pages %}
     <a href="{{ rel }}stats.html"{% if page=='stats' %} aria-current="page"{% endif %}>評等統計</a>
+    {% endif %}
+    {% if 'about' not in hidden_pages %}
     <a href="{{ rel }}about.html"{% if page=='about' %} aria-current="page"{% endif %}>評分規則</a>
+    {% endif %}
   </nav>
   <form class="find" role="search" action="{{ rel }}list.html" method="get">
     {# The form's action is the fallback, and it is a real one: with scripting
