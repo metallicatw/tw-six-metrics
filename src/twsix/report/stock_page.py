@@ -441,6 +441,7 @@ def build_page(
         for name in (
             "FRQ", "CFQ", "ISQ", "BSQ", "BASIC", "營收", "OPQ", "EPQ", "股利",
             "三大法人", "年財務比率", "年度交易資訊_上市櫃合併_",
+            "股價(週)", "個股新聞",
         )
     ]
     return page

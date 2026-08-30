@@ -13,6 +13,21 @@
 {%- else -%}0.00{%- endif -%}
 {%- endmacro %}
 
+{# 綜合評分 is a mean of six integers, so a third of the values are repeating
+   decimals.  Printed raw they came out as 「3.8333333333」 and 「3.1666666667」
+   in a column two digits wide — precision the score does not have, in a place
+   nobody can use it.  Two decimals to read, the full value in the tooltip for
+   anyone comparing two stocks that tie at 3.17.  Non-numeric scores
+   （「數據不足」）pass through as they are. #}
+{% macro score(v) -%}
+{%- if v is none or v == '' -%}<span class="muted">—</span>
+{%- else -%}
+{%- set f = v|float(default=none) -%}
+{%- if f is none -%}<span class="muted">{{ v }}</span>
+{%- else -%}<span title="{{ v }}">{{ '%.2f'|format(f) }}</span>{%- endif -%}
+{%- endif -%}
+{%- endmacro %}
+
 {% macro row(r, rel) -%}
 <tr>
   <td><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a></td>
@@ -24,7 +39,7 @@
   <td>{{ grade(r.grades.eps) }}</td>
   <td>{{ grade(r.grades.inventory_turnover) }}</td>
   <td>{{ grade(r.grades.free_cash_flow) }}</td>
-  <td class="num">{{ r.composite }}</td>
+  <td class="num">{{ score(r.composite) }}</td>
   <td class="num">{{ delta(r.composite_delta) }}</td>
   <td>{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
 </tr>

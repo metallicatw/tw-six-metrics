@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% from "_macros.html.j2" import grade %}
+{% from "_macros.html.j2" import grade, score %}
 {% macro n(v, digits=2, suffix='') -%}
 {%- if v is none %}<span class="gap">—</span>{% else %}{{ ('%.' ~ digits ~ 'f')|format(v) }}{{ suffix }}{% endif -%}
 {%- endmacro %}
@@ -135,7 +135,7 @@
 <tr>
   <td>{{ s.fiscal_quarter }}</td><td>{{ s.revenue_month }}</td>
   {% for k in indicator_order %}<td>{{ grade(s.grades[k]) }}</td>{% endfor %}
-  <td class="num">{{ s.composite }}</td>
+  <td class="num">{{ score(s.composite) }}</td>
   <td>{% if s.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
 </tr>
 {% endfor %}
