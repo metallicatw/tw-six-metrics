@@ -6,9 +6,7 @@ themselves live in :mod:`twsix.rating.indicators` and never touch this module.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 
 from ..calendar_tw import Quarter, RocMonth, latest_quarter_for_month
 from ..models import INDICATOR_ORDER, Number, Snapshot, StockRating

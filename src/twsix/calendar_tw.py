@@ -84,13 +84,13 @@ class Quarter:
         """``115.2Q`` — the form EPQ/OPQ use in their first column."""
         return f"{self.year - ROC_OFFSET}.{self.q}Q"
 
-    def shift(self, n: int) -> "Quarter":
+    def shift(self, n: int) -> Quarter:
         """``Quarter(2026, 2).shift(-4)`` -> ``2025.2Q``."""
         total = self.year * 4 + (self.q - 1) + n
         return Quarter(total // 4, total % 4 + 1)
 
     @classmethod
-    def parse(cls, text: str) -> "Quarter":
+    def parse(cls, text: str) -> Quarter:
         """Accept ``2026.2Q`` (Gregorian) or ``115.2Q`` (ROC)."""
         m = _QUARTER_RE.match(text)
         if not m:
@@ -132,14 +132,14 @@ class RocMonth:
     def gregorian_year(self) -> int:
         return self.year + ROC_OFFSET
 
-    def shift(self, n: int) -> "RocMonth":
+    def shift(self, n: int) -> RocMonth:
         """Step by whole months, ignoring the 1-2 merge."""
         idx = self.year * 12 + (self.month - 1) + n
         y, m = divmod(idx, 12)
         return RocMonth(y, f"{m + 1:02d}")
 
     @classmethod
-    def parse(cls, text: str) -> "RocMonth":
+    def parse(cls, text: str) -> RocMonth:
         m = _ROC_MONTH_RE.match(text)
         if not m:
             raise ValueError(f"not a ROC month: {text!r}")

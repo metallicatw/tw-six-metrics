@@ -28,7 +28,7 @@ from ..transform.statements import (
     net_margin,
     operating_margin,
 )
-from ..xlsx.extract import Workbook, index_to_col
+from ..xlsx.extract import Workbook
 
 #: sheet -> (row holding the period headers, {canonical field: row})
 LAYOUT: dict[str, tuple[int, dict[str, int]]] = {
@@ -119,7 +119,7 @@ class SheetSource:
         turnover: dict[Quarter, float] = {}
         fcf: dict[Quarter, float] = {}
 
-        for i, q in enumerate(ordered):
+        for _i, q in enumerate(ordered):
             s = statements.quarters[q]
             older = statements.get(q.shift(-1))
             v = operating_margin(s)

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Iterable, Sequence
 
 Number = float | None
 
@@ -23,7 +23,7 @@ class Grade(IntEnum):
         return {0: "C", 1: "B", 2: "BB", 3: "A", 4: "AA"}[int(self)]
 
     @classmethod
-    def from_letter(cls, s: str) -> "Grade":
+    def from_letter(cls, s: str) -> Grade:
         return cls({"C": 0, "B": 1, "BB": 2, "A": 3, "AA": 4}[s.strip().upper()])
 
 
@@ -148,7 +148,7 @@ class Snapshot:
         c = self.composite
         return NA_TEXT if c is None else f"{c:.10g}"
 
-    def is_value_pick(self, previous: "Snapshot | None") -> bool:
+    def is_value_pick(self, previous: Snapshot | None) -> bool:
         """六項無 0 分、無 1 分、綜合評分 >= 3、且較上期未下滑超過 0.3。"""
         c = self.composite
         if c is None or c < 3:

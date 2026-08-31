@@ -13,13 +13,13 @@ cosmetic — it is the dependency order of the original formulas.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 from ..models import (
+    INDICATOR_LABELS,
     Grade,
     IndicatorResult,
-    INDICATOR_LABELS,
     Number,
     Status,
     all_present,
@@ -84,7 +84,7 @@ class Rules:
     fcf_short_quarters: int = 4
 
     @classmethod
-    def from_mapping(cls, data: dict) -> "Rules":
+    def from_mapping(cls, data: dict) -> Rules:
         flat: dict[str, object] = {}
         for section in data.values():
             if isinstance(section, dict):

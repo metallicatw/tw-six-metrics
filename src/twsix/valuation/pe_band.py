@@ -9,8 +9,8 @@ band) through 5 (above the dearest).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 Number = float | None
 
@@ -46,7 +46,7 @@ class Bands:
         multiples: Sequence[float],
         low_q: float = 0.10,
         high_q: float = 0.90,
-    ) -> "Bands":
+    ) -> Bands:
         clean = [m for m in multiples if m and m > 0]
         if not clean:
             raise ValueError("no usable multiples")
@@ -122,13 +122,13 @@ def build_river(
         n = week_in_year.get(year, 0)
         week_in_year[year] = n + 1
         per_share.append(base + step * n)
-    for (_d, _y, close), psv in zip(weekly, per_share):
+    for (_d, _y, close), psv in zip(weekly, per_share, strict=False):
         if psv and psv == psv and psv != 0:  # not NaN, not zero
             values.append(close / psv)
 
     bands = Bands.from_multiples(values, low_q, high_q)
     out: list[RiverPoint] = []
-    for (date, _y, close), psv in zip(weekly, per_share):
+    for (date, _y, close), psv in zip(weekly, per_share, strict=False):
         if not psv or psv != psv or psv == 0:
             continue
         out.append(

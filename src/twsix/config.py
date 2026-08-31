@@ -81,7 +81,7 @@ class Settings:
     periods: int = 9
 
     @classmethod
-    def load(cls, config_dir: Path | str | None = None) -> "Settings":
+    def load(cls, config_dir: Path | str | None = None) -> Settings:
         d = Path(config_dir) if config_dir else CONFIG_DIR
         settings = _read(d / "settings.toml")
         rules_raw = _read(d / "rating_rules.toml")

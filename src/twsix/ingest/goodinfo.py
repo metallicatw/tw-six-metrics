@@ -70,16 +70,18 @@ def _text(fragment: str) -> str:
     )
 
 
+def _span(attrs: str, name: str) -> int:
+    hit = re.search(rf"{name}\s*=\s*['\"]?(\d+)", attrs, re.I)
+    return int(hit.group(1)) if hit else 1
+
+
 def _cells(row_html: str) -> list[Cell]:
     out: list[Cell] = []
     for m in re.finditer(r"<(t[hd])\b([^>]*)>(.*?)</\1\s*>", row_html, re.S | re.I):
         attrs, inner = m.group(2), m.group(3)
-
-        def _span(name: str) -> int:
-            hit = re.search(rf"{name}\s*=\s*['\"]?(\d+)", attrs, re.I)
-            return int(hit.group(1)) if hit else 1
-
-        out.append(Cell(_text(inner), _span("colspan"), _span("rowspan")))
+        out.append(
+            Cell(_text(inner), _span(attrs, "colspan"), _span(attrs, "rowspan"))
+        )
     return out
 
 

@@ -11,8 +11,8 @@ parse with the standard library.
 from __future__ import annotations
 
 import re
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -62,7 +62,7 @@ class Workbook:
     def close(self) -> None:
         self._zip.close()
 
-    def __enter__(self) -> "Workbook":
+    def __enter__(self) -> Workbook:
         return self
 
     def __exit__(self, *exc: object) -> None:
@@ -93,10 +93,7 @@ class Workbook:
         for sheet in ET.fromstring(wb_raw).iter(NS + "sheet"):
             rid = sheet.get(DOC_REL_NS + "id", "")
             target = rid_to_target.get(rid, "")
-            if target.startswith("/"):
-                path = target.lstrip("/")
-            else:
-                path = "xl/" + target
+            path = target.lstrip("/") if target.startswith("/") else "xl/" + target
             out.append(
                 SheetRef(
                     name=sheet.get("name", ""),
@@ -133,7 +130,7 @@ class Workbook:
         out: dict[tuple[int, int], object] = {}
 
         with self._zip.open(ref.path) as fh:
-            for event, el in ET.iterparse(fh, events=("end",)):
+            for _event, el in ET.iterparse(fh, events=("end",)):
                 if el.tag != NS + "row":
                     continue
                 row = int(el.get("r", "0"))

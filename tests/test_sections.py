@@ -61,7 +61,7 @@ def test_the_river_edges_are_evenly_spaced():
     page, _ = _page()
     steps = [
         round(b - a, 6)
-        for a, b in zip(page.river.levels, page.river.levels[1:])
+        for a, b in zip(page.river.levels, page.river.levels[1:], strict=False)
     ]
     assert max(steps) - min(steps) < 1e-6
 
@@ -138,8 +138,8 @@ def test_the_statement_charts_are_the_six_indicators_in_the_rating_tables_order(
     讀者在上一個分頁看到六個等第，這裡要能一格一格對回去——少一張，或順序不同，
     就得自己在腦裡對照，而那正是圖表要省掉的事。
     """
-    from twsix.report.sections import INDICATOR_FIGURES
     from twsix.models import INDICATOR_ORDER
+    from twsix.report.sections import INDICATOR_FIGURES
 
     assert [k for k, *_ in INDICATOR_FIGURES] == list(INDICATOR_ORDER)
 

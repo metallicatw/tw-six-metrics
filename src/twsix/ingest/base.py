@@ -23,9 +23,10 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 log = logging.getLogger("twsix.ingest")
 
@@ -142,7 +143,7 @@ class HttpClient:
     #: 這個 client 會被多執行緒共用（十三張表分散到八個鏡像站同時抓），所以
     #: 節流表和 opener 的建立都要上鎖。鎖只保護「排隊」那一瞬間，等待本身在鎖
     #: 外面睡——不然併發就退化成排隊，而排隊正是要修掉的東西。
-    _lock: "threading.Lock" = field(default_factory=lambda: threading.Lock(), init=False, repr=False)
+    _lock: threading.Lock = field(default_factory=lambda: threading.Lock(), init=False, repr=False)
 
     def _build_opener(self):  # type: ignore[no-untyped-def]
         with self._lock:

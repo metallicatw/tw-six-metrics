@@ -26,11 +26,10 @@ rather than counting it once.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
-from ..calendar_tw import Quarter
-from ..models import INDICATOR_LABELS, INDICATOR_ORDER
 from . import charts
 
 Number = float | None
@@ -218,7 +217,7 @@ def build_pe_river(
 
     multiples = [
         p / e
-        for p, e in zip(prices, eps)
+        for p, e in zip(prices, eps, strict=False)
         if p is not None and e is not None and e > 0 and p > 0
     ]
     if len(multiples) < 5:

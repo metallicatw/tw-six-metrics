@@ -25,7 +25,8 @@ Coordinates below come from the sheets themselves, not from memory:
 
 from __future__ import annotations
 
-from typing import Protocol, Sequence
+from collections.abc import Sequence
+from typing import Protocol
 
 from ..valuation.assemble import ValuationInput
 

@@ -19,7 +19,9 @@ from twsix.ingest.derive import (
 )
 from twsix.ingest.moneydj import GridSource, _offset_grid, parse_page
 from twsix.ingest.valuation_source import merged_revenue_yoy, read_valuation_input
-from twsix.ingest.yearly_trading import SHEET as YEARLY, parse as parse_yearly, to_grid
+from twsix.ingest.yearly_trading import SHEET as YEARLY
+from twsix.ingest.yearly_trading import parse as parse_yearly
+from twsix.ingest.yearly_trading import to_grid
 from twsix.valuation import ValuationOptions, evaluate
 
 PAGES = Path(__file__).resolve().parent / "pages" / "5439"

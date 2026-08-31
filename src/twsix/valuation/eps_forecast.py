@@ -6,8 +6,9 @@ valuation), plus the AA:AD block (P/E, PEG and total-return).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal
 
 Number = float | None
 
@@ -98,7 +99,7 @@ class PeBand:
         highs: Sequence[Number],
         lows: Sequence[Number],
         basis: PeBasis = "avg_5y",
-    ) -> "PeBand | None":
+    ) -> PeBand | None:
         """``highs``/``lows`` are yearly figures, newest first.
 
         〔BASIC2〕J7:M8 offers 當年度 / 3年平均 / 5年平均 / 當年5年孰低 — but
@@ -182,10 +183,10 @@ class PeBand:
         lo: list[Number] = []
         for i, eps in enumerate(annual_eps):
             h = highs[i] if i < len(highs) else None
-            l = lows[i] if i < len(lows) else None
+            low = lows[i] if i < len(lows) else None
             ok = eps is not None and eps > 0
             hi.append(h / eps if ok and h is not None else None)
-            lo.append(l / eps if ok and l is not None else None)
+            lo.append(low / eps if ok and low is not None else None)
         return hi, lo
 
 

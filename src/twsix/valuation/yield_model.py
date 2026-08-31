@@ -8,8 +8,9 @@ deliberately crossed over.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal
 
 Number = float | None
 

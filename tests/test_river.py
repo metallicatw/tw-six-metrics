@@ -107,14 +107,12 @@ def test_the_real_stock_steps_four_times_a_year_and_no_more():
     must be steps.  Smoothing between them would invent an earnings path the
     company never reported.
     """
-    import json  # noqa: PLC0415
+    import sys  # noqa: PLC0415
     from pathlib import Path  # noqa: PLC0415
 
     from twsix.ingest.moneydj import GridSource  # noqa: PLC0415
     from twsix.ingest.valuation_source import quarterly_eps  # noqa: PLC0415
     from twsix.ingest.weekly_prices import closes, parse, to_grid  # noqa: PLC0415
-
-    import sys  # noqa: PLC0415
 
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from test_stock_page import _full_grids  # noqa: PLC0415
@@ -134,7 +132,7 @@ def test_the_real_stock_steps_four_times_a_year_and_no_more():
 
     steps = sum(
         1
-        for a, b in zip(points, points[1:])
+        for a, b in zip(points, points[1:], strict=False)
         if a.trailing_eps != b.trailing_eps
     )
     weeks_per_year = 52
