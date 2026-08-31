@@ -21,7 +21,6 @@
   <button type="button" role="tab" id="tab-six" class="tab" aria-controls="panel-six" aria-selected="false" tabindex="-1">六大財務指標評等</button>
   <button type="button" role="tab" id="tab-eps" class="tab" aria-controls="panel-eps" aria-selected="false" tabindex="-1">EPS預估與估價</button>
   <button type="button" role="tab" id="tab-yield" class="tab" aria-controls="panel-yield" aria-selected="false" tabindex="-1">殖利率估價</button>
-  <button type="button" role="tab" id="tab-statements" class="tab" aria-controls="panel-statements" aria-selected="false" tabindex="-1">財報圖表</button>
   <button type="button" role="tab" id="tab-river" class="tab" aria-controls="panel-river" aria-selected="false" tabindex="-1">河流圖</button>
   <button type="button" role="tab" id="tab-season" class="tab" aria-controls="panel-season" aria-selected="false" tabindex="-1">季節性</button>
   <button type="button" role="tab" id="tab-inst" class="tab" aria-controls="panel-inst" aria-selected="false" tabindex="-1">外資投信</button>
@@ -156,9 +155,26 @@
   </table>
 </div>
 
+{# 每個指標的圖就接在它自己的評等後面。
+   把六張圖另開一個分頁，等於要讀者記住「B 是哪一項」再切過去對——而那正是圖表
+   要省掉的動作。表格用來掃，圖用來看走勢，兩者講的是同一條數列。 #}
+{% for ind in p.indicators %}
+{% if p.statements[ind.key] %}
+<section class="metric">
+  <h4>
+    {%- if ind.badge -%}<span class="g g-{{ ind.letter }}">{{ ind.letter }}</span>
+    {%- else -%}<span class="g g-na">{{ ind.letter or "—" }}</span>{%- endif -%}
+    <span class="nm">{{ ind.label }}</span>
+    <span class="why">{{ ind.reason }}</span>
+  </h4>
+  {{ p.statements[ind.key]|safe }}
+</section>
+{% endif %}
+{% endfor %}
+
+{# 月營收本身不是六大指標之一（評分看的是年增率），但它是那條年增率的分母，
+   放在最後當背景。 #}
 {% if p.figures.revenue %}{{ p.figures.revenue|safe }}{% endif %}
-{% if p.figures.revenue_yoy %}{{ p.figures.revenue_yoy|safe }}{% endif %}
-{% if p.figures.eps %}{{ p.figures.eps|safe }}{% endif %}
 
 {# ================= 3. EPS預估與估價 ================= #}
 </section>
@@ -293,17 +309,8 @@
 {% endif %}
 
 
-{# ================= 5. 財報圖表 ================= #}
-</section>
-
-<section class="panel" id="panel-statements" role="tabpanel" aria-labelledby="tab-statements" hidden>
-<h3 id="statements">財報圖表</h3>
-<p class="muted">六大指標實際評分所依據的數列，依評等表的順序。營收是單月，其餘是單季；中空的長條代表負值。</p>
-{% for key in ["revenue_yoy", "operating_margin", "net_income_yoy", "eps", "inventory_turnover", "free_cash_flow"] %}
-  {% if p.statements[key] %}{{ p.statements[key]|safe }}{% endif %}
-{% endfor %}
-
-{# ================= 6. 河流圖 ================= #}
+{# 〔財報圖表〕已併入〔六大財務指標評等〕：六張圖就是六個等第的數列，
+   分成兩個分頁只是逼讀者自己在腦裡對照。 #}
 </section>
 
 <section class="panel" id="panel-river" role="tabpanel" aria-labelledby="tab-river" hidden>

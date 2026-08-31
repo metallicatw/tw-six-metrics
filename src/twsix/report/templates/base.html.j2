@@ -6,12 +6,18 @@
 <title>{% block title %}{{ site_title }}{% endblock %}</title>
 <style>
 :root{
-  --ground:#f4f6f8; --surface:#fff; --surface-2:#eaeef2;
-  --ink:#111820; --ink-2:#3b4854; --muted:#6a7885;
-  --rule:#d9e0e6; --accent:#0e5a52; --accent-2:#12766b;
-  --up:#ae2b1e; --down:#146b47;
-  --g4:#0d5348; --g3:#2c7a6c; --g2:#5a6b74; --g1:#92682a; --g0:#8f3b2c;
-  --badge-ink:#fff;
+  /* 底色帶一點青，不是純中性灰——整站的主角是青綠，底也跟著偏一點點，畫面才
+     像一件東西而不是一張灰紙上貼了幾塊顏色。 */
+  --ground:#eef4f7; --surface:#fff; --surface-2:#e3ecf1;
+  --ink:#0d1620; --ink-2:#33424f; --muted:#5d6b78;
+  --rule:#d2dee5; --accent:#0e7c6f; --accent-2:#127a8f;
+  --up:#cf3327; --down:#0d7c4f;
+  /* 等第：亮底配深字，不是深底配白字。
+     鮮豔的顏色配白字幾乎一定過不了 4.5:1（#10b981 配白只有 2.54），為了合規
+     只好把顏色壓暗——那正是原本那組看起來悶的原因。反過來用深字，同樣鮮豔的
+     填色可以到 5.2~9.2，而且同一組填色在淺色和深色主題上都成立。 */
+  --g4:#10b981; --g3:#22c1a8; --g2:#7c8ea8; --g1:#f0a72a; --g0:#f0533f;
+  --badge-ink:#0b1220;
   /* 六大指標各一個色相。這是「識別」，不是裝飾：同一個指標在站上任何地方都是
      同一個顏色，而顏色從不單獨承載意義——每張圖都有自己的標題與座標軸，正負由
      零線與填色深淺讀出，所以灰階列印和色盲模式下都還是完整的。
@@ -23,21 +29,23 @@
   --m0:#00918a; --m1:#a86a00; --m2:#8b3fd4;
   --m3:#c02a4e; --m4:#2563c9; --m5:#5a8f00;
   /* 河流圖分區底色：只是背景，每一區另有虛線與右側名稱，顏色不單獨承載意義 */
-  --zone-0:#d5e9e1; --zone-1:#e3f0e8; --zone-2:#e9eef2;
-  --zone-3:#f6ead0; --zone-4:#f4dcd2; --zone-5:#eec9bf;
+  --zone-0:#cdece0; --zone-1:#ddf2e6; --zone-2:#e6edf2;
+  --zone-3:#fbecc9; --zone-4:#fbdccf; --zone-5:#f8c8ba;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
-  --ground:#0d1116; --surface:#151b21; --surface-2:#1c232a;
-  --ink:#e5ebf1; --ink-2:#b2bec9; --muted:#84919e;
-  --rule:#273038; --accent:#57c4b4; --accent-2:#79d4c6;
-  --up:#e4695b; --down:#4eb884;
-  --g4:#6fd3c2; --g3:#43a795; --g2:#8e9aa4; --g1:#d0a44e; --g0:#e07a63;
-  --badge-ink:#10161c;
+  --ground:#0b1016; --surface:#141b22; --surface-2:#1c252e;
+  --ink:#e8eef4; --ink-2:#b6c3cf; --muted:#8b99a6;
+  --rule:#26313b; --accent:#4fd6c4; --accent-2:#5ecfe0;
+  --up:#ff7b6b; --down:#4ede9d;
+  /* 等第的填色兩個主題共用——它們本來就夠亮，深字在深底上一樣讀得到（5.0~8.5）。
+     一組顏色兩邊通用，「AA 是什麼顏色」就不必記兩次。 */
+  --g4:#10b981; --g3:#22c1a8; --g2:#7c8ea8; --g1:#f0a72a; --g0:#f0533f;
+  --badge-ink:#0b1220;
   /* 深色不是把淺色自動翻過來，是在深底上重新選一組步階再驗一次——五項也全過。 */
   --m0:#16a99c; --m1:#c08a20; --m2:#9a66e8;
   --m3:#e85f7c; --m4:#5490e6; --m5:#7ba233;
-  --zone-0:#1b423a; --zone-1:#1c3630; --zone-2:#242c34;
-  --zone-3:#3a3122; --zone-4:#432c22; --zone-5:#4d2a20;
+  --zone-0:#18453b; --zone-1:#193830; --zone-2:#232d36;
+  --zone-3:#3d3320; --zone-4:#472d20; --zone-5:#52291d;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);
@@ -189,6 +197,15 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
   font-size:10.5px;line-height:1.6;vertical-align:1px;
   border:1px solid var(--accent);color:var(--accent);background:transparent}
 /* -- 個股新聞 --------------------------------------------------------- */
+/* -- 六大指標：一個等第配一張圖 -------------------------------------- */
+.metric{margin:26px 0 0}
+.metric h4{display:flex;align-items:center;gap:9px;margin:0 0 8px;font-size:15px;
+  flex-wrap:wrap}
+.metric h4 .nm{font-weight:600;color:var(--ink)}
+.metric h4 .why{font-size:12.5px;font-weight:400;color:var(--muted)}
+.metric figure.chart-fig{margin:0}
+.metric figure.chart-fig figcaption{position:absolute;width:1px;height:1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 ol.news{list-style:none;padding:0;margin:16px 0 0;display:grid;gap:1px;
   background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden}
 ol.news li{background:var(--surface);padding:13px 16px}

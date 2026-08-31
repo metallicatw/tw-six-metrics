@@ -244,11 +244,16 @@ def test_the_stock_page_is_tabs_rather_than_one_long_scroll():
     build_site(_records(), out, sheets_dir=_sheets(tmp))
     page = (out / "stock" / "5439.html").read_text("utf-8")
 
-    assert page.count('role="tab"') == 10
-    assert page.count('class="panel"') == 10
+    # 分頁數和面板數必須相等——多一個按鈕就是一個點了沒反應的分頁，多一個面板
+    # 就是一段永遠打不開的內容。
+    tabs = page.count('role="tab"')
+    assert tabs == page.count('class="panel"')
+    # 〔財報圖表〕併進〔六大財務指標評等〕之後少一個。
+    assert tabs == 9
+    assert 'id="tab-statements"' not in page
     # Exactly one panel open on arrival, and it is the first.
     assert page.count('role="tabpanel" aria-labelledby="tab-summary">') == 1
-    assert page.count("hidden>") >= 9
+    assert page.count("hidden>") >= tabs - 1
     # The three rows a reader needs on every tab stay put.
     assert 'class="ident sticky"' in page
 
