@@ -1168,13 +1168,16 @@ def _expand(raw_paths: Sequence[str]) -> list[Path]:
 
     Windows 的 cmd 不展開萬用字元——``*.html`` 原封不動傳進 argparse，而 Unix
     shell 早就展開好了，所以這個 bug 只在 Windows 上出現。兩邊都要能用，所以
-    自己展開一次：目錄當成「裡面所有的 .html」，帶萬用字元的走 glob。
+    自己展開一次：目錄當成「裡面所有的 .html 與 .csv」，帶萬用字元的走 glob。
+
+    .csv 是瀏覽器裡的 Claude 擴充功能按下 Goodinfo 那顆「匯出檔案」的產物——
+    同一張表，258 週而不是集保查詢頁的 51 週。
     """
     out: list[Path] = []
     for raw in raw_paths:
         path = Path(raw)
         if path.is_dir():
-            out.extend(sorted(path.glob("*.html")))
+            out.extend(sorted(path.glob("*.html")) + sorted(path.glob("*.csv")))
         elif any(ch in raw for ch in "*?["):
             parent = path.parent if str(path.parent) != "." else Path(".")
             out.extend(sorted(parent.glob(path.name)))
@@ -1183,17 +1186,55 @@ def _expand(raw_paths: Sequence[str]) -> list[Path]:
     return out
 
 
+def _save_table(sheets_dir: Path, table: Any) -> None:
+    """把解析好的一張表存進 ``data/sheets/<代號>/``。
+
+    匯入的歷史比官方那條路長得多（258 週 vs 51 週），而合併是以週別為鍵做聯集
+    （見 ``tdcc.merge``），所以官方每週累積的新資料會蓋在上面，匯進來的舊週原封
+    不動留著。這也是為什麼欄名一定要一致。
+    """
+    import json
+
+    sheets_dir.mkdir(parents=True, exist_ok=True)
+    target = sheets_dir / f"{table.sheet}.json"
+    existing: list[list[str]] = []
+    if target.exists():
+        try:
+            existing = json.loads(target.read_text(encoding="utf-8"))
+        except ValueError:
+            existing = []
+    from .ingest.tdcc import merge
+
+    grid = merge(existing, table.grid) if existing else table.grid
+    target.write_text(json.dumps(grid, ensure_ascii=False), encoding="utf-8")
+    print(f"  匯入 {table.sheet}：{len(table.rows)} 列 × "
+          f"{len(table.columns)} 欄　-> {target}（合併後 {len(grid) - 1} 列）")
+
+
 def _read_saved_page(path: Path, sources: Any) -> str:
     """瀏覽器存下來的檔案，編碼看它自己。
 
-    Goodinfo 是 utf-8，但「另存新檔」有時會落成 cp950。先試 utf-8，讀不到任何
-    一張表的特徵字再試 cp950——用內容判斷，不是用 BOM 或猜。
+    Goodinfo 是 utf-8，但「另存新檔」有時會落成 cp950。先**嚴格**解 utf-8：
+    cp950 的位元組幾乎一定會在這一步失敗，所以解得開就是 utf-8，不必再猜。
+    ``utf-8-sig`` 順便吃掉 BOM——匯出的 CSV 帶著一個（為了讓 Excel 不亂碼）。
+
+    只有在「解得開 utf-8、卻一張表的特徵字都找不到」時才退回 cp950。那是為了
+    HTML 準備的補救，不該套在 CSV 上：CSV 本來就沒有那些特徵字，硬退回 cp950
+    會把一份好好的檔案讀成亂碼，然後安靜地當成「不是這兩張」跳過。
     """
+    from .ingest import goodinfo_csv
+
     raw = path.read_bytes()
-    text = raw.decode("utf-8", errors="replace")
-    if not any(src.anchor in text for src in sources.values()):
-        text = raw.decode("cp950", errors="replace")
-    return text
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return raw.decode("cp950", errors="replace")
+    if goodinfo_csv.looks_like_csv(text):
+        return text
+    if any(src.anchor in text for src in sources.values()):
+        return text
+    alt = raw.decode("cp950", errors="replace")
+    return alt if any(src.anchor in alt for src in sources.values()) else text
 
 
 def cmd_fetch_page(args: argparse.Namespace) -> int:
@@ -1205,8 +1246,9 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
     a normal-looking page that has no table in it.
     """
     settings = Settings.load(args.config)
+    from .ingest import goodinfo_csv
     from .ingest.base import HttpClient
-    from .ingest.goodinfo import DIRECTORS, HOLDERS
+    from .ingest.goodinfo import DIRECTORS, HOLDERS, NotTheTable, parse
     from .ingest.pending import SOURCES, identify, probe
 
     names = [args.source] if args.source else list(SOURCES)
@@ -1234,6 +1276,26 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
                 bad += 1
                 continue
             text = _read_saved_page(path, SOURCES)
+
+            # 匯出的 CSV 走另一條路：它沒有 <title>，形狀也不同（合併表頭被攤平
+            # 成單列，千分位被拿掉）。以第一欄是不是「週別／月別」判斷，判準和
+            # HTML 那條路一樣是**內容**，不是副檔名——下載下來的檔名是使用者的，
+            # 不是資料的。
+            if goodinfo_csv.looks_like_csv(text):
+                try:
+                    table = goodinfo_csv.parse(text)
+                except NotTheTable as exc:
+                    print(f"  解析失敗 {path.name}：{exc}", file=sys.stderr)
+                    bad += 1
+                    continue
+                done += 1
+                if not importing:
+                    print(f"  OK   {path.name}　→ {table.sheet}　"
+                          f"{len(table.rows)} 列（匯出的 CSV）")
+                    continue
+                _save_table(sheets_dir, table)
+                continue
+
             # 哪一個來源？看頁面的 <title>，不是檔名，也不是 anchor——
             # Goodinfo 每一頁都帶著同一份左側選單，anchor 會全部命中第一個。
             hit = identify(text)
@@ -1255,23 +1317,13 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
                 continue
 
             # 存進 data/sheets/，之後 `twsix report` 就會把這兩張畫進個股頁。
-            import json
-
-            from .ingest.goodinfo import NotTheTable, parse
-
             try:
                 table = parse(text)
             except NotTheTable as exc:
                 print(f"  解析失敗 {path.name}：{exc}", file=sys.stderr)
                 bad += 1
                 continue
-            sheets_dir.mkdir(parents=True, exist_ok=True)
-            target = sheets_dir / f"{table.sheet}.json"
-            target.write_text(
-                json.dumps(table.grid, ensure_ascii=False), encoding="utf-8"
-            )
-            print(f"  匯入 {table.sheet}：{len(table.rows)} 列 × "
-                  f"{len(table.columns)} 欄　-> {target}")
+            _save_table(sheets_dir, table)
 
         if skipped:
             print(f"  （跳過 {len(skipped)} 個不是這兩張的檔案）")
