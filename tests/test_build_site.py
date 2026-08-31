@@ -564,3 +564,21 @@ def test_the_intraday_price_ticks_are_gone_from_the_page(tmp_path=None):
     page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
     assert "盤中速報" not in page
     assert "roundup" not in page
+
+
+def test_the_header_stamp_says_when_and_reminds_to_update(tmp_path=None):
+    """頁首那一行原本擠了四件事，其中三件在別的地方各自說過一次。
+
+    檔數與季別在〔評等清單〕的第一句，落後多久在下面那條 ⚠ 橫幅。留在頁首只是
+    把最上面那一行讀成一串參數。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    for name in ("index.html", "stock/5439.html"):
+        page = (out / name).read_text(encoding="utf-8")
+        assert "網站最後更新：" in page, name
+        assert "個股資料請記得更新" in page, name
+        assert "網站產生：" not in page, name
+        assert "資料截止：" not in page, name

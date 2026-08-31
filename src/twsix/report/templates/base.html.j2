@@ -400,9 +400,15 @@ tr.here th{font-weight:700}
   <p class="stamp">
     <button type="button" id="tokenlink" class="linkish" hidden>設定抓取權杖</button>
   </p>
+  {# 這一行原本擠了四件事：產生時間、檔數、財報季別、營收月份。後面三件在別的
+     地方各自說過一次了——檔數與季別在〔評等清單〕的第一句，落後多久在下面那條
+     ⚠ 橫幅——所以留在這裡只是把最上面那一行讀成一串參數。
+
+     換成兩件事：這份網站是什麼時候建的，以及「個股資料要自己更新」。後半句才是
+     讀者真正需要知道的：全市場評等是排程長出來的，但每一檔的完整報表要按「立即
+     更新」才會重抓，而清單上每一列的日期就是各檔上一次更新的時間。 #}
   <p class="stamp">
-    網站產生：{{ generated_at }}　·　{{ stock_count }} 檔　·
-    資料截止：財報 {{ latest_quarter or '—' }}　/　營收 {{ latest_revenue_month or '—' }}
+    網站最後更新：{{ generated_at }}，個股資料請記得更新
   </p>
 </div></header>
 <div class="wrap">
