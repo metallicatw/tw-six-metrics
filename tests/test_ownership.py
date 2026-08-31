@@ -495,3 +495,82 @@ def test_backfilled_months_and_monthly_snapshots_land_in_one_series():
     delta = grid[0].index("全體董監持股-持股增減")
     assert grid[2][delta] == "-241"       # 7,060 - 7,301
     assert grid[-1][delta] == ""          # 最舊那一列沒有更早的可以比
+
+
+def test_latest_custody_friday_is_the_newest_already_published_data_day():
+    """回補之前要先判斷「有沒有可能有新的一週」，而且不能連網去問。
+
+    偏差的方向要對：算晚了最多多跑一趟查詢頁，算早了會在真的有新資料時跳過
+    回補。所以取的是「今天為止最近的那個週五」——不可能有比它更新的一期。
+    """
+    from twsix.cli import _latest_custody_friday
+
+    assert _latest_custody_friday(date(2026, 8, 28)) == date(2026, 8, 28)  # 週五
+    assert _latest_custody_friday(date(2026, 8, 29)) == date(2026, 8, 28)  # 週六
+    assert _latest_custody_friday(date(2026, 8, 30)) == date(2026, 8, 28)  # 週日
+    assert _latest_custody_friday(date(2026, 8, 31)) == date(2026, 8, 28)  # 週一
+    assert _latest_custody_friday(date(2026, 9, 3)) == date(2026, 8, 28)   # 週四
+    assert _latest_custody_friday(date(2026, 9, 4)) == date(2026, 9, 4)    # 下一個週五
+
+
+def test_director_floor_survives_and_stops_asking_for_months_that_never_existed():
+    """「問過了，那個月本來就沒有」要記下來，否則每次更新都重問一遍。
+
+    一檔近年才上市的股票，上市之前那十幾個月永遠回查無資料，一個月一個請求、
+    兩秒多一個。少了地板，那半分鐘每按一次「立即更新」就重付一次。
+    """
+    root = _archive(_tmp())
+    assert own.director_floor(root, "6547") is None
+
+    own.save_director_floor(root, "6547", "11203")
+    assert own.director_floor(root, "6547") == "11203"
+
+    # 只往更早的方向放寬，不會被後來某次比較淺的回補推高。
+    own.save_director_floor(root, "6547", "11208")
+    assert own.director_floor(root, "6547") == "11203"
+    own.save_director_floor(root, "6547", "11101")
+    assert own.director_floor(root, "6547") == "11101"
+
+    # 地板不能被誤認成月線檔（那個目錄用 *.csv.gz glob）。
+    assert own.director_history(root, "6547") == {}
+
+
+def test_stock_workflow_commits_the_directors_backfill_it_paid_for():
+    """〔加一檔個股〕抓到的董監月線與地板要 commit 進來，否則下次重抓。
+
+    這條 workflow 只 add 它自己列出來的路徑；漏掉哪一個，那一份就留在 runner 上
+    隨著機器一起消失，而使用者看到的是「明明更新過了，怎麼還是一樣慢」。
+    """
+    text = (ROOT.parent / ".github" / "workflows" / "stock.yml").read_text("utf-8")
+    assert '"data/ownership/stock/$code.csv.gz"' in text
+    assert '"data/ownership/directors_stock/$code."*' in text
+
+
+def test_no_workflow_pays_for_a_second_runner_just_to_build_the_site():
+    """建站要在抓完資料的那個 job 裡做，不是 call 另一個 workflow。
+
+    workflow_call 起的是另一台 runner：重新排隊、checkout、setup-python、
+    pip install、重跑一次剛跑過的測試，全部只為了四秒的 build。使用者按下
+    「立即更新」之後等的時間裡，那段開機成本比抓資料本身還長。
+    """
+    wf = ROOT.parent / ".github" / "workflows"
+    for name in ("stock.yml", "ownership.yml"):
+        text = (wf / name).read_text("utf-8")
+        live = [ln for ln in text.splitlines() if not ln.lstrip().startswith("#")]
+        assert not any("workflows/pages.yml" in ln for ln in live), name
+        assert "uses: ./.github/actions/site" in text, name
+        assert "deploy-pages@v4" in text, name
+    # 建站的定義仍然只有一份。
+    assert (wf.parent / "actions" / "site" / "action.yml").exists()
+
+
+def test_ci_installs_only_what_the_site_actually_imports():
+    """建站的相依是 jinja2，不是 ".[all]"。
+
+    all 會拖進 matplotlib（連著 numpy、pillow、fonttools）、pytest、ruff、mypy，
+    四個裡面沒有一個在執行時被 import——圖表是自己畫的 SVG，測試跑的是零相依的
+    run_tests.py。幾十 MB 的解壓縮，每個 job 付一次。
+    """
+    action = (ROOT.parent / ".github" / "actions" / "site" / "action.yml").read_text("utf-8")
+    assert 'pip install -e ".[report]"' in action
+    assert 'pip install -e ".[all]"' not in action

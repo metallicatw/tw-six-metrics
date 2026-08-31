@@ -32,6 +32,9 @@ on:
 permissions:
   contents: write
   issues: write
+  # 建站與上傳 Pages artifact 現在就在這個 job 裡做，不再叫醒第二台 runner。
+  pages: write
+  id-token: write
 
 concurrency:
   group: add-stock
@@ -70,7 +73,7 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - run: pip install -e ".[all]"
+      - run: pip install -e ".[report]"
 
       # 抓取之前先確認引擎是好的。抓回來的資料要 commit 進 repo，用一個壞掉
       # 的引擎去解析等於把垃圾存成事實。
@@ -87,9 +90,13 @@ jobs:
           code="${{ steps.pick.outputs.code }}"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # 集保的 51 週歷史是逐檔問來的，和個股表一起 commit——否則下次在
-          # runner 上跑同一檔又要重問一次。
-          git add "data/sheets/$code" "data/ownership/stock/$code.csv.gz" || true
+          # 集保的 51 週歷史和董監的月線都是逐檔問來的，和個股表一起 commit
+          # ——否則下次在 runner 上跑同一檔又要重問一次。董監那一份還包含
+          # `.floor`：記著「比這個月更早就查無資料」，沒有它，一檔近年才上市的
+          # 股票每次更新都要花半分鐘重新確認上市之前確實沒有資料。
+          git add "data/sheets/$code" \
+                  "data/ownership/stock/$code.csv.gz" \
+                  "data/ownership/directors_stock/$code."* || true
           if git diff --cached --quiet; then
             echo "::notice::$code 的資料沒有變化，不需要 commit"
             exit 0
@@ -98,6 +105,17 @@ jobs:
           # 這期間可能有別的 commit 進來（例如另一次抓取），rebase 再推。
           git pull --rebase origin main
           git push origin HEAD:main
+
+      # 建站就在這裡做。以前這一步是 `uses: ./.github/workflows/pages.yml`，
+      # 也就是叫醒第二台 runner，重跑一次 checkout + setup-python + pip install
+      # + 298 個測試，只為了那四秒的 build。使用者等的時間裡，那段開機成本比
+      # 抓資料本身還長。工作區這時已經 rebase 到 main 的頂端，資料是新的。
+      #
+      # 測試上面剛跑過同一份程式碼，不重跑。
+      - name: 建站
+        uses: ./.github/actions/site
+        with:
+          test: "false"
 
       - name: 說明
         env:
@@ -137,13 +155,20 @@ jobs:
 
           常見原因：股號不存在、或券商鏡像站當下拒絕連線。過幾分鐘重開一張就好。"
 
-  # 自己把網站建起來，不指望 push 會觸發 pages.yml——它不會。用 GITHUB_TOKEN
-  # 推的 commit 不產生 workflow 事件（GitHub 的遞迴防護），所以上面那個 commit
-  # 對 pages.yml 來說等於沒發生過。直接呼叫同一份定義，建站的邏輯只有一處。
-  publish:
+  # 發布。artifact 上一個 job 已經傳好了，這裡只按下發布鍵——沒有 checkout、
+  # 沒有 Python，十幾秒就結束。
+  #
+  # 為什麼還要獨立一個 job：deploy-pages 必須跑在綁 `github-pages` environment
+  # 的 job 裡，而那個 job 不該同時握有 contents: write。
+  deploy:
     needs: fetch
+    runs-on: ubuntu-latest
     permissions:
-      contents: read
       pages: write
       id-token: write
-    uses: ./.github/workflows/pages.yml
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
