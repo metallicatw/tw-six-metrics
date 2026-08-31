@@ -13,6 +13,7 @@ Commands
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta, timezone
@@ -863,6 +864,9 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 
 #: 回補到幾週為止就算夠。集保的查詢頁目前提供 51 週，所以這是「全部」。
+HOLDERS_SHEET = "大戶持股"
+DIRECTORS_SHEET = "董監持股"
+
 BACKFILL_WEEKS = 51
 
 
@@ -1186,7 +1190,30 @@ def _expand(raw_paths: Sequence[str]) -> list[Path]:
     return out
 
 
-def _save_table(sheets_dir: Path, table: Any) -> None:
+#: 只認**開頭**的代號，而且允許 ETF 那個尾巴字母（00679B、00403A）。
+#:
+#: 不用 search 掃全名，是因為檔名裡還有別的數字：
+#: `台積電_董監持股_200609_202608.csv` 裡的 200609 是期間，不是代號——
+#: 掃到它就會把台積電的資料寫進一個叫 200609 的資料夾，而且不報錯。
+#: 認不出來就退回命令列給的代號，那條路至少是使用者自己說的。
+_CODE_IN_NAME = re.compile(r"^([0-9]{4,6}[A-Z]?)(?![0-9A-Za-z])")
+
+
+def _code_from_name(path: Path) -> str:
+    """檔名裡的股票代號，沒有就回空字串。
+
+    一次匯入一整個資料夾（12 檔 × 2 頁）時，這是唯一分得出哪一列屬於誰的線索——
+    表格裡面沒有代號那一欄。少了它，24 個檔案會全部寫進命令列上那一檔的資料夾，
+    而且不會報錯：24 份資料，一檔股票，安靜地互相覆蓋。
+
+    瀏覽器匯出的檔名長這樣：`5439_高技_集保股權分散_週統計.csv`。認不出來就退回
+    命令列給的代號，而且每一筆都把去向印出來——猜錯要看得見。
+    """
+    hit = _CODE_IN_NAME.match(path.stem)
+    return hit.group(1) if hit else ""
+
+
+def _save_table(sheets_dir: Path, table: Any, code: str = "") -> None:
     """把解析好的一張表存進 ``data/sheets/<代號>/``。
 
     匯入的歷史比官方那條路長得多（258 週 vs 51 週），而合併是以週別為鍵做聯集
@@ -1207,8 +1234,9 @@ def _save_table(sheets_dir: Path, table: Any) -> None:
 
     grid = merge(existing, table.grid) if existing else table.grid
     target.write_text(json.dumps(grid, ensure_ascii=False), encoding="utf-8")
-    print(f"  匯入 {table.sheet}：{len(table.rows)} 列 × "
-          f"{len(table.columns)} 欄　-> {target}（合併後 {len(grid) - 1} 列）")
+    print(f"  匯入 {code or sheets_dir.name} {table.sheet}："
+          f"{len(table.rows)} 列 × {len(table.columns)} 欄"
+          f"　-> {target}（合併後 {len(grid) - 1} 列）")
 
 
 def _read_saved_page(path: Path, sources: Any) -> str:
@@ -1235,6 +1263,93 @@ def _read_saved_page(path: Path, sources: Any) -> str:
         return text
     alt = raw.decode("cp950", errors="replace")
     return alt if any(src.anchor in alt for src in sources.values()) else text
+
+
+#: 深歷史算「夠深」的門檻。
+#:
+#: 集保的查詢頁給 51 週，公開資訊觀測站的董監查詢實務上給 36 個月——那是自動化
+#: 拿得到的全部。超過這兩個數字的，只可能是從 Goodinfo 匯入來的。所以門檻設在
+#: 「明顯超過自動化的上限」，不是設在某個好看的整數。
+DEEP_WEEKS = 60
+DEEP_MONTHS = 48
+
+GOODINFO_HOLDERS = "https://goodinfo.tw/tw/EquityDistributionClassHis.asp?STOCK_ID={code}"
+GOODINFO_DIRECTORS = "https://goodinfo.tw/tw/StockDirectorSharehold.asp?STOCK_ID={code}"
+
+#: 一次給 Chrome 幾檔。
+#:
+#: 不是技術限制，是禮貌與存活率的取捨。Goodinfo 是一個人維護的免費站台，對同一
+#: 個 IP 的瀏覽量有上限；一次要它開幾百頁，先被擋的是你自己的網路。分批還有一個
+#: 好處：中途被擋的時候，你知道停在哪一檔。
+BATCH = 6
+
+
+def cmd_deep(args: argparse.Namespace) -> int:
+    """哪幾檔還沒有深歷史，以及去哪裡拿。
+
+    〔大戶持股〕〔董監持股〕的**未來**由每週排程負責，一次三個請求涵蓋全市場，
+    跑得愈久歷史愈長。這個指令管的是**過去**：Goodinfo 那兩頁一次給 258 週與
+    240 個月，而它只能由使用者自己的瀏覽器取得（對機房 IP 回 403）。
+
+    所以這裡不抓任何東西，只回答兩個問題：還缺哪幾檔，網址是什麼。
+    """
+    import json
+
+    settings = Settings.load(args.config)
+    data_dir = Path(args.data or settings.data_dir)
+    sheets = data_dir / "sheets"
+    if not sheets.is_dir():
+        print(f"找不到 {sheets}", file=sys.stderr)
+        return EXIT_FAIL
+
+    names: dict[str, str] = {}
+    for row in Store(data_dir).read("ratings") or []:
+        names.setdefault(row.get("stock_id", ""), row.get("name", ""))
+
+    def depth(code: str, sheet: str) -> int:
+        target = sheets / code / f"{sheet}.json"
+        if not target.exists():
+            return 0
+        try:
+            return max(len(json.loads(target.read_text(encoding="utf-8"))) - 1, 0)
+        except ValueError:
+            return 0
+
+    watched = sorted(d.name for d in sheets.iterdir() if d.is_dir() and d.name.isdigit())
+    if not watched:
+        print("觀察清單是空的——先跑 twsix report <代號>。")
+        return EXIT_OK
+
+    missing: list[str] = []
+    print(f"{'代號':<8}{'名稱':<12}{'大戶持股':>10}{'董監持股':>10}")
+    for code in watched:
+        weeks, months = depth(code, HOLDERS_SHEET), depth(code, DIRECTORS_SHEET)
+        short = weeks < DEEP_WEEKS or months < DEEP_MONTHS
+        if short:
+            missing.append(code)
+        mark = "　← 要匯入" if short else ""
+        print(f"{code:<8}{names.get(code, ''):<12}{weeks:>8} 週{months:>8} 月{mark}")
+
+    print(f"\n共 {len(watched)} 檔，其中 {len(missing)} 檔還沒有深歷史。")
+    if not missing:
+        print("都補齊了。之後由每週排程接著往前長。")
+        return EXIT_OK
+
+    print(
+        f"\n下面的網址交給 Chrome 裡的 Claude，請它逐頁「匯出 CSV」，"
+        f"存到同一個資料夾。\n"
+        f"一次 {BATCH} 檔就好——Goodinfo 是一個人維護的免費站台，對同一個 IP 的\n"
+        f"瀏覽量有上限，一口氣要它開幾百頁，先被擋的是你自己的網路。\n"
+        f"匯完一批：twsix fetch-page <任一代號> --import <資料夾>\n"
+    )
+    for i in range(0, len(missing), BATCH):
+        batch = missing[i : i + BATCH]
+        print(f"— 第 {i // BATCH + 1} 批（{'、'.join(batch)}）")
+        for code in batch:
+            print("   " + GOODINFO_HOLDERS.format(code=code))
+            print("   " + GOODINFO_DIRECTORS.format(code=code))
+        print()
+    return EXIT_OK
 
 
 def cmd_fetch_page(args: argparse.Namespace) -> int:
@@ -1266,7 +1381,8 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
             return EXIT_FAIL
 
         importing = bool(args.imports)
-        sheets_dir = Path(args.data or settings.data_dir) / "sheets" / args.stock
+        root = Path(args.data or settings.data_dir) / "sheets"
+        touched: set[str] = set()
         bad = 0
         done = 0
         skipped: list[str] = []
@@ -1289,11 +1405,13 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
                     bad += 1
                     continue
                 done += 1
+                code = _code_from_name(path) or args.stock
                 if not importing:
-                    print(f"  OK   {path.name}　→ {table.sheet}　"
+                    print(f"  OK   {path.name}　→ {code} {table.sheet}　"
                           f"{len(table.rows)} 列（匯出的 CSV）")
                     continue
-                _save_table(sheets_dir, table)
+                _save_table(root / code, table, code)
+                touched.add(code)
                 continue
 
             # 哪一個來源？看頁面的 <title>，不是檔名，也不是 anchor——
@@ -1323,7 +1441,9 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
                 print(f"  解析失敗 {path.name}：{exc}", file=sys.stderr)
                 bad += 1
                 continue
-            _save_table(sheets_dir, table)
+            code = _code_from_name(path) or args.stock
+            _save_table(root / code, table, code)
+            touched.add(code)
 
         if skipped:
             print(f"  （跳過 {len(skipped)} 個不是這兩張的檔案）")
@@ -1336,7 +1456,11 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
                   file=sys.stderr)
             return EXIT_FAIL
         elif importing:
-            print(f"\n重新產生個股頁：twsix report {args.stock} --rebuild")
+            # 一次匯入一整批時，要重跑的是**被動到的每一檔**，不是命令列上那一個。
+            codes = sorted(touched) or [args.stock]
+            print(f"\n重新產生個股頁（{len(codes)} 檔）：")
+            for code in codes:
+                print(f"  twsix report {code} --rebuild")
         return EXIT_OK if bad == 0 else EXIT_FAIL
 
     http = HttpClient(
@@ -1627,10 +1751,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fs.set_defaults(func=cmd_fetch_stock)
 
+    dp = sub.add_parser(
+        "deep", help="哪幾檔還缺五年的籌碼歷史，以及去哪裡拿"
+    )
+    dp.add_argument("--data", help="資料目錄")
+    dp.set_defaults(func=cmd_deep)
+
     fp = sub.add_parser(
         "fetch-page", help="抓一張還沒有解析器的頁面（Goodinfo 大戶／董監持股）"
     )
-    fp.add_argument("stock", help="股票代號")
+    fp.add_argument(
+        "stock",
+        help="股票代號。--import 時只是退路：每個檔案先看自己的檔名裡有沒有代號",
+    )
     fp.add_argument(
         "--source", help="prices / news / holders / directors；省略則全部試一次"
     )

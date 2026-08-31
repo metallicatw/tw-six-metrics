@@ -196,3 +196,58 @@ def test_the_chart_window_is_wide_enough_for_what_the_export_carries():
     labels = view.figures["big"]
     assert "21W36" in labels                    # 五年前那一週有畫上去
     assert "26W36" in labels
+
+
+# ---------------------------------------------------------------------------
+# 一次匯入一整批
+# ---------------------------------------------------------------------------
+
+
+def test_each_file_lands_in_its_own_stocks_folder():
+    """表格裡沒有代號那一欄，所以一整個資料夾裡唯一分得出誰是誰的線索是檔名。
+
+    少了它，一批 24 個檔案會全部寫進命令列上那**一檔**的資料夾——而且不會報錯：
+    24 份資料、一檔股票，安靜地互相覆蓋。這正是「分批匯出」這條路會踩到的。
+    """
+    import argparse
+    import shutil
+    import tempfile
+
+    from twsix.cli import cmd_fetch_page
+
+    tmp = Path(tempfile.mkdtemp(prefix="twsix-batch-"))
+    box = tmp / "csv"
+    box.mkdir()
+    shutil.copy(PAGES / f"5439_{HOLDERS}.csv", box / "5439_高技_集保股權分散.csv")
+    shutil.copy(PAGES / f"5439_{DIRECTORS}.csv", box / "5439_高技_董監持股.csv")
+    # 同一份資料，換一個檔名——測的是「去了哪裡」，不是內容。
+    shutil.copy(PAGES / f"5439_{HOLDERS}.csv", box / "2330_台積電_集保股權分散.csv")
+
+    rc = cmd_fetch_page(
+        argparse.Namespace(
+            config=None, stock="9999", data=str(tmp / "data"),
+            check=None, imports=[str(box)], source=None, save=None,
+        )
+    )
+    assert rc == 0
+    sheets = tmp / "data" / "sheets"
+    assert (sheets / "5439" / f"{HOLDERS}.json").is_file()
+    assert (sheets / "5439" / f"{DIRECTORS}.json").is_file()
+    assert (sheets / "2330" / f"{HOLDERS}.json").is_file()
+    # 命令列上那個代號只是退路，這一批用不到它。
+    assert not (sheets / "9999").exists()
+
+
+def test_a_filename_without_a_code_falls_back_to_the_command_line():
+    from twsix.cli import _code_from_name
+
+    assert _code_from_name(Path("5439_高技_集保股權分散_週統計.csv")) == "5439"
+    assert _code_from_name(Path("2330_台積電_董監持股_200609_202608.csv")) == "2330"
+    assert _code_from_name(Path("00679B_元大美債_大戶.csv")) == "00679B"  # ETF 的尾巴
+    assert _code_from_name(Path("00403A_大戶持股.csv")) == "00403A"
+    assert _code_from_name(Path("大戶持股.csv")) == ""
+    assert _code_from_name(Path("export.csv")) == ""
+    # 檔名裡的期間不是代號。掃全名會把台積電的資料寫進一個叫 200609 的資料夾，
+    # 而且不報錯——所以只認開頭。
+    assert _code_from_name(Path("台積電_董監持股_200609_202608.csv")) == ""
+    assert _code_from_name(Path("5439_高技_董監持股_200609_202608.csv")) == "5439"
