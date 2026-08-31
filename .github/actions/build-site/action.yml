@@ -1,0 +1,55 @@
+name: 建站
+description: 安裝、（可選）測試、對帳、建站、上傳 Pages artifact。
+
+# 為什麼是 composite action 而不是第四個 workflow：
+#
+# 「加一檔個股」原本的流程是兩個 job——fetch 抓完資料 commit，再 call pages.yml
+# 去建站。而 workflow_call 起的是**另一台 runner**：重新排隊、重新 checkout、
+# 重新 setup-python、重新 pip install、重新跑一次剛剛才跑過的 298 個測試，最後
+# 才做那件真正要做的事（`twsix build`，四秒）。
+#
+# 使用者按下「立即更新」之後等的三、四分鐘裡，抓資料只占十幾秒；其餘幾乎全是
+# 這段開機成本，而且付了兩次。
+#
+# 把它收成 composite action：建站的定義只有一份（pages.yml 和抓取的 workflow
+# 共用），但它跑在**呼叫它的那個 job 裡**，所以第二次開機沒有了。
+
+inputs:
+  test:
+    description: 要不要跑測試。呼叫端剛剛跑過同一份程式碼就填 "false"。
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    # 已經 setup 過的 job 再跑一次是快取命中，大約兩秒；沒 setup 過的（pages.yml
+    # 直接被 push 觸發）則非跑不可。留著，換取「呼叫端不必知道要先做什麼」。
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: pip
+
+    # 不是 ".[all]"。all 會裝 matplotlib、pytest、ruff、mypy——四個裡面沒有一個
+    # 在執行時被 import：圖表是自己畫的 SVG，測試跑的是零相依的 run_tests.py，
+    # 另外兩個 CI 根本沒呼叫。matplotlib 連著 numpy、pillow、fonttools 一起拖進來，
+    # 幾十 MB 解壓縮，每個 job 都付一次。實際需要的只有 jinja2。
+    - run: pip install -e ".[report]"
+      shell: bash
+
+    # 零相依，最先跑：引擎壞了就不必建站。
+    - if: inputs.test == 'true'
+      run: python scripts/run_tests.py
+      shell: bash
+
+    - name: 對帳（守門）
+      run: twsix verify
+      shell: bash
+
+    - name: 建立網站
+      run: twsix build
+      shell: bash
+
+    - uses: actions/configure-pages@v5
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: site
