@@ -199,9 +199,9 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
 /* -- 個股新聞 --------------------------------------------------------- */
 /* -- 六大指標：一個等第配一張圖 -------------------------------------- */
 .metric{margin:26px 0 0}
-.metric h4{display:flex;align-items:center;gap:9px;margin:0 0 8px;font-size:15px;
+.metric h4{display:flex;align-items:center;gap:9px;margin:0 0 10px;font-size:16px;
   flex-wrap:wrap}
-.metric h4 .nm{font-weight:600;color:var(--ink)}
+.metric h4 .nm{font-weight:700;color:var(--ink);letter-spacing:-.01em}
 .metric h4 .why{font-size:12.5px;font-weight:400;color:var(--muted)}
 .metric figure.chart-fig{margin:0}
 .metric figure.chart-fig figcaption{position:absolute;width:1px;height:1px;
@@ -233,7 +233,7 @@ ol.news .sum{margin:6px 0 0;font-size:12.5px;line-height:1.65;color:var(--muted)
 .val{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1px;
   background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:18px}
 .val section{background:var(--surface);padding:15px 17px}
-.val h4{margin:0 0 10px;font-size:13px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+.val h4{margin:0 0 10px;font-size:13px;color:var(--accent);font-weight:700;letter-spacing:.02em}
 .val dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:13.5px}
 .val dt{color:var(--ink-2);white-space:nowrap}
 .val dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;
@@ -283,8 +283,15 @@ details.sources summary{cursor:pointer;color:var(--ink-2)}
   background:var(--surface);color:var(--ink-2)}
 .srclist li.missing{border-color:var(--g0);color:var(--g0)}
 /* -- charts ------------------------------------------------------------ */
-figure.chart-fig{margin:22px 0 26px}
-figure.chart-fig figcaption{font-size:13.5px;font-weight:600;color:var(--ink-2);margin-bottom:8px}
+figure.chart-fig{margin:24px 0 28px;--fig:var(--accent)}
+/* 標題左邊那道色條和圖裡的資料同色。標題是讀者第一個看到的東西，它跟圖之間
+   如果沒有任何視覺上的連結，捲動時就得靠位置去猜「這個標題管的是下面哪一張」。 */
+figure.chart-fig figcaption{display:flex;align-items:center;gap:9px;
+  font-size:15.5px;font-weight:700;color:var(--ink);margin-bottom:10px;
+  letter-spacing:-.01em}
+figure.chart-fig figcaption::before{content:"";flex:0 0 auto;width:4px;height:1.15em;
+  border-radius:2px;background:var(--fig)}
+figure.chart-fig figcaption .muted{font-size:12.5px;font-weight:500}
 /* viewBox 是 1200×300，而內容欄正好 1200 寬——桌機上 1:1，不被拉伸。
    高度跟著 CSS 走，所以窄畫面只有橫向會縮，那是這個取捨的代價：換來的是
    桌機上完全不變形。 */
@@ -297,8 +304,14 @@ details.chart-data .scroll{margin-top:8px;max-height:260px;overflow-y:auto}
 .pband{position:relative;height:74px;margin:6px 0 2px}
 .pband .track{position:absolute;top:14px;left:0;right:0;height:8px;border-radius:4px;
   background:var(--surface-2);border:1px solid var(--rule)}
-.band-valuation .pband .track{border:none;opacity:.55;
+/* 兩條估價區間的漸層方向是相反的，而且不能弄反：
+   〔殖利率估價〕左邊便宜、右邊昂貴 → 綠到暖；
+   〔EPS預估與估價〕左邊是下檔、右邊是上檔目標 → 暖到綠。
+   同一個漸層套在兩張圖上，其中一張就會把好壞說反。 */
+.band-valuation .pband .track{border:none;opacity:.6;
   background:linear-gradient(90deg,var(--g4) 0%,var(--g2) 50%,var(--g0) 100%)}
+.band-range .pband .track{border:none;opacity:.6;
+  background:linear-gradient(90deg,var(--g0) 0%,var(--g2) 50%,var(--g4) 100%)}
 .pband .stop{position:absolute;top:0;transform:translateX(-50%);text-align:center;
   font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .pband .stop i{display:block;width:2px;height:20px;margin:8px auto 0;background:var(--rule)}
@@ -456,7 +469,7 @@ tr.here th{font-weight:700}
       }
       if(live || repo){
         var g=document.createElement('span'); g.className='tag grabbtn';
-        g.textContent = r[4] ? '重抓' : '抓這一檔';
+        g.textContent = r[4] ? '更新' : '抓這一檔';
         g.addEventListener('mousedown', function(e){
           e.preventDefault(); e.stopPropagation();
           grabNow(r[0]);
@@ -524,9 +537,11 @@ tr.here th{font-weight:700}
    * 抓過一次，就再也沒有辦法重抓：資料放到過期、或是後來新增了區塊（大戶持股、
    * 董監持股就是這樣加進來的），舊的那些檔反而是唯一補不到的。
    *
-   * 所以按鈕永遠在，只換字：沒有報告是「抓取」，有報告是「重新抓取」。
+   * 所以按鈕永遠在，只換字。第一次是「抓取」（這一檔還沒有資料），之後是
+   * 「立即更新」——按鈕上該寫的是按下去會發生什麼事，而不是重複一次動作的名字。
+   * 已經有報告的時候，讀者要的是「把它換成最新的」，那件事就叫更新。
    */
-  function label(code, full){ return (full ? '重新抓取 ' : '抓取 ') + code; }
+  function label(code, full){ return (full ? '立即更新 ' : '抓取 ') + code; }
 
   function refreshOffer(){
     var q = box.value.trim();

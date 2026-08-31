@@ -271,10 +271,24 @@ def _open(frame: Frame, title: str, desc: str) -> list[str]:
     ]
 
 
-def _figure(title: str, unit: str, body: str, table: str, extra: str = "") -> str:
+def _figure(
+    title: str,
+    unit: str,
+    body: str,
+    table: str,
+    extra: str = "",
+    colour: str = "var(--accent)",
+) -> str:
+    """標題帶著這張圖自己的色相。
+
+    ``--fig`` 交給 CSS，讓標題左邊那道色條和圖裡的資料同色。標題是讀者第一個
+    看到的東西，它跟圖之間如果沒有任何視覺上的連結，捲動時就要靠位置去猜「這個
+    標題管的是下面哪一張」。
+    """
     suffix = f' <span class="muted">{escape(unit.strip())}</span>' if unit.strip() else ""
     return (
-        f'<figure class="chart-fig {extra}"><figcaption>{escape(title)}{suffix}</figcaption>'
+        f'<figure class="chart-fig {extra}" style="--fig:{colour}">'
+        f"<figcaption>{escape(title)}{suffix}</figcaption>"
         f"{body}{table}</figure>"
     )
 
@@ -389,7 +403,10 @@ def bars(
             )
     parts += _x_labels(f, labels, label_every)
     parts.append("</svg>")
-    return _figure(title, unit, "".join(parts), _table(labels, [(title, values)], digits))
+    return _figure(
+        title, unit, "".join(parts), _table(labels, [(title, values)], digits),
+        colour=colour,
+    )
 
 
 def line(
@@ -503,7 +520,10 @@ def line(
             )
     parts += _x_labels(f, labels, label_every)
     parts.append("</svg>")
-    return _figure(title, unit, "".join(parts), _table(labels, [(title, values)], digits))
+    return _figure(
+        title, unit, "".join(parts), _table(labels, [(title, values)], digits),
+        colour=colour,
+    )
 
 
 def price_band(
@@ -518,12 +538,14 @@ def price_band(
     Not a chart of a series — a position on a scale, which is what
     〔EPS預估與估價〕 and 〔殖利率估價〕 both actually report.
 
-    ``scale`` decides whether the track is coloured, and getting it wrong is
-    not cosmetic.  〔殖利率估價〕's 便宜 → 昂貴 really is a cheap-to-expensive
-    scale, so a green-to-warm track reads correctly.  〔EPS預估與估價〕's
-    下檔 → 目標 is the opposite: the high end is the *upside* target.  Painting
-    that end warm would tell the reader the exact inverse of what it means, so
-    that band gets a neutral track and lets its labels speak.
+    ``scale`` decides **which way the gradient runs**, and getting it wrong is
+    not cosmetic — it would tell the reader the exact inverse of what the band
+    means.
+
+    〔殖利率估價〕（``scale="valuation"``）是便宜 → 昂貴：左邊好、右邊貴，所以
+    綠到暖。〔EPS預估與估價〕（``scale="range"``）是下檔 → 目標，方向相反：右邊
+    是上檔目標。所以它的漸層是**暖到綠**，不是不上色——不上色只是把「哪一端是
+    好的」這件事丟回給讀者自己讀標籤。
     """
     points = [(name, float(v)) for name, v in levels if v is not None]
     if len(points) < 2:

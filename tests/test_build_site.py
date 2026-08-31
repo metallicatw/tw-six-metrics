@@ -448,7 +448,9 @@ def test_the_fetch_button_sits_next_to_the_search_box():
     # 已經完整的那一檔也要能重抓：資料會過期，而且後來新增的區塊（大戶持股、
     # 董監持股）只能靠重抓補上。上一版把它當成「沒有對象」，按鈕就消失了——
     # 於是成功抓過一次的股票反而是唯一補不到新東西的。
+    #
+    # 字是「立即更新」不是「重新抓取」：按鈕上該寫的是按下去會發生什麼事。
     full = (out / "stock" / "5439.html").read_text("utf-8")
     assert 'data-grab="5439"' in full
     assert 'data-full="1"' in full
-    assert "重新抓取" in full
+    assert "立即更新" in full
