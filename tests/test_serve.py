@@ -214,3 +214,32 @@ def test_the_static_site_is_still_served():
             assert r.headers.get("Cache-Control") == "no-store"
     finally:
         s.stop()
+
+
+def test_the_button_passes_everything_report_actually_reads():
+    """少一個欄位就是 AttributeError——而且只有真的按下去才會炸。
+
+    測試裡的 run 是假的，所以這條路從來沒被走過；`no_backfill` 因此漏了一段
+    時間，本機按「立即更新」直接錯誤。用內省比對，不靠記憶。
+    """
+    import argparse
+    import inspect
+    import re
+
+    from twsix import cli, serve
+
+    needs = set(re.findall(r"args\.([a-z_]+)", inspect.getsource(cli.cmd_report)))
+    call = inspect.getsource(serve.run_report)
+    body = call.split("argparse.Namespace(", 1)[1]
+    gives = set(re.findall(r"(\w+)\s*=", body))
+    missing = sorted(needs - gives)
+    assert not missing, f"serve 沒有傳給 report 的欄位：{missing}"
+
+    # 而且真的組得出來——上面是文字比對，這裡是把它建起來。
+    ns = argparse.Namespace(
+        config=None, stock="2330", data=None, out=None, as_of=None,
+        host=None, save_html=None, retries=1, rebuild=True,
+        no_backfill=False, cached=False,
+    )
+    for name in sorted(needs):
+        getattr(ns, name)

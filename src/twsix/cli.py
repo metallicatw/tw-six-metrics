@@ -408,9 +408,16 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
         http = _SavedPages(Path(args.from_html), args.stock)
         dj = MoneyDJ(http=http, hosts=("saved://",))
     else:
+        # 「立即更新」要的是新的資料，不是六小時前那一份。
+        #
+        # 磁碟快取的用途是「同一次除錯裡重跑不必再打擾站台」，但它預設留六小時，
+        # 於是本機在六小時內按第二次「立即更新」，抓回來的是同一批快取——按鈕
+        # 說了它做不到的事。GitHub runner 每次都是全新的機器，所以這個洞只在
+        # 本機那條路上看得到，也就更容易一直沒被發現。
+        fresh = bool(getattr(args, "fresh", False))
         http = HttpClient(
             cache_dir=Path(settings.ingest.cache_dir),
-            cache_ttl=settings.ingest.cache_ttl_hours * 3600,
+            cache_ttl=0 if fresh else settings.ingest.cache_ttl_hours * 3600,
             min_interval=settings.ingest.min_interval_seconds,
             retries=args.retries,
         )
@@ -815,7 +822,8 @@ def cmd_report(args: argparse.Namespace) -> int:
     print(f"[1/4] 抓取 {stock} 的報表…")
     rc = cmd_fetch_stock(
         ns(sheet=None, host=args.host, save_html=args.save_html,
-           from_html=None, retries=args.retries, out=args.data)
+           from_html=None, retries=args.retries, out=args.data,
+           fresh=not args.cached)
     )
     if rc != EXIT_OK:
         print(
@@ -826,7 +834,8 @@ def cmd_report(args: argparse.Namespace) -> int:
         return EXIT_FAIL
 
     print(f"[2/4] 抓取 {stock} 的年度交易資訊…")
-    if cmd_fetch_yearly(ns(save_raw=None, out=args.data)) != EXIT_OK:
+    if cmd_fetch_yearly(ns(save_raw=None, out=args.data,
+                          fresh=not args.cached)) != EXIT_OK:
         print(
             "  年度交易資訊沒拿到——殖利率估價與本益比河流圖的分區會缺，"
             "其餘照常。",
@@ -1434,7 +1443,10 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
 
     http = HttpClient(
         cache_dir=Path(settings.ingest.cache_dir),
-        cache_ttl=settings.ingest.cache_ttl_hours * 3600,
+        cache_ttl=(
+            0 if getattr(args, "fresh", False)
+            else settings.ingest.cache_ttl_hours * 3600
+        ),
         min_interval=settings.ingest.min_interval_seconds,
         retries=settings.ingest.retries,
     )
@@ -1557,6 +1569,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="每個站台重試次數（預設 1；輪替八個站台本身就是重試）",
     )
     fs.add_argument("--out", help="資料目錄")
+    fs.add_argument(
+        "--fresh", action="store_true",
+        help="略過磁碟快取，一定重新向站台要（`report` 預設就是這樣）",
+    )
     fs.set_defaults(func=cmd_fetch_stock)
 
     fp = sub.add_parser(
@@ -1639,6 +1655,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="把抓到的原始 HTML 存到這個目錄（解析出錯時用來對照）",
     )
     rp.add_argument("--retries", type=int, default=1, help="每個站台重試次數")
+    rp.add_argument(
+        "--cached", action="store_true",
+        help="允許使用磁碟快取（預設不用——「立即更新」要的是新資料）",
+    )
     rp.add_argument(
         "--no-backfill", dest="no_backfill", action="store_true",
         help="不要向集保補 51 週的歷史（快一分鐘，但〔大戶持股〕會只有一個點）",

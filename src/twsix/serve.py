@@ -196,10 +196,18 @@ def run_report(code: str) -> int:
 
     from .cli import cmd_report  # noqa: PLC0415
 
+    # 這一組欄位要跟 `twsix report` 的參數對得上——少一個就是 AttributeError，
+    # 而且只有在真的按下按鈕、真的去抓的時候才會炸（測試用的是假的 run）。
+    # `no_backfill` 就是這樣漏了一段時間：本機那條路上，按鈕按下去直接錯誤。
+    # test_serve.py 裡有一個測試用內省把兩邊比對，不再靠記憶。
     return cmd_report(
         argparse.Namespace(
             config=None, stock=code, data=None, out=None, as_of=None,
             host=None, save_html=None, retries=1, rebuild=True,
+            # 本機也要補集保的週歷史，否則〔大戶持股〕只有一個點。
+            no_backfill=False,
+            # 按鈕上寫的是「立即更新」，那就不要拿六小時前的快取交差。
+            cached=False,
         )
     )
 
