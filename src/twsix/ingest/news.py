@@ -148,17 +148,28 @@ class Digest:
 
     @property
     def substantive(self) -> int:
-        return len(self.items) - self.tickers
+        """談公司本身的則數。盤中速報已經不在 ``items`` 裡，所以就是全部。"""
+        return len(self.items)
 
 
 def describe(items: list[Item], *, days: int = WINDOW_DAYS) -> Digest | None:
+    """視窗內的新聞，盤中速報不列入。
+
+    盤中速報原本是列出來但灰底加標籤——想法是「讓讀者自己看到報導有多薄」。
+    實際看下去不是那樣：5439 那一頁二十五則裡有十七則是同一句「大漲 7.46%，
+    報 266.5 元」的變體，真正談公司的八則被埋在中間，還要多讀一段文字解釋
+    那些不是新聞。價格走勢在這一頁上已經有三張圖在講，講得比一句話清楚。
+
+    所以不列。留下計數是為了 `dropped` 那一行的算術對得起來，頁面不再提它。
+    """
     kept = within(items, days=days)
     if not kept:
         return None
+    news = [i for i in kept if not i.is_ticker]
     return Digest(
-        items=kept,
-        latest=max(i.date for i in kept),
-        tickers=sum(1 for i in kept if i.is_ticker),
+        items=news,
+        latest=max((i.date for i in news), default=""),
+        tickers=len(kept) - len(news),
         dropped=len(items) - len(kept),
         days=days,
     )

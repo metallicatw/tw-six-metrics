@@ -51,7 +51,8 @@ def test_only_the_last_two_months_are_kept():
     items = parse(payload())
     digest = describe(items)
     assert digest is not None
-    assert len(digest.items) == 25
+    # 視窗內 25 則，其中 17 則是盤中速報，不列。
+    assert len(digest.items) == 8
     assert digest.dropped == 5
     assert min(i.date for i in digest.items) >= "2026/06/26"
 
@@ -68,19 +69,31 @@ def test_the_window_is_measured_from_the_newest_item_not_the_clock():
     assert within(items, days=7)[0].date == "2026/08/27"
 
 
-def test_price_ticks_are_counted_apart_from_news():
+def test_price_ticks_are_dropped_not_listed():
     """「盤中速報 - 高技(5439)大漲7.46%」 is a quote with a headline on it.
 
-    Real, published, and not something anyone reads as news — so it is kept
-    and labelled rather than dropped, the way the wire round-ups were.
+    上一版把它們留在列表裡、灰底加標籤，想法是「讓讀者看到報導有多薄」。實際
+    看下去不是那樣：視窗內二十五則有十七則是同一句話的變體，真正談公司的八則
+    被埋在中間。價格走勢這一頁上已經有三張圖在講。
     """
     digest = describe(parse(payload()))
-    assert digest.tickers == 17
+    assert digest.tickers == 17          # 數得出來
     assert digest.substantive == 8
-    ticks = [i for i in digest.items if i.is_ticker]
-    assert all("盤中速報" in i.title for i in ticks)
-    real = [i for i in digest.items if not i.is_ticker]
-    assert any("財務報告" in i.title for i in real)
+    assert len(digest.items) == 8        # 但一則都不列
+    assert not any(i.is_ticker for i in digest.items)
+    assert any("財務報告" in i.title for i in digest.items)
+
+
+def test_a_stock_with_nothing_but_price_ticks_gets_an_empty_digest_not_none():
+    """全部都是盤中速報時，要說「沒有相關新聞」，不是「尚未取得資料」。
+
+    兩件事差很多：一個是這一檔最近沒人寫，一個是我們還沒去抓。
+    """
+    ticks = [i for i in parse(payload()) if i.is_ticker]
+    digest = describe(ticks)
+    assert digest is not None
+    assert digest.items == []
+    assert digest.tickers > 0
 
 
 def test_the_category_becomes_the_source_line():

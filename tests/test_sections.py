@@ -290,10 +290,10 @@ def test_without_the_weekly_sheet_the_zones_are_unchanged_and_the_chart_is_absen
 # -- 個股新聞 --------------------------------------------------------------
 
 
-def test_the_news_section_keeps_two_months_and_separates_the_price_ticks():
+def test_the_news_section_keeps_two_months_and_drops_the_price_ticks():
     page, _ = _page()
     assert page.news is not None
-    assert len(page.news.items) == 25
+    assert len(page.news.items) == 8      # 25 則裡的 17 則盤中速報不列
     assert page.news.tickers == 17
     assert page.news.substantive == 8
     assert page.news.dropped == 5
