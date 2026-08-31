@@ -75,15 +75,35 @@ jobs:
 
       - run: pip install -e ".[report]"
 
-      # 抓取之前先確認引擎是好的。抓回來的資料要 commit 進 repo，用一個壞掉
-      # 的引擎去解析等於把垃圾存成事實。
-      - name: 測試
-        run: python scripts/run_tests.py
-
-      # report 會順便向集保補這一檔的 51 週股權歷史（第一次約一分鐘，之後
-      # 只補新的那一週）。沒有那一年的走勢，〔大戶持股〕只有一個點。
-      - name: 抓取並產生報告
-        run: twsix report "${{ steps.pick.outputs.code }}"
+      # 測試與抓取同時跑。
+      #
+      # 兩件事都得做：抓回來的資料要 commit 進 repo，用一個壞掉的引擎去解析等於
+      # 把垃圾存成事實；而抓取本身是等網路，CPU 幾乎閒著。排成一列就是白等
+      # 二十幾秒——那二十幾秒是使用者按下按鈕之後真的在看著螢幕的時間。
+      #
+      # 先確定引擎能載入（import 失敗的話連抓都不必抓），再把整套測試丟到背景，
+      # 抓完之後 wait 它。任何一邊失敗，這一步就失敗，沒有資料會被 commit。
+      #
+      # report 會順便向集保補這一檔的 51 週股權歷史（第一次約一分鐘，之後只補
+      # 新的那一週）。沒有那一年的走勢，〔大戶持股〕只有一個點。
+      - name: 測試並抓取
+        run: |
+          python -c "import twsix.cli"
+          python scripts/run_tests.py > /tmp/tests.log 2>&1 &
+          tests=$!
+          set +e
+          twsix report "${{ steps.pick.outputs.code }}"
+          fetch=$?
+          wait "$tests"
+          suite=$?
+          set -e
+          echo "----- 測試 -----"
+          tail -n 20 /tmp/tests.log
+          if [ "$suite" -ne 0 ]; then
+            echo "::error::測試沒過，不 commit 這次抓到的資料"
+            exit 1
+          fi
+          exit "$fetch"
 
       - name: Commit
         run: |

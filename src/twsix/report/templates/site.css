@@ -1,0 +1,344 @@
+/* 全站共用的樣式。原本內嵌在 base.html.j2 的 <style> 裡，於是 1,741 張個股
+   頁每一張都夾帶同一份 22 KB——整個網站 96 MB，其中七成是這兩個檔案的複本。
+   抽出來之後網站剩下約四分之一，Pages 的打包與發布跟著快，讀者也只下載一次。 */
+:root{
+  /* 底色帶一點青，不是純中性灰——整站的主角是青綠，底也跟著偏一點點，畫面才
+     像一件東西而不是一張灰紙上貼了幾塊顏色。 */
+  --ground:#eef4f7; --surface:#fff; --surface-2:#e3ecf1;
+  --ink:#0d1620; --ink-2:#33424f; --muted:#5d6b78;
+  --rule:#d2dee5; --accent:#0e7c6f; --accent-2:#127a8f;
+  --up:#cf3327; --down:#0d7c4f;
+  /* 等第：亮底配深字，不是深底配白字。
+     鮮豔的顏色配白字幾乎一定過不了 4.5:1（#10b981 配白只有 2.54），為了合規
+     只好把顏色壓暗——那正是原本那組看起來悶的原因。反過來用深字，同樣鮮豔的
+     填色可以到 5.2~9.2，而且同一組填色在淺色和深色主題上都成立。 */
+  --g4:#10b981; --g3:#22c1a8; --g2:#7c8ea8; --g1:#f0a72a; --g0:#f0533f;
+  --badge-ink:#0b1220;
+  /* 六大指標各一個色相。這是「識別」，不是裝飾：同一個指標在站上任何地方都是
+     同一個顏色，而顏色從不單獨承載意義——每張圖都有自己的標題與座標軸，正負由
+     零線與填色深淺讀出，所以灰階列印和色盲模式下都還是完整的。
+
+     六個值是跑出來的，不是挑出來的：對亮度帶、彩度下限、相鄰色在三種色盲模擬
+     下的 ΔE、正常視覺 ΔE、與底色的對比五項全數 PASS。順序也是結果的一部分
+     ——teal 和 amber 相鄰才過得了 deutan，把 amber 換到 rose 旁邊就掉到 7.5
+     的警告區。 */
+  --m0:#00918a; --m1:#a86a00; --m2:#8b3fd4;
+  --m3:#c02a4e; --m4:#2563c9; --m5:#5a8f00;
+  /* 河流圖分區底色：只是背景，每一區另有虛線與右側名稱，顏色不單獨承載意義 */
+  --zone-0:#cdece0; --zone-1:#ddf2e6; --zone-2:#e6edf2;
+  --zone-3:#fbecc9; --zone-4:#fbdccf; --zone-5:#f8c8ba;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --ground:#0b1016; --surface:#141b22; --surface-2:#1c252e;
+  --ink:#e8eef4; --ink-2:#b6c3cf; --muted:#8b99a6;
+  --rule:#26313b; --accent:#4fd6c4; --accent-2:#5ecfe0;
+  --up:#ff7b6b; --down:#4ede9d;
+  /* 等第的填色兩個主題共用——它們本來就夠亮，深字在深底上一樣讀得到（5.0~8.5）。
+     一組顏色兩邊通用，「AA 是什麼顏色」就不必記兩次。 */
+  --g4:#10b981; --g3:#22c1a8; --g2:#7c8ea8; --g1:#f0a72a; --g0:#f0533f;
+  --badge-ink:#0b1220;
+  /* 深色不是把淺色自動翻過來，是在深底上重新選一組步階再驗一次——五項也全過。 */
+  --m0:#16a99c; --m1:#c08a20; --m2:#9a66e8;
+  --m3:#e85f7c; --m4:#5490e6; --m5:#7ba233;
+  --zone-0:#18453b; --zone-1:#193830; --zone-2:#232d36;
+  --zone-3:#3d3320; --zone-4:#472d20; --zone-5:#52291d;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font:15px/1.55 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--accent-2);text-underline-offset:2px}
+a:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;padding:0 20px 44px}
+header.top{background:var(--surface);border-bottom:1px solid var(--rule);margin-bottom:14px}
+header.top .in{max-width:1240px;margin:0 auto;padding:12px 20px 10px}
+header.top h1{margin:0;font-size:17px;letter-spacing:-.01em}
+header.top h1 a{color:inherit;text-decoration:none}
+nav{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:13px}
+nav a{color:var(--ink-2);text-decoration:none}
+nav a[aria-current=page]{color:var(--accent-2);font-weight:600}
+.stamp{font-size:11.5px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
+.stamp:empty{display:none}
+.linkish{appearance:none;border:none;background:none;padding:0;font:inherit;
+  font-size:11.5px;color:var(--accent-2);cursor:pointer;text-decoration:underline;
+  text-underline-offset:2px}
+h2{font-size:18px;margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--ink)}
+h3{font-size:15px;margin:16px 0 6px}
+h4{margin:14px 0 6px}
+p{margin:0 0 10px;max-width:78ch}
+.muted{color:var(--muted);font-size:12.5px}
+.scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:5px;background:var(--surface);margin-bottom:14px}
+table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:560px}
+/* 對齊規則只有兩條，套在所有表格上：
+   文字靠左、數字靠右，而標題永遠跟著它那一欄的內容走。
+   標題置中、數字置左那種混搭，是掃一欄數字時最花眼力的排版。 */
+th,td{padding:5px 10px;text-align:left;border-bottom:1px solid var(--rule);
+  white-space:nowrap;vertical-align:baseline}
+th.num,thead th.num,td.series{text-align:right}
+thead th{background:var(--surface-2);font-size:12px;font-weight:600;color:var(--ink-2);position:sticky;top:0}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+td.num{text-align:right;font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+.g{display:inline-block;min-width:26px;text-align:center;padding:1px 6px;border-radius:3px;
+  font-size:12px;font-weight:600;color:var(--badge-ink);font-family:ui-monospace,Menlo,monospace}
+.g-AA{background:var(--g4)}.g-A{background:var(--g3)}.g-BB{background:var(--g2)}
+.g-B{background:var(--g1)}.g-C{background:var(--g0)}
+.g-na{background:transparent;color:var(--muted);border:1px solid var(--rule)}
+.pick{color:var(--accent-2);font-weight:600}
+.up{color:var(--up)}.down{color:var(--down)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:5px;overflow:hidden;margin-bottom:14px}
+.card{background:var(--surface);padding:10px 14px}
+.card b{display:block;font-size:21px;color:var(--accent);line-height:1.2;
+  font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+.card span{display:block;font-size:11.5px;color:var(--muted);margin-top:3px}
+footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--rule);
+  font-size:12.5px;color:var(--muted)}
+/* -- 頁首個股搜尋 ----------------------------------------------------- */
+.find{position:relative;margin:10px 0 0;max-width:520px}
+/* 搜尋框與「抓取」同一列。抓取這個動作的對象永遠是框裡那一檔，兩者分開放
+   （例如按鈕留在頁面底部）就得先讓讀者自己把它們連起來——而那正是上一版
+   最常被按錯的地方。 */
+.findrow{display:flex;gap:8px;align-items:stretch}
+.findrow input{flex:1 1 auto;min-width:0}
+.findrow .btn-grab{flex:0 0 auto;white-space:nowrap;font-size:13px;padding:0 14px}
+.find input{width:100%;padding:8px 12px;border:1px solid var(--rule);border-radius:5px;
+  background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
+.find input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px;
+  border-color:var(--accent-2)}
+.find ul{position:absolute;z-index:40;left:0;right:0;top:calc(100% + 4px);
+  margin:0;padding:4px;list-style:none;background:var(--surface);
+  border:1px solid var(--rule);border-radius:5px;
+  box-shadow:0 8px 24px rgba(0,0,0,.16);max-height:56vh;overflow:auto}
+.find li{display:flex;align-items:baseline;gap:8px;padding:6px 9px;border-radius:4px;
+  font-size:13px;cursor:pointer;white-space:nowrap}
+/* The first hit is pre-selected so Enter goes somewhere, which means the
+   selection has to be visible at a glance — --surface-2 alone was a shade
+   apart from the panel in dark mode.  A left bar in the accent colour reads
+   in both themes and does not rely on the fill. */
+.find li.on{background:var(--surface-2);box-shadow:inset 3px 0 0 var(--accent-2)}
+.find li b{font-variant-numeric:tabular-nums;color:var(--accent-2);min-width:3.4em}
+.find li .nm{font-weight:600;color:var(--ink)}
+.find li .ind{color:var(--muted);font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
+.find li .sc{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums}
+/* -- 本機抓取 --------------------------------------------------------- */
+.grab{position:absolute;z-index:45;left:0;right:0;top:calc(100% + 4px);
+  background:var(--surface);border:1px solid var(--accent);border-radius:5px;
+  padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.grab .head{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--ink);padding-right:20px}
+.grab .x{position:absolute;top:5px;right:6px;appearance:none;border:none;background:none;
+  color:var(--muted);font:inherit;font-size:13px;line-height:1;padding:3px 5px;cursor:pointer;
+  border-radius:3px}
+.grab .x:hover{background:var(--surface-2);color:var(--ink)}
+.grab .log{margin:0;max-height:180px;overflow:auto;font-size:11px;line-height:1.6;
+  color:var(--muted);white-space:pre-wrap;word-break:break-all;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.tag.grabbtn{margin-left:6px;padding:1px 8px;border-radius:3px;font-size:10.5px;
+  border:1px solid var(--accent);color:var(--accent);background:var(--surface);
+  cursor:pointer}
+.tag.grabbtn:hover{background:var(--accent);color:var(--surface)}
+.btn-grab{display:inline-block;padding:7px 16px;border-radius:5px;border:none;
+  background:var(--accent);color:#fff;font:inherit;font-size:14px;font-weight:600;
+  cursor:pointer}
+.btn-grab:hover{background:var(--accent-2)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .btn-grab{color:#10161c}}
+ul.how{padding-left:20px;font-size:13.5px;line-height:1.9}
+ul.how code{background:var(--surface-2);padding:1px 6px;border-radius:3px;
+  font-size:12.5px;color:var(--ink)}
+/* 近六期數列：期別列與數值列共用同一組欄，所以標籤永遠落在自己的數字上面。 */
+/* max-content, not 1fr: with 1fr the six columns split whatever the table
+   hands the cell — 94px each here — which stretched the series across half
+   the table and pushed 理由 against the right edge.  Sized to their contents
+   they take exactly the room the numbers need. */
+td.series{width:1%}
+td.series .cells{display:grid;grid-template-columns:repeat(var(--n),max-content);
+  gap:1px 14px;justify-content:end}
+td.series .p{font-size:10.5px;color:var(--muted);text-align:right;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+td.series .v{text-align:right;font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+/* -- 個股頁：固定頁首與分頁 ------------------------------------------ */
+.ident.sticky{position:sticky;top:0;z-index:30;background:var(--ground);
+  margin:0 -20px 16px;padding:12px 20px 0;
+  box-shadow:0 1px 0 var(--rule),0 6px 14px -12px rgba(0,0,0,.4)}
+.ident.sticky h2{margin:0;font-size:19px;border:none;padding:0;letter-spacing:-.01em}
+.ident .facts{display:flex;flex-wrap:wrap;gap:4px 18px;margin:5px 0 9px;
+  font-size:12.5px;color:var(--muted);max-width:none}
+.ident .facts b{color:var(--ink);font-weight:600;
+  font-variant-numeric:tabular-nums;margin-left:3px}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;
+  border-bottom:1px solid var(--rule)}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;appearance:none;border:none;background:transparent;
+  font:inherit;font-size:13px;color:var(--muted);cursor:pointer;
+  padding:7px 12px;border-bottom:2px solid transparent;margin-bottom:-1px;
+  white-space:nowrap;border-radius:4px 4px 0 0}
+.tab:hover{color:var(--ink-2);background:var(--surface-2)}
+.tab[aria-selected=true]{color:var(--accent-2);font-weight:600;
+  border-bottom-color:var(--accent-2)}
+.tab:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+/* 分頁自己的標題和分頁標籤是同一句話，重複一次只是佔掉一行。 */
+.panel > h3:first-child{position:absolute;width:1px;height:1px;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap}
+.searchbar{margin:0 0 14px}
+.searchbar input{width:100%;max-width:340px;padding:8px 11px;border:1px solid var(--rule);
+  border-radius:4px;background:var(--surface);color:var(--ink);font:inherit;font-size:14px}
+.stale,.note{background:var(--surface);border:1px solid var(--rule);
+  border-radius:5px;padding:8px 12px;font-size:12.5px;line-height:1.6;
+  color:var(--ink-2);max-width:none;margin-bottom:12px}
+.stale{border-left:3px solid var(--g1)}
+.note{border-left:3px solid var(--accent)}
+.tag.full,.tag.when{display:inline-block;padding:0 6px;margin-left:5px;border-radius:3px;
+  font-size:10.5px;line-height:1.6;vertical-align:1px;
+  border:1px solid var(--accent);color:var(--accent);background:transparent}
+/* 日期比「完整」多兩個字元，而且它是次要資訊——代號才是這一格的主角。
+   等寬數字讓 1,741 列的日期在垂直方向對齊，掃過去才讀得出新舊。 */
+.tag.when{font-variant-numeric:tabular-nums;letter-spacing:.02em;
+  border-color:var(--rule);color:var(--muted)}
+/* -- 個股新聞 --------------------------------------------------------- */
+/* -- 六大指標：一個等第配一張圖 -------------------------------------- */
+.metric{margin:26px 0 0}
+.metric h4{display:flex;align-items:center;gap:9px;margin:0 0 10px;font-size:16px;
+  flex-wrap:wrap}
+.metric h4 .nm{font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.metric h4 .why{font-size:12.5px;font-weight:400;color:var(--muted)}
+.metric figure.chart-fig{margin:0}
+.metric figure.chart-fig figcaption{position:absolute;width:1px;height:1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+ol.news{list-style:none;padding:0;margin:16px 0 0;display:grid;gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden}
+ol.news li{background:var(--surface);padding:13px 16px}
+/* 只給螢幕閱讀器的文字。看得見的箭頭是 aria-hidden，所以「另開分頁」這件事
+   要另外用文字說一次——不然聽的人只會聽到標題，點下去分頁就換了。 */
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
+  white-space:nowrap}
+ol.news .head .ext{margin-left:5px;font-size:11.5px;color:var(--muted);
+  vertical-align:1px}
+ol.news .meta{display:flex;flex-wrap:wrap;gap:9px;align-items:center;
+  font-size:11.5px;color:var(--muted);margin-bottom:5px}
+ol.news .meta time{font-variant-numeric:tabular-nums}
+ol.news .tag{padding:0 7px;border-radius:3px;border:1px solid var(--rule);
+  background:var(--ground);color:var(--muted)}
+ol.news .head{font-size:14.5px;font-weight:600;line-height:1.5;color:var(--ink);
+  text-decoration:none;display:inline-block}
+ol.news a.head:hover{color:var(--accent-2);text-decoration:underline}
+ol.news .sum{margin:6px 0 0;font-size:12.5px;line-height:1.65;color:var(--muted)}
+/* -- 河流圖 ----------------------------------------------------------- */
+.river-fig svg{height:380px}
+.zonekey{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0 0;padding:0 2px;
+  font-size:11.5px;color:var(--muted);max-width:none}
+.zonekey .key{display:inline-flex;align-items:center;gap:5px}
+.zonekey i{width:11px;height:11px;border-radius:2px;border:1px solid var(--rule);
+  display:inline-block}
+/* -- valuation ------------------------------------------------------- */
+.val{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:18px}
+.val section{background:var(--surface);padding:15px 17px}
+.val h4{margin:0 0 10px;font-size:13px;color:var(--accent);font-weight:700;letter-spacing:.02em}
+.val dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:13.5px}
+.val dt{color:var(--ink-2);white-space:nowrap}
+.val dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+.val dd.big{font-size:17px;color:var(--accent);font-weight:600}
+.band{margin-top:12px}
+.band .track{position:relative;height:8px;border-radius:4px;
+  background:linear-gradient(90deg,var(--g3) 0%,var(--surface-2) 50%,var(--g0) 100%)}
+.band .pin{position:absolute;top:-4px;width:2px;height:16px;background:var(--ink);border-radius:1px}
+.band .ends{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:5px;
+  font-variant-numeric:tabular-nums}
+.verdict{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;font-weight:600;color:var(--badge-ink)}
+.v-便宜{background:var(--g4)}.v-合理{background:var(--g1)}.v-昂貴{background:var(--g0)}
+.gap{color:var(--muted);font-size:13px;font-style:normal}
+.rr{display:inline-block;margin-left:6px;padding:0 6px;border-radius:3px;font-size:11.5px;
+  font-weight:600;color:var(--badge-ink);font-family:inherit}
+.rr-可買進{background:var(--g4)}.rr-多空不明{background:var(--g1)}
+.rr-減碼{background:var(--g0)}.rr-空方{background:var(--g0)}
+details.rules{margin:0 0 18px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);padding:10px 14px}
+details.rules summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink-2)}
+details.rules[open] summary{margin-bottom:10px}
+.warn{font-size:12.5px;color:var(--g1);margin:6px 0 0;max-width:none}
+
+/* -- single-stock page ------------------------------------------------ */
+.ident h2{margin-top:8px;border-bottom:none;padding-bottom:0}
+.ident p{margin-top:2px}
+nav.sections{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 26px;
+  border-bottom:1px solid var(--rule);padding-bottom:12px}
+nav.sections a{font-size:13.5px;padding:5px 12px;border:1px solid var(--rule);border-radius:999px;
+  background:var(--surface);color:var(--ink-2);text-decoration:none}
+nav.sections a:hover{border-color:var(--accent-2);color:var(--accent-2)}
+h3[id]{scroll-margin-top:16px}
+.verdict-yes,.verdict-no{border-left:4px solid;padding:10px 14px;border-radius:0 4px 4px 0;
+  background:var(--surface);font-size:14px;max-width:none}
+.verdict-yes{border-color:var(--g4)}
+.verdict-no{border-color:var(--rule);color:var(--ink-2)}
+td.series{white-space:nowrap}
+td.series span{display:inline-block;min-width:52px;text-align:right;
+  padding-left:8px;color:var(--ink-2)}
+td.series span:first-child{color:var(--ink);font-weight:600}
+td.reason{white-space:normal;font-size:12px;color:var(--muted);
+  min-width:180px;max-width:340px;line-height:1.5}
+details.sources{margin:0 0 8px;font-size:13px}
+details.sources summary{cursor:pointer;color:var(--ink-2)}
+.srclist{list-style:none;display:flex;flex-wrap:wrap;gap:6px;padding:10px 0 0;margin:0}
+.srclist li{font-size:12px;padding:2px 9px;border-radius:3px;border:1px solid var(--rule);
+  background:var(--surface);color:var(--ink-2)}
+.srclist li.missing{border-color:var(--g0);color:var(--g0)}
+/* -- charts ------------------------------------------------------------ */
+figure.chart-fig{margin:24px 0 28px;--fig:var(--accent)}
+/* 標題左邊那道色條和圖裡的資料同色。標題是讀者第一個看到的東西，它跟圖之間
+   如果沒有任何視覺上的連結，捲動時就得靠位置去猜「這個標題管的是下面哪一張」。 */
+figure.chart-fig figcaption{display:flex;align-items:center;gap:9px;
+  font-size:15.5px;font-weight:700;color:var(--ink);margin-bottom:10px;
+  letter-spacing:-.01em}
+figure.chart-fig figcaption::before{content:"";flex:0 0 auto;width:4px;height:1.15em;
+  border-radius:2px;background:var(--fig)}
+figure.chart-fig figcaption .muted{font-size:12.5px;font-weight:500}
+/* viewBox 是 1200×300，而內容欄正好 1200 寬——桌機上 1:1，不被拉伸。
+   高度跟著 CSS 走，所以窄畫面只有橫向會縮，那是這個取捨的代價：換來的是
+   桌機上完全不變形。 */
+svg.chart{display:block;width:100%;height:240px;background:var(--surface);
+  border:1px solid var(--rule);border-radius:5px}
+details.chart-data{margin-top:8px;font-size:12.5px}
+details.chart-data summary{cursor:pointer;color:var(--muted)}
+details.chart-data table{min-width:0}
+details.chart-data .scroll{margin-top:8px;max-height:260px;overflow-y:auto}
+.pband{position:relative;height:74px;margin:6px 0 2px}
+.pband .track{position:absolute;top:14px;left:0;right:0;height:8px;border-radius:4px;
+  background:var(--surface-2);border:1px solid var(--rule)}
+/* 兩條估價區間的漸層方向是相反的，而且不能弄反：
+   〔殖利率估價〕左邊便宜、右邊昂貴 → 綠到暖；
+   〔EPS預估與估價〕左邊是下檔、右邊是上檔目標 → 暖到綠。
+   同一個漸層套在兩張圖上，其中一張就會把好壞說反。 */
+.band-valuation .pband .track{border:none;opacity:.6;
+  background:linear-gradient(90deg,var(--g4) 0%,var(--g2) 50%,var(--g0) 100%)}
+.band-range .pband .track{border:none;opacity:.6;
+  background:linear-gradient(90deg,var(--g0) 0%,var(--g2) 50%,var(--g4) 100%)}
+.pband .stop{position:absolute;top:0;transform:translateX(-50%);text-align:center;
+  font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pband .stop i{display:block;width:2px;height:20px;margin:8px auto 0;background:var(--rule)}
+.pband .stop b{display:block;margin-top:4px;font-weight:600;color:var(--ink-2)}
+.pband .stop em{display:block;font-style:normal;font-family:ui-monospace,Menlo,monospace}
+.pband .here{position:absolute;top:6px;transform:translateX(-50%);text-align:center}
+.pband .here i{display:block;width:2px;height:28px;margin:0 auto;background:var(--ink)}
+.pband .here b{display:block;margin-top:3px;font-size:11.5px;font-weight:600;color:var(--ink);
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+/* -- reward/risk criteria ---------------------------------------------- */
+.criteria{border:1px solid var(--rule);border-radius:4px;background:var(--surface);
+  padding:14px 18px;margin:22px 0}
+.criteria h4{margin:0 0 10px;font-size:14px}
+.criteria ol{margin:0;padding-left:22px;font-size:13.5px;color:var(--ink-2)}
+.criteria ol li{margin-bottom:5px}
+.criteria ol li b{font-family:ui-monospace,Menlo,monospace;color:var(--ink)}
+.criteria ol li.hit{color:var(--ink);font-weight:600}
+.criteria .tag{display:inline-block;padding:0 7px;border-radius:3px;font-size:11.5px;
+  background:var(--g4);color:var(--badge-ink);font-weight:600}
+.criteria .warnings{margin:12px 0 0;padding-left:20px;font-size:12.5px;color:var(--g1);
+  list-style:"※ "}
+.criteria .warnings li{margin-top:4px}
+tr.here{background:var(--surface-2)}
+tr.here th{font-weight:700}
+  background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:20px}
+  padding:2px 0;color:var(--ink-2)}
+@media(max-width:640px){svg.chart{height:200px}}
+@media(max-width:640px){.wrap{padding:0 14px 60px}}

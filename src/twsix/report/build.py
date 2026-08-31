@@ -8,6 +8,8 @@ optional: without it the site simply is not built and the CLI says so.
 
 from __future__ import annotations
 
+import functools
+import hashlib
 import shutil
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -80,19 +82,65 @@ class SiteContext:
     engine_version: str = ENGINE_VERSION
 
 
-def _env():  # type: ignore[no-untyped-def]
+def _env(assets: bool = False):  # type: ignore[no-untyped-def]
     try:
         from jinja2 import Environment, FileSystemLoader, select_autoescape
     except ImportError as exc:  # pragma: no cover - dependency guard
         raise RuntimeError(
             "報表產生需要 Jinja2：pip install jinja2（或 uv sync --extra report）"
         ) from exc
-    return Environment(
+    env = Environment(
         loader=FileSystemLoader(str(TEMPLATE_DIR)),
         autoescape=select_autoescape(["html", "xml"]),
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    # 共用的樣式與腳本。網站版連外部檔案，單頁版（`twsix page` 產出的那一張）
+    # 內嵌——那張要能單獨用瀏覽器開起來，旁邊沒有 assets/ 可以連。
+    env.globals["assets"] = assets
+    env.globals["asset_v"] = asset_version()
+    if not assets:
+        from markupsafe import Markup
+
+        env.globals["site_css"] = Markup(asset_text("site.css"))
+        env.globals["site_js"] = Markup(asset_text("site.js"))
+    return env
+
+
+#: 全站共用、每一頁都一樣的兩個檔案。
+#:
+#: 原本內嵌在 base.html.j2 裡，於是 1,741 張個股頁每一張都夾帶同一份 22 KB 樣式
+#: 加 16 KB 腳本。整個網站 96 MB，其中約七成是這兩個檔案的複本——而那 96 MB 每次
+#: 「立即更新」都要打包、上傳、再解開一次，就為了其中一張頁面變了。
+#:
+#: 抽出來之後網站約剩四分之一。讀者也只下載一次（第二頁起是快取命中），而不是
+#: 每翻一頁重下 38 KB。
+ASSET_FILES = ("site.css", "site.js")
+
+
+@functools.lru_cache(maxsize=4)
+def asset_text(name: str) -> str:
+    return (TEMPLATE_DIR / name).read_text(encoding="utf-8")
+
+
+@functools.lru_cache(maxsize=1)
+def asset_version() -> str:
+    """內容的指紋，掛在網址後面當快取破除用。
+
+    沒有它，改過樣式的網站對回訪的讀者是舊的——瀏覽器手上那份 site.css 沒有過期
+    的理由。有了它，檔名一變就重新下載，而沒變的時候繼續用快取。
+    """
+    digest = hashlib.sha256()
+    for name in ASSET_FILES:
+        digest.update(asset_text(name).encode())
+    return digest.hexdigest()[:8]
+
+
+def write_assets(out_dir: Path) -> None:
+    target = out_dir / "assets"
+    target.mkdir(parents=True, exist_ok=True)
+    for name in ASSET_FILES:
+        (target / name).write_text(asset_text(name), encoding="utf-8")
 
 
 def _float(text: str) -> float | None:
@@ -275,13 +323,14 @@ def build_site(
     valuations: list[dict[str, str]] | None = None,
     sheets_dir: Path | None = None,
 ) -> dict[str, int]:
-    env = _env()
+    env = _env(assets=True)
     rows = rows_from_store(records)
     valuation_by_stock = {
         r["stock_id"]: _valuation_view(r) for r in (valuations or [])
     }
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "stock").mkdir(exist_ok=True)
+    write_assets(out_dir)
 
     composites = [r.composite_value for r in rows if r.composite_value is not None]
     # The vintage is a property of the *data*, not of whichever stock happens
@@ -703,6 +752,7 @@ def _full_stock_page(
         generated_at=base.get("generated_at", ""),
         rel="../",
         repo=base.get("repo", ""),
+        assets=True,
     )
     return True
 
@@ -715,6 +765,7 @@ def build_stock_page(
     generated_at: str = "",
     rel: str = "",
     repo: str = "",
+    assets: bool = False,
 ) -> Path:
     """Render 〔評價簡表〕〔六大財務指標評等〕〔EPS預估與估價〕〔殖利率估價〕.
 
@@ -723,7 +774,7 @@ def build_stock_page(
     """
     from .stock_page import REWARD_RISK_NOTES, REWARD_RISK_RULES
 
-    env = _env()
+    env = _env(assets=assets)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     env.get_template("stockpage.html.j2").stream(
         p=page,
