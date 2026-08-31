@@ -894,13 +894,17 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> None:
         retries=2,
         cookies=True,         # 查詢頁認 session，少了 cookie token 永遠對不上
     )
-    # 一次都不必連網的情況：手上最新的那一週已經是「目前可能存在的最新一週」。
+    # 一次都不必連網的情況：這一檔的歷史**又滿又新**。
     #
-    # 集保的資料日是週五，週日前後才上架。所以只要手上已經有兩天以前的那個週五，
-    # 就沒有任何一週是問得到而我們沒有的——連問「有哪些週」都不必問。省下的是
-    # 一次 2~3 秒的來回，而「立即更新」一檔早就補齊的股票，那一次來回就是整段
-    # 回補的全部成本。
-    if have and max(have) >= _latest_custody_friday(datetime.now(_TAIPEI).date()):
+    # 兩個條件都要。上一版只看了「新」——手上最新的那一週就是目前可能存在的最新
+    # 一週——結果是個陷阱：回補是新到舊跑的，所以一次跑到一半被擋，存下來的正好
+    # 是最新那幾週。下一次進來看到「最新的有了」就直接跳過，那些洞於是永遠補不
+    # 回來，而使用者看到的是「明明按了立即更新，大戶持股還是缺」。
+    #
+    # 滿 = 51 週（查詢頁提供的全部）。新 = 手上有今天為止最近的那個週五（集保的
+    # 資料日固定是週五）。兩個都成立才確定沒有任何一週是問得到而我們沒有的。
+    newest = _latest_custody_friday(datetime.now(_TAIPEI).date())
+    if len(have) >= BACKFILL_WEEKS and max(have) >= newest:
         print(f"  集保週資料已是最新（{len(have)} 週）")
         return
 
@@ -917,23 +921,56 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> None:
         return
 
     print(f"  補集保週資料：缺 {len(missing)} 週，約 {len(missing) * 1.6:.0f} 秒")
-    got: list[Any] = []
-    failed = 0
-    for i, day in enumerate(missing, start=1):
-        try:
-            got.append(history.week(stock, day))
-        except Exception as exc:  # noqa: BLE001 - 一週抓不到不該讓整批停下
-            failed += 1
-            if failed <= 3:
-                print(f"    {day:%Y-%m-%d} 沒拿到：{exc}", file=sys.stderr)
-            if failed >= 5:
-                print("    連續失敗太多次，停止回補", file=sys.stderr)
-                break
-        if i % 10 == 0 or i == len(missing):
-            print(f"    {i}/{len(missing)} 週")
-    if got:
-        total = own.save_stock_history(root, stock, got)
-        print(f"  集保週資料：新增 {len(got)} 週，共 {total} 週")
+
+    def sweep(days: list[Any], label: str) -> tuple[list[Any], list[Any]]:
+        """跑一輪。回傳（拿到的、沒拿到的）。
+
+        連續失敗才算被擋。上一版數的是**總數**，五次就整批停下——五次散落在
+        51 週裡是很正常的抖動，卻會讓後面四十幾週一次都不問。實際結果就是
+        〔大戶持股〕缺一大段，而且下次進來還會被「已是最新」擋掉。
+        """
+        ok: list[Any] = []
+        bad: list[Any] = []
+        streak = 0
+        for i, day in enumerate(days, start=1):
+            try:
+                ok.append(history.week(stock, day))
+                streak = 0
+            except Exception as exc:  # noqa: BLE001 - 一週抓不到不該讓整批停下
+                bad.append(day)
+                streak += 1
+                if len(bad) <= 3:
+                    print(f"    {day:%Y-%m-%d} 沒拿到：{exc}", file=sys.stderr)
+                if streak >= 6:
+                    print("    連續六週失敗，先停下（多半是被擋）", file=sys.stderr)
+                    bad.extend(days[i:])
+                    break
+            # 邊跑邊存。整段跑完才存的話，step 被砍或 runner 逾時就等於白跑——
+            # 而白跑的下一次會從同一個地方重新開始，永遠補不完。
+            if ok and (i % 10 == 0 or i == len(days)):
+                own.save_stock_history(root, stock, ok)
+                ok = []
+                print(f"    {label} {i}/{len(days)} 週")
+        if ok:
+            own.save_stock_history(root, stock, ok)
+        return ok, bad
+
+    _, failed_days = sweep(missing, "第一輪")
+    if failed_days:
+        # 再試一次沒拿到的那幾週。查詢頁偶爾會回沒有表格的頁面，重問多半就過了；
+        # 一整輪之後再問，也讓 session 有機會換一個新的 token。
+        print(f"    {len(failed_days)} 週沒拿到，再試一次")
+        _, failed_days = sweep(failed_days, "重試")
+
+    total = len(own.weeks(root, stock))
+    if failed_days:
+        print(
+            f"  集保週資料：共 {total} 週，還缺 {len(failed_days)} 週"
+            f"（下次執行會接著補）",
+            file=sys.stderr,
+        )
+    else:
+        print(f"  集保週資料：共 {total} 週")
 
 
 #: 董監月線回補幾個月。三年——董監持股是慢變數，看的是「這一年加碼還是減碼、

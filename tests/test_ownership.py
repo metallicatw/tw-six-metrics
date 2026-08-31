@@ -596,3 +596,53 @@ def test_ci_installs_only_what_the_site_actually_imports():
     action = (ROOT.parent / ".github" / "actions" / "build-site" / "action.yml").read_text("utf-8")
     assert 'pip install -e ".[report]"' in action
     assert 'pip install -e ".[all]"' not in action
+
+
+def test_the_stock_workflow_runs_the_suite_alongside_the_fetch_not_before_it():
+    """抓取是等網路，CPU 幾乎閒著；排成一列就是白等二十幾秒。
+
+    而那二十幾秒是使用者按下「立即更新」之後真的在看著螢幕的時間。兩件都得做，
+    但沒有理由一件做完才做另一件。
+    """
+    text = (ROOT.parent / ".github" / "workflows" / "stock.yml").read_text("utf-8")
+    live = [ln for ln in text.splitlines() if not ln.lstrip().startswith("#")]
+    body = "\n".join(live)
+    assert "run_tests.py > /tmp/tests.log 2>&1 &" in body, "測試沒有丟到背景"
+    assert 'wait "$tests"' in body, "沒有等測試結束就往下走了"
+    # 測試沒過就不能 commit——並行不能變成不管。
+    assert '不 commit 這次抓到的資料' in body
+    order = body.index("run_tests.py"), body.index("twsix report"), body.index("git commit")
+    assert order[0] < order[1] < order[2]
+
+
+def test_the_backfill_guard_needs_a_full_year_not_just_a_current_week():
+    """只看「新」是個陷阱：回補是新到舊跑的。
+
+    一次跑到一半被擋，存下來的正好是最新那幾週；下一次進來看到「最新的有了」
+    就跳過，那些洞於是永遠補不回來——使用者看到的是「明明按了立即更新，大戶
+    持股還是缺」。
+    """
+    import inspect
+
+    from twsix import cli
+
+    src = inspect.getsource(cli._backfill_holders)
+    assert "len(have) >= BACKFILL_WEEKS" in src
+    assert "max(have) >= newest" in src
+
+
+def test_a_scattered_failure_does_not_abandon_the_rest_of_the_year():
+    """五次失敗散落在 51 週裡是很正常的抖動。
+
+    上一版數的是**總數**，五次就整批停下，後面四十幾週一次都不問。連續才算被擋。
+    """
+    import inspect
+
+    from twsix import cli
+
+    src = inspect.getsource(cli._backfill_holders)
+    assert "streak" in src and "streak >= 6" in src
+    # 邊跑邊存：step 被砍或 runner 逾時的時候，拿到的那幾週不能跟著消失。
+    assert src.count("save_stock_history") >= 2
+    # 沒拿到的再試一次，而不是留給下一次執行。
+    assert "再試一次" in src

@@ -1,0 +1,460 @@
+/* 全站共用的腳本。抽出的理由同 site.css。
+   兩個原本由 Jinja 填的值（rel、repo）改由每頁一行的 window.TWSIX 帶進來——
+   那一行 60 個位元組，換掉 20 KB 的複本。 */
+/* 全站個股搜尋。
+ *
+ * search.json 是 [代號, 名稱, 產業, 綜合評分, 完整頁的更新日期] 的陣列，順序固定，
+ * 只有這裡讀它。索引是延後載入的：訪客多半只是看清單頁，不該為了一個可能
+ * 不會用到的搜尋框先付 85 KB。第一次聚焦才抓，抓過就留著。
+ *
+ * 排序刻意分三段而不是算一個相似度分數：使用者打「23」時要的是 2330 那一類，
+ * 不是名字裡有 23 的公司。代號開頭 > 名稱 > 代號中間 > 產業，段內照代號排。
+ */
+(function(){
+  var box=document.getElementById('find'); if(!box) return;
+  var list=document.getElementById('find-list');
+  var data=null, hits=[], cur=-1, base=TWSIX.rel;
+
+  function load(){
+    if(data) return Promise.resolve(data);
+    return fetch(base+'search.json').then(function(r){return r.json();})
+      .then(function(j){ data=j; return j; })
+      .catch(function(){ data=[]; return data; });
+  }
+
+  function score(row, q){
+    if(row[0].indexOf(q)===0) return 0;
+    if(row[1].toLowerCase().indexOf(q)>-1) return 1;
+    if(row[0].indexOf(q)>-1) return 2;
+    if(row[2].toLowerCase().indexOf(q)>-1) return 3;
+    return -1;
+  }
+
+  function search(q){
+    var out=[], i, s;
+    for(i=0;i<data.length;i++){
+      s=score(data[i], q);
+      if(s>=0) out.push([s, data[i]]);
+    }
+    out.sort(function(a,b){ return a[0]-b[0] || (a[1][0]<b[1][0]?-1:1); });
+    return out.slice(0,12).map(function(x){return x[1];});
+  }
+
+  function draw(){
+    list.innerHTML='';
+    refreshOffer();
+    if(!hits.length){ close(); return; }
+    hits.forEach(function(r,i){
+      var li=document.createElement('li');
+      li.id='find-o'+i;
+      li.setAttribute('role','option');
+      li.setAttribute('aria-selected', i===cur ? 'true':'false');
+      if(i===cur) li.className='on';
+      var b=document.createElement('b'); b.textContent=r[0];
+      var nm=document.createElement('span'); nm.className='nm'; nm.textContent=r[1];
+      var ind=document.createElement('span'); ind.className='ind'; ind.textContent=r[2];
+      var sc=document.createElement('span'); sc.className='sc'; sc.textContent=r[3];
+      li.appendChild(b); li.appendChild(nm); li.appendChild(ind); li.appendChild(sc);
+      /* 第五欄是更新日期（沒有完整頁時是空字串，所以真假值判斷照舊）。
+         舊資料可能是數字 1——那時沒有日期可印，退回「完整」。 */
+      if(r[4]){
+        var t=document.createElement('span');
+        var d=String(r[4]);
+        t.className = d.length===10 ? 'tag when' : 'tag full';
+        t.textContent = d.length===10 ? d.slice(5).replace('-','/') : '完整';
+        t.title = d.length===10 ? ('報表更新於 '+d) : '已抓取完整資料';
+        li.appendChild(t);
+      }
+      if(live || repo){
+        var g=document.createElement('span'); g.className='tag grabbtn';
+        g.textContent = r[4] ? '更新' : '抓這一檔';
+        g.addEventListener('mousedown', function(e){
+          e.preventDefault(); e.stopPropagation();
+          grabNow(r[0]);
+        });
+        li.appendChild(g);
+      }
+      li.addEventListener('mousedown', function(e){ e.preventDefault(); go(r); });
+      list.appendChild(li);
+    });
+    list.hidden=false;
+    box.setAttribute('aria-expanded','true');
+    if(cur>=0) box.setAttribute('aria-activedescendant','find-o'+cur);
+    else box.removeAttribute('aria-activedescendant');
+  }
+
+  function close(){
+    list.hidden=true; list.innerHTML='';
+    box.setAttribute('aria-expanded','false');
+    box.removeAttribute('aria-activedescendant');
+    cur=-1;
+  }
+
+  function go(r){ location.href = base+'stock/'+r[0]+'.html'; }
+
+  function run(){
+    var q=box.value.trim().toLowerCase();
+    if(!q){ hits=[]; close(); refreshOffer(); return; }
+    load().then(function(){
+      if(box.value.trim().toLowerCase()!==q) return;  /* 打字比抓索引快 */
+      hits=search(q); cur=hits.length?0:-1; draw();
+    });
+  }
+
+  /* ---- 本機抓取 -------------------------------------------------------
+   * 靜態站台抓不到券商鏡像站（瀏覽器的同源政策，不是缺功能），所以抓取這件事
+   * 只在 `twsix serve` 底下才成立。頁面載入時問一次 /api/ping：問得到就把
+   * 「立即抓取」放進搜尋結果，問不到就當作沒有這回事。
+   */
+  var live=false, grab=document.getElementById('grab');
+  var repo = TWSIX.repo;
+  fetch(base+'api/ping').then(function(r){return r.ok?r.json():null;})
+    .then(function(j){ live = !!(j && j.service==='twsix'); refreshOffer(); })
+    .catch(function(){ live=false; refreshOffer(); });
+
+  /* ---- 頁首那顆「抓取 XXXX」 -------------------------------------------
+   * 一顆按鈕，一個對象：搜尋框裡選中的那一檔；框是空的就退回這一頁的股票。
+   * 已經有完整報告、或這台機器根本抓不了（沒有本機服務也沒有設 repo），
+   * 按鈕就不出現。
+   */
+  var btn = document.getElementById('grabnow');
+  var pageCode = document.body.getAttribute('data-grab') || '';
+  var pageFull = document.body.getAttribute('data-full') === '1';
+  var target = '';
+
+  function canGrab(){ return live || !!repo; }
+  function offer(code, full){
+    target = (code && canGrab()) ? code : '';
+    if(!btn) return;
+    if(target){ btn.textContent = label(target, full); btn.hidden = false; }
+    else btn.hidden = true;
+  }
+  /* 「已經完整」不等於「不必再抓」。
+   *
+   * 上一版把有完整報告的那一檔當成沒有對象，按鈕就消失了——於是一檔股票只要成功
+   * 抓過一次，就再也沒有辦法重抓：資料放到過期、或是後來新增了區塊（大戶持股、
+   * 董監持股就是這樣加進來的），舊的那些檔反而是唯一補不到的。
+   *
+   * 所以按鈕永遠在，只換字。第一次是「抓取」（這一檔還沒有資料），之後是
+   * 「立即更新」——按鈕上該寫的是按下去會發生什麼事，而不是重複一次動作的名字。
+   * 已經有報告的時候，讀者要的是「把它換成最新的」，那件事就叫更新。
+   */
+  function label(code, full){ return (full ? '立即更新 ' : '抓取 ') + code; }
+
+  function refreshOffer(){
+    var q = box.value.trim();
+    if(q && hits.length){
+      var h = hits[cur > -1 ? cur : 0];
+      offer(h ? h[0] : '', h && h[4]);
+    } else if(!q){
+      offer(pageCode, pageFull);
+    } else {
+      offer('');   /* 打了字卻找不到這一檔：沒有對象可抓 */
+    }
+  }
+  function grabNow(code){
+    if(!code) return;
+    if(live) fetchStock(code); else if(repo) askGithub(code);
+  }
+  if(btn){
+    /* mousedown 先於 blur，preventDefault 讓搜尋框不失焦——否則清單一關，
+       按鈕的對象就在 click 抵達之前被換掉了。 */
+    btn.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    btn.addEventListener('click', function(){ grabNow(target); });
+  }
+  var grabX = document.getElementById('grab-x');
+  if(grabX){
+    grabX.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    /* 關掉面板只是不再看它，不是取消——runner 那邊照跑。等待也一併放掉，
+       否則下一頁又會把同一個面板叫回來。 */
+    grabX.addEventListener('click', function(){
+      clearInterval(ticker); ticker = null; watching = null; forget();
+      grab.hidden = true;
+    });
+  }
+
+  /* 線上版的抓取路徑：按下去就跑，不換頁。
+   *
+   * 靜態網站沒辦法自己抓券商鏡像站，但它可以**直接叫 GitHub Actions 去跑**——
+   * REST API 支援跨域，所以 workflow_dispatch 一個 POST 就送得出去，再輪詢
+   * 執行狀態把進度畫在同一頁上。這就是桌機版那個面板，只是背後換成 runner。
+   *
+   * 代價是那個 POST 要一把權杖，而靜態網站沒有地方藏秘密。所以權杖由使用者
+   * 自己貼一次，存在**這台瀏覽器的 localStorage**：不進 repo、不進產生出來的
+   * HTML、不經過任何第三方，只會送到 api.github.com。別人打開這個網站沒有
+   * 權杖，就沒有按鈕，也就按不到任何東西——這比開放 issue 更關得住。
+   *
+   * 建議用 fine-grained PAT，只勾這一個 repo、只給 Actions 讀寫。那把權杖能做
+   * 的事就只有「在這個 repo 跑 workflow」。
+   *
+   * 沒有權杖時退回開 issue 那條路，一次點擊加一次送出，手機上也能用。
+   */
+  var TOKEN_KEY = 'twsix.token';
+  var WORKFLOW = 'stock.yml';
+  var API = 'https://api.github.com/repos/' + repo;
+
+  function token(){
+    try{ return localStorage.getItem(TOKEN_KEY) || ''; }catch(e){ return ''; }
+  }
+  function setToken(v){
+    try{ v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY); }
+    catch(e){}
+  }
+  function gh(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({
+      'Accept': 'application/vnd.github+json',
+      'Authorization': 'Bearer ' + token(),
+      'X-GitHub-Api-Version': '2022-11-28'
+    }, opts.headers || {});
+    return fetch(API + path, opts);
+  }
+
+  /* ---- 進度面板 ------------------------------------------------------- */
+  var started = 0, ticker = null, steps = [];
+
+  function elapsed(){
+    var s = Math.round((Date.now() - started) / 1000);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+  function step(text){
+    if(steps[steps.length - 1] !== text) steps.push(text);
+    paint();
+  }
+  function paint(){
+    if(!grab || !started) return;
+    grab.hidden = false;
+    /* 每秒重畫一次，讀者才看得出它還活著。一分半沒有任何動靜，看起來就是當掉
+       ——那正是這個計時器存在的唯一理由。 */
+    grab.querySelector('.head').textContent = '抓取中… ' + elapsed();
+    grab.querySelector('.log').textContent = steps.join('\n');
+  }
+  function beginPanel(){
+    started = Date.now(); steps = [];
+    clearInterval(ticker);
+    ticker = setInterval(paint, 1000);
+    paint();
+  }
+  function endPanel(head, note){
+    clearInterval(ticker); ticker = null;
+    if(!grab) return;
+    grab.hidden = false;
+    grab.querySelector('.head').textContent = head;
+    if(note) steps.push(note);
+    grab.querySelector('.log').textContent = steps.join('\n');
+  }
+
+  /* ---- 站內輪詢：資料進網站了沒 --------------------------------------- */
+  var PENDING = 'twsix.pending';
+  function remember(code){
+    try{ sessionStorage.setItem(PENDING, JSON.stringify(
+      {code: code, until: Date.now() + 8*60*1000})); }catch(e){}
+  }
+  function forget(){ try{ sessionStorage.removeItem(PENDING); }catch(e){} }
+  function pendingJob(){
+    try{
+      var j = JSON.parse(sessionStorage.getItem(PENDING) || 'null');
+      if(!j || !j.code || Date.now() > j.until){ forget(); return null; }
+      return j;
+    }catch(e){ return null; }
+  }
+
+  var watching = null;
+  function arrive(code){
+    forget();
+    endPanel(code + ' 好了，正在開啟報告…');
+    if(location.pathname.replace(/^.*\//, '') === code + '.html') location.reload();
+    else location.href = base + 'stock/' + code + '.html';
+  }
+  function watch(code, tries){
+    if(watching && watching !== code) return;
+    watching = code;
+    fetch(base + 'search.json?t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(rows){
+        for(var i=0;i<rows.length;i++){
+          if(rows[i][0] === code && rows[i][4]){ arrive(code); return; }
+        }
+        nextWatch(code, tries);
+      })
+      .catch(function(){ nextWatch(code, tries); });
+  }
+  function nextWatch(code, tries){
+    if(tries <= 0){
+      forget(); watching = null;
+      endPanel('等太久了，' + code + ' 還沒出現',
+               '到 Actions 看一下「加一檔個股」跑完了沒；跑完了重新整理這一頁。');
+      return;
+    }
+    setTimeout(function(){ watch(code, tries - 1); }, 10000);
+  }
+
+  /* ---- 直接跑 workflow ------------------------------------------------ */
+  function runOnGithub(code){
+    close();
+    beginPanel();
+    remember(code);
+    step('送出 ' + code + ' 給 GitHub Actions…');
+    var since = new Date(Date.now() - 60000).toISOString();
+    gh('/actions/workflows/' + WORKFLOW + '/dispatches', {
+      method: 'POST',
+      body: JSON.stringify({ref: 'main', inputs: {stock: code}})
+    }).then(function(r){
+      if(r.status === 204){ step('已排入佇列，等 runner 接手…'); pollRun(code, since, 90); return; }
+      if(r.status === 401 || r.status === 403){
+        setToken('');
+        endPanel('權杖無效或權限不足', '請重新設定一把 fine-grained PAT，勾選這個 repo 的 Actions 讀寫。');
+        return;
+      }
+      return r.text().then(function(t){
+        endPanel('送出失敗（HTTP ' + r.status + '）', t.slice(0, 300));
+      });
+    }).catch(function(e){
+      endPanel('送不出去', String(e));
+    });
+  }
+
+  /* runner 排隊、跑測試、抓資料、補股權歷史、建站，加起來約三到四分鐘——新加
+     的一檔要向集保逐週問滿 51 週，那是〔大戶持股〕有沒有走勢的差別。每 4 秒問
+     一次狀態，把 GitHub 自己的字串翻成人看得懂的一行，讀者才知道它在哪一步。 */
+  function pollRun(code, since, tries){
+    if(tries <= 0){ step('狀態查不到了，改用網站本身判斷…'); watch(code, 40); return; }
+    gh('/actions/workflows/' + WORKFLOW + '/runs?per_page=5&created=%3E' +
+       encodeURIComponent(since))
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        var run = j && j.workflow_runs && j.workflow_runs[0];
+        if(!run){ setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000); return; }
+        if(run.status === 'queued') step('排隊中…');
+        else if(run.status === 'in_progress') step(
+          '執行中：抓報表 → 補集保 51 週股權歷史（約 1 分鐘）→ 產生報告 → 重建網站');
+        else if(run.status === 'completed'){
+          if(run.conclusion === 'success'){
+            step('Actions 完成，等網站發布…');
+            watch(code, 40);
+          } else {
+            forget();
+            endPanel('抓取失敗（' + run.conclusion + '）',
+                     '執行紀錄：' + run.html_url);
+          }
+          return;
+        }
+        setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000);
+      })
+      .catch(function(){ setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000); });
+  }
+
+  /* 曾經有一條「沒權杖就開一張 issue」的退路，已經拿掉。它把一次點擊變成換頁、
+     核對標題、按 Submit，而那一頁上還有別的按鈕可以按錯、有預填的股號可以改壞；
+     跑完也不會自己關。權杖貼一次就一勞永逸，兩條路並存只是留著壞的那條。 */
+
+  /* ---- 設定權杖 ------------------------------------------------------- */
+  function askToken(){
+    var now = token();
+    var msg = now
+      ? '目前已設定權杖。貼上新的可以更換，留空並按確定則清除。'
+      : '貼上 GitHub fine-grained PAT（只勾這一個 repo、Actions 讀寫）。\n'
+        + '它只存在這台瀏覽器，不會進 repo，也只會送到 api.github.com。';
+    var v = window.prompt(msg, '');
+    if(v === null) return false;
+    setToken(v.trim());
+    return !!v.trim();
+  }
+
+  function askGithub(code){
+    if(token()) return runOnGithub(code);
+    if(askToken()) return runOnGithub(code);
+    /* 取消了設定權杖。什麼都不做會變成「按了沒反應」——說一聲它為什麼沒動。 */
+    close(); beginPanel();
+    endPanel('還沒設定抓取權杖',
+             '線上抓取要一把 GitHub fine-grained PAT（只勾這個 repo、Actions 讀寫）。\n'
+             + '按頁首的「設定抓取權杖」貼上，之後就不用再貼。');
+    return;
+  }
+  window.twsixAskGithub = askGithub;
+  window.twsixSetToken = askToken;
+  window.twsixHasToken = function(){ return !!token(); };
+  window.twsixCanAsk = function(){ return !live && !!repo; };
+  /* ---- 本機服務（twsix serve）：同一個面板，不同的後端 ---------------- */
+  function pollLocal(code){
+    fetch(base + 'api/job/' + code).then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j.error){ endPanel('抓取失敗', j.error); return; }
+        if(!j.done){
+          /* 本機那條路每一行都是 twsix report 自己印的，直接照抄。 */
+          steps = j.lines.slice(); paint();
+          setTimeout(function(){ pollLocal(code); }, 800);
+          return;
+        }
+        steps = j.lines.slice();
+        if(j.ok) arrive(code);
+        else endPanel('抓取失敗', '八個鏡像站都拒絕通常代表 IP 被擋，換個網路再試。');
+      })
+      .catch(function(){ endPanel('抓取中斷', '連不上本機服務'); });
+  }
+  function fetchStock(code){
+    close(); beginPanel(); remember(code);
+    step('正在抓取 ' + code + '…');
+    fetch(base + 'api/fetch/' + code, {method: 'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j.error){ endPanel('抓取失敗', j.error); return; }
+        pollLocal(code);
+      })
+      .catch(function(){ endPanel('抓取中斷', '連不上本機服務'); });
+  }
+  window.twsixFetch = fetchStock;
+  window.twsixLive = function(){ return live; };
+
+  /* 換頁之後把等待接回來。計時器從零重新起算——真正的起點已經不在這一頁上，
+     顯示一個假的總時間比顯示這一頁等了多久更誤導。 */
+  (function resume(){
+    var j = pendingJob();
+    if(!j) return;
+    setTimeout(function(){
+      beginPanel();
+      step('等 ' + j.code + ' 的資料進到網站…');
+      watch(j.code, 40);
+    }, 1200);
+  })();
+
+  /* 權杖入口。放在導覽列而不是藏在按鈕裡，因為換一把、清掉都要找得到。 */
+  var tl = document.getElementById('tokenlink');
+  if(tl){
+    setTimeout(function(){
+      if(live || !repo) return;
+      tl.hidden = false;
+      var mark = function(){ tl.textContent = token() ? '抓取權杖 ✓' : '設定抓取權杖'; };
+      mark();
+      tl.addEventListener('click', function(e){ e.preventDefault(); askToken(); mark(); });
+    }, 1000);
+  }
+
+  box.addEventListener('focus', load);
+  box.addEventListener('input', run);
+  box.addEventListener('blur', function(){ setTimeout(close, 150); });
+  box.addEventListener('keydown', function(e){
+    if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+      if(!hits.length) return;
+      e.preventDefault();
+      cur=(cur + (e.key==='ArrowDown'?1:hits.length-1)) % hits.length;
+      draw();
+    } else if(e.key==='Enter'){
+      /* 有選中就跳轉；沒有就讓 form 送到清單頁，那是無 JS 時走的同一條路。 */
+      if(cur>-1 && hits[cur]){
+        e.preventDefault();
+        /* 有完整報告就跳過去；沒有而且本機服務在跑，Enter 就是「去抓」——
+           那才是「輸入代號就跑出完整報告」的意思。 */
+        if(hits[cur][4]) go(hits[cur]);
+        else if(live || repo) grabNow(hits[cur][0]);
+        else go(hits[cur]);
+      }
+    } else if(e.key==='Escape'){ close(); box.blur(); }
+  });
+  document.addEventListener('keydown', function(e){
+    var el=document.activeElement;
+    if(e.key==='/' && el!==box && !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)){
+      e.preventDefault(); box.focus(); box.select();
+    }
+  });
+})();

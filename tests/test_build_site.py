@@ -43,6 +43,22 @@ def _sheets(tmp: Path) -> Path:
     return tmp / "sheets"
 
 
+def served(out: Path, name: str) -> str:
+    """一張頁面 **加上它連進來的共用檔案**——瀏覽器實際看到的全部。
+
+    樣式與腳本從每一張頁面裡抽出來變成 assets/site.css、assets/site.js 之後，
+    「這段腳本在不在頁面上」就不能只讀那張 HTML 了。這個 helper 把連結的檔案接
+    回去，於是斷言問的還是同一件事：讀者的瀏覽器拿不拿得到這段程式。
+    """
+    page = (out / name).read_text(encoding="utf-8")
+    parts = [page]
+    for asset in ("site.css", "site.js"):
+        if asset in page:
+            parts.append((out / "assets" / asset).read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
+
+
 def test_a_fetched_stock_gets_the_full_page_in_the_site(tmp_path=None):
     """The whole point: 河流圖 and 個股新聞 must be *in the built site*."""
     tmp = tmp_path or _tmp()
@@ -178,11 +194,11 @@ def test_every_page_carries_the_search_box(tmp_path=None):
     build_site(_records(), out, sheets_dir=_sheets(tmp))
 
     for name in ("index.html", "picks.html", "stats.html", "about.html"):
-        page = (out / name).read_text(encoding="utf-8")
+        page = served(out, name)
         assert 'id="find"' in page, f"{name} 沒有搜尋框"
         assert "search.json" in page, f"{name} 沒有載入索引"
     for code in ("5439", "2330"):
-        page = (out / "stock" / f"{code}.html").read_text(encoding="utf-8")
+        page = served(out, f"stock/{code}.html")
         assert 'id="find"' in page, f"{code} 的頁面沒有搜尋框"
 
 
@@ -206,8 +222,11 @@ def test_the_stock_page_search_box_resolves_paths_from_its_own_depth():
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp))
     page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
-    assert "'../'+'search.json'" in page or "base='../'" in page.replace(" ", "")
+    # rel 現在由每頁一行的 window.TWSIX 帶進來，腳本本身是全站共用的靜態檔。
+    assert 'window.TWSIX={rel:"../"' in page
     assert 'action="../index.html"' in page
+    assert 'href="../assets/site.css' in page and 'src="../assets/site.js' in page
+    assert "base=TWSIX.rel" in served(out, "stock/5439.html")
 
 
 # -- 這一輪的版面決定 ------------------------------------------------------
@@ -297,7 +316,7 @@ def test_the_published_site_can_ask_github_to_fetch_a_stock():
     tmp = _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
-    page = (out / "index.html").read_text("utf-8")
+    page = served(out, "index.html")
 
     assert '"owner/repo"' in page
     assert "/dispatches" in page
@@ -315,7 +334,7 @@ def test_the_page_watches_for_its_own_result_rather_than_telling_you_to_wait():
     tmp = _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
-    page = (out / "index.html").read_text("utf-8")
+    page = served(out, "index.html")
 
     assert "search.json?t=" in page
     assert "no-store" in page
@@ -326,10 +345,10 @@ def test_no_repo_configured_means_no_offer():
     tmp = _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp), repo="")
-    page = (out / "index.html").read_text("utf-8")
+    page = served(out, "index.html")
 
     assert "metallicatw" not in page
-    assert 'var repo = ""' in page or "var repo = ''" in page
+    assert 'repo:""' in page or "repo:''" in page
 
 
 def test_the_unfetched_stock_page_offers_both_paths_from_one_implementation():
@@ -341,7 +360,7 @@ def test_the_unfetched_stock_page_offers_both_paths_from_one_implementation():
     tmp = _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
-    page = (out / "stock" / "2330.html").read_text("utf-8")
+    page = served(out, "stock/2330.html")
 
     assert "twsixLive" in page and "twsixCanAsk" in page
     assert "twsixFetch" in page and "twsixAskGithub" in page
@@ -359,7 +378,7 @@ def test_the_wait_survives_navigating_away():
     tmp = _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
-    page = (out / "stock" / "2330.html").read_text("utf-8")
+    page = served(out, "stock/2330.html")
 
     assert "sessionStorage" in page
     assert "twsix.pending" in page
@@ -409,8 +428,7 @@ def test_every_function_the_page_calls_is_a_function_the_page_defines():
     build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
 
     for name in ("index.html", "stock/2330.html", "stock/5439.html"):
-        page = (out / name).read_text("utf-8")
-        js = _script_bodies(page)
+        js = _script_bodies(served(out, name))
         # 前面接著 `.` 的是方法呼叫，屬於某個物件，不在這裡的判斷範圍。
         called = {
             m.group(1)
@@ -453,7 +471,7 @@ def test_the_fetch_button_sits_next_to_the_search_box():
     full = (out / "stock" / "5439.html").read_text("utf-8")
     assert 'data-grab="5439"' in full
     assert 'data-full="1"' in full
-    assert "立即更新" in full
+    assert "立即更新" in served(out, "stock/5439.html")
 
 
 def test_the_mark_is_the_update_date_when_the_fetch_left_one(tmp_path=None):
@@ -582,3 +600,61 @@ def test_the_header_stamp_says_when_and_reminds_to_update(tmp_path=None):
         assert "個股資料請記得更新" in page, name
         assert "網站產生：" not in page, name
         assert "資料截止：" not in page, name
+
+
+def test_the_shared_css_and_js_are_downloaded_once_not_baked_into_every_page(tmp_path=None):
+    """1,741 張頁面夾帶同一份 22 KB 樣式 + 16 KB 腳本 = 96 MB 的網站。
+
+    那 96 MB 每次「立即更新」都要打包、上傳、再解開一次，就為了其中一張變了。
+    抽成 assets/ 之後網站約剩四分之一，而讀者翻第二頁起是快取命中。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    css = out / "assets" / "site.css"
+    js = out / "assets" / "site.js"
+    assert css.is_file() and js.is_file()
+    assert len(css.read_text("utf-8")) > 5_000
+    assert len(js.read_text("utf-8")) > 5_000
+
+    for name, rel in (("index.html", ""), ("stock/2330.html", "../")):
+        page = (out / name).read_text("utf-8")
+        assert f'href="{rel}assets/site.css?v=' in page, name
+        assert f'src="{rel}assets/site.js?v=' in page, name
+        # 內嵌的只剩那一行 bootstrap，不是整份腳本。
+        assert "<style>" not in page, name
+        assert len(_script_bodies(page)) < 500, name
+
+
+def test_the_asset_url_carries_a_content_fingerprint(tmp_path=None):
+    """沒有指紋，改過樣式的網站對回訪的讀者是舊的。
+
+    瀏覽器手上那份 site.css 沒有過期的理由——它上次拿到的網址一模一樣。
+    """
+    from twsix.report.build import asset_version
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    v = asset_version()
+    assert len(v) == 8
+    assert f"assets/site.css?v={v}" in (out / "index.html").read_text("utf-8")
+
+
+def test_a_standalone_page_still_carries_everything_it_needs(tmp_path=None):
+    """`twsix page` 產出的那一張要能單獨用瀏覽器開起來。
+
+    它旁邊沒有 assets/ 可以連——所以單頁版內嵌，網站版連外部檔案。同一份樣板，
+    兩種輸出。
+    """
+    from test_stock_page import _page  # noqa: PLC0415
+    from twsix.report.build import build_stock_page  # noqa: PLC0415
+
+    tmp = tmp_path or _tmp()
+    page, _ = _page()
+    out = build_stock_page(page, tmp / "5439.html")
+    text = out.read_text("utf-8")
+    assert "<style>" in text
+    assert "assets/site.css" not in text
+    assert len(_script_bodies(text)) > 5_000
