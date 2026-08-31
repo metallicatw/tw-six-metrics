@@ -401,11 +401,37 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     sheets = [args.sheet] if args.sheet else list(ORDER)
+
+    # 十三張表分散到八個鏡像站同時抓。節流仍然是「每個主機之間隔多久」，所以對
+    # 任何一個站來說請求沒有變密——變快的是我們排隊的方式。存檔還原（--from-html）
+    # 沒有主機可分，照舊逐張讀。
+    parallel = not args.from_html and len(sheets) > 1
+    fetched: dict[str, list[list[str]]] = {}
+    errors: dict[str, Exception] = {}
+    if parallel:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = {
+                pool.submit(dj.fetch, args.stock, name, offset=i): name
+                for i, name in enumerate(sheets)
+            }
+            for future, name in futures.items():
+                try:
+                    fetched[name] = future.result()
+                except Exception as exc:  # noqa: BLE001 - 逐張回報
+                    errors[name] = exc
+
     failures = 0
     contract_failures = 0
     for name in sheets:
         try:
-            grid = dj.fetch(args.stock, name)
+            if parallel:
+                if name in errors:
+                    raise errors[name]
+                grid = fetched[name]
+            else:
+                grid = dj.fetch(args.stock, name)
         except ContractError as exc:
             print(f"  {name:<8} 契約不符：{exc}", file=sys.stderr)
             failures += 1

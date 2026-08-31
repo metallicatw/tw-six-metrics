@@ -18,6 +18,7 @@ import http.cookiejar
 import json
 import logging
 import ssl
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -138,8 +139,16 @@ class HttpClient:
     cookies: bool = False
     _last_call: dict[str, float] = field(default_factory=dict, init=False)
     _opener: object | None = field(default=None, init=False, repr=False)
+    #: 這個 client 會被多執行緒共用（十三張表分散到八個鏡像站同時抓），所以
+    #: 節流表和 opener 的建立都要上鎖。鎖只保護「排隊」那一瞬間，等待本身在鎖
+    #: 外面睡——不然併發就退化成排隊，而排隊正是要修掉的東西。
+    _lock: "threading.Lock" = field(default_factory=lambda: threading.Lock(), init=False, repr=False)
 
     def _build_opener(self):  # type: ignore[no-untyped-def]
+        with self._lock:
+            return self._build_opener_locked()
+
+    def _build_opener_locked(self):  # type: ignore[no-untyped-def]
         if self._opener is None:
             handlers = [urllib.request.HTTPSHandler(context=tls_context())]
             if self.cookies:
@@ -190,13 +199,22 @@ class HttpClient:
         )
 
     def _throttle(self, url: str) -> None:
+        """每個主機之間至少隔 ``min_interval`` 秒，即使有好幾個執行緒同時要。
+
+        先在鎖裡「訂位」——把下一個可以發送的時間點算出來並寫回去——再到鎖外面
+        睡到那個時間。如果連睡覺都握著鎖，八個執行緒會排成一列，併發等於沒有；
+        反過來，如果不在鎖裡訂位，八個執行緒會同時看到同一個 last 而一起衝出去，
+        對站台就是一次八連發。
+        """
         host = urllib.parse.urlparse(url).netloc
-        last = self._last_call.get(host)
-        if last is not None:
-            wait = self.min_interval - (time.time() - last)
-            if wait > 0:
-                time.sleep(wait)
-        self._last_call[host] = time.time()
+        now = time.time()
+        with self._lock:
+            last = self._last_call.get(host)
+            send_at = now if last is None else max(now, last + self.min_interval)
+            self._last_call[host] = send_at
+        wait = send_at - time.time()
+        if wait > 0:
+            time.sleep(wait)
 
     def get(
         self,

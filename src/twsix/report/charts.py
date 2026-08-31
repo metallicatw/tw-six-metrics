@@ -60,28 +60,40 @@ def _chronological(
 BAR_GAP = 2.0
 #: Rounded data-ends, anchored to the baseline.
 BAR_RADIUS = 4.0
+#: 長條寬度上限。期數少時整格撐滿只是把版面的寬度誤讀成資料的份量。
+BAR_MAX_W = 56.0
 LINE_WIDTH = 2.0
 #: 超過這麼多點就不畫標記。
 #:
 #: 標記外圍那圈 surface 色描邊是為了讓點從線上跳出來，但點一密，那些描邊就把線
-#: 切成假虛線——看起來像資料有斷，其實沒有。門檻不能只看點數：SVG 是
-#: preserveAspectRatio="none"，橫向會被拉寬約 1.7 倍，所以標記在畫面上比在
-#: viewBox 裡寬。留四倍標記直徑的間距反推，654 / (4 × 5) ≈ 32。
-#: 一年的週線（51 點）因此不畫標記，兩年的季線（8 點）會畫。
+#: 切成假虛線——看起來像資料有斷，其實沒有。留四倍標記直徑的間距反推：繪圖區
+#: 1122 寬、標記 9 寬，1122 / (4 × 9) ≈ 31。
+#: 一年的週線（51 點）因此不畫標記，兩年的季線（8 點）會畫。標記沒畫的時候，
+#: 每一點仍然查得到值——見 _hover_slots()。
 MARKER_LIMIT = 30
 MARKER_R = 4.5  # 9px across
 
 
 @dataclass(frozen=True)
 class Frame:
-    """The drawing area, in the SVG's own user units."""
+    """The drawing area, in the SVG's own user units.
 
-    width: float = 720.0
-    height: float = 190.0
-    left: float = 54.0
-    right: float = 12.0
-    top: float = 14.0
-    bottom: float = 26.0
+    這個尺寸要盡量貼近它在畫面上實際被畫出來的大小。SVG 用
+    ``preserveAspectRatio="none"`` 撐滿容器寬度，所以 viewBox 和容器差多少，
+    畫面上就被拉多少——而拉伸是**非等比**的：只拉橫向。原本 720×190 撐到
+    1200×190，橫向 1.67 倍、縱向 1 倍，於是每個圓形標記變成橢圓、每一段斜線的
+    線寬和水平線不一樣粗。看起來只是「有點糊」，其實是整張圖的幾何都歪了。
+
+    1200 是這個網站內容欄的寬度（max-width 1240 減去左右各 20 的 padding），
+    所以桌機上是 1:1，什麼都不被拉。窄畫面會等比縮，那是縮不是變形。
+    """
+
+    width: float = 1200.0
+    height: float = 300.0
+    left: float = 62.0
+    right: float = 16.0
+    top: float = 18.0
+    bottom: float = 30.0
 
     @property
     def plot_w(self) -> float:
@@ -144,7 +156,39 @@ def _grid(frame: Frame, lo: float, hi: float, digits: int) -> list[str]:
         )
         out.append(
             f'<text x="{frame.left - 8:.1f}" y="{y + 3.5:.1f}" text-anchor="end" '
-            f'font-size="10" fill="var(--muted)">{escape(_axis_label(value, digits))}</text>'
+            f'font-size="11" fill="var(--muted)">{escape(_axis_label(value, digits))}</text>'
+        )
+    return out
+
+
+def _hover_slots(
+    frame: Frame,
+    labels: Sequence[str],
+    values: Sequence[Number],
+    unit: str,
+    digits: int,
+) -> list[str]:
+    """每一期一塊透明的滑鼠感應區，帶原生 tooltip。
+
+    密的序列不畫標記（見 MARKER_LIMIT），但「不畫點」不該等於「查不到值」。
+    整欄透明矩形的命中範圍比點本身大得多，滑過任何高度都讀得到那一期的數字，
+    而且不需要一行 JavaScript——``<title>`` 是瀏覽器自己的 tooltip。
+    """
+    out: list[str] = []
+    n = len(values)
+    if not n:
+        return out
+    slot = frame.plot_w / n
+    for i, raw in enumerate(values):
+        if raw is None:
+            continue
+        x = frame.left + slot * i
+        label = escape(labels[i] if i < len(labels) else "")
+        text = escape(_fmt(float(raw), digits)) + escape(unit)
+        out.append(
+            f'<rect x="{x:.1f}" y="{frame.top:.1f}" width="{slot:.1f}" '
+            f'height="{frame.plot_h:.1f}" fill="transparent">'
+            f"<title>{label}　{text}</title></rect>"
         )
     return out
 
@@ -190,7 +234,7 @@ def _x_labels(frame: Frame, labels: Sequence[str], every: int) -> list[str]:
         last_right = left_edge + width
         out.append(
             f'<text x="{x:.1f}" y="{frame.height - 8:.1f}" text-anchor="{anchor}" '
-            f'font-size="10" fill="var(--muted)">{escape(label)}</text>'
+            f'font-size="11" fill="var(--muted)">{escape(label)}</text>'
         )
     return out
 
@@ -267,7 +311,10 @@ def bars(
     parts += _grid(f, lo, hi, digits)
 
     slot = f.plot_w / len(values)
-    width = max(slot - BAR_GAP, 1.0)
+    # 期數少的時候不要把長條撐滿整格。九季畫在 1122 寬的圖上，一根就是 122px
+    # ——那不是資料變重要，是版面把它變胖。上限之後多出來的空間留白，長條置中。
+    width = max(min(slot - BAR_GAP, BAR_MAX_W), 1.0)
+    pad = (slot - width) / 2
     zero_y = f.top + f.plot_h * (1 - (0 - lo) / (hi - lo))
     for i, raw in enumerate(values):
         if raw is None:
@@ -277,7 +324,7 @@ def bars(
         top = min(y, zero_y)
         height = max(abs(y - zero_y), 1.0)
         radius = min(BAR_RADIUS, width / 2, height)
-        x = f.left + slot * i + BAR_GAP / 2
+        x = f.left + slot * i + pad
         parts.append(
             f'<rect x="{x:.1f}" y="{top:.1f}" width="{width:.1f}" height="{height:.1f}" '
             f'rx="{radius:.1f}" fill="var(--accent)" opacity=".92">'
@@ -311,8 +358,16 @@ def line(
     present = [float(v) for v in values if v is not None]
     if not present:
         return f'<p class="muted">{escape(title)}：無資料</p>'
-    f = frame or Frame()
-    lo, hi = _nice_bounds(present)
+    f = frame or Frame(height=240.0)
+    # 折線圖不從零起算。
+    #
+    # 長條圖必須從零——長條的長度就是量值，截掉底部等於騙人。折線不是：它畫的是
+    # 一條水準隨時間怎麼移動。大戶持股在 84.7~87.5 之間走，畫在 0~90 的軸上就是
+    # 一條平線，而那 2.8 個百分點正是這張圖存在的唯一理由。
+    #
+    # 零線沒有被丟掉：序列跨越零的時候（年增率那一類）零仍然落在範圍內，_grid
+    # 會把它畫成實線加粗。
+    lo, hi = _nice_bounds(present, include_zero=False)
     parts = _open(f, title, f"{len(present)} 期{unit}")
     parts += _grid(f, lo, hi, digits)
 
@@ -323,6 +378,8 @@ def line(
             f.left + slot * (i + 0.5),
             f.top + f.plot_h * (1 - (value - lo) / (hi - lo)),
         )
+
+    parts += _hover_slots(f, labels, values, unit, digits)
 
     run: list[str] = []
     for i, raw in enumerate(values):

@@ -193,7 +193,7 @@ ol.news .head{font-size:14.5px;font-weight:600;line-height:1.5;color:var(--ink);
 ol.news a.head:hover{color:var(--accent-2);text-decoration:underline}
 ol.news .sum{margin:6px 0 0;font-size:12.5px;line-height:1.65;color:var(--muted)}
 /* -- 河流圖 ----------------------------------------------------------- */
-.river-fig svg{height:auto;max-height:360px}
+.river-fig svg{height:380px}
 .zonekey{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0 0;padding:0 2px;
   font-size:11.5px;color:var(--muted);max-width:none}
 .zonekey .key{display:inline-flex;align-items:center;gap:5px}
@@ -255,8 +255,11 @@ details.sources summary{cursor:pointer;color:var(--ink-2)}
 /* -- charts ------------------------------------------------------------ */
 figure.chart-fig{margin:22px 0 26px}
 figure.chart-fig figcaption{font-size:13.5px;font-weight:600;color:var(--ink-2);margin-bottom:8px}
-svg.chart{display:block;width:100%;height:190px;background:var(--surface);
-  border:1px solid var(--rule);border-radius:4px}
+/* viewBox 是 1200×300，而內容欄正好 1200 寬——桌機上 1:1，不被拉伸。
+   高度跟著 CSS 走，所以窄畫面只有橫向會縮，那是這個取捨的代價：換來的是
+   桌機上完全不變形。 */
+svg.chart{display:block;width:100%;height:240px;background:var(--surface);
+  border:1px solid var(--rule);border-radius:5px}
 details.chart-data{margin-top:8px;font-size:12.5px}
 details.chart-data summary{cursor:pointer;color:var(--muted)}
 details.chart-data table{min-width:0}
@@ -292,7 +295,7 @@ tr.here{background:var(--surface-2)}
 tr.here th{font-weight:700}
   background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:20px}
   padding:2px 0;color:var(--ink-2)}
-@media(max-width:640px){svg.chart{height:160px}}
+@media(max-width:640px){svg.chart{height:200px}}
 @media(max-width:640px){.wrap{padding:0 14px 60px}}
 </style>
 </head>
