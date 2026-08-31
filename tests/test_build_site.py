@@ -671,3 +671,45 @@ def test_the_watcher_waits_for_the_mark_to_change_not_merely_to_exist(tmp_path=N
     assert "now !== was" in js, "還在用『有值就算完成』的判斷"
     # 同一天更新同一檔，日期不會變——那時沒有站內訊號可等，要有保底。
     assert "SETTLE_MS" in js
+
+
+def test_the_site_publishes_a_stamp_that_changes_on_every_build(tmp_path=None):
+    """「deploy 完成了沒」要有一個精確的答案，不是從資料反推。
+
+    以前問的是 search.json 的第五欄——那一欄只在資料變了才動，所以同一天對同一檔
+    按第二次「立即更新」，日期一模一樣，頁面沒有任何訊號可以等，只能空等計時器。
+    build.json 每建一次站就換一次，六十個位元組。
+    """
+    import json
+    import time
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    sheets = _sheets(tmp)
+    build_site(_records(), out, sheets_dir=sheets)
+    first = json.loads((out / "build.json").read_text("utf-8"))
+    assert first["built"] and first["assets"]
+
+    # 頁面知道自己是哪一次建的，才比得出來。
+    # 薄頁和完整頁走的是兩條不同的 render 路徑，兩條都要帶到——漏掉完整頁的話，
+    # 「立即更新」停在的那一頁正好就是不會自己更新的那一頁。
+    for name in ("index.html", "stock/2330.html", "stock/5439.html"):
+        assert f'built:"{first["built"]}"' in (out / name).read_text("utf-8"), name
+
+    time.sleep(1.1)
+    build_site(_records(), out, sheets_dir=sheets)
+    second = json.loads((out / "build.json").read_text("utf-8"))
+    assert second["built"] != first["built"], "重建之後號碼沒變，等待就永遠不會結束"
+
+
+def test_the_watcher_polls_the_build_stamp_first(tmp_path=None):
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
+    js = (out / "assets" / "site.js").read_text("utf-8")
+
+    assert "build.json?t=" in js
+    assert "TWSIX.built" in js
+    # search.json 那條路留著，但只是 build.json 拿不到時的退路。
+    assert "function fallback(" in js
+    assert js.index("build.json?t=") < js.index("function fallback(")

@@ -81,6 +81,7 @@ class SiteContext:
     stock_count: int
     latest_quarter: str
     engine_version: str = ENGINE_VERSION
+    build_id: str = ""
 
 
 class MissingOptional(RuntimeError):
@@ -145,6 +146,29 @@ def asset_version() -> str:
     for name in ASSET_FILES:
         digest.update(asset_text(name).encode())
     return digest.hexdigest()[:8]
+
+
+#: 每建一次站就換一次的號碼。
+#:
+#: 用途只有一個：讓瀏覽器問得出「我手上這一份，是不是已經被換掉了」。
+#: 原本問的是 search.json 的第五欄變了沒——但那一欄只在**資料**變了才動，而同一天
+#: 對同一檔按第二次「立即更新」，日期一模一樣，於是頁面沒有任何訊號可以等，只能
+#: 空等一個保底計時器。build.json 不同：它每次建站都變，所以「deploy 完成、CDN
+#: 也換好了」這件事有一個精確的、六十個位元組的答案。
+BUILD_STAMP = "build.json"
+
+
+def build_id(now: datetime | None = None) -> str:
+    return f"{int((now or datetime.now(UTC)).timestamp())}"
+
+
+def write_build_stamp(out_dir: Path, ident: str) -> None:
+    import json
+
+    (out_dir / BUILD_STAMP).write_text(
+        json.dumps({"built": ident, "assets": asset_version()}, separators=(",", ":")),
+        encoding="utf-8",
+    )
 
 
 def write_assets(out_dir: Path) -> None:
@@ -352,12 +376,14 @@ def build_site(
         generated_at=stamp(),
         stock_count=len(rows),
         latest_quarter=quarter,
+        build_id=build_id(),
     )
     base = dict(
         hidden_pages=sorted(HIDDEN_PAGES),
         repo=repo,
         site_title=ctx.site_title,
         generated_at=ctx.generated_at,
+        build_id=ctx.build_id,
         stock_count=ctx.stock_count,
         latest_quarter=ctx.latest_quarter,
         latest_revenue_month=month,
@@ -518,6 +544,11 @@ def build_site(
 
     _write_search_index(out_dir, rows, rich_ids, fetched_at)
     written["search.json"] = 1
+
+    # 最後才寫，而且要在 .nojekyll 之前——它是「這一份網站已經完整」的signal，
+    # 早於內容寫出去就會讓還在等的瀏覽器提早重新載入。
+    write_build_stamp(out_dir, ctx.build_id)
+    written[BUILD_STAMP] = 1
 
     (out_dir / ".nojekyll").write_text("", encoding="utf-8")
     return written
@@ -764,6 +795,7 @@ def _full_stock_page(
         rel="../",
         repo=base.get("repo", ""),
         assets=True,
+        build_id=base.get("build_id", ""),
     )
     return True
 
@@ -777,6 +809,7 @@ def build_stock_page(
     rel: str = "",
     repo: str = "",
     assets: bool = False,
+    build_id: str = "",
 ) -> Path:
     """Render 〔評價簡表〕〔六大財務指標評等〕〔EPS預估與估價〕〔殖利率估價〕.
 
@@ -798,6 +831,7 @@ def build_stock_page(
         grab_code=page.stock_id,
         grab_full=True,
         rel=rel,
+        build_id=build_id,
         site_title=site_title,
         generated_at=generated_at or stamp(),
         stock_count=1,
