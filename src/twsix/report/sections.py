@@ -496,7 +496,13 @@ BIG_TIERS = ("＞400張≦800張", "＞800張≦1千張", "＞1千張")
 #: 散戶：一張到十張。兩條線一起看才有意義——籌碼從誰手上換到誰手上。
 SMALL_TIERS = ("≦10張",)
 #: 圖上畫幾週。三年，和河流圖同一個量級；再長就把最近的變化壓平了。
-HOLDER_WEEKS = 156
+#: 圖上畫幾週。
+#:
+#: 原本是 156（三年），因為那時手上最多也只有集保查詢頁的 51 週加上排程累積的
+#: 幾週——窗開得再大也沒有東西可畫。現在使用者可以從 Goodinfo 一次匯入 258 週，
+#: 而籌碼的完整循環（散戶進場、大戶收貨、再派發）本來就要好幾年才看得完一輪。
+#: 260 = 五年，正好是匯出的全部。〔董監持股〕那張畫 120 個月，同一個道理。
+HOLDER_WEEKS = 260
 
 
 @dataclass
@@ -571,6 +577,11 @@ def holders(grid: Sequence[Sequence[str]]) -> Holders | None:
     if not weeks:
         return None
 
+    # 最新那一列可能整列都是「-」。Goodinfo 的表會先把「這一週」列出來——股價
+    # 有了，集保的股權分散還沒公布。照 `weeks[0]` 取，頁首四張卡就全是「—%」，
+    # 看起來像資料沒抓到。取「最新一列有數字的」，和〔董監持股〕同一個作法。
+    latest = next((w for w in weeks if w["big"] is not None), weeks[0])
+
     window = weeks[:HOLDER_WEEKS]
     labels = [w["week"] for w in window]
     figures = {
@@ -591,7 +602,7 @@ def holders(grid: Sequence[Sequence[str]]) -> Holders | None:
             label_every=13,
         ),
     }
-    return Holders(weeks=weeks, tiers=tiers, latest=weeks[0], figures=figures)
+    return Holders(weeks=weeks, tiers=tiers, latest=latest, figures=figures)
 
 
 #: 圖上畫幾個月。十年——董監持股是慢變數，短窗看不出換手。

@@ -155,3 +155,44 @@ def test_an_imported_history_survives_the_official_weekly_snapshots():
     row = next(r for r in merged[1:] if r[0] == "26W35")
     assert row[at] == "1.0"                      # 官方蓋掉重疊的那一週
     assert row[merged[0].index("當週股價-收盤")] == "264.5"  # 空白不擦掉已有的
+
+
+# ---------------------------------------------------------------------------
+# 匯入之後，頁面上會發生的兩件事
+# ---------------------------------------------------------------------------
+
+
+def test_the_cards_skip_a_newest_row_that_has_no_data_yet():
+    """Goodinfo 的表會先把「這一週」列出來：股價有了，集保的分散還沒公布。
+
+    照 `weeks[0]` 取，頁首四張卡就全是「—%」——看起來像資料沒抓到，而其實是
+    這一週還沒到。〔董監持股〕本來就是取「最新一列有數字的」，〔大戶持股〕沒有，
+    匯入 258 週之後才暴露出來（在那之前最新一列一直是有資料的那一列）。
+    """
+    from twsix.report.sections import holders
+
+    grid = _csv(HOLDERS).grid
+    assert grid[1][0] == "26W36"
+    assert grid[1][1] == "-"                    # 統計日期還沒有
+
+    view = holders(grid)
+    assert view is not None
+    assert view.latest["week"] == "26W35"       # 往下取一列
+    assert view.latest["big"] is not None
+    assert view.weeks[0]["week"] == "26W36"     # 但表格照樣從最新的那一列開始
+
+
+def test_the_chart_window_is_wide_enough_for_what_the_export_carries():
+    """窗開 156 週（三年）是「當時手上最多就那麼多」留下來的。
+
+    籌碼的一輪循環——散戶進場、大戶收貨、再派發——本來就要好幾年才看得完。
+    匯進來 258 週卻只畫三年，等於把買來的東西丟掉四成。
+    """
+    from twsix.report.sections import HOLDER_WEEKS, holders
+
+    assert HOLDER_WEEKS >= 258
+
+    view = holders(_csv(HOLDERS).grid)
+    labels = view.figures["big"]
+    assert "21W36" in labels                    # 五年前那一週有畫上去
+    assert "26W36" in labels
