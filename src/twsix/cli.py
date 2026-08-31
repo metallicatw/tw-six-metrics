@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -830,6 +830,19 @@ def cmd_report(args: argparse.Namespace) -> int:
 BACKFILL_WEEKS = 51
 
 
+def _latest_custody_friday(today: date) -> date:
+    """集保股權分散表**可能存在**的最新資料日。
+
+    資料日固定是週五（週日前後才上架），所以今天為止最近的那個週五就是上界：
+    不可能有比它更新的一期。手上已經有它，就確定沒有任何一週是問得到而我們沒有的。
+
+    偏差的方向是刻意的。算晚了（回傳比較新的日期）最多是多跑一趟查詢頁，結果
+    發現沒有新的；算早了則會在真的有新資料時跳過回補，而那一週要等到下一次
+    全市場快照才補得回來。所以寧可多問。
+    """
+    return today - timedelta(days=(today.weekday() - 4) % 7)
+
+
 def _backfill_holders(args: argparse.Namespace, stock: str) -> None:
     """把這一檔缺的集保週資料補齊——一年 51 週。
 
@@ -858,6 +871,16 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> None:
         retries=2,
         cookies=True,         # 查詢頁認 session，少了 cookie token 永遠對不上
     )
+    # 一次都不必連網的情況：手上最新的那一週已經是「目前可能存在的最新一週」。
+    #
+    # 集保的資料日是週五，週日前後才上架。所以只要手上已經有兩天以前的那個週五，
+    # 就沒有任何一週是問得到而我們沒有的——連問「有哪些週」都不必問。省下的是
+    # 一次 2~3 秒的來回，而「立即更新」一檔早就補齊的股票，那一次來回就是整段
+    # 回補的全部成本。
+    if have and max(have) >= _latest_custody_friday(datetime.now(_TAIPEI).date()):
+        print(f"  集保週資料已是最新（{len(have)} 週）")
+        return
+
     history = History(http)
     try:
         available = history.dates()[:BACKFILL_WEEKS]
@@ -925,10 +948,14 @@ def _backfill_directors(args: argparse.Namespace, stock: str) -> None:
             year, month = year - 1, 12
         latest = f"{year - 1911:03d}{month:02d}"
 
+    # 上次問到哪個月就沒有了。少了這一行，一檔 2023 年才上市的股票每次更新都會
+    # 把上市之前那十幾個月重問一遍，而答案永遠是同一個「查無資料」。
+    floor = own.director_floor(root, stock)
+
     wanted = [
         (y, m)
         for y, m in roc_months(latest, BACKFILL_MONTHS)
-        if f"{int(y) + 1911}/{m}" not in have
+        if f"{int(y) + 1911}/{m}" not in have and (floor is None or y + m >= floor)
     ]
     if not wanted:
         print(f"  董監月資料已是最新（{len(have)} 個月）")
@@ -946,28 +973,37 @@ def _backfill_directors(args: argparse.Namespace, stock: str) -> None:
     mops = MopsInsiders(http)
     got: list[Any] = []
     missing = 0
+    empty = 0            # 連續「查無資料」——那是真的沒有，不是抓失敗
+    oldest: str | None = None
     for i, (y, m) in enumerate(wanted, start=1):
         try:
             got.append(mops.month(stock, y, m))
         except NoMonth:
             # 那個月本來就沒有申報（例如剛上市之前）。再往前問也不會有。
             missing += 1
-            if missing >= 3:
+            empty += 1
+            if empty >= 3:
                 print("    連續三個月查無資料，停止（多半是上市之前）")
                 break
         except Exception as exc:  # noqa: BLE001 - 一個月抓不到不該讓整批停下
             print(f"    {y}/{m} 沒拿到：{exc}", file=sys.stderr)
             missing += 1
+            empty = 0
             if missing >= 6:
                 print("    失敗太多次，停止回補", file=sys.stderr)
                 break
         else:
-            missing = 0
+            missing = empty = 0
+            oldest = y + m
         if i % 12 == 0 or i == len(wanted):
             print(f"    {i}/{len(wanted)} 個月")
     if got:
         total = own.save_director_history(root, stock, got)
         print(f"  董監月資料：新增 {len(got)} 個月，共 {total} 個月")
+    # 只有在「連問三個月都查無資料」時才立地板：那是站台明確說沒有，不是逾時或
+    # 被擋。被擋的時候立地板，會把一段真的存在的歷史永遠關在外面。
+    if empty >= 3 and oldest is not None:
+        own.save_director_floor(root, stock, oldest)
 
 
 def _fold_ownership(args: argparse.Namespace, stock: str) -> None:

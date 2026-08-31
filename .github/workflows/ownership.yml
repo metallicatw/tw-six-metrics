@@ -35,6 +35,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: ownership
@@ -51,7 +53,7 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - run: pip install -e ".[all]"
+      - run: pip install -e ".[report]"
 
       # 抓回來的東西要 commit 進 repo，先確認引擎是好的。
       - name: 測試
@@ -85,12 +87,22 @@ jobs:
           git pull --rebase origin main
           git push origin HEAD:main
 
-  # 和「加一檔個股」同一個理由：用 GITHUB_TOKEN 推的 commit 不觸發 workflow，
-  # 所以自己呼叫建站，不指望 push 事件。
-  publish:
+      # 和「加一檔個股」一樣：建站就在這個 job 裡做，不叫醒第二台 runner。
+      - name: 建站
+        uses: ./.github/actions/site
+        with:
+          test: "false"
+
+  # 只按發布鍵。artifact 上一個 job 已經傳好了。
+  deploy:
     needs: fetch
+    runs-on: ubuntu-latest
     permissions:
-      contents: read
       pages: write
       id-token: write
-    uses: ./.github/workflows/pages.yml
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

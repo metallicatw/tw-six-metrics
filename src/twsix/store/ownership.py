@@ -162,6 +162,31 @@ def save_director_history(root: Path, stock_id: str, totals: Iterable[Any]) -> i
     return len(rows)
 
 
+def director_floor(root: Path, stock_id: str) -> str | None:
+    """這一檔問到哪個月為止就沒有了（民國 ``11203``），沒問過就 ``None``。
+
+    公開資訊觀測站對「上市之前」的月份回的是查無資料，不是錯誤。少了這個記號，
+    每一次更新都會把同樣問不到的十幾個月重問一遍——一個月一個請求、兩秒多一個，
+    於是一檔 2023 年才上市的股票，每按一次「立即更新」就白花半分鐘去確認一件
+    上次就已經確認過的事。
+    """
+    path = root / DIRECTOR_STOCK_DIR / f"{stock_id}.floor"
+    if not path.exists():
+        return None
+    text = path.read_text("utf-8").strip()
+    return text or None
+
+
+def save_director_floor(root: Path, stock_id: str, month_roc: str) -> None:
+    """記下「比這個月更早就沒有了」。只在真的查無資料時寫，逾時或被擋不算。"""
+    path = root / DIRECTOR_STOCK_DIR / f"{stock_id}.floor"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    old = director_floor(root, stock_id)
+    if old is not None and old <= month_roc:
+        return
+    path.write_text(month_roc + "\n", encoding="utf-8")
+
+
 def director_history(root: Path, stock_id: str) -> dict[str, tuple[int, int, int]]:
     """單檔回補的董監月線：月別 -> (持股, 質押, 獨立董監持股)，單位股。"""
     path = root / DIRECTOR_STOCK_DIR / f"{stock_id}.csv.gz"
