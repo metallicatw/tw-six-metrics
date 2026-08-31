@@ -653,3 +653,21 @@ def test_a_standalone_page_still_carries_everything_it_needs(tmp_path=None):
     assert "<style>" in text
     assert "assets/site.css" not in text
     assert len(_script_bodies(text)) > 5_000
+
+
+def test_the_watcher_waits_for_the_mark_to_change_not_merely_to_exist(tmp_path=None):
+    """對一檔已經有完整報告的股票按「立即更新」，「有沒有完整頁」從頭到尾都是真。
+
+    舊的判斷是「第五欄有值就算完成」，所以輪詢第一次就以為好了，把還沒發布的
+    舊頁面重新載入一次——看起來像什麼都沒發生，於是要自己再重整一次。第五欄改成
+    更新日期之後，它會變；判斷改成「跟按之前不一樣」才算完成。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
+    js = (out / "assets" / "site.js").read_text("utf-8")
+
+    assert "function currentMark(code)" in js
+    assert "now !== was" in js, "還在用『有值就算完成』的判斷"
+    # 同一天更新同一檔，日期不會變——那時沒有站內訊號可等，要有保底。
+    assert "SETTLE_MS" in js
