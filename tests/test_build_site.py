@@ -713,3 +713,20 @@ def test_the_watcher_polls_the_build_stamp_first(tmp_path=None):
     # search.json 那條路留著，但只是 build.json 拿不到時的退路。
     assert "function fallback(" in js
     assert js.index("build.json?t=") < js.index("function fallback(")
+
+
+def test_every_progress_line_says_how_long_it_took(tmp_path=None):
+    """「總共兩分鐘」沒辦法告訴任何人該修哪一段。
+
+    整段等待橫跨三件事：GitHub 派 runner 的排隊、workflow 本身、Pages 的 CDN
+    換檔。前後兩段都不在 Actions 顯示的 Total duration 裡，所以只看那個數字會
+    一直修錯地方。每一行掛上秒數，一張截圖就分得出來。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
+    js = (out / "assets" / "site.js").read_text("utf-8")
+
+    assert "var line = elapsed() + " in js, "進度行沒有時間戳"
+    assert "這一段是排隊，不算在 workflow 的執行時間裡" in js
+    assert "剩下的是 Pages CDN 換檔" in js

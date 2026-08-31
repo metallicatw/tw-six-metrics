@@ -217,8 +217,13 @@
     var s = Math.round((Date.now() - started) / 1000);
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
+  /* 每一行都掛上「按下按鈕之後第幾秒」。
+     這不是裝飾。整段等待橫跨三個我們管不到的東西——GitHub 派 runner 的排隊、
+     workflow 本身、Pages 的 CDN 換檔——而「總共兩分鐘」這個數字沒辦法告訴任何人
+     該去修哪一段。有了時間戳，一張截圖就分得出來。 */
   function step(text){
-    if(steps[steps.length - 1] !== text) steps.push(text);
+    var line = elapsed() + '　' + text;
+    if(steps[steps.length - 1] !== line) steps.push(line);
     paint();
   }
   function paint(){
@@ -273,7 +278,8 @@
   var watching = null;
   function arrive(code, built){
     forget();
-    endPanel(code + ' 好了，正在開啟報告…');
+    step('網站已換上新版，開啟報告');
+    endPanel(code + ' 好了（' + elapsed() + '），正在開啟報告…');
     /* 停在同一頁時用 reload——它會帶 max-age=0，一定跟伺服器對過再顯示。
        換頁就不會：GitHub Pages 給 HTML 的是 Cache-Control: max-age=600，所以
        十分鐘內看過那一頁的瀏覽器會直接拿自己的快取，看起來就像「抓完了但沒變」。
@@ -357,7 +363,7 @@
       method: 'POST',
       body: JSON.stringify({ref: 'main', inputs: {stock: code}})
     }).then(function(r){
-      if(r.status === 204){ step('已排入佇列，等 runner 接手…'); pollRun(code, since, 180, was); return; }
+      if(r.status === 204){ step('已送出。等 GitHub 派 runner（這一段是排隊，不算在 workflow 的執行時間裡）'); pollRun(code, since, 180, was); return; }
       if(r.status === 401 || r.status === 403){
         setToken('');
         endPanel('權杖無效或權限不足', '請重新設定一把 fine-grained PAT，勾選這個 repo 的 Actions 讀寫。');
@@ -382,12 +388,12 @@
       .then(function(j){
         var run = j && j.workflow_runs && j.workflow_runs[0];
         if(!run){ setTimeout(function(){ pollRun(code, since, tries - 1, was); }, 2000); return; }
-        if(run.status === 'queued') step('排隊中…');
+        if(run.status === 'queued') step('GitHub 已建立這次執行，還在排隊');
         else if(run.status === 'in_progress') step(
-          '執行中：抓報表 → 補集保 51 週股權歷史（約 1 分鐘）→ 產生報告 → 重建網站');
+          'runner 開始跑：抓報表 → 補集保股權歷史 → 產生報告 → 建站 → 發布');
         else if(run.status === 'completed'){
           if(run.conclusion === 'success'){
-            step('Actions 完成，等 Pages 換上新版（通常十幾秒）…');
+            step('workflow 完成。剩下的是 Pages CDN 換檔');
             watch(code, 180, was, Date.now() + SETTLE_MS);
           } else {
             forget();
