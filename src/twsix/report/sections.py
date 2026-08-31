@@ -65,38 +65,74 @@ RIVER_ZONES: tuple[str, ...] = (
 # =========================================================================
 
 
+#: 六大指標的顯示順序，以及每一個指標自己的色相。
+#:
+#: 順序照〔六大財務指標評等〕的欄序，不是照資料好不好取——讀者在上一個分頁看到
+#: 六個等第，這裡就要能一格一格對回去。
+#:
+#: 色相是識別：同一個指標在站上任何地方都是同一個顏色。它從不單獨承載意義——
+#: 每張圖有自己的標題和座標軸，正負由零線與填色深淺讀出——所以灰階列印、色盲
+#: 模式、強制色彩模式下都還是完整的。六個值與它們的排列順序是驗證器跑出來的，
+#: 不是挑出來的（見 base.html.j2 的 --m0..--m5）。
+#: 最後一欄：座標範圍要不要用穩健百分位。只有兩條年增率需要——基期小的時候一季
+#: +1,100% 是真的，照最大值定軸會把另外十九季壓成貼著零線的一條平線。
+INDICATOR_FIGURES: tuple[tuple[str, str, str, str, int, bool], ...] = (
+    ("revenue_yoy", "營收年增率（單月）", "var(--m0)", "%", 1, True),
+    ("operating_margin", "營業利益率（單季）", "var(--m1)", "%", 2, False),
+    ("net_income_yoy", "稅後淨利年增率（單季）", "var(--m2)", "%", 1, True),
+    ("eps", "每股盈餘 EPS（單季）", "var(--m3)", " 元", 2, False),
+    ("inventory_turnover", "存貨周轉率（單季）", "var(--m4)", " 次", 2, False),
+    ("free_cash_flow", "自由現金流量（單季）", "var(--m5)", " 百萬", 0, False),
+)
+
+#: 圖上畫幾期。二十季 = 五年，二十四個月 = 兩年——都比評分用的窗口長，因為圖要
+#: 回答的是「這條線一直是這樣嗎」，而評分只問「最近幾期」。
+FIGURE_QUARTERS = 20
+FIGURE_MONTHS = 24
+
+
 def statement_figures(data: Any) -> dict[str, str]:
-    """〔財報圖表〕 — the series the six indicators are actually graded on.
+    """〔財報圖表〕 — 六大指標各自被評分的那一條數列，依評等表的順序。
 
-    Not every line in the three statements; the ones a rating turns on.  A
-    page of twenty charts is a page nobody reads, and these five are the ones
-    a reader can trace straight back to a grade in the section above.
+    每一條都是評分實際吃的數字，不是另外算的近似值：營收年增率讀
+    ``data.revenue_yoy``、稅後淨利年增率呼叫 ``data.net_income_yoy()``——就是
+    ``rate()`` 呼叫的同一個方法。圖和等第因此不可能各說各話。
     """
-    quarters = data.quarters[:20]
-    if not quarters:
-        return {}
-    labels = [str(q) for q in quarters]
-
-    def series(source: dict[Quarter, float]) -> list[Number]:
-        return [source.get(q) for q in quarters]
-
+    quarters = data.quarters[:FIGURE_QUARTERS]
     out: dict[str, str] = {}
-    specs = (
-        ("net_income", data.net_income, "單季稅後淨利", " 百萬", 0),
-        ("operating_margin", data.operating_margin, "單季營業利益率", "%", 2),
-        ("free_cash_flow", data.free_cash_flow, "單季自由現金流量", " 百萬", 0),
-        ("inventory_turnover", data.inventory_turnover, "單季存貨周轉率", " 次", 2),
-    )
-    for key, source, title, unit, digits in specs:
-        values = series(source)
-        # Each series reaches back a different distance — 存貨周轉率 needs a
-        # prior quarter's inventory and so starts a quarter later, and 自由
-        # 現金流量 only exists where the cash-flow statement does.  Padding
-        # them all to twenty quarters drew seven bars crammed against the left
-        # of an empty frame; trim to the span that has data.
-        last = max(
-            (i for i, v in enumerate(values) if v is not None), default=None
+
+    def quarterly(source: dict[Any, float]) -> tuple[list[str], list[Number]]:
+        return [str(q) for q in quarters], [source.get(q) for q in quarters]
+
+    series: dict[str, tuple[list[str], list[Number]]] = {}
+
+    # 營收是月的，不是季的——這是六個裡唯一的月頻指標。用 raw 那一列（一月獨立
+    # 呈現），因為圖是給人看趨勢的，不是給評分用的窗口。
+    months = list(getattr(data, "revenue_months_raw", []) or data.revenue_months)
+    if months:
+        picked = months[:FIGURE_MONTHS]
+        series["revenue_yoy"] = (picked, [data.revenue_yoy.get(m) for m in picked])
+
+    if quarters:
+        series["operating_margin"] = quarterly(data.operating_margin)
+        series["eps"] = quarterly(data.eps)
+        series["inventory_turnover"] = quarterly(data.inventory_turnover)
+        series["free_cash_flow"] = quarterly(data.free_cash_flow)
+        # 年增率要拿去年同季比，所以它自己有一套算法——直接呼叫評分用的那一個。
+        series["net_income_yoy"] = (
+            [str(q) for q in quarters],
+            list(data.net_income_yoy(quarters[0], len(quarters))),
         )
+
+    for key, title, colour, unit, digits, robust in INDICATOR_FIGURES:
+        got = series.get(key)
+        if not got:
+            continue
+        labels, values = got
+        # 每一條數列往回能走的距離不一樣——存貨周轉率要前一季的存貨，所以晚一季
+        # 才開始；自由現金流量只在現金流量表有的地方存在。全部補滿二十季會畫出
+        # 七根長條擠在一個空框的左邊，所以裁到真的有資料的那一段。
+        last = max((i for i, v in enumerate(values) if v is not None), default=None)
         if last is None:
             continue
         out[key] = charts.bars(
@@ -105,7 +141,9 @@ def statement_figures(data: Any) -> dict[str, str]:
             title=title,
             unit=unit,
             digits=digits,
-            label_every=2,
+            label_every=2 if len(labels[: last + 1]) <= 24 else 3,
+            colour=colour,
+            robust=robust,
         )
     return out
 

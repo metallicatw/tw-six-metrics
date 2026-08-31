@@ -132,6 +132,28 @@ def _nice_bounds(values: Sequence[float], include_zero: bool = True) -> tuple[fl
     return (lo, hi)
 
 
+def _robust_bounds(values: Sequence[float]) -> tuple[float, float]:
+    """給重尾比率用的座標範圍：讓多數期別看得見，極端值畫到邊界並標三角形。
+
+    年增率會爆炸——去年同季基期很小的時候，一季 +1,100% 是真的。照最大值定軸，
+    另外十九季就全部被壓成貼著零線的一條平線，而那十九季才是「這家公司平常長
+    什麼樣」。
+
+    取第 10~90 百分位再放寬一半，含零。被裁掉的那幾根仍然是資料的一部分：
+    tooltip 有完整數值，下面的表也有，圖上還多一個三角形說「它出去了」。
+    """
+    ordered = sorted(values)
+    n = len(ordered)
+    if n < 8:  # 期數太少，百分位沒有意義
+        return _nice_bounds(values)
+    lo = ordered[int(n * 0.10)]
+    hi = ordered[int(n * 0.90) - 1 if int(n * 0.90) >= n else int(n * 0.90)]
+    span = hi - lo
+    if span <= 0:
+        return _nice_bounds(values)
+    return _nice_bounds([min(lo - span * 0.5, 0.0), max(hi + span * 0.5, 0.0)])
+
+
 def _axis_label(value: float, digits: int) -> str:
     if abs(value) >= 1_000_000:
         return f"{value / 1_000_000:,.1f}M"
@@ -292,6 +314,8 @@ def bars(
     label_every: int = 3,
     frame: Frame | None = None,
     newest_first: bool = True,
+    colour: str = "var(--accent)",
+    robust: bool = False,
 ) -> str:
     """Magnitude over an ordered axis, oldest on the left.
 
@@ -306,7 +330,7 @@ def bars(
     if not present:
         return f'<p class="muted">{escape(title)}：無資料</p>'
     f = frame or Frame()
-    lo, hi = _nice_bounds(present)
+    lo, hi = _robust_bounds(present) if robust else _nice_bounds(present)
     parts = _open(f, title, f"{len(present)} 期{unit}，{_fmt(min(present), digits)} 至 {_fmt(max(present), digits)}")
     parts += _grid(f, lo, hi, digits)
 
@@ -320,17 +344,49 @@ def bars(
         if raw is None:
             continue
         value = float(raw)
-        y = f.top + f.plot_h * (1 - (value - lo) / (hi - lo))
+        shown = min(max(value, lo), hi)
+        clipped = shown != value
+        y = f.top + f.plot_h * (1 - (shown - lo) / (hi - lo))
         top = min(y, zero_y)
         height = max(abs(y - zero_y), 1.0)
         radius = min(BAR_RADIUS, width / 2, height)
         x = f.left + slot * i + pad
+        # 正負用「填滿 vs 中空」分，不是用另一個色相。
+        #
+        # 這一張圖只有一個序列，色相是它的身分（六大指標各一個），拿它去兼差表示
+        # 正負，兩件事就會在同一個通道上打架。填滿／中空是獨立的通道：灰階列印
+        # 看得出來，色盲模式看得出來，而且零線本來就在那裡。
+        down = value < 0
+        skin = (
+            f'fill="{colour}" fill-opacity=".26" stroke="{colour}" stroke-width="1.5"'
+            if down
+            else f'fill="{colour}" fill-opacity=".92"'
+        )
         parts.append(
             f'<rect x="{x:.1f}" y="{top:.1f}" width="{width:.1f}" height="{height:.1f}" '
-            f'rx="{radius:.1f}" fill="var(--accent)" opacity=".92">'
+            f'rx="{radius:.1f}" {skin}>'
             f"<title>{escape(labels[i] if i < len(labels) else '')}　"
             f"{escape(_fmt(value, digits))}{escape(unit)}</title></rect>"
         )
+        if clipped:
+            # 超出軸的那一根要說出來，不能只是畫到邊界為止——不然讀者會以為它
+            # 剛好等於軸的上限。
+            #
+            # 標記是「挖」出來的，不是加上去的：軸的外面沒有空間可以畫（長條已經
+            # 頂到邊界），所以在長條頂端切一道底色的鋸齒，看起來就是被裁掉的樣子。
+            # 同色的三角形疊在同色的長條上等於看不見，那是第一版的錯。
+            up = value > hi
+            edge = f.top if up else f.top + f.plot_h
+            depth = 9 if up else -9
+            cx = x + width / 2
+            w = width / 2
+            parts.append(
+                f'<path d="M{cx - w:.1f},{edge:.1f} L{cx - w / 2:.1f},{edge + depth:.1f} '
+                f'L{cx:.1f},{edge:.1f} L{cx + w / 2:.1f},{edge + depth:.1f} '
+                f'L{cx + w:.1f},{edge:.1f} Z" fill="var(--surface)">'
+                f"<title>{escape(labels[i] if i < len(labels) else '')}　"
+                f"{escape(_fmt(value, digits))}{escape(unit)}（超出座標範圍）</title></path>"
+            )
     parts += _x_labels(f, labels, label_every)
     parts.append("</svg>")
     return _figure(title, unit, "".join(parts), _table(labels, [(title, values)], digits))
@@ -346,6 +402,7 @@ def line(
     label_every: int = 3,
     frame: Frame | None = None,
     newest_first: bool = True,
+    colour: str = "var(--accent)",
 ) -> str:
     """A rate over an ordered axis, oldest on the left.
 
@@ -387,7 +444,7 @@ def line(
             if len(run) > 1:
                 parts.append(
                     f'<polyline points="{" ".join(run)}" fill="none" '
-                    f'stroke="var(--accent)" stroke-width="{LINE_WIDTH}" '
+                    f'stroke="{colour}" stroke-width="{LINE_WIDTH}" '
                     f'stroke-linejoin="round" stroke-linecap="round" />'
                 )
             run = []
@@ -397,7 +454,7 @@ def line(
     if len(run) > 1:
         parts.append(
             f'<polyline points="{" ".join(run)}" fill="none" '
-            f'stroke="var(--accent)" stroke-width="{LINE_WIDTH}" '
+            f'stroke="{colour}" stroke-width="{LINE_WIDTH}" '
             f'stroke-linejoin="round" stroke-linecap="round" />'
         )
 
@@ -425,7 +482,7 @@ def line(
         x, y = point(i, float(raw))
         parts.append(
             f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{MARKER_R if newest else 2.5:.1f}" '
-            f'fill="var(--accent)" stroke="var(--surface)" stroke-width="2">'
+            f'fill="{colour}" stroke="var(--surface)" stroke-width="2">'
             f"<title>{escape(labels[i] if i < len(labels) else '')}　"
             f"{escape(_fmt(float(raw), digits))}{escape(unit)}</title></circle>"
         )

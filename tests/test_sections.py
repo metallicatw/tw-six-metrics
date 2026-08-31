@@ -132,13 +132,53 @@ def test_seasonality_survives_a_stock_with_no_history():
 # -- 財報圖表 --------------------------------------------------------------
 
 
-def test_the_statement_charts_are_the_series_the_grades_use():
+def test_the_statement_charts_are_the_six_indicators_in_the_rating_tables_order():
+    """六張圖，就是六大指標，順序和評等表一樣。
+
+    讀者在上一個分頁看到六個等第，這裡要能一格一格對回去——少一張，或順序不同，
+    就得自己在腦裡對照，而那正是圖表要省掉的事。
+    """
+    from twsix.report.sections import INDICATOR_FIGURES
+    from twsix.models import INDICATOR_ORDER
+
+    assert [k for k, *_ in INDICATOR_FIGURES] == list(INDICATOR_ORDER)
+
     page, _ = _page()
-    assert set(page.statements) >= {
-        "net_income", "operating_margin", "free_cash_flow", "inventory_turnover"
-    }
+    assert set(page.statements) == set(INDICATOR_ORDER)
     for svg in page.statements.values():
         assert "<details" in svg  # numbers, not only a picture
+
+
+def test_each_indicator_keeps_its_own_hue():
+    """色相是身分：同一個指標到哪裡都同一個顏色，而六個顏色互不重複。
+
+    顏色從不單獨承載意義（每張圖有標題、有軸、有零線），但它要是會飄，那就連
+    「這張是哪一個指標」都要重讀標題才知道。
+    """
+    from twsix.report.sections import INDICATOR_FIGURES
+
+    hues = [c for _, _, c, _, _, _ in INDICATOR_FIGURES]
+    assert len(set(hues)) == len(hues)
+    assert all(h.startswith("var(--m") for h in hues)
+
+    page, _ = _page()
+    for key, _title, colour, _unit, _digits, _robust in INDICATOR_FIGURES:
+        if key in page.statements:
+            assert colour in page.statements[key]
+
+
+def test_a_negative_bar_is_hollow_rather_than_a_different_hue():
+    """正負用填滿／中空分，不是換一個色相。
+
+    色相已經在表示「這是哪一個指標」，拿它去兼差表示正負，兩件事就會在同一個
+    通道上打架。填滿／中空是獨立的通道，灰階和色盲模式下都還在。
+    """
+    from twsix.report import charts
+
+    svg = charts.bars(["A", "B"], [5.0, -3.0], title="測試", colour="var(--m0)")
+    assert 'fill-opacity=".92"' in svg      # 正值：實心
+    assert 'fill-opacity=".26"' in svg      # 負值：中空
+    assert 'stroke="var(--m0)"' in svg      # 中空的那根有描邊，不然會消失
 
 
 # -- what is deliberately absent -------------------------------------------
@@ -362,3 +402,42 @@ def test_every_indicator_series_says_which_periods_it_covers():
     by_label = {i["label"]: i for i in page.indicators}
     assert by_label["營收年增率"]["periods"][-1] == "115/07"
     assert by_label["每股盈餘EPS"]["periods"][-1] == "2026.2Q"
+
+
+def test_a_ratio_that_explodes_does_not_flatten_the_other_twenty_quarters():
+    """年增率是重尾的：基期小的時候一季 +1,100% 是真的。
+
+    照最大值定軸，另外十九季全部被壓成貼著零線的一條平線——而那十九季才是「這家
+    公司平常長什麼樣」。穩健範圍讓多數期別看得見，超出去的畫到邊界並加一個三角形
+    說「它出去了」，完整數值留在 tooltip 和下面的表裡。
+    """
+    import re
+
+    from twsix.report import charts
+
+    labels = [f"q{i}" for i in range(11)]
+    values = [3.0, -2.0, 5.0, 1.0, 4.0, -1.0, 2.0, 6.0, 0.5, 3.5, 1100.0]
+
+    def axis(svg: str) -> list[str]:
+        return re.findall(r'fill="var\(--muted\)">([^<]+)</text>', svg)[:4]
+
+    plain = charts.bars(labels, values, title="年增率", robust=False)
+    robust = charts.bars(labels, values, title="年增率", robust=True)
+
+    # 照最大值定軸：刻度到一千的量級，另外十期全部擠在零線上
+    assert axis(plain) == ["-1,000", "0", "1,000", "2,000"]
+    # 穩健範圍：刻度回到十的量級，那十期才有高度可言
+    assert axis(robust) == ["-10", "-3", "3", "10"]
+
+    # 出界的那一根仍然是資料：畫到邊界、加三角形、完整數值留在 tooltip 裡
+    assert "超出座標範圍" in robust
+    assert "<path" in robust
+    assert "1,100（超出座標範圍）" in robust
+
+
+def test_a_short_series_keeps_the_plain_axis():
+    """期數太少的時候百分位沒有意義，退回原本的算法。"""
+    from twsix.report import charts
+
+    svg = charts.bars(["a", "b", "c"], [1.0, 2.0, 90.0], title="短", robust=True)
+    assert "超出座標範圍" not in svg

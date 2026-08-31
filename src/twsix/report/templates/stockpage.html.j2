@@ -298,8 +298,8 @@
 
 <section class="panel" id="panel-statements" role="tabpanel" aria-labelledby="tab-statements" hidden>
 <h3 id="statements">財報圖表</h3>
-<p class="muted">六大指標實際評分所依據的數列，逐季呈現。</p>
-{% for key in ["net_income", "operating_margin", "free_cash_flow", "inventory_turnover"] %}
+<p class="muted">六大指標實際評分所依據的數列，依評等表的順序。營收是單月，其餘是單季；中空的長條代表負值。</p>
+{% for key in ["revenue_yoy", "operating_margin", "net_income_yoy", "eps", "inventory_turnover", "free_cash_flow"] %}
   {% if p.statements[key] %}{{ p.statements[key]|safe }}{% endif %}
 {% endfor %}
 
