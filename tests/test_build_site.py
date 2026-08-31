@@ -454,3 +454,83 @@ def test_the_fetch_button_sits_next_to_the_search_box():
     assert 'data-grab="5439"' in full
     assert 'data-full="1"' in full
     assert "立即更新" in full
+
+
+def test_the_mark_is_the_update_date_when_the_fetch_left_one(tmp_path=None):
+    """「完整」只說了有沒有，沒說什麼時候——而讀者要判斷的是後者。
+
+    一份三個月前抓的完整報告和昨天抓的，在舊版清單上是同一個字。日期同時回答
+    兩件事：有這個標記就代表有完整頁，標記的內容就是它多舊。
+    """
+    tmp = tmp_path or _tmp()
+    sheets = _sheets(tmp)
+    (sheets / "5439" / "_fetched.txt").write_text("2026-08-30\n", encoding="utf-8")
+
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=sheets)
+
+    listing = (out / "index.html").read_text(encoding="utf-8")
+    assert 'class="tag when"' in listing
+    assert ">08/30<" in listing
+    assert "報表更新於 2026-08-30" in listing
+    assert 'class="tag full"' not in listing      # 有日期就不再退回「完整」
+
+    # search.json 的第五欄跟著換成日期。真假值沒變，所以讀它的 JS 照舊。
+    row = next(
+        r
+        for r in json.loads((out / "search.json").read_text(encoding="utf-8"))
+        if r[0] == "5439"
+    )
+    assert row[4] == "2026-08-30"
+
+
+def test_a_stock_fetched_before_the_stamp_existed_still_says_完整(tmp_path=None):
+    """沒有日期就不要編一個出來——退回原本的字，不要留空或猜一個。"""
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))   # 沒有 _fetched.txt
+
+    listing = (out / "index.html").read_text(encoding="utf-8")
+    assert 'class="tag full"' in listing and "完整" in listing
+    assert 'class="tag when"' not in listing
+
+
+def test_a_corrupt_stamp_is_ignored_rather_than_printed(tmp_path=None):
+    """壞掉的內容不該原樣印到頁面上。"""
+    tmp = tmp_path or _tmp()
+    sheets = _sheets(tmp)
+    (sheets / "5439" / "_fetched.txt").write_text("昨天啦\n", encoding="utf-8")
+
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=sheets)
+    listing = (out / "index.html").read_text(encoding="utf-8")
+    assert "昨天啦" not in listing
+    assert 'class="tag full"' in listing
+
+
+def test_the_stamp_is_not_mistaken_for_a_fourteenth_sheet(tmp_path=None):
+    """建站是用 glob("*.json") 把資料夾讀成表格的，記號不能長得像一張表。"""
+    from twsix.cli import FETCHED_STAMP
+
+    assert not FETCHED_STAMP.endswith(".json")
+
+    tmp = tmp_path or _tmp()
+    sheets = _sheets(tmp)
+    (sheets / "5439" / FETCHED_STAMP).write_text("2026-08-30\n", encoding="utf-8")
+    out = tmp / "site"
+    written = build_site(_records(), out, sheets_dir=sheets)
+    assert written.get("  其中完整版") == 1      # 還是照常算得出完整報告
+
+
+def test_the_name_links_to_the_same_page_as_the_code(tmp_path=None):
+    """掃清單時眼睛落在名稱上，卻要把游標移回四位數字才點得到。
+
+    每一列都要付一次的小摩擦，而兩個連結指向同一頁，沒有任何歧義。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    listing = (out / "index.html").read_text(encoding="utf-8")
+    assert '<td><a href="stock/5439.html">高技</a></td>' in listing
+    assert '<td><a href="stock/2330.html">台積電</a></td>' in listing

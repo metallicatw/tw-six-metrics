@@ -361,6 +361,24 @@ class _SavedPages:
         raise FileNotFoundError(f"無法由網址判斷分頁：{url}")
 
 
+#: 一檔股票最後一次成功更新報表的日期，就放在它自己的資料夾裡。
+#:
+#: 為什麼不看檔案的修改時間：CI 每次是全新 checkout，git 會把所有檔案的 mtime
+#: 設成 checkout 的當下，於是 1,741 檔看起來全都是「今天更新的」。為什麼不查
+#: git log：actions/checkout 預設只抓一層深度，查不到那個路徑上一次被動的時間。
+#: 所以由抓取的那一刻自己寫下來——唯一誠實的來源是做那件事的人。
+#:
+#: 副檔名不是 .json，因為建站是用 ``glob("*.json")`` 把資料夾裡每一張表讀進來的，
+#: 多一個 .json 會被當成第十四張表。
+FETCHED_STAMP = "_fetched.txt"
+
+
+def _stamp_fetched(out_dir: Path) -> None:
+    (out_dir / FETCHED_STAMP).write_text(
+        datetime.now(_TAIPEI).strftime("%Y-%m-%d") + "\n", encoding="utf-8"
+    )
+
+
 def cmd_fetch_stock(args: argparse.Namespace) -> int:
     """單檔查詢：抓一支股票的九張報表，存成可離線重讀的格線.
 
@@ -424,6 +442,7 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
 
     failures = 0
     contract_failures = 0
+    saved = 0
     for name in sheets:
         try:
             if parallel:
@@ -445,7 +464,11 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
         target.write_text(
             json.dumps(grid, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
         )
+        saved += 1
         print(f"  {name:<8} {len(grid):>4} 列 -> {target}")
+
+    if saved:
+        _stamp_fetched(out_dir)
 
     if not args.sheet:
         failures += _fetch_extras(http, args.stock, out_dir, bool(args.from_html))

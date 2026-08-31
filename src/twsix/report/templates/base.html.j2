@@ -193,9 +193,13 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
   color:var(--ink-2);max-width:none;margin-bottom:12px}
 .stale{border-left:3px solid var(--g1)}
 .note{border-left:3px solid var(--accent)}
-.tag.full{display:inline-block;padding:0 6px;margin-left:5px;border-radius:3px;
+.tag.full,.tag.when{display:inline-block;padding:0 6px;margin-left:5px;border-radius:3px;
   font-size:10.5px;line-height:1.6;vertical-align:1px;
   border:1px solid var(--accent);color:var(--accent);background:transparent}
+/* 日期比「完整」多兩個字元，而且它是次要資訊——代號才是這一格的主角。
+   等寬數字讓 1,741 列的日期在垂直方向對齊，掃過去才讀得出新舊。 */
+.tag.when{font-variant-numeric:tabular-nums;letter-spacing:.02em;
+  border-color:var(--rule);color:var(--muted)}
 /* -- 個股新聞 --------------------------------------------------------- */
 /* -- 六大指標：一個等第配一張圖 -------------------------------------- */
 .metric{margin:26px 0 0}
@@ -411,7 +415,7 @@ tr.here th{font-weight:700}
 <script>
 /* 全站個股搜尋。
  *
- * search.json 是 [代號, 名稱, 產業, 綜合評分, 有無完整頁] 的陣列，順序固定，
+ * search.json 是 [代號, 名稱, 產業, 綜合評分, 完整頁的更新日期] 的陣列，順序固定，
  * 只有這裡讀它。索引是延後載入的：訪客多半只是看清單頁，不該為了一個可能
  * 不會用到的搜尋框先付 85 KB。第一次聚焦才抓，抓過就留著。
  *
@@ -463,8 +467,14 @@ tr.here th{font-weight:700}
       var ind=document.createElement('span'); ind.className='ind'; ind.textContent=r[2];
       var sc=document.createElement('span'); sc.className='sc'; sc.textContent=r[3];
       li.appendChild(b); li.appendChild(nm); li.appendChild(ind); li.appendChild(sc);
+      /* 第五欄是更新日期（沒有完整頁時是空字串，所以真假值判斷照舊）。
+         舊資料可能是數字 1——那時沒有日期可印，退回「完整」。 */
       if(r[4]){
-        var t=document.createElement('span'); t.className='tag full'; t.textContent='完整';
+        var t=document.createElement('span');
+        var d=String(r[4]);
+        t.className = d.length===10 ? 'tag when' : 'tag full';
+        t.textContent = d.length===10 ? d.slice(5).replace('-','/') : '完整';
+        t.title = d.length===10 ? ('報表更新於 '+d) : '已抓取完整資料';
         li.appendChild(t);
       }
       if(live || repo){
