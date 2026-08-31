@@ -271,30 +271,57 @@
   }
 
   var watching = null;
-  function arrive(code){
+  function arrive(code, built){
     forget();
     endPanel(code + ' 好了，正在開啟報告…');
-    if(location.pathname.replace(/^.*\//, '') === code + '.html') location.reload();
-    else location.href = base + 'stock/' + code + '.html';
+    /* 停在同一頁時用 reload——它會帶 max-age=0，一定跟伺服器對過再顯示。
+       換頁就不會：GitHub Pages 給 HTML 的是 Cache-Control: max-age=600，所以
+       十分鐘內看過那一頁的瀏覽器會直接拿自己的快取，看起來就像「抓完了但沒變」。
+       掛上這一次建站的號碼，等於換一個網址，快取就繞不過去了。 */
+    if(location.pathname.replace(/^.*\//, '') === code + '.html'){ location.reload(); }
+    else {
+      var fresh = built || TWSIX.built;
+      var v = fresh ? ('?v=' + encodeURIComponent(fresh)) : '';
+      location.href = base + 'stock/' + code + '.html' + v;
+    }
   }
-  /* Actions 綠燈之後還要等 Pages 的 CDN 換上新檔，通常十幾二十秒。三秒問一次，
-     問的是同一個 search.json——同源、no-store、幾十 KB，成本比十秒的空等低。 */
-  var WATCH_MS = 3000;
-  /* 同一天更新同一檔，第五欄的日期不會變。這時沒有任何站內訊號可以等，所以在
-     Actions 已經回報成功的前提下，等滿這段時間就直接重整——deploy 都完成了，
-     再等下去只是在等一個永遠不會變的值。 */
+  /* deploy 綠燈之後還要等 Pages 的 CDN 把新檔換上去，通常十幾二十秒。這一段
+     沒有辦法縮短，但可以**問得夠密、而且問對東西**，在它一換好的那一秒就重整。
+
+     問的是 build.json：六十個位元組，每建一次站就換一個號碼。以前問的是
+     search.json 的第五欄——那一欄只在**資料**變了才動，所以同一天對同一檔按第二次
+     「立即更新」，日期一模一樣，頁面就沒有任何訊號可以等，只能空等一個計時器。
+     build.json 不會有這個問題：它每次都變。
+
+     一秒問一次。六十個位元組的請求，比一秒的空等便宜得多。 */
+  var WATCH_MS = 1000;
+  /* 只有在 build.json 拿不到（舊版網站、或 CDN 給了奇怪的東西）時才會用到的
+     保底：Actions 都回報成功了，等滿這段時間就直接重整。 */
   var SETTLE_MS = 45000;
   function watch(code, tries, was, deadline){
     if(watching && watching !== code) return;
     watching = code;
-    fetch(base + 'search.json?t=' + Date.now(), {cache:'no-store'})
+    var mine = TWSIX.built || '';
+    fetch(base + 'build.json?t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        /* 這一頁自己是哪一次建的，寫在 window.TWSIX.built 裡。線上的號碼跟它
+           不一樣，就代表 CDN 已經換上新的一份了——不必再去猜資料變了沒。 */
+        if(j && j.built && mine && j.built !== mine){ arrive(code, j.built); return; }
+        if(j && j.built) { nextWatch(code, tries, was, deadline); return; }
+        return fallback(code, tries, was, deadline);
+      })
+      .catch(function(){ return fallback(code, tries, was, deadline); });
+  }
+  /* build.json 不在（例如網站還是上一版建的）就退回舊辦法：看那一檔在
+     search.json 裡的更新日期變了沒。 */
+  function fallback(code, tries, was, deadline){
+    return fetch(base + 'search.json?t=' + Date.now(), {cache:'no-store'})
       .then(function(r){ return r.json(); })
       .then(function(rows){
         for(var i=0;i<rows.length;i++){
           if(rows[i][0] !== code) continue;
           var now = rows[i][4];
-          /* 變了就是新的網站上線了。was 是 null（不知道按之前的樣子）時退回
-             舊行為：有值就算數。 */
           if(was === null || was === undefined ? !!now : now !== was){
             arrive(code); return;
           }
@@ -348,7 +375,7 @@
      的一檔要向集保逐週問滿 51 週，那是〔大戶持股〕有沒有走勢的差別。每 4 秒問
      一次狀態，把 GitHub 自己的字串翻成人看得懂的一行，讀者才知道它在哪一步。 */
   function pollRun(code, since, tries, was){
-    if(tries <= 0){ step('狀態查不到了，改用網站本身判斷…'); watch(code, 60, was, 0); return; }
+    if(tries <= 0){ step('狀態查不到了，改用網站本身判斷…'); watch(code, 180, was, 0); return; }
     gh('/actions/workflows/' + WORKFLOW + '/runs?per_page=5&created=%3E' +
        encodeURIComponent(since))
       .then(function(r){ return r.ok ? r.json() : null; })
@@ -360,8 +387,8 @@
           '執行中：抓報表 → 補集保 51 週股權歷史（約 1 分鐘）→ 產生報告 → 重建網站');
         else if(run.status === 'completed'){
           if(run.conclusion === 'success'){
-            step('Actions 完成，等網站發布…');
-            watch(code, 60, was, Date.now() + SETTLE_MS);
+            step('Actions 完成，等 Pages 換上新版（通常十幾秒）…');
+            watch(code, 180, was, Date.now() + SETTLE_MS);
           } else {
             forget();
             endPanel('抓取失敗（' + run.conclusion + '）',
@@ -444,7 +471,7 @@
     setTimeout(function(){
       beginPanel();
       step('等 ' + j.code + ' 的資料進到網站…');
-      watch(j.code, 60, j.was, Date.now() + 90000);
+      watch(j.code, 180, j.was, Date.now() + 90000);
     }, 1200);
   })();
 

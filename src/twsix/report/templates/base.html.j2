@@ -79,7 +79,7 @@
   由公開資料自動產生，僅供研究參考，不構成投資建議。
 </footer>
 </div>
-<script>window.TWSIX={rel:{{ rel|tojson }},repo:{{ (repo or '')|tojson }}};</script>
+<script>window.TWSIX={rel:{{ rel|tojson }},repo:{{ (repo or '')|tojson }},built:{{ (build_id or '')|tojson }}};</script>
 {% if assets %}<script src="{{ rel }}assets/site.js?v={{ asset_v }}" defer></script>
 {% else %}<script>{{ site_js }}</script>{% endif %}
 </body>
