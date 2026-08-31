@@ -104,12 +104,31 @@ class Company:
     people: tuple[Person, ...]
 
     def _sum(self, only_independent: bool = False) -> tuple[int, int]:
+        """董監持股合計。**同一個持有人只算一次。**
+
+        一個法人董事可以占好幾席，而明細是**一席一列**——每一列都帶著那個法人
+        自己的全部持股。統一（1216）的高權投資就占了三席：董事長本人一列、董事
+        本人兩列，三列都寫著同樣的 284,330,536 股。
+
+        逐列相加會把那一塊算三次：1,130,457 張，實際是 561,796 張，多了一倍。
+        質押更整齊——240,090 張正好是 80,030 的三倍。
+
+        這個洞是使用者從 Goodinfo 匯入 1216 的歷史時撞出來的：兩邊差了兩倍，
+        而扣掉重複的兩次之後**一股不差**。5439 沒撞到，因為它的董事沒有人占兩席。
+
+        以姓名（法人就是公司名）去重。同一家公司的董事會裡兩個同名的人，比起
+        把同一塊股票數三次，是遠小的風險。
+        """
         held = pledged = 0
+        seen: set[str] = set()
         for p in self.people:
             if not is_director(p.title):
                 continue
             if only_independent and "獨立" not in p.title:
                 continue
+            if p.name in seen:
+                continue
+            seen.add(p.name)
             held += p.held
             pledged += p.pledged
         return held, pledged

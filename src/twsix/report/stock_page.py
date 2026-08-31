@@ -114,6 +114,8 @@ class StockPage:
     latest_composite: Number = None
 
     forecast: dict[str, Any] = field(default_factory=dict)
+    #: 目標價試算盤的種子——原始數字，不是格式化過的字串。
+    calc: dict[str, Any] = field(default_factory=dict)
     pe: dict[str, Any] = field(default_factory=dict)
     growth: dict[str, Any] = field(default_factory=dict)
     dividend: dict[str, Any] = field(default_factory=dict)
@@ -222,6 +224,105 @@ UNBUILT_PAGES: tuple[tuple[str, str], ...] = (
         "觀測站抓上市與上櫃兩份，涵蓋全市場",
     ),
 )
+
+
+
+def _mean(values: Sequence[Any]) -> float | None:
+    nums = [v for v in values if v is not None]
+    return sum(nums) / len(nums) if nums else None
+
+
+def _sigma(values: Sequence[Any]) -> float | None:
+    """樣本標準差（n-1）。
+
+    四個點用哪一種除數是有差的：5439 近四季的淨利率，母體式是 1.4%，樣本式是
+    1.7%——而參考工具上寫的正是 1.7%。四季是「這家公司的表現」抽出來的四個樣本，
+    不是全部，所以樣本式也是對的那一個。
+    """
+    nums = [v for v in values if v is not None]
+    if len(nums) < 2:
+        return None
+    m = sum(nums) / len(nums)
+    return (sum((x - m) ** 2 for x in nums) / (len(nums) - 1)) ** 0.5
+
+
+def _calc_seed(reader: Any, stock_id: str, valuation: Any) -> dict[str, Any]:
+    """目標價試算盤的起始值。
+
+    每一個預設值都要說得出它從哪裡來——一個試算盤最容易變成的東西，就是一組
+    看起來很精確、其實是憑空填的參數。所以三個成長率不是「-6/4/90」這種手寫的
+    數字，而是這一檔自己的月營收年增率：最近一個月、近六個月平均、今年以來累計。
+    淨利率同理：近四季平均，上下各一個標準差。本益比用估價區間的低／中／高。
+
+    讀者當然可以改——那正是這個盤的用途。但打開的時候看到的是**這一檔的事實**，
+    不是別人的假設。
+    """
+    from ..ingest.valuation_source import read_valuation_input
+
+    try:
+        raw = read_valuation_input(reader, stock_id=stock_id)
+    except Exception:  # noqa: BLE001 - 少了輸入就沒有試算盤，不影響其他區塊
+        return {}
+
+    yoy = [v for v in (raw.monthly_revenue_yoy or ())]
+    latest = yoy[0] if yoy else None
+    recent6 = _mean(yoy[:6])
+    # 「今年以來累計年增率」沒有放進來。
+    #
+    # 參考工具上有這個數字（5439 是 40.8%），我試著從月營收自己算，換了幾種
+    # 視窗長度都對不上——那代表它算的不是我想的那件事，可能是來源自己публ的
+    # 累計欄位。對不上就不放：一個看起來很精確、其實來路不明的預設值，比少一個
+    # 參考值糟得多，因為它會被當成事實填進試算盤。
+    #
+    # 「最近月」與「近六月均」是自己算的，而且和參考工具逐位相同（4.5%、43.6%）。
+    margins = [v for v in (raw.net_margins or ())][:4]
+    avg_margin = _mean(margins)
+    sd = _sigma(margins)
+
+    band = valuation.band
+    pe_low = band.low if band is not None else None
+    pe_high = band.high if band is not None else None
+    pe_mid = None if pe_low is None or pe_high is None else (pe_low + pe_high) / 2
+
+    years = []
+    from ..ingest.valuation_source import current_roc_year
+
+    try:
+        newest = current_roc_year(reader) + 1911
+    except Exception:  # noqa: BLE001
+        newest = None
+    highs = [v for v in (getattr(raw, "price_high", ()) or ())]
+    lows = [v for v in (getattr(raw, "price_low", ()) or ())]
+    epss = [v for v in (getattr(raw, "annual_eps", ()) or ())]
+    phigh = [v for v in (getattr(raw, "pe_high", ()) or ())]
+    plow = [v for v in (getattr(raw, "pe_low", ()) or ())]
+    # 今年還沒過完，EPS 是空的——那一列在「近四年」的表上只是一行破折號，
+    # 佔掉一個本來可以放完整年度的位置。從第一個有 EPS 的年度起算。
+    start = next((i for i, v in enumerate(epss) if v is not None), 0)
+    for k in range(4):
+        i = start + k
+        if newest is None or i >= len(highs):
+            break
+        years.append({
+            "year": newest - i,
+            "high": highs[i] if i < len(highs) else None,
+            "low": lows[i] if i < len(lows) else None,
+            "eps": epss[i] if i < len(epss) else None,
+            "pe_high": phigh[i] if i < len(phigh) else None,
+            "pe_low": plow[i] if i < len(plow) else None,
+        })
+
+    return {
+        # 年營收：去年全年，仟元 -> 百萬元
+        "revenue": None if raw.last_year_revenue is None else raw.last_year_revenue / 1000,
+        # 股數：ValuationInput 記的是百萬股 -> 億股
+        "shares": None if raw.weighted_shares is None else raw.weighted_shares / 100,
+        "price": valuation.market_price,
+        "growth": {"latest": latest, "recent6": recent6},
+        "margin": {"avg": avg_margin, "sigma": sd},
+        "pe": {"low": pe_low, "mid": pe_mid, "high": pe_high},
+        "years": years,
+    }
 
 
 def build_page(
@@ -359,6 +460,8 @@ def build_page(
             "eps": _num(row.eps),
             "trailing_eps": _num(valuation.trailing_eps),
         }
+    page.calc = _calc_seed(reader, page.stock_id, valuation)
+
     if valuation.pe_view is not None and valuation.band is not None:
         view = valuation.pe_view
         label, why = reward_risk_band(view.reward_risk)

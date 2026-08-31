@@ -17,6 +17,7 @@
      開網址還是看得到，只是導覽不指過去。#}
   <nav>
     <a href="{{ rel }}index.html"{% if page=='list' %} aria-current="page"{% endif %}>評等清單</a>
+    <a href="{{ rel }}watchlist.html"{% if page=='watchlist' %} aria-current="page"{% endif %}>觀察清單</a>
     {% if 'picks' not in hidden_pages %}
     <a href="{{ rel }}picks.html"{% if page=='picks' %} aria-current="page"{% endif %}>具投資價值</a>
     {% endif %}

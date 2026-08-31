@@ -487,6 +487,16 @@ def build_site(
     ).dump(str(out_dir / "index.html"))
     written["index.html（評等清單）"] = 1
 
+    # 觀察清單：和〔評等清單〕同一張表，同一個 macro，只是預設只顯示加過星的列。
+    #
+    # 為什麼整張表都送過去、由瀏覽器自己篩：清單存在讀者的 localStorage 裡，
+    # 建站的時候我們不知道他標了哪幾檔——也不該知道。這是一份靜態網站，沒有
+    # 可以放私人清單的地方。
+    env.get_template("watchlist.html.j2").stream(
+        **base, page="watchlist", rel="", rows=rows
+    ).dump(str(out_dir / "watchlist.html"))
+    written["watchlist.html（觀察清單）"] = 1
+
     # Old links and bookmarks still resolve.  A redirect rather than a second
     # copy: two files with the same table drift the moment one is edited.
     (out_dir / "list.html").write_text(

@@ -342,3 +342,66 @@ tr.here th{font-weight:700}
   padding:2px 0;color:var(--ink-2)}
 @media(max-width:640px){svg.chart{height:200px}}
 @media(max-width:640px){.wrap{padding:0 14px 60px}}
+
+
+/* -- 評等清單：排序、篩選、觀察清單 ------------------------------------- */
+.filters{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:0 0 12px}
+.filters input[type=search]{flex:1 1 240px;min-width:200px;padding:7px 11px;
+  border:1px solid var(--rule);border-radius:5px;background:var(--surface);
+  color:var(--ink);font:inherit;font-size:13.5px}
+.filters label{display:inline-flex;align-items:center;gap:6px;font-size:13px;
+  color:var(--ink-2);white-space:nowrap;cursor:pointer}
+/* 可排序的標題：整格都能點，不是只有那幾個字。標題本來就窄，
+   讓人瞄準三個中文字是每一次排序都要付一次的成本。 */
+thead th:has(> button.sortable){padding:0}
+th button.sortable{display:block;width:100%;appearance:none;border:none;background:none;
+  font:inherit;font-size:12px;font-weight:600;color:var(--ink-2);text-align:inherit;
+  padding:5px 10px;cursor:pointer;position:relative}
+th.num button.sortable{text-align:right}
+th button.sortable:hover{color:var(--accent-2);background:var(--surface)}
+th button.sortable:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+/* 箭頭用 ::after，不塞進文字裡——塞進去會讓欄寬在每次排序時跳動。 */
+th button.sortable.asc::after{content:" ▲";font-size:9px;color:var(--accent)}
+th button.sortable.desc::after{content:" ▼";font-size:9px;color:var(--accent)}
+.star-cell{width:1%;padding-left:8px;padding-right:2px;text-align:center}
+button.star{appearance:none;border:none;background:none;cursor:pointer;padding:2px 4px;
+  font-size:15px;line-height:1;color:var(--muted);border-radius:3px}
+button.star:hover{color:var(--g1);background:var(--surface-2)}
+button.star.on{color:var(--g1)}
+button.star:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+.when-cell{white-space:nowrap}
+.when-cell .tag.when,.when-cell .tag.full{margin-left:0}
+tbody tr[hidden]{display:none}
+
+
+/* -- 目標價試算盤 -------------------------------------------------------- */
+.calc{margin:22px 0 0;padding:16px 18px;border:1px solid var(--rule);border-radius:6px;
+  background:var(--surface)}
+.calc h4{margin:0 0 10px;font-size:15.5px;font-weight:700;color:var(--ink)}
+.calc h5{margin:18px 0 6px;font-size:14px;color:var(--ink)}
+.calc-inputs{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  margin:14px 0 10px}
+.calc-inputs label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;
+  color:var(--ink-2);font-weight:600}
+.calc-inputs .hint{font-weight:400;font-size:11px;color:var(--muted)}
+.calc-inputs input{padding:7px 10px;border:1px solid var(--rule);border-radius:5px;
+  background:var(--ground);color:var(--ink);font:inherit;font-size:14px;
+  font-variant-numeric:tabular-nums}
+.calc-inputs input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+.calc-formula{margin:0 0 12px;font-size:12px;color:var(--muted);
+  padding:8px 10px;border-left:3px solid var(--accent);background:var(--surface-2);
+  border-radius:0 4px 4px 0;max-width:none}
+.calc .btn-grab{font-size:13px;padding:7px 16px}
+.calc .linkish{margin-left:12px}
+table.mini,table.matrix{min-width:0;font-size:12.5px;table-layout:fixed}
+/* 第一欄是列標題，不是資料。不釘住寬度的話那句長標題會把數字全推到右邊，
+   而矩陣要能一眼看出行列關係，靠的正是格子等寬。 */
+table.matrix th:first-child{width:8.5em;white-space:normal;line-height:1.35}
+table.matrix th[scope=row],table.matrix thead th{background:var(--surface-2);font-weight:600}
+table.matrix td{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+/* 五級：綠 = 現價之上很多，紅 = 現價之下。亮底深字，和等第徽章同一套邏輯。 */
+table.matrix td.h4{background:var(--g4);color:var(--badge-ink)}
+table.matrix td.h3{background:var(--g3);color:var(--badge-ink)}
+table.matrix td.h2{background:var(--g2);color:var(--badge-ink)}
+table.matrix td.h1{background:var(--g1);color:var(--badge-ink)}
+table.matrix td.h0{background:var(--g0);color:var(--badge-ink)}
