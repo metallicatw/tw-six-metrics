@@ -45,6 +45,9 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -92,17 +95,8 @@ jobs:
         uses: ./.github/actions/build-site
         with:
           test: "false"
+          setup: "false"
 
-  # 只按發布鍵。artifact 上一個 job 已經傳好了。
-  deploy:
-    needs: fetch
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
+      - name: 發布
+        id: deployment
         uses: actions/deploy-pages@v4
