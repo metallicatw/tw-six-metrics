@@ -19,6 +19,19 @@ Goodinfo 同樣兩張表有 **258 週**和 **240 個月**。它擋腳本（對�
 三份資料以「週別／月別」為鍵合併（見 :func:`twsix.ingest.tdcc.merge`），官方那
 份蓋在上面。欄名一致就是為了這一刻。
 
+## 匯出有**兩種**形狀
+
+同一顆按鈕，兩種產物，兩種都要讀得懂：
+
+* **網站自己的「匯出檔案」**——網頁上那兩層合併表頭原封不動變成 CSV 的**前兩列**，
+  欄位有引號，千分位逗號留著。攤平規則和 HTML 那條路一樣：跨多欄的群組是
+  `群組-子欄`，只占一欄的群組保留自己的名字。攤出來的結果和正規欄名一字不差。
+* **逐格抓表格組出來的單列表頭**——群組前綴被丟掉（`收盤`）、分隔符號變成 `_`
+  （`非獨立董監_持股張數`）、千分位被移除。
+
+第一列有幾格就分得出是哪一種：兩列式的第一列是**群組**（5 格／7 格），單列式的
+第一列已經是完整欄位（14 格／21 格）。兩條路最後都產出同一份格線。
+
 ## 為什麼不共用 HTML 那個解析器
 
 同一張表，兩種形狀。CSV 的表頭是網頁上那兩層合併表頭**攤平**的結果，攤法和我們
@@ -127,6 +140,47 @@ _LAYOUTS: dict[str, tuple[tuple[str, str], ...]] = {
     DIRECTORS: DIRECTOR_COLUMNS,
 }
 
+#: 網站自己匯出的那一種：(群組, 子欄…)。空的子欄代表那個群組只占一欄。
+#:
+#: 攤平規則就是 HTML 那條路的規則——跨多欄的接成 `群組-子欄`，只占一欄的保留原名。
+#: 這份規格不是猜的：拿真實匯出的檔案，攤出來要和 HOLDER_COLUMNS／DIRECTOR_COLUMNS
+#: 的正規名稱一字不差，測試逐欄比對。
+HOLDER_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("週別", ()),
+    ("統計日期", ()),
+    ("當週股價", ("收盤", "漲跌(元)", "漲跌(%)")),
+    ("集保庫存(萬張)", ()),
+    (
+        "各持股等級股東之持有比例(%)",
+        ("≦10張", "＞10張≦50張", "＞50張≦100張", "＞100張≦200張",
+         "＞200張≦400張", "＞400張≦800張", "＞800張≦1千張", "＞1千張"),
+    ),
+)
+
+_MONEY = ("持股張數", "持股(%)", "持股增減", "質押張數", "質押(%)")
+DIRECTOR_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("月別", ()),
+    ("當月股價", ("當月收盤", "漲跌(元)", "漲跌(%)")),
+    ("發行張數(萬張)", ()),
+    ("非獨立董監持股", _MONEY),
+    ("獨立董監持股", _MONEY),
+    ("全體董監持股", _MONEY),
+    ("外資持股(%)", ()),
+)
+
+_GROUPED_LAYOUTS: dict[str, tuple[tuple[str, tuple[str, ...]], ...]] = {
+    HOLDERS: HOLDER_GROUPS,
+    DIRECTORS: DIRECTOR_GROUPS,
+}
+
+
+def flatten(groups: tuple[tuple[str, tuple[str, ...]], ...]) -> list[str]:
+    """(群組, 子欄…) -> 攤平後的欄名。跨多欄的接 `-`，只占一欄的保留原名。"""
+    out: list[str] = []
+    for name, subs in groups:
+        out.extend(f"{name}-{sub}" for sub in subs) if subs else out.append(name)
+    return out
+
 #: 第一欄叫什麼，就決定了這是哪一張表。和 HTML 那條路同一個判準。
 _FIRST: dict[str, str] = {"週別": HOLDERS, "月別": DIRECTORS}
 
@@ -153,6 +207,10 @@ def parse(text: str) -> Table:
     sheet = _FIRST.get(header[0] if header else "")
     if sheet is None:
         raise NotTheTable(f"第一欄是「{header[0] if header else ''}」，不是週別或月別")
+
+    groups = _GROUPED_LAYOUTS[sheet]
+    if len(header) == len(groups):
+        return _parse_two_row(sheet, groups, header, rows)
 
     layout = _LAYOUTS[sheet]
     want = {src for src, _ in layout}
@@ -183,6 +241,46 @@ def parse(text: str) -> Table:
             cell = raw[i].strip()
             row.append(_regroup(cell) if dst in GROUPED else cell)
         data.append(row)
+    if not data:
+        raise NotTheTable(f"「{sheet}」有表頭沒有資料列")
+    return Table(sheet=sheet, columns=columns, rows=data)
+
+
+def _parse_two_row(
+    sheet: str,
+    groups: tuple[tuple[str, tuple[str, ...]], ...],
+    header: list[str],
+    rows: list[list[str]],
+) -> Table:
+    """網站自己匯出的那一種：第一列是群組，第二列是子欄，第三列起是資料。
+
+    兩列都要對得上才收。只對第一列就收，等於相信一個沒看過的第二列——而錯位的
+    欄位不會爆炸，只會讓十年的歷史悄悄接到隔壁那一欄去。
+    """
+    if len(rows) < 3:
+        raise NotTheTable(f"「{sheet}」只有 {len(rows)} 列，沒有資料")
+
+    want_groups = [name for name, _ in groups]
+    if header != want_groups:
+        bad = [h for h in header if h not in want_groups] or ["順序不對"]
+        raise NotTheTable(f"「{sheet}」的群組列不對：{'、'.join(bad[:4])}")
+
+    want_subs = [sub for _, subs in groups for sub in subs]
+    subs = [_key(c) for c in rows[1]]
+    if subs != want_subs:
+        bad = [c for c in subs if c not in want_subs] or ["順序不對"]
+        raise NotTheTable(f"「{sheet}」的子欄列不對：{'、'.join(bad[:4])}")
+
+    columns = flatten(groups)
+    data: list[list[str]] = []
+    for raw in rows[2:]:
+        if not any(c.strip() for c in raw):
+            continue
+        if len(raw) != len(columns):
+            raise NotTheTable(
+                f"「{sheet}」有一列 {len(raw)} 格，表頭攤平後是 {len(columns)} 欄"
+            )
+        data.append([c.strip() for c in raw])
     if not data:
         raise NotTheTable(f"「{sheet}」有表頭沒有資料列")
     return Table(sheet=sheet, columns=columns, rows=data)

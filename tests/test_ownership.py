@@ -655,3 +655,41 @@ def test_a_scattered_failure_does_not_abandon_the_rest_of_the_year():
     assert src.count("save_stock_history") >= 2
     # 沒拿到的再試一次，而不是留給下一次執行。
     assert "再試一次" in src
+
+
+def test_a_corporate_director_holding_several_seats_is_counted_once():
+    """明細是**一席一列**，而一個法人董事可以占好幾席。
+
+    統一（1216）的高權投資占三席：董事長本人一列、董事本人兩列，三列都寫著同樣
+    的 284,330,536 股。逐列相加會把那一塊算三次——1,130,457 張，實際是 561,796
+    張，多了一倍；質押 240,090 正好是 80,030 的三倍。
+
+    這個洞是使用者從 Goodinfo 匯入 1216 的十年歷史時撞出來的：兩邊差了兩倍，而
+    扣掉重複的兩次之後一股不差。5439 沒撞到，因為它的董事沒有人占兩席——也就是
+    說，只用一檔股票驗收的來源，驗的是那一檔，不是那個規則。
+
+    實測全市場 1,085 家上市公司裡有 498 家有重複席次。這不是邊角案例。
+    """
+    company = _insiders()["1216"]
+
+    seats = [p for p in company.people if p.name == "高權投資股份有限公司"]
+    assert len(seats) == 3, "fixture 應該保留那三席"
+    assert {p.held for p in seats} == {284_330_536}, "三列寫的是同一塊持股"
+
+    assert round(company.held / 1000) == 561_796        # Goodinfo 上是 561,796 張
+    assert round(company.pledged / 1000) == 80_030      # 不是 240,090
+    assert company.independent_held == 0
+
+
+def test_two_directors_with_different_names_both_count():
+    """去重是以「持有人」為單位，不是把董事會壓成一個人。"""
+    company = _insiders()["1216"]
+    names = {p.name for p in company.people if ins.is_director(p.title)}
+    assert "侯博裕" in names and "林蒼生" in names
+    # 兩個人的持股都要在合計裡
+    only = sum(
+        p.held for p in company.people
+        if ins.is_director(p.title) and p.name in ("侯博裕", "林蒼生")
+    )
+    assert only == 141_697_024 + 49_916_266
+    assert company.held > only
