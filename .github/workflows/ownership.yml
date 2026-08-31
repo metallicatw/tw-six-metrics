@@ -89,7 +89,7 @@ jobs:
 
       # 和「加一檔個股」一樣：建站就在這個 job 裡做，不叫醒第二台 runner。
       - name: 建站
-        uses: ./.github/actions/site
+        uses: ./.github/actions/build-site
         with:
           test: "false"
 

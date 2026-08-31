@@ -29,7 +29,7 @@ on:
 # 抓取的兩個 workflow 以前是 call 這一份，而 workflow_call 起的是另一台 runner：
 # 重新排隊、重新 checkout、重新裝一次相依、重新跑一次剛跑過的測試，全部只為了
 # 那四秒的 `twsix build`。它們現在改成在自己的 job 裡用
-# `./.github/actions/site`——同一份建站定義，少一次開機。
+# `./.github/actions/build-site`——同一份建站定義，少一次開機。
 
 permissions:
   contents: read
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - uses: ./.github/actions/site
+      - uses: ./.github/actions/build-site
 
   deploy:
     needs: build

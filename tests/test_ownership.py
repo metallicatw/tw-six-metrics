@@ -546,6 +546,21 @@ def test_stock_workflow_commits_the_directors_backfill_it_paid_for():
     assert '"data/ownership/directors_stock/$code."*' in text
 
 
+def _assert_tracked(path: Path) -> None:
+    """這個檔案有沒有真的進版控？沒有 git 就跳過（測試本身零相依）。"""
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None:  # pragma: no cover
+        return
+    rel = path.relative_to(ROOT.parent)
+    out = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", str(rel)],
+        cwd=ROOT.parent, capture_output=True, text=True,
+    )
+    assert out.returncode == 0, f"{rel} 不在版本控制裡（多半被 .gitignore 吃掉了）"
+
+
 def test_no_workflow_pays_for_a_second_runner_just_to_build_the_site():
     """建站要在抓完資料的那個 job 裡做，不是 call 另一個 workflow。
 
@@ -558,10 +573,17 @@ def test_no_workflow_pays_for_a_second_runner_just_to_build_the_site():
         text = (wf / name).read_text("utf-8")
         live = [ln for ln in text.splitlines() if not ln.lstrip().startswith("#")]
         assert not any("workflows/pages.yml" in ln for ln in live), name
-        assert "uses: ./.github/actions/site" in text, name
+        assert "uses: ./.github/actions/build-site" in text, name
         assert "deploy-pages@v4" in text, name
-    # 建站的定義仍然只有一份。
-    assert (wf.parent / "actions" / "site" / "action.yml").exists()
+    # 建站的定義仍然只有一份，而且**在版本控制裡**。
+    #
+    # 「在磁碟上存在」不等於「推得上去」：.gitignore 原本有一條沒加斜線的
+    # `site/`，它會比對任何深度的 site 目錄，於是 `.github/actions/site/` 被
+    # 整個忽略——git add -A 一聲不吭地跳過，本機測試全綠，runner 上才說
+    # Can't find 'action.yml'。所以這裡問的是 git，不是檔案系統。
+    action = wf.parent / "actions" / "build-site" / "action.yml"
+    assert action.exists()
+    _assert_tracked(action)
 
 
 def test_ci_installs_only_what_the_site_actually_imports():
@@ -571,6 +593,6 @@ def test_ci_installs_only_what_the_site_actually_imports():
     四個裡面沒有一個在執行時被 import——圖表是自己畫的 SVG，測試跑的是零相依的
     run_tests.py。幾十 MB 的解壓縮，每個 job 付一次。
     """
-    action = (ROOT.parent / ".github" / "actions" / "site" / "action.yml").read_text("utf-8")
+    action = (ROOT.parent / ".github" / "actions" / "build-site" / "action.yml").read_text("utf-8")
     assert 'pip install -e ".[report]"' in action
     assert 'pip install -e ".[all]"' not in action

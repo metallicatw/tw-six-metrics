@@ -113,7 +113,7 @@ jobs:
       #
       # 測試上面剛跑過同一份程式碼，不重跑。
       - name: 建站
-        uses: ./.github/actions/site
+        uses: ./.github/actions/build-site
         with:
           test: "false"
 
