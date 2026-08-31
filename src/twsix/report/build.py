@@ -315,6 +315,10 @@ def build_site(
 
     count = 0
     rich_ids: set[str] = set()
+    #: 代號 -> 這一檔報表最後一次成功更新的日期（``YYYY-MM-DD``）。
+    #: 清單上原本標的是「完整」，但那個字只說了「有沒有」，沒說「什麼時候」——
+    #: 而一份三個月前抓的完整報告，和昨天抓的完整報告，讀者要做的判斷不一樣。
+    fetched_at: dict[str, str] = {}
     template = env.get_template("stock.html.j2")
     for stock_id, group in grouped.items():
         # A stock whose sheets were fetched gets the full page — the ten
@@ -331,6 +335,9 @@ def build_site(
             if full:
                 count += 1
                 rich_ids.add(stock_id)
+                when = _fetched_on(sheets_dir / stock_id)
+                if when:
+                    fetched_at[stock_id] = when
                 continue
         group.sort(key=lambda x: int(x.get("period_index") or 0))
         head = group[0]
@@ -381,6 +388,7 @@ def build_site(
     # falls back to the grade table, and a link promising more than it
     # delivers is the one thing worse than the plain page.
     base["rich_ids"] = rich_ids
+    base["fetched_at"] = fetched_at
 
 
     # 〔評等清單〕 is the front door.  It used to be 〔具投資價值〕, which ranks
@@ -448,7 +456,7 @@ def build_site(
     written["about.html"] = 1
 
 
-    _write_search_index(out_dir, rows, rich_ids)
+    _write_search_index(out_dir, rows, rich_ids, fetched_at)
     written["search.json"] = 1
 
     (out_dir / ".nojekyll").write_text("", encoding="utf-8")
@@ -461,7 +469,28 @@ def build_site(
 NAME_CAP = 24
 
 
-def _write_search_index(out_dir: Path, rows: list[Row], rich_ids: set[str]) -> None:
+def _fetched_on(base_dir: Path) -> str:
+    """這一檔報表最後一次成功更新的日期，抓取當下自己寫下的那一行。
+
+    抓過但還沒有這個記號的（這個機制之前就在檔案庫裡的那幾檔）回空字串，清單上
+    退回顯示「完整」——沒有日期就不要編一個出來。
+    """
+    stamp = base_dir / "_fetched.txt"
+    if not stamp.exists():
+        return ""
+    text = stamp.read_text(encoding="utf-8").strip()
+    # 只認 YYYY-MM-DD。壞掉的內容當作沒有，而不是原樣印到頁面上。
+    if len(text) == 10 and text[4] == "-" and text[7] == "-":
+        return text
+    return ""
+
+
+def _write_search_index(
+    out_dir: Path,
+    rows: list[Row],
+    rich_ids: set[str],
+    fetched_at: dict[str, str] | None = None,
+) -> None:
     """``search.json`` — what the header search box matches against.
 
     Arrays, not objects, and in a fixed order: ``[代號, 名稱, 產業, 綜合評分,
@@ -486,7 +515,10 @@ def _write_search_index(out_dir: Path, rows: list[Row], rich_ids: set[str]) -> N
             # integers is 「2.3333333333」, and shipping ten digits to format
             # them away on arrival wastes the bytes twice over.
             f"{r.composite_value:.2f}" if r.composite_value is not None else "",
-            1 if r.stock_id in rich_ids else 0,
+            # 第五欄從 0/1 變成「更新日期或空字串」。真假值沒有變——空字串一樣
+            # 是假的——所以讀它的那段 JS 原本的 if 判斷全部照舊，只是多了一個
+            # 可以直接印出來的字串。沒有日期但有完整頁的，退回 "1"。
+            (fetched_at or {}).get(r.stock_id) or (1 if r.stock_id in rich_ids else 0),
         ]
         for r in sorted(rows, key=lambda x: x.stock_id)
     ]

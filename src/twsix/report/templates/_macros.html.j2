@@ -31,12 +31,24 @@
 {# `rich_ids` is the set of stocks whose sheets were fetched, so their page is
    the ten-section one rather than the grade table.  Marked because otherwise
    the only way to find them is to click through 1,741 codes — and the mark is
-   a word, not a colour, so it survives a greyscale print. #}
-{% macro row(r, rel, rich_ids=None) -%}
+   a word, not a colour, so it survives a greyscale print.
+
+   這個記號原本是「完整」。改成更新日期，是因為「完整」只回答了「有沒有」，而
+   讀者真正要判斷的是「這份資料還算不算數」——三個月前抓的完整報告和昨天抓的
+   完整報告，看到的是同一個字，能做的判斷卻不一樣。日期同時回答了兩件事：有這個
+   標記就代表有完整頁，標記的內容就是它多舊。
+
+   月/日夠用（清單掃過去要窄），完整日期放在 title 裡給要確認年份的人。抓過但
+   還沒有日期記號的退回「完整」——沒有日期就不要編一個出來。 #}
+{% macro row(r, rel, rich_ids=None, fetched_at=None) -%}
+{% set when = (fetched_at or {}).get(r.stock_id) %}
 <tr>
   <td><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a>
-    {%- if rich_ids and r.stock_id in rich_ids %} <span class="tag full" title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞">完整</span>{% endif %}</td>
-  <td>{{ r.name }}</td>
+    {%- if when %} <span class="tag when" title="報表更新於 {{ when }}　完整報告：河流圖、季節性、外資投信、個股新聞（大戶／董監持股另由每週排程更新）">{{ when[5:] | replace('-', '/') }}</span>
+    {%- elif rich_ids and r.stock_id in rich_ids %} <span class="tag full" title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞">完整</span>{% endif %}</td>
+  {# 名稱也連過去。原本只有代號可點——而讀者掃清單時眼睛落在名稱上，
+     卻要把游標移回四位數字才點得到，那是每一列都要付一次的小摩擦。 #}
+  <td><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.name }}</a></td>
   <td class="muted">{{ r.industry }}</td>
   <td>{{ grade(r.grades.revenue_yoy) }}</td>
   <td>{{ grade(r.grades.operating_margin) }}</td>
