@@ -3,24 +3,26 @@
 {% block title %}評等清單 — {{ site_title }}{% endblock %}
 {% block body %}
 <h2>評等清單</h2>
-<p class="muted">本期（{{ latest_quarter }}）全市場評等，共 {{ rows|length }} 檔。輸入代號、名稱或產業即時篩選。</p>
-<div class="searchbar">
+<p class="muted">
+  本期（{{ latest_quarter }}）全市場評等，共 <span id="tally">{{ rows|length }} 檔</span>。
+  點欄位標題可排序，☆ 加入觀察清單。
+</p>
+{# 全市場評等來自活頁簿的那一份快照，不會隨著個股更新而變新。這件事在頁面上要
+   說得出口——不然「最後更新日」有值的那 29 檔和其餘 1,712 檔看起來是同一種東西。 #}
+<p class="note">
+  <b>兩種資料，兩種新舊。</b>
+  六大指標的等第與綜合評分來自 <b>{{ latest_quarter }}</b> 的全市場評等，整張表同一個時點；
+  <b>最後更新日</b>那一欄是<b>個股完整報告</b>的抓取日期，只有按過「立即更新」的股票才有。
+  沒有日期的那幾檔，後面的等第一樣是 {{ latest_quarter }} 的，不是今天的。
+</p>
+<div class="filters">
   <input id="q" type="search" placeholder="篩選：代號 / 名稱 / 產業" aria-label="篩選">
+  <label><input type="checkbox" id="only-watched"> 只看觀察清單</label>
+  <label><input type="checkbox" id="only-picks"> 只看具投資價值</label>
+  <label><input type="checkbox" id="only-full"> 只看有完整報告</label>
 </div>
 <div class="scroll"><table id="t">
 {{ table_head() }}
 <tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at) }}{% endfor %}</tbody>
 </table></div>
-<script>
-(function(){
-  var q=document.getElementById('q'), rows=document.querySelectorAll('#t tbody tr');
-  function apply(){
-    var v=q.value.trim().toLowerCase();
-    rows.forEach(function(tr){
-      tr.style.display = !v || tr.textContent.toLowerCase().indexOf(v)>-1 ? '' : 'none';
-    });
-  }
-  q.addEventListener('input', apply);
-})();
-</script>
 {% endblock %}

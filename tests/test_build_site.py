@@ -249,7 +249,7 @@ def test_the_three_stale_pages_are_unlinked_but_still_built():
 
     nav = re.search(r"<nav>(.*?)</nav>", (out / "index.html").read_text("utf-8"), re.S)
     labels = re.findall(r">([^<>]+)</a>", nav.group(1))
-    assert labels == ["評等清單"]
+    assert labels == ["評等清單", "觀察清單"]
     for name in ("picks.html", "stats.html", "about.html"):
         assert (out / name).is_file(), f"{name} 不該被刪掉，只是不連過去"
     # 評等清單 is the front door now; the old URL still resolves.
@@ -545,8 +545,10 @@ def test_the_name_links_to_the_same_page_as_the_code(tmp_path=None):
     build_site(_records(), out, sheets_dir=_sheets(tmp))
 
     listing = (out / "index.html").read_text(encoding="utf-8")
-    assert '<td><a href="stock/5439.html">高技</a></td>' in listing
-    assert '<td><a href="stock/2330.html">台積電</a></td>' in listing
+    assert '<a href="stock/5439.html">高技</a>' in listing
+    assert '<a href="stock/2330.html">台積電</a>' in listing
+    # 代號那一格也還是連結——兩個都指同一頁。
+    assert '<a href="stock/5439.html">5439</a>' in listing
 
 
 def test_a_news_headline_opens_in_a_new_tab(tmp_path=None):
@@ -730,3 +732,103 @@ def test_every_progress_line_says_how_long_it_took(tmp_path=None):
     assert "var line = elapsed() + " in js, "進度行沒有時間戳"
     assert "這一段是排隊，不算在 workflow 的執行時間裡" in js
     assert "剩下的是 Pages CDN 換檔" in js
+
+
+def test_every_column_can_be_sorted_and_sorts_by_a_key_not_by_the_printed_text(tmp_path=None):
+    """「+0.50」「—」「AA」照字串排會排出胡說。
+
+    型別是在產生 HTML 的時候就知道的——那時候寫進 data-s，比在瀏覽器裡一欄一欄
+    猜可靠。沒有值一律是 -999：排序時沉到底，而不是插在中間。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    listing = (out / "index.html").read_text("utf-8")
+
+    # 每一欄都可以點——只有幾欄能點，而且看不出是哪幾欄，比全部都能點難用。
+    import re
+
+    cols = re.findall(r'class="sortable" data-col="(\d+)"', listing)
+    assert [int(c) for c in cols] == list(range(14))
+
+    row = listing.split('<tr data-code="5439"')[1].split("</tr>")[0]
+    assert re.search(r'class="num" data-s="[-0-9.]+"', row)   # 綜合評分排的是數字
+    assert 'data-s="4"' in row                                # AA -> 4
+    assert 'data-s="高技"' in row                              # 名稱排的是名稱
+    js = (out / "assets" / "site.js").read_text("utf-8")
+    assert "data-s" in js and "sortBy" in js
+
+
+def test_the_update_date_is_its_own_column_with_a_header(tmp_path=None):
+    """原本那個日期是塞在代號那一格裡的徽章——有值，但沒有欄名。
+
+    一欄資料沒有標題，讀者只能猜它是什麼；而它旁邊那 1,712 檔沒有日期的，看起來
+    就像資料壞了，而不是「那是另一種資料」。
+    """
+    tmp = tmp_path or _tmp()
+    sheets = _sheets(tmp)
+    (sheets / "5439" / "_fetched.txt").write_text("2026-08-30\n", encoding="utf-8")
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=sheets)
+    listing = (out / "index.html").read_text("utf-8")
+
+    assert "最後<br>更新日" in listing
+    row = listing.split('<tr data-code="5439"')[1].split("</tr>")[0]
+    assert '<td class="when-cell" data-s="2026-08-30">' in row
+    # 沒有完整報告的那一檔，這一格是破折號，不是空白——空白讀起來像漏掉了。
+    plain = listing.split('<tr data-code="2330"')[1].split("</tr>")[0]
+    assert '<td class="when-cell" data-s="">' in plain and "—" in plain
+
+
+def test_the_watchlist_page_is_the_same_table_filtered_in_the_browser(tmp_path=None):
+    """清單存在讀者的 localStorage 裡，建站的時候我們不知道他標了哪幾檔。
+
+    ——也不該知道。這是一份靜態網站，沒有可以放私人清單的地方。所以整張表都送
+    過去，由瀏覽器自己篩。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    page = (out / "watchlist.html").read_text("utf-8")
+    assert '<table id="t" data-watchlist="1">' in page
+    assert '<tr data-code="5439"' in page and '<tr data-code="2330"' in page
+    assert 'id="watch-empty"' in page          # 一檔都沒加時要說話
+    js = (out / "assets" / "site.js").read_text("utf-8")
+    assert "twsix.watchlist" in js and "localStorage" in js
+    # 導覽列指得過去
+    assert 'href="watchlist.html"' in (out / "index.html").read_text("utf-8")
+
+
+def test_the_target_price_calculator_is_seeded_from_the_stocks_own_numbers(tmp_path=None):
+    """一個試算盤最容易變成的東西，是一組看起來很精確、其實憑空填的參數。
+
+    所以每個預設值都要說得出出處，而且要對得起來：5439 的年營收 9,644 百萬、
+    股數 0.93 億股、淨利率 14.5% ± 1.7%、營收成長率 4.5%（最近月）到 43.6%
+    （近六月均）——這幾個數字和坊間工具上的一模一樣，是各自算出來的，不是抄的。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "stock" / "5439.html").read_text("utf-8")
+
+    assert 'id="calc"' in page and "data-seed=" in page
+    import json
+    import re
+
+    seed = json.loads(re.search(r"data-seed='([^']+)'", page).group(1))
+    assert round(seed["revenue"]) == 9644            # 百萬元
+    assert round(seed["shares"], 2) == 0.93          # 億股
+    assert round(seed["margin"]["avg"] * 100, 1) == 14.5
+    assert round(seed["margin"]["sigma"] * 100, 1) == 1.7
+    assert round(seed["growth"]["latest"] * 100, 1) == 4.5
+    assert round(seed["growth"]["recent6"] * 100, 1) == 43.6
+    assert [y["year"] for y in seed["years"]] == [2025, 2024, 2023, 2022]
+    assert round(seed["years"][0]["eps"], 2) == 13.74
+
+    # 算不出來、對不上來源的東西不放：累計年增率我試過幾種視窗都對不上參考工具，
+    # 所以它不在種子裡——一個來路不明的預設值會被當成事實填進去。
+    assert "ytd" not in seed["growth"]
+
+    js = (out / "assets" / "site.js").read_text("utf-8")
+    assert "預估目標價" in js and "上檔空間" in js

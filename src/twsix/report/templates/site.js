@@ -521,3 +521,273 @@
     }
   });
 })();
+
+
+/* =========================================================================
+ * 評等清單：排序、篩選、觀察清單
+ *
+ * 三件事放在一起，因為它們操作的是同一張表的同一批 <tr>，而且順序有相依：
+ * 排序會重排 DOM，篩選只切換 display，觀察清單同時是一個篩選條件和一個狀態。
+ * 分開寫就會出現「排序之後星號跑掉」「篩選之後排序失效」那一類的 bug。
+ * ========================================================================= */
+(function(){
+  var table = document.getElementById('t');
+  if(!table) return;
+  var body = table.tBodies[0];
+  var rows = [].slice.call(body.rows);
+
+  /* ---- 觀察清單 --------------------------------------------------------
+   * 存在 localStorage，只在這台瀏覽器裡。這是一份靜態網站——沒有伺服器可以放
+   * 你的私人清單，也不該有。換一台機器要重加，那是這個取捨的代價。 */
+  var KEY = 'twsix.watchlist';
+  function load(){
+    try{ return JSON.parse(localStorage.getItem(KEY) || '[]') || []; }catch(e){ return []; }
+  }
+  function save(list){
+    try{ localStorage.setItem(KEY, JSON.stringify(list)); }catch(e){}
+  }
+  var watched = {};
+  load().forEach(function(c){ watched[c] = 1; });
+
+  function paintStar(btn){
+    var on = !!watched[btn.getAttribute('data-star')];
+    btn.textContent = on ? '★' : '☆';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.classList.toggle('on', on);
+    var cell = btn.closest('td');
+    if(cell) cell.setAttribute('data-s', on ? '1' : '0');
+  }
+  [].forEach.call(table.querySelectorAll('button[data-star]'), paintStar);
+
+  table.addEventListener('click', function(e){
+    var btn = e.target.closest('button[data-star]');
+    if(!btn) return;
+    var code = btn.getAttribute('data-star');
+    if(watched[code]) delete watched[code]; else watched[code] = 1;
+    save(Object.keys(watched));
+    paintStar(btn);
+    apply();
+    count();
+  });
+
+  /* ---- 排序 ------------------------------------------------------------
+   * 比大小看 data-s，不看畫面上的字。「+0.50」「—」「AA」照字串排會排出胡說，
+   * 而每一欄的型別是在產生 HTML 的時候就知道的——那時候寫下來，比在瀏覽器裡
+   * 一欄一欄猜可靠。 */
+  var sortCol = -1, sortDir = 1;
+  function key(tr, col){
+    var td = tr.cells[col];
+    var raw = td ? (td.getAttribute('data-s') || td.textContent) : '';
+    var num = parseFloat(raw);
+    return (raw !== '' && !isNaN(num) && /^[-+]?[0-9.]+$/.test(raw.trim())) ? num : raw;
+  }
+  function sortBy(col){
+    if(sortCol === col){ sortDir = -sortDir; } else { sortCol = col; sortDir = -1; }
+    var decorated = rows.map(function(tr, i){ return [key(tr, col), i, tr]; });
+    decorated.sort(function(a, b){
+      if(a[0] < b[0]) return -sortDir;
+      if(a[0] > b[0]) return sortDir;
+      return a[1] - b[1];             /* 同分維持原本的順序，排序才是穩定的 */
+    });
+    var frag = document.createDocumentFragment();
+    decorated.forEach(function(d){ frag.appendChild(d[2]); });
+    body.appendChild(frag);
+    [].forEach.call(table.querySelectorAll('th button.sortable'), function(b){
+      var mine = +b.getAttribute('data-col') === col;
+      b.classList.toggle('asc', mine && sortDir === 1);
+      b.classList.toggle('desc', mine && sortDir === -1);
+      b.setAttribute('aria-sort', mine ? (sortDir === 1 ? 'ascending' : 'descending') : 'none');
+    });
+  }
+  table.addEventListener('click', function(e){
+    var b = e.target.closest('th button.sortable');
+    if(b) sortBy(+b.getAttribute('data-col'));
+  });
+
+  /* ---- 篩選 ------------------------------------------------------------ */
+  var q = document.getElementById('q');
+  var onlyWatched = document.getElementById('only-watched');
+  var onlyPicks = document.getElementById('only-picks');
+  var onlyFull = document.getElementById('only-full');
+  var tally = document.getElementById('tally');
+  var watchOnlyPage = table.getAttribute('data-watchlist') === '1';
+
+  function visible(tr){
+    if(watchOnlyPage || (onlyWatched && onlyWatched.checked)){
+      if(!watched[tr.getAttribute('data-code')]) return false;
+    }
+    if(onlyPicks && onlyPicks.checked && tr.cells[13].getAttribute('data-s') !== '1') return false;
+    if(onlyFull && onlyFull.checked && !tr.cells[2].getAttribute('data-s')) return false;
+    var v = q ? q.value.trim().toLowerCase() : '';
+    return !v || tr.textContent.toLowerCase().indexOf(v) > -1;
+  }
+  function apply(){
+    rows.forEach(function(tr){ tr.hidden = !visible(tr); });
+    count();
+  }
+  function count(){
+    if(!tally) return;
+    var n = 0;
+    rows.forEach(function(tr){ if(!tr.hidden) n++; });
+    /* 觀察清單那一頁上，分母是「全市場 1,741 檔」——那個數字在那裡沒有意義，
+       只會讓人以為自己漏掉了什麼。 */
+    tally.textContent = watchOnlyPage || n === rows.length
+      ? (n + ' 檔') : (n + ' / ' + rows.length + ' 檔');
+  }
+  [q, onlyWatched, onlyPicks, onlyFull].forEach(function(el){
+    if(el) el.addEventListener(el.tagName === 'INPUT' && el.type === 'search' ? 'input' : 'change', apply);
+  });
+  apply();
+
+  /* 觀察清單那一頁：一檔都沒加的時候要說話，不要給一張空表讓人以為壞了。 */
+  var empty = document.getElementById('watch-empty');
+  if(empty){
+    var show = function(){ empty.hidden = Object.keys(watched).length > 0; };
+    show();
+    table.addEventListener('click', show);
+  }
+})();
+
+
+/* =========================================================================
+ * 目標價試算盤
+ *
+ * 一條公式，三個維度：營收成長率 × 淨利率 → 預估 EPS，再乘上每一個預估 PE →
+ * 目標價。頁面上其他地方給的是「引擎依規則算出的一個答案」，這裡給的是「你的
+ * 假設會得到什麼答案」。
+ *
+ * 顏色刻意不照數字大小塗。坊間工具把高價塗紅、低價塗綠，但對看的人來說，一個
+ * 目標價是好是壞不在於它大不大，而在於它離現價多遠——所以這裡塗的是**相對現價
+ * 的上檔空間**：綠色是現價之上，紅色是現價之下。圖表沒有義務讓人猜它在說什麼。
+ * ========================================================================= */
+(function(){
+  var box = document.getElementById('calc');
+  if(!box) return;
+
+  var seed = {};
+  try{ seed = JSON.parse(box.getAttribute('data-seed') || '{}'); }catch(e){ return; }
+  var price = parseFloat(box.getAttribute('data-price'));
+  if(isNaN(price)) price = null;
+
+  var el = {
+    rev: document.getElementById('c-rev'), sh: document.getElementById('c-sh'),
+    g: document.getElementById('c-g'), m: document.getElementById('c-m'),
+    pe: document.getElementById('c-pe'), out: document.getElementById('calc-out'),
+    basis: document.getElementById('calc-basis')
+  };
+
+  function pct(x){ return x === null || x === undefined ? null : x * 100; }
+  function r1(x){ return x === null || x === undefined ? '' : Math.round(x * 10) / 10; }
+
+  function defaults(){
+    var g = seed.growth || {}, m = seed.margin || {}, pe = seed.pe || {};
+    var mid = pct(m.avg), sd = pct(m.sigma) || 0;
+    /* 悲觀／中性／樂觀。成長率用這一檔自己的月營收年增率——最近一個月是「現在
+       的溫度」，近六個月平均是「這一段的趨勢」，兩者之間差很多的時候，那個差
+       本身就是最誠實的樂觀／悲觀區間。 */
+    var lo = pct(g.latest), hi = pct(g.recent6);
+    if(lo === null && hi === null){ lo = 0; hi = 10; }
+    if(lo === null) lo = hi; if(hi === null) hi = lo;
+    var a = Math.min(lo, hi), b = Math.max(lo, hi);
+    return {
+      rev: seed.revenue ? Math.round(seed.revenue) : '',
+      sh: seed.shares ? Math.round(seed.shares * 100) / 100 : '',
+      g: [r1(a), r1((a + b) / 2), r1(b)].join(', '),
+      m: mid === null ? '' : [r1(mid - sd), r1(mid), r1(mid + sd)].join(', '),
+      pe: [pe.low, pe.mid, pe.high].map(function(v){ return v ? Math.round(v * 10) / 10 : ''; })
+            .filter(function(v){ return v !== ''; }).join(', ') || '15, 20, 25'
+    };
+  }
+
+  function fill(d){
+    el.rev.value = d.rev; el.sh.value = d.sh;
+    el.g.value = d.g; el.m.value = d.m; el.pe.value = d.pe;
+  }
+
+  function basis(){
+    var g = seed.growth || {}, m = seed.margin || {}, pe = seed.pe || {};
+    var bits = [];
+    if(g.latest !== undefined && g.latest !== null) bits.push('最近月 ' + r1(pct(g.latest)) + '%');
+    if(g.recent6 !== undefined && g.recent6 !== null) bits.push('近六月均 ' + r1(pct(g.recent6)) + '%');
+    var out = [];
+    if(bits.length) out.push('營收成長率參考：' + bits.join('、') + '（月營收年增率）');
+    if(m.avg !== undefined && m.avg !== null){
+      out.push('淨利率：中性 ' + r1(pct(m.avg)) + '%（近四季平均）± σ ' +
+               r1(pct(m.sigma)) + '%（近四季樣本標準差）');
+    }
+    if(pe.low) out.push('本益比：' + r1(pe.low) + ' / ' + r1(pe.mid) + ' / ' + r1(pe.high) +
+                        '（本益比估價區間的低／中／高）');
+    out.push('年營收採去年全年；股數為加權平均股數。以上是預設值的出處，改動之後就是你自己的假設。');
+    el.basis.innerHTML = '<b>預設值怎麼來的。</b>　' + out.join('；');
+  }
+
+  function nums(text){
+    return String(text || '').split(/[,，\s]+/)
+      .map(function(t){ return parseFloat(t); })
+      .filter(function(v){ return !isNaN(v); });
+  }
+
+  function heat(target){
+    /* 相對現價的上檔空間。沒有現價就不上色——沒有基準的顏色是裝飾，不是資訊。 */
+    if(price === null || !target) return '';
+    var up = target / price - 1;
+    if(up >= 0.5) return 'h4';
+    if(up >= 0.2) return 'h3';
+    if(up >= 0) return 'h2';
+    if(up >= -0.2) return 'h1';
+    return 'h0';
+  }
+
+  function matrix(title, note, values, fmt, colour){
+    var g = nums(el.g.value), m = nums(el.m.value);
+    var h = '<h5>' + title + '</h5>';
+    if(note) h += '<p class="muted">' + note + '</p>';
+    h += '<div class="scroll"><table class="matrix"><thead><tr><th>淨利率＼成長率</th>';
+    m.forEach(function(v){ h += '<th class="num">' + v + '%</th>'; });
+    h += '</tr></thead><tbody>';
+    g.slice().reverse().forEach(function(gv){
+      h += '<tr><th scope="row">' + gv + '%</th>';
+      m.forEach(function(mv){
+        var v = values(gv, mv);
+        h += '<td class="num ' + (colour ? colour(v) : '') + '">' + fmt(v) + '</td>';
+      });
+      h += '</tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  function run(){
+    var rev = parseFloat(el.rev.value), sh = parseFloat(el.sh.value);
+    if(isNaN(rev) || isNaN(sh) || !sh){
+      el.out.innerHTML = '<p class="stale">年營收與股數都要填，而且股數不能是 0。</p>';
+      return;
+    }
+    /* 年營收（百萬元）× (1+成長率) × 淨利率 ÷ 股數（億股）
+       百萬元 ÷ 億股 = 百萬元 / 一億股 -> 元/股 要再除以 100。 */
+    function eps(gv, mv){ return rev * (1 + gv / 100) * (mv / 100) / (sh * 100); }
+
+    var html = matrix('預估 EPS（元）', '', eps,
+      function(v){ return v.toFixed(2); }, null);
+
+    nums(el.pe.value).forEach(function(pe){
+      html += matrix('預估目標價（元）　本益比 ' + pe,
+        price ? '顏色是相對現價 ' + price.toFixed(2) + ' 的上檔空間，不是數字大小。' : '',
+        function(gv, mv){ return eps(gv, mv) * pe; },
+        function(v){ return Math.round(v).toLocaleString(); }, heat);
+    });
+    el.out.innerHTML = html;
+  }
+
+  document.getElementById('c-run').addEventListener('click', run);
+  document.getElementById('c-reset').addEventListener('click', function(){
+    fill(defaults()); run();
+  });
+  [el.rev, el.sh, el.g, el.m, el.pe].forEach(function(i){
+    i.addEventListener('change', run);
+    i.addEventListener('keydown', function(e){ if(e.key === 'Enter') run(); });
+  });
+
+  fill(defaults());
+  basis();
+  run();
+})();

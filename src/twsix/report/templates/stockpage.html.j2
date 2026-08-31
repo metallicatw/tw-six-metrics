@@ -230,6 +230,55 @@
 
 {% if p.figures.pe_band %}{{ p.figures.pe_band|safe }}{% endif %}
 
+{% if p.calc and p.calc.revenue and p.calc.shares %}
+{# ================= 目標價試算盤 =================
+   上面那幾格是「引擎依規則算出來的一個答案」。這一區是「你自己的假設會得到什麼
+   答案」——同一條公式，參數交給讀者。
+
+   預設值不是憑空填的，每一個都說得出出處（見下方說明），而且和坊間工具對得起來。
+   打開的時候看到的是這一檔的事實，改動之後看到的是你的假設。 #}
+<section class="calc" id="calc"
+         data-seed='{{ p.calc|tojson }}' data-price="{{ p.market_price or '' }}">
+  <h4>目標價試算盤<span class="muted">　改任何一格，下面的矩陣立刻重算</span></h4>
+
+  <p class="note" id="calc-basis"></p>
+
+  {% if p.calc.years %}
+  <div class="scroll"><table class="mini">
+    <thead><tr><th>項目</th>{% for y in p.calc.years %}<th class="num">{{ y.year }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for label, key, digits in (('股價高點','high',1),('股價低點','low',2),('EPS','eps',2),('本益比高','pe_high',1),('本益比低','pe_low',1)) %}
+      <tr><td>{{ label }}</td>
+        {% for y in p.calc.years %}
+        <td class="num">{{ ('%.' ~ digits ~ 'f')|format(y[key]) if y[key] is not none else '—' }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+  <div class="calc-inputs">
+    <label>年營收（百萬元）<input type="number" id="c-rev" step="any"></label>
+    <label>股數（億股）<input type="number" id="c-sh" step="any"></label>
+    <label>預估營收成長率（%）<span class="hint">悲觀, 中性, 樂觀</span>
+      <input type="text" id="c-g" inputmode="decimal"></label>
+    <label>預估淨利率（%）<span class="hint">悲觀, 中性, 樂觀</span>
+      <input type="text" id="c-m" inputmode="decimal"></label>
+    <label>預估本益比 PE<span class="hint">每個 PE 一張目標價矩陣</span>
+      <input type="text" id="c-pe" inputmode="decimal"></label>
+  </div>
+  <p class="calc-formula">
+    預估 EPS ＝ 年營收 × (1 ＋ 營收成長率) × 淨利率 ÷ 股數　│　
+    預估目標價 ＝ 預估 EPS × 預估本益比
+  </p>
+  <button type="button" class="btn-grab" id="c-run">重新計算</button>
+  <button type="button" class="linkish" id="c-reset">還原預設值</button>
+
+  <div id="calc-out"></div>
+</section>
+{% endif %}
+
 <div class="criteria">
   <h4>報酬風險比判斷準則<span class="muted">　總大EPS、PER 動態調整推估法</span></h4>
   <ol>

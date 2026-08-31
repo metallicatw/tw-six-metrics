@@ -40,33 +40,55 @@
 
    月/日夠用（清單掃過去要窄），完整日期放在 title 裡給要確認年份的人。抓過但
    還沒有日期記號的退回「完整」——沒有日期就不要編一個出來。 #}
+{# `data-s` 是排序鍵：排序看它，不看畫面上的字。
+   「+0.50」「—」「AA」照字串排會排出胡說，而把「怎麼比大小」放進 JS 去猜每一欄
+   的型別，等於在兩個地方各寫一次規則。這裡一次寫好：數字就是數字，等第換成
+   0~4，沒有值一律是最小的 -999——排序時沉到底，而不是插在中間。 #}
 {% macro row(r, rel, rich_ids=None, fetched_at=None) -%}
 {% set when = (fetched_at or {}).get(r.stock_id) %}
-<tr>
-  <td><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a>
-    {%- if when %} <span class="tag when" title="報表更新於 {{ when }}　完整報告：河流圖、季節性、外資投信、個股新聞（大戶／董監持股另由每週排程更新）">{{ when[5:] | replace('-', '/') }}</span>
-    {%- elif rich_ids and r.stock_id in rich_ids %} <span class="tag full" title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞">完整</span>{% endif %}</td>
+{% set has_full = when or (rich_ids and r.stock_id in rich_ids) %}
+<tr data-code="{{ r.stock_id }}">
+  <td class="star-cell">
+    {# 加入觀察清單。只存在這台瀏覽器裡（localStorage），不上傳也不進 repo——
+       這是一份靜態網站，沒有可以放你私人清單的地方，也不該有。 #}
+    <button type="button" class="star" data-star="{{ r.stock_id }}"
+            aria-pressed="false" aria-label="把 {{ r.stock_id }} 加入觀察清單"
+            title="加入觀察清單">☆</button></td>
+  <td data-s="{{ r.stock_id }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a></td>
+  <td class="when-cell" data-s="{{ when or '' }}">
+    {%- if when %}<span class="tag when" title="報表更新於 {{ when }}　完整報告：河流圖、季節性、外資投信、個股新聞（大戶／董監持股另由每週排程更新）">{{ when[5:] | replace('-', '/') }}</span>
+    {%- elif has_full %}<span class="tag full" title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞">完整</span>
+    {%- else %}<span class="muted">—</span>{% endif %}</td>
   {# 名稱也連過去。原本只有代號可點——而讀者掃清單時眼睛落在名稱上，
      卻要把游標移回四位數字才點得到，那是每一列都要付一次的小摩擦。 #}
-  <td><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.name }}</a></td>
-  <td class="muted">{{ r.industry }}</td>
-  <td>{{ grade(r.grades.revenue_yoy) }}</td>
-  <td>{{ grade(r.grades.operating_margin) }}</td>
-  <td>{{ grade(r.grades.net_income_yoy) }}</td>
-  <td>{{ grade(r.grades.eps) }}</td>
-  <td>{{ grade(r.grades.inventory_turnover) }}</td>
-  <td>{{ grade(r.grades.free_cash_flow) }}</td>
-  <td class="num">{{ score(r.composite) }}</td>
-  <td class="num">{{ delta(r.composite_delta) }}</td>
-  <td>{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
+  <td data-s="{{ r.name }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.name }}</a></td>
+  <td class="muted" data-s="{{ r.industry }}">{{ r.industry }}</td>
+  {% for key in ('revenue_yoy','operating_margin','net_income_yoy','eps','inventory_turnover','free_cash_flow') %}
+  <td data-s="{{ {'AA':4,'A':3,'BB':2,'B':1,'C':0}.get(r.grades[key], -999) }}">{{ grade(r.grades[key]) }}</td>
+  {% endfor %}
+  <td class="num" data-s="{{ r.composite|float(default=-999) }}">{{ score(r.composite) }}</td>
+  <td class="num" data-s="{{ r.composite_delta if r.composite_delta is not none else -999 }}">{{ delta(r.composite_delta) }}</td>
+  <td data-s="{{ 1 if r.value_pick else 0 }}">{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
 </tr>
 {%- endmacro %}
 
+{# 每一欄都可以點著排序。只給那三欄會讓人試著點別欄然後以為壞了——「有些能點、
+   有些不能，而且看不出是哪些」比「全部都能點」難用得多。 #}
 {% macro table_head() -%}
 <thead><tr>
-  <th>代號</th><th>名稱</th><th>產業</th>
-  <th>營收<br>年增率</th><th>營業<br>利益率</th><th>稅後淨利<br>年增率</th>
-  <th>EPS</th><th>存貨<br>周轉率</th><th>自由<br>現金流</th>
-  <th class="num">綜合<br>評分</th><th class="num">評分<br>變化</th><th></th>
+  <th class="star-cell" title="觀察清單"><button type="button" class="sortable" data-col="0" aria-label="依觀察清單排序">★</button></th>
+  <th><button type="button" class="sortable" data-col="1">代號</button></th>
+  <th><button type="button" class="sortable" data-col="2">最後<br>更新日</button></th>
+  <th><button type="button" class="sortable" data-col="3">名稱</button></th>
+  <th><button type="button" class="sortable" data-col="4">產業</button></th>
+  <th><button type="button" class="sortable" data-col="5">營收<br>年增率</button></th>
+  <th><button type="button" class="sortable" data-col="6">營業<br>利益率</button></th>
+  <th><button type="button" class="sortable" data-col="7">稅後淨利<br>年增率</button></th>
+  <th><button type="button" class="sortable" data-col="8">EPS</button></th>
+  <th><button type="button" class="sortable" data-col="9">存貨<br>周轉率</button></th>
+  <th><button type="button" class="sortable" data-col="10">自由<br>現金流</button></th>
+  <th class="num"><button type="button" class="sortable" data-col="11">綜合<br>評分</button></th>
+  <th class="num"><button type="button" class="sortable" data-col="12">評分<br>變化</button></th>
+  <th><button type="button" class="sortable" data-col="13">具投資<br>價值</button></th>
 </tr></thead>
 {%- endmacro %}
