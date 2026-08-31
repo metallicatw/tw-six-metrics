@@ -18,13 +18,17 @@ inputs:
   test:
     description: 要不要跑測試。呼叫端剛剛跑過同一份程式碼就填 "false"。
     default: "true"
+  setup:
+    description: 要不要裝 Python 與相依。呼叫端同一個 job 裡已經裝過就填 "false"。
+    default: "true"
 
 runs:
   using: composite
   steps:
-    # 已經 setup 過的 job 再跑一次是快取命中，大約兩秒；沒 setup 過的（pages.yml
-    # 直接被 push 觸發）則非跑不可。留著，換取「呼叫端不必知道要先做什麼」。
-    - uses: actions/setup-python@v5
+    # 同一個 job 裡已經裝過就跳過。快取命中也要好幾秒，而這幾秒是使用者按下
+    # 按鈕之後真的在等的時間。pages.yml 由 push 觸發時沒人先裝過，所以預設是裝。
+    - if: inputs.setup == 'true'
+      uses: actions/setup-python@v5
       with:
         python-version: "3.12"
         cache: pip
@@ -33,7 +37,8 @@ runs:
     # 在執行時被 import：圖表是自己畫的 SVG，測試跑的是零相依的 run_tests.py，
     # 另外兩個 CI 根本沒呼叫。matplotlib 連著 numpy、pillow、fonttools 一起拖進來，
     # 幾十 MB 解壓縮，每個 job 都付一次。實際需要的只有 jinja2。
-    - run: pip install -e ".[report]"
+    - if: inputs.setup == 'true'
+      run: pip install -e ".[report]"
       shell: bash
 
     # 零相依，最先跑：引擎壞了就不必建站。

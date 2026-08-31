@@ -575,6 +575,15 @@ def test_no_workflow_pays_for_a_second_runner_just_to_build_the_site():
         assert not any("workflows/pages.yml" in ln for ln in live), name
         assert "uses: ./.github/actions/build-site" in text, name
         assert "deploy-pages@v4" in text, name
+        # 連 deploy 都不再另起一台 runner：起一台要十幾秒，deploy-pages 本身九秒。
+        # 不用 yaml 解析——這一組測試要能在沒裝任何東西的 Python 上跑。
+        after = text.split("\njobs:\n", 1)[1]
+        jobs = [
+            ln.strip().rstrip(":")
+            for ln in after.splitlines()
+            if ln.startswith("  ") and not ln.startswith("   ") and ln.rstrip().endswith(":")
+        ]
+        assert jobs == ["fetch"], f"{name} 還有第二個 job：{jobs}"
     # 建站的定義仍然只有一份，而且**在版本控制裡**。
     #
     # 「在磁碟上存在」不等於「推得上去」：.gitignore 原本有一條沒加斜線的

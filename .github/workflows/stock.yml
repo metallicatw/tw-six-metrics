@@ -43,6 +43,14 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    # 發布也在這個 job 裡做。
+    #
+    # 原本是獨立的 deploy job，只為了跑 deploy-pages 那九秒——而起一台 runner
+    # 要十幾秒。deploy-pages 唯一的硬性要求是「跑在綁 github-pages environment
+    # 的 job 裡」，那就把 environment 綁在這裡。
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     # 只有能寫這個 repo 的人開的 issue 才算數。少了這一行，任何人都可以用
     # issue 叫這個 repo 去跑 Actions——那是一個開給全世界的免費運算後門。
     if: >-
@@ -136,6 +144,11 @@ jobs:
         uses: ./.github/actions/build-site
         with:
           test: "false"
+          setup: "false"   # 上面已經 setup 過了
+
+      - name: 發布
+        id: deployment
+        uses: actions/deploy-pages@v4
 
       - name: 說明
         env:
@@ -174,21 +187,3 @@ jobs:
           gh issue comment "$NUM" --body "抓取失敗了，詳情在這次執行紀錄：$RUN
 
           常見原因：股號不存在、或券商鏡像站當下拒絕連線。過幾分鐘重開一張就好。"
-
-  # 發布。artifact 上一個 job 已經傳好了，這裡只按下發布鍵——沒有 checkout、
-  # 沒有 Python，十幾秒就結束。
-  #
-  # 為什麼還要獨立一個 job：deploy-pages 必須跑在綁 `github-pages` environment
-  # 的 job 裡，而那個 job 不該同時握有 contents: write。
-  deploy:
-    needs: fetch
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
