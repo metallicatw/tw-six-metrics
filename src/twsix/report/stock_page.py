@@ -26,8 +26,9 @@ Two things are deliberately *not* silent:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
 
 from ..ingest.goodinfo import DIRECTORS, HOLDERS
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
@@ -281,7 +282,7 @@ def build_page(
             }
         )
     picks = rating.value_picks()
-    for row, pick in zip(page.periods, picks):
+    for row, pick in zip(page.periods, picks, strict=False):
         row["value_pick"] = bool(pick)
     if rating.snapshots:
         newest = rating.snapshots[0]

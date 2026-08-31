@@ -14,12 +14,13 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import date, datetime, timedelta, timezone
+from collections.abc import Sequence
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from .config import REPO_ROOT, Settings
-from .models import INDICATOR_ORDER, INDICATOR_LABELS
+from .models import INDICATOR_LABELS, INDICATOR_ORDER
 from .store.snapshots import RATING_COLUMNS, Manifest, Store, rating_rows
 
 EXIT_OK = 0
@@ -99,7 +100,11 @@ def cmd_verify(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     sys.path.insert(0, str(REPO_ROOT / "tests"))
     try:
-        from golden_loader import expected_blocks, gate_flag, inventory_ratios  # type: ignore
+        from golden_loader import (  # type: ignore
+            expected_blocks,
+            gate_flag,
+            inventory_ratios,
+        )
     except ImportError:
         print("找不到 tests/golden_loader.py", file=sys.stderr)
         return EXIT_FAIL
@@ -221,8 +226,8 @@ def _id_columns(columns: Sequence[str]) -> tuple[str, ...]:
 def cmd_fetch(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient
-    from .ingest.twse import Twse
     from .ingest.tpex import Tpex
+    from .ingest.twse import Twse
 
     http = HttpClient(
         cache_dir=Path(settings.ingest.cache_dir),
@@ -232,7 +237,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     )
     store = Store(args.out or settings.data_dir)
     manifest = store.load_manifest()
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
 
     twse, tpex = Twse(http), Tpex(http)
     plan: list[tuple[str, object]] = []
@@ -574,7 +579,6 @@ def _fetched_grids(root: Path, stock: str):
 
 def _fetched_reader(root: Path, stock: str):
     """A CellReader over grids saved by ``fetch-stock``."""
-    import json
 
     from .ingest.moneydj import GridSource
 

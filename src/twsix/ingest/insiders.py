@@ -39,8 +39,9 @@ Goodinfo 標「發行張數」，但它的值和集保庫存合計一模一樣�
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 from .base import HttpClient
 

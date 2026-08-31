@@ -19,8 +19,11 @@ dependencies = []
 [project.optional-dependencies]
 report = ["jinja2>=3.1"]
 charts = ["matplotlib>=3.8"]
-dev = ["pytest>=8.0", "ruff>=0.6", "mypy>=1.11"]
-all = ["jinja2>=3.1", "matplotlib>=3.8", "pytest>=8.0", "ruff>=0.6", "mypy>=1.11"]
+# ruff 釘在一個次版本區間，不是 >=。它每個小版本都會加新規則，於是 CI 會在
+# 沒有人動過任何一行程式碼的時候突然變紅——那不是品質訊號，是雜訊，而雜訊
+# 久了就沒有人看紅字了。要升就明確地升一次，順便把新規則一起處理掉。
+dev = ["pytest>=8.0", "ruff>=0.15,<0.16", "mypy>=1.11"]
+all = ["jinja2>=3.1", "matplotlib>=3.8", "pytest>=8.0", "ruff>=0.15,<0.16", "mypy>=1.11"]
 
 [project.scripts]
 twsix = "twsix.cli:main"

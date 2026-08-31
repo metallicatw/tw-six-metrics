@@ -68,6 +68,11 @@ QUARTER_LABEL = re.compile(r"^\d+\.\dQ$")
 MONTH_LABEL = re.compile(r"^\d+/\d")
 
 
+
+def _at(row: list[str], column: int) -> str:
+    """一列裡的某一格，短了就當空的。"""
+    return row[column] if len(row) > column else ""
+
 def _cell(grid: Grid, row: int, col: int) -> str:
     if 0 <= row < len(grid) and 0 <= col < len(grid[row]):
         return grid[row][col]
@@ -112,9 +117,12 @@ def merged_revenue_series(grid: Grid) -> list[tuple[str, float | None]]:
         label = (row[REV_COL_MONTH] if len(row) > REV_COL_MONTH else "").strip()
         if not MONTH_LABEL.match(label):
             continue
-        cell = lambda c: row[c] if len(row) > c else ""  # noqa: E731
         months.append(
-            (label, _number(cell(REV_COL_AMOUNT)), _number(cell(REV_COL_LAST_YEAR)))
+            (
+                label,
+                _number(_at(row, REV_COL_AMOUNT)),
+                _number(_at(row, REV_COL_LAST_YEAR)),
+            )
         )
 
     out: list[tuple[str, float | None]] = []
@@ -172,7 +180,7 @@ def _fill_net_margins(grids: Grids) -> None:
     if not values:
         return
     grid = grids.setdefault(RATING, [])
-    for col, value in zip(RATING_COLS, values):
+    for col, value in zip(RATING_COLS, values, strict=False):
         _put(grid, RATING_ROW_NET_MARGIN, col, value)
 
 
@@ -241,7 +249,7 @@ def annual_eps_by_year(grid: Grid) -> dict[int, float]:
         if label == ANNUAL_PERIOD_LABEL and not periods:
             periods = [c.strip() for c in row[1:]]
         elif label == ANNUAL_EPS_LABEL and periods:
-            for period, cell in zip(periods, row[1:]):
+            for period, cell in zip(periods, row[1:], strict=False):
                 year = _roc_year(period)
                 value = _number(cell)
                 if year is not None and value is not None:

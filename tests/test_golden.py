@@ -24,12 +24,11 @@ from golden_loader import (
     gate_flag,
     inventory_ratios,
 )
-
 from twsix.models import (
-    Grade,
-    IndicatorResult,
     INDICATOR_LABELS,
     INDICATOR_ORDER,
+    Grade,
+    IndicatorResult,
     Snapshot,
     Status,
 )
@@ -114,7 +113,7 @@ def test_rules_reproduce_composite_and_value_pick():
             )
             for b in blocks
         ]
-        for i, (blk, snap) in enumerate(zip(blocks, snaps)):
+        for i, (blk, snap) in enumerate(zip(blocks, snaps, strict=False)):
             prev = snaps[i + 1] if i + 1 < len(snaps) else None
             if blk.composite in ("數據不足", "N/A"):
                 if snap.composite_display != blk.composite:
@@ -168,7 +167,7 @@ def test_pipeline_from_raw_statements_matches_the_workbook():
 
     assert len(rating.snapshots) == len(blocks)
     failures: list[str] = []
-    for snap, blk in zip(rating.snapshots, blocks):
+    for snap, blk in zip(rating.snapshots, blocks, strict=False):
         if snap.fiscal_quarter != blk.fiscal_quarter:
             failures.append(
                 f"quarter: engine={snap.fiscal_quarter} excel={blk.fiscal_quarter}"
@@ -238,7 +237,7 @@ def test_market_snapshot_composite_and_value_pick():
         snaps: list[Snapshot | None] = [
             _snapshot_from_scores(stock_id, r) for r in group
         ]
-        for i, (row, snap) in enumerate(zip(group, snaps)):
+        for i, (row, snap) in enumerate(zip(group, snaps, strict=False)):
             if snap is None:
                 anomalies.append(f"{stock_id} period{row['period_index']}")
                 continue

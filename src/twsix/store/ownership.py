@@ -23,9 +23,10 @@ from __future__ import annotations
 import csv
 import gzip
 import io
+from collections.abc import Iterable, Iterator
 from datetime import date
 from pathlib import Path
-from typing import Any, Iterable, Iterator
+from typing import Any
 
 from ..ingest import insiders as ins
 from ..ingest import tdcc

@@ -17,8 +17,8 @@ sys.path.insert(0, str(ROOT.parent / "src"))
 from twsix.ingest.goodinfo import (  # noqa: E402
     DIRECTORS,
     HOLDERS,
-    NotTheTable,
     Cell,
+    NotTheTable,
     flatten_header,
     parse,
     parse_directors,

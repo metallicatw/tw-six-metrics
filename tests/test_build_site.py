@@ -395,12 +395,7 @@ def test_the_wait_survives_navigating_away():
 # 所以退一步用靜態的方式問同一件事：頁面裡每一個被呼叫的名字，都有被定義嗎？
 
 _JS_GLOBALS = frozenset(
-    """
-    if for while switch catch return typeof function new delete void
-    fetch setTimeout setInterval clearInterval clearTimeout encodeURIComponent
-    decodeURIComponent parseInt parseFloat isNaN String Number Boolean Object
-    Array JSON Date Math Promise Error RegExp Set Map alert confirm require
-    """.split()
+    ["if", "for", "while", "switch", "catch", "return", "typeof", "function", "new", "delete", "void", "fetch", "setTimeout", "setInterval", "clearInterval", "clearTimeout", "encodeURIComponent", "decodeURIComponent", "parseInt", "parseFloat", "isNaN", "String", "Number", "Boolean", "Object", "Array", "JSON", "Date", "Math", "Promise", "Error", "RegExp", "Set", "Map", "alert", "confirm", "require"]
 )
 
 

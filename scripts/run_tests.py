@@ -19,7 +19,25 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "tests"))
 
-GREEN, RED, DIM, RESET = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
+GREEN, RED, DIM, YELLOW, RESET = (
+    "\033[32m", "\033[31m", "\033[2m", "\033[33m", "\033[0m"
+)
+
+
+def _missing_optional() -> tuple[type[BaseException], ...]:
+    """「這台機器沒裝 jinja2」不是失敗。
+
+    ci 的第一步刻意在 pip install 之前跑整套，用意是「引擎本身零相依」。但套件裡
+    有一部分（產生報表）本來就需要 jinja2，那幾十個測試在那一步不該算數——它們
+    在後面裝完相依的 pytest 那一步照跑。
+
+    分不出這兩件事的話，那一步永遠是紅的，而永遠紅的守門等於沒有守門。
+    """
+    try:
+        from twsix.report.build import MissingOptional
+    except Exception:  # pragma: no cover - 套件本身壞掉時照舊報失敗
+        return ()
+    return (MissingOptional,)
 
 
 def load(path: Path):  # type: ignore[no-untyped-def]
@@ -37,9 +55,10 @@ def main() -> int:
         print("no tests found")
         return 1
 
-    passed = failed = 0
+    passed = failed = skipped = 0
     failures: list[tuple[str, str]] = []
     started = time.time()
+    optional = _missing_optional()
 
     for path in files:
         try:
@@ -58,6 +77,9 @@ def main() -> int:
                 continue
             try:
                 fn()
+            except optional as exc:  # type: ignore[misc]
+                skipped += 1
+                print(f"  {YELLOW}skip{RESET} {name} — {exc}")
             except Exception:
                 failed += 1
                 failures.append((f"{path.name}::{name}", traceback.format_exc()))
@@ -72,7 +94,8 @@ def main() -> int:
         print(f"{RED}=== {name} ==={RESET}")
         print(tb)
     colour = RED if failed else GREEN
-    print(f"{colour}{passed} passed, {failed} failed{RESET} in {elapsed:.2f}s")
+    tail = f"，{skipped} 跳過（少了選用相依）" if skipped else ""
+    print(f"{colour}{passed} passed, {failed} failed{RESET}{tail} in {elapsed:.2f}s")
     return 1 if failed else 0
 
 

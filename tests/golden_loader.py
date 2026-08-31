@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 GOLDEN = Path(__file__).resolve().parent / "golden"
@@ -71,7 +71,7 @@ class Grid:
         return sorted(int(r) for r in self._raw)
 
 
-@lru_cache(maxsize=None)
+@cache
 def sheets(stock_id: str) -> dict[str, Grid]:
     base = GOLDEN / stock_id
     out: dict[str, Grid] = {}

@@ -28,9 +28,9 @@ than usual, since the whole point of the workbook is the numbers.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from html import escape
-from typing import Sequence
 
 Number = float | None
 

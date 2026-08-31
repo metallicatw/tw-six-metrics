@@ -6,9 +6,9 @@ import csv
 from pathlib import Path
 
 from twsix.calendar_tw import (
+    REPORT_CALENDAR,
     Quarter,
     RocMonth,
-    REPORT_CALENDAR,
     latest_quarter_for_month,
 )
 

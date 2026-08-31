@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import csv
 import json
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any
 
 SCHEMA_VERSION = 1
 
@@ -33,7 +34,7 @@ class Manifest:
     notes: list[str] = field(default_factory=list)
 
     def stamp(self) -> None:
-        self.generated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        self.generated_at = datetime.now(UTC).isoformat(timespec="seconds")
 
 
 class Store:

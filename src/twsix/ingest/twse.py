@@ -10,8 +10,9 @@ All of these are open data — no key, no cookie, no user-agent games.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from .base import HttpClient, SourceInfo, parse_number
 

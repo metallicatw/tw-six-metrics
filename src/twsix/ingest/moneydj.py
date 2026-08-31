@@ -33,10 +33,9 @@ sheets fall out of it.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import Iterable, Sequence
-
 from pathlib import Path
 
 from .base import FetchError, HttpClient
@@ -444,7 +443,7 @@ def _render(rows: Sequence[_El]) -> Block:
     # the 9-column 年度 table had to fit inside an 8-column parent.
     edges = list(range(ncols + 1))
     for r, line in enumerate(placed):
-        for cell, c0, cs in line:
+        for _cell, c0, cs in line:
             want = max(
                 (ln[1] for ln in lines_by_cell[(r, c0)] if not isinstance(ln, str)),
                 default=0,
@@ -476,7 +475,7 @@ def _render(rows: Sequence[_El]) -> Block:
 
     out: list[dict[int, str]] = [{} for _ in range(total)]
     for r, line in enumerate(placed):
-        for cell, c0, _cs in line:
+        for _cell, c0, _cs in line:
             base_col = edges[c0]
             k = bases[r]
             for item in lines_by_cell[(r, c0)]:
@@ -661,7 +660,7 @@ class MoneyDJ:
     #: When set, every page fetched is written here before parsing.  The pages
     #: change without notice, so when a parse goes wrong the raw HTML is the
     #: only evidence of what actually came back.
-    save_html: "Path | None" = None
+    save_html: Path | None = None
     _blocked: set[str] = field(default_factory=set, init=False)
 
     def _ordered(self, offset: int = 0) -> list[str]:

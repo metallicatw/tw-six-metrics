@@ -12,10 +12,11 @@ import functools
 import hashlib
 import shutil
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
 
@@ -68,7 +69,7 @@ TAIPEI = timezone(timedelta(hours=8), "台北")
 
 def stamp(now: datetime | None = None) -> str:
     """The build time, in Taiwan."""
-    return (now or datetime.now(timezone.utc)).astimezone(TAIPEI).strftime(
+    return (now or datetime.now(UTC)).astimezone(TAIPEI).strftime(
         "%Y-%m-%d %H:%M 台北時間"
     )
 
@@ -82,11 +83,21 @@ class SiteContext:
     engine_version: str = ENGINE_VERSION
 
 
+class MissingOptional(RuntimeError):
+    """少了選用相依，不是程式壞了。
+
+    引擎本身是零相依的，但產生報表要 jinja2。分成兩種例外，是為了讓
+    ``scripts/run_tests.py`` 能把「這台機器沒裝 jinja2」跳過，而不是報成失敗——
+    ci 的第一步刻意在安裝之前跑，用意是「引擎不該需要任何東西」，而那個用意
+    要成立，就得說得出哪些測試不在那個範圍裡。
+    """
+
+
 def _env(assets: bool = False):  # type: ignore[no-untyped-def]
     try:
         from jinja2 import Environment, FileSystemLoader, select_autoescape
     except ImportError as exc:  # pragma: no cover - dependency guard
-        raise RuntimeError(
+        raise MissingOptional(
             "報表產生需要 Jinja2：pip install jinja2（或 uv sync --extra report）"
         ) from exc
     env = Environment(
@@ -195,7 +206,7 @@ def rows_from_store(records: Iterable[dict[str, str]]) -> list[Row]:
     return out
 
 
-def data_vintage(rows: list["Row"]) -> tuple[str, str]:
+def data_vintage(rows: list[Row]) -> tuple[str, str]:
     """The newest 財報季度 and 營收月份 actually present in the data.
 
     Both labels sort correctly as strings — ``"2026.2Q" > "2025.4Q"`` and
