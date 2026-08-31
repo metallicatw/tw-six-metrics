@@ -246,9 +246,20 @@
 
   /* ---- 站內輪詢：資料進網站了沒 --------------------------------------- */
   var PENDING = 'twsix.pending';
-  function remember(code){
+  /* `was` 是按下按鈕當下那一檔的第五欄（更新日期，沒有完整頁時是 0）。
+     判斷「好了沒」要看它**變了沒有**，不是看它有沒有值——對一檔已經有完整報告
+     的股票按「立即更新」，有沒有值從頭到尾都是真，於是輪詢在第一次就以為完成，
+     把還沒發布的舊頁面重新載入一次。那正是「按完看起來沒變、要自己再重整一次」
+     的來源。 */
+  function remember(code, was){
     try{ sessionStorage.setItem(PENDING, JSON.stringify(
-      {code: code, until: Date.now() + 8*60*1000})); }catch(e){}
+      {code: code, was: was === undefined ? null : was,
+       until: Date.now() + 8*60*1000})); }catch(e){}
+  }
+  function currentMark(code){
+    if(!data) return null;
+    for(var i=0;i<data.length;i++) if(data[i][0] === code) return data[i][4];
+    return null;
   }
   function forget(){ try{ sessionStorage.removeItem(PENDING); }catch(e){} }
   function pendingJob(){
@@ -266,41 +277,60 @@
     if(location.pathname.replace(/^.*\//, '') === code + '.html') location.reload();
     else location.href = base + 'stock/' + code + '.html';
   }
-  function watch(code, tries){
+  /* Actions 綠燈之後還要等 Pages 的 CDN 換上新檔，通常十幾二十秒。三秒問一次，
+     問的是同一個 search.json——同源、no-store、幾十 KB，成本比十秒的空等低。 */
+  var WATCH_MS = 3000;
+  /* 同一天更新同一檔，第五欄的日期不會變。這時沒有任何站內訊號可以等，所以在
+     Actions 已經回報成功的前提下，等滿這段時間就直接重整——deploy 都完成了，
+     再等下去只是在等一個永遠不會變的值。 */
+  var SETTLE_MS = 45000;
+  function watch(code, tries, was, deadline){
     if(watching && watching !== code) return;
     watching = code;
     fetch(base + 'search.json?t=' + Date.now(), {cache:'no-store'})
       .then(function(r){ return r.json(); })
       .then(function(rows){
         for(var i=0;i<rows.length;i++){
-          if(rows[i][0] === code && rows[i][4]){ arrive(code); return; }
+          if(rows[i][0] !== code) continue;
+          var now = rows[i][4];
+          /* 變了就是新的網站上線了。was 是 null（不知道按之前的樣子）時退回
+             舊行為：有值就算數。 */
+          if(was === null || was === undefined ? !!now : now !== was){
+            arrive(code); return;
+          }
+          break;
         }
-        nextWatch(code, tries);
+        if(deadline && Date.now() > deadline){ arrive(code); return; }
+        nextWatch(code, tries, was, deadline);
       })
-      .catch(function(){ nextWatch(code, tries); });
+      .catch(function(){ nextWatch(code, tries, was, deadline); });
   }
-  function nextWatch(code, tries){
+  function nextWatch(code, tries, was, deadline){
     if(tries <= 0){
       forget(); watching = null;
       endPanel('等太久了，' + code + ' 還沒出現',
                '到 Actions 看一下「加一檔個股」跑完了沒；跑完了重新整理這一頁。');
       return;
     }
-    setTimeout(function(){ watch(code, tries - 1); }, 10000);
+    setTimeout(function(){ watch(code, tries - 1, was, deadline); }, WATCH_MS);
   }
 
   /* ---- 直接跑 workflow ------------------------------------------------ */
   function runOnGithub(code){
+    /* 索引是延後載入的，而頁首那顆按鈕不必先打字就能按——所以這裡可能還沒有
+       index。先確定拿到手，才知道「按之前長什麼樣」，也才判斷得出好了沒。 */
+    if(!data){ load().then(function(){ runOnGithub(code); }); return; }
     close();
     beginPanel();
-    remember(code);
+    var was = currentMark(code);
+    remember(code, was);
     step('送出 ' + code + ' 給 GitHub Actions…');
     var since = new Date(Date.now() - 60000).toISOString();
     gh('/actions/workflows/' + WORKFLOW + '/dispatches', {
       method: 'POST',
       body: JSON.stringify({ref: 'main', inputs: {stock: code}})
     }).then(function(r){
-      if(r.status === 204){ step('已排入佇列，等 runner 接手…'); pollRun(code, since, 90); return; }
+      if(r.status === 204){ step('已排入佇列，等 runner 接手…'); pollRun(code, since, 180, was); return; }
       if(r.status === 401 || r.status === 403){
         setToken('');
         endPanel('權杖無效或權限不足', '請重新設定一把 fine-grained PAT，勾選這個 repo 的 Actions 讀寫。');
@@ -317,21 +347,21 @@
   /* runner 排隊、跑測試、抓資料、補股權歷史、建站，加起來約三到四分鐘——新加
      的一檔要向集保逐週問滿 51 週，那是〔大戶持股〕有沒有走勢的差別。每 4 秒問
      一次狀態，把 GitHub 自己的字串翻成人看得懂的一行，讀者才知道它在哪一步。 */
-  function pollRun(code, since, tries){
-    if(tries <= 0){ step('狀態查不到了，改用網站本身判斷…'); watch(code, 40); return; }
+  function pollRun(code, since, tries, was){
+    if(tries <= 0){ step('狀態查不到了，改用網站本身判斷…'); watch(code, 60, was, 0); return; }
     gh('/actions/workflows/' + WORKFLOW + '/runs?per_page=5&created=%3E' +
        encodeURIComponent(since))
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(j){
         var run = j && j.workflow_runs && j.workflow_runs[0];
-        if(!run){ setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000); return; }
+        if(!run){ setTimeout(function(){ pollRun(code, since, tries - 1, was); }, 2000); return; }
         if(run.status === 'queued') step('排隊中…');
         else if(run.status === 'in_progress') step(
           '執行中：抓報表 → 補集保 51 週股權歷史（約 1 分鐘）→ 產生報告 → 重建網站');
         else if(run.status === 'completed'){
           if(run.conclusion === 'success'){
             step('Actions 完成，等網站發布…');
-            watch(code, 40);
+            watch(code, 60, was, Date.now() + SETTLE_MS);
           } else {
             forget();
             endPanel('抓取失敗（' + run.conclusion + '）',
@@ -339,9 +369,9 @@
           }
           return;
         }
-        setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000);
+        setTimeout(function(){ pollRun(code, since, tries - 1, was); }, 2000);
       })
-      .catch(function(){ setTimeout(function(){ pollRun(code, since, tries - 1); }, 4000); });
+      .catch(function(){ setTimeout(function(){ pollRun(code, since, tries - 1, was); }, 2000); });
   }
 
   /* 曾經有一條「沒權杖就開一張 issue」的退路，已經拿掉。它把一次點擊變成換頁、
@@ -393,7 +423,7 @@
       .catch(function(){ endPanel('抓取中斷', '連不上本機服務'); });
   }
   function fetchStock(code){
-    close(); beginPanel(); remember(code);
+    close(); beginPanel(); remember(code, currentMark(code));
     step('正在抓取 ' + code + '…');
     fetch(base + 'api/fetch/' + code, {method: 'POST'})
       .then(function(r){ return r.json(); })
@@ -414,7 +444,7 @@
     setTimeout(function(){
       beginPanel();
       step('等 ' + j.code + ' 的資料進到網站…');
-      watch(j.code, 40);
+      watch(j.code, 60, j.was, Date.now() + 90000);
     }, 1200);
   })();
 
