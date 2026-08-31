@@ -464,28 +464,31 @@
 <h3 id="news">個股新聞</h3>
 {% if p.news %}
 {% set n = p.news %}
+{% if n.items %}
 <p class="note">
   鉅亨網，近 {{ n.days }} 天共 <b>{{ n.items|length }}</b> 則，最新 {{ n.latest }}。
-  {%- if n.tickers %}
-  其中 <b>{{ n.tickers }}</b> 則是「盤中速報」——那是把當天漲跌寫成一句話的即時報價，
-  是真的但不是新聞，所以另外標出來；談到公司本身的有 <b>{{ n.substantive }}</b> 則。
-  {%- endif %}
   {%- if n.dropped %}　更早的 {{ n.dropped }} 則未列出。{% endif %}
 </p>
 <ol class="news">
   {% for it in n.items %}
-  <li class="{{ 'roundup' if it.is_ticker else '' }}">
+  <li>
     <div class="meta">
       <time>{{ it.date }}{% if it.time %} {{ it.time }}{% endif %}</time>
       <span class="src">{{ it.source }}</span>
-      {% if it.is_ticker %}<span class="tag">盤中速報</span>{% endif %}
     </div>
-    {% if it.url %}<a class="head" href="{{ it.url }}" rel="noopener">{{ it.title }}</a>
+    {# 另開分頁。讀者點一則新聞是「順便看一下」，不是「離開這一頁」——原本會把
+       整份報告換掉，回來還得重新選分頁、重新捲到原來的位置。
+       noopener noreferrer 是開新分頁的必要配套：少了它，被開的那一頁可以透過
+       window.opener 改寫這一頁的網址。 #}
+    {% if it.url %}<a class="head" href="{{ it.url }}" target="_blank" rel="noopener noreferrer">{{ it.title }}<span class="ext" aria-hidden="true">↗</span><span class="sr">（另開分頁）</span></a>
     {% else %}<b class="head">{{ it.title }}</b>{% endif %}
     {% if it.summary %}<p class="sum">{{ it.summary }}</p>{% endif %}
   </li>
   {% endfor %}
 </ol>
+{% else %}
+<p class="note">鉅亨網，近 {{ n.days }} 天沒有談到這一檔公司的新聞。</p>
+{% endif %}
 {% else %}
 <p class="stale">尚未取得〔個股新聞〕，請執行 <code>twsix report {{ p.stock_id }}</code>。</p>
 {% endif %}

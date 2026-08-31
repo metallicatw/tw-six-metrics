@@ -213,10 +213,12 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
 ol.news{list-style:none;padding:0;margin:16px 0 0;display:grid;gap:1px;
   background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden}
 ol.news li{background:var(--surface);padding:13px 16px}
-/* Wire round-ups stay in the list but step back: they are evidence of thin
-   coverage, not coverage.  Opacity alone would fail a contrast check, so the
-   tag carries the meaning and this only softens the ground. */
-ol.news li.roundup{background:var(--surface-2)}
+/* 只給螢幕閱讀器的文字。看得見的箭頭是 aria-hidden，所以「另開分頁」這件事
+   要另外用文字說一次——不然聽的人只會聽到標題，點下去分頁就換了。 */
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
+  white-space:nowrap}
+ol.news .head .ext{margin-left:5px;font-size:11.5px;color:var(--muted);
+  vertical-align:1px}
 ol.news .meta{display:flex;flex-wrap:wrap;gap:9px;align-items:center;
   font-size:11.5px;color:var(--muted);margin-bottom:5px}
 ol.news .meta time{font-variant-numeric:tabular-nums}

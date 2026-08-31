@@ -534,3 +534,33 @@ def test_the_name_links_to_the_same_page_as_the_code(tmp_path=None):
     listing = (out / "index.html").read_text(encoding="utf-8")
     assert '<td><a href="stock/5439.html">高技</a></td>' in listing
     assert '<td><a href="stock/2330.html">台積電</a></td>' in listing
+
+
+def test_a_news_headline_opens_in_a_new_tab(tmp_path=None):
+    """點一則新聞是「順便看一下」，不是「離開這一頁」。
+
+    原本會把整份報告換掉，回來還得重新選分頁、重新捲回原來的位置。
+    target 一定要配 rel="noopener noreferrer"：少了它，被開的那一頁可以透過
+    window.opener 改寫這一頁的網址。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
+    heads = [ln for ln in page.splitlines() if 'class="head" href=' in ln]
+    assert heads, "新聞標題連結不見了"
+    for ln in heads:
+        assert 'target="_blank"' in ln
+        assert 'rel="noopener noreferrer"' in ln
+
+
+def test_the_intraday_price_ticks_are_gone_from_the_page(tmp_path=None):
+    """盤中速報不再出現在頁面上——標籤、灰底列、說明文字都不留。"""
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
+    assert "盤中速報" not in page
+    assert "roundup" not in page
