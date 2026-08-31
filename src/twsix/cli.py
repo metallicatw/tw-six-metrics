@@ -1414,6 +1414,19 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
                 touched.add(code)
                 continue
 
+            # 副檔名說是 CSV，內容卻認不出來——那不是「不是這兩張」，是「這一份
+            # CSV 的形狀和我們認得的不一樣」。兩者要分開講：前者跳過就好，後者
+            # 得把**實際看到的第一行**印出來，否則使用者只能猜。
+            #
+            # 匯出的形狀會變（不同批次、不同版本的擴充功能），而第一行就足以說明
+            # 是哪一種變化：多了一列標題、欄名改了字、還是整份是別的編碼。
+            if path.suffix.lower() == ".csv":
+                first = (text.splitlines() or [""])[0][:120]
+                print(f"  認不得 {path.name}", file=sys.stderr)
+                print(f"    第一行：{first}", file=sys.stderr)
+                bad += 1
+                continue
+
             # 哪一個來源？看頁面的 <title>，不是檔名，也不是 anchor——
             # Goodinfo 每一頁都帶著同一份左側選單，anchor 會全部命中第一個。
             hit = identify(text)
@@ -1448,8 +1461,13 @@ def cmd_fetch_page(args: argparse.Namespace) -> int:
         if skipped:
             print(f"  （跳過 {len(skipped)} 個不是這兩張的檔案）")
         if bad:
-            print(f"\n{bad} 份不能用。用瀏覽器另存新檔時要選「網頁，僅 HTML」，"
-                  f"不要選「完整網頁」。", file=sys.stderr)
+            print(
+                f"\n{bad} 份不能用。\n"
+                f"  .html：另存新檔要選「網頁，僅 HTML」，不要選「完整網頁」。\n"
+                f"  .csv ：上面印出的第一行就是我們實際讀到的東西；把它連同檔案\n"
+                f"         一起貼出來，對照表才能補得準——不對照就改，等於用猜的。",
+                file=sys.stderr,
+            )
         elif not done:
             print(f"\n沒有找到〔{HOLDERS}〕或〔{DIRECTORS}〕。這兩張要自己用瀏覽器"
                   f"開 Goodinfo 存下來——Goodinfo 對腳本回 403，對你的瀏覽器不會。",
