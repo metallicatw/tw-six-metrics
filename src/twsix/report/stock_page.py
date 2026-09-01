@@ -192,6 +192,9 @@ class StockPage:
     forecast: dict[str, Any] = field(default_factory=dict)
     #: 目標價試算盤的種子——原始數字，不是格式化過的字串。
     calc: dict[str, Any] = field(default_factory=dict)
+    #: 〔EPS預估與估價〕計算方式說明——逐格列出公式與本檔實際代入的數字，
+    #: 給展開後的說明區塊用。內容依 settings 目前生效的方法動態產生。
+    methodology: dict[str, Any] = field(default_factory=dict)
     pe: dict[str, Any] = field(default_factory=dict)
     growth: dict[str, Any] = field(default_factory=dict)
     dividend: dict[str, Any] = field(default_factory=dict)
@@ -401,6 +404,75 @@ def _calc_seed(reader: Any, stock_id: str, valuation: Any) -> dict[str, Any]:
     }
 
 
+#: D2 的三種營收成長率取法，對照 pick_growth() 的邏輯與 〔營收〕欄位出處。
+GROWTH_METHOD_LABELS: dict[str, tuple[str, str]] = {
+    "1&6": ("最近一月與近六月平均孰低", "MIN(最近一個月年增率, 近六個月平均年增率)"),
+    "3&6": ("近三月與近六月平均孰低", "MIN(近三個月平均年增率, 近六個月平均年增率)"),
+    "12m": ("近十二月累計年增率", "近十二個月累計營收 ÷ 前十二個月累計營收 − 1"),
+}
+
+#: F16 的三種淨利率取法。
+MARGIN_METHOD_LABELS: dict[str, tuple[str, str]] = {
+    "4q_avg": ("近四季平均", "近四季稅後淨利率的算術平均"),
+    "4q_min": ("近四季最低", "近四季稅後淨利率中最保守的一季"),
+    "current": ("最近一季", "最近一季（當季）稅後淨利率"),
+}
+
+#: K2 的四種本益比區間取法，對照 PeBand.from_history() 的規則。
+PE_BASIS_LABELS: dict[str, tuple[str, str]] = {
+    "current_year": ("當年度", "只取最近一個完整年度的最高／最低本益比"),
+    "avg_3y": (
+        "3年平均（排除極端值後）",
+        "五年窗格先各丟掉一個最高與一個最低年度，剩下的三年中取最近三年平均",
+    ),
+    "avg_5y": (
+        "5年平均（排除極端值後）",
+        "近五個完整年度中，各丟掉一個最高與一個最低年度，剩下三年平均",
+    ),
+    "min_current_5y": ("當年與5年平均孰低", "取「當年度」與「5年平均（排除極端值）」兩者中較低的一個"),
+}
+
+
+def _methodology(valuation: Any, settings: Any) -> dict[str, Any]:
+    """組出〔EPS預估與估價〕說明區塊要用的文字與數字，全部帶真實代入值。
+
+    不在模板裡算——模板只認得已經算好的字串，這樣一個說明文字錯了，
+    可以直接對到這個函式，而不是散在 Jinja 運算式裡。
+    """
+    f = getattr(settings, "forecast", None)
+    growth_method = getattr(f, "revenue_growth_method", "1&6")
+    margin_method = getattr(f, "margin_method", "4q_avg")
+    pe_basis = getattr(f, "pe_basis", "avg_5y")
+
+    g_label, g_formula = GROWTH_METHOD_LABELS.get(growth_method, ("—", "—"))
+    m_label, m_formula = MARGIN_METHOD_LABELS.get(margin_method, ("—", "—"))
+    p_label, p_formula = PE_BASIS_LABELS.get(pe_basis, ("—", "—"))
+
+    row = valuation.forecast
+    band = valuation.band
+    pe_view = valuation.pe_view
+
+    return {
+        "growth_method_label": g_label,
+        "growth_method_formula": g_formula,
+        "growth_rate": _pct(row.growth_rate) if row else "—",
+        "last_year_revenue": _num(row.last_year_revenue / 1000, 1) if row else "—",
+        "projected_revenue": _num(row.projected_revenue, 1) if row else "—",
+        "margin_method_label": m_label,
+        "margin_method_formula": m_formula,
+        "net_margin": _pct(row.net_margin) if row else "—",
+        "projected_income": _num(row.projected_income, 1) if row else "—",
+        "weighted_shares": _num(row.weighted_shares, 0) if row else "—",
+        "forecast_eps": _num(row.eps) if row else "—",
+        "pe_basis_label": p_label,
+        "pe_basis_formula": p_formula,
+        "band_low": _num(band.low) if band else "—",
+        "band_high": _num(band.high) if band else "—",
+        "target_price": _num(pe_view.target_price) if pe_view else "—",
+        "downside_price": _num(pe_view.downside_price) if pe_view else "—",
+    }
+
+
 def build_page(
     rating: Any,
     valuation: Any,
@@ -536,6 +608,7 @@ def build_page(
             "eps": _num(row.eps),
             "trailing_eps": _num(valuation.trailing_eps),
         }
+        page.methodology = _methodology(valuation, settings)
     page.calc = _calc_seed(reader, page.stock_id, valuation)
 
     if valuation.pe_view is not None and valuation.band is not None:

@@ -874,8 +874,8 @@ def test_every_forecast_field_on_the_page_says_where_its_formula_came_from(tmp_p
 def test_the_matrix_says_which_axis_is_which_and_the_three_bands_read_apart(tmp_path=None):
     """「淨利率＼成長率」印成一行，讀者得自己猜哪個是橫的——猜錯就整張表看反。
 
-    改成一格裡兩個軸名各站斜線一邊；同時三張目標價矩陣要分得出來，而格子的顏色
-    在三張表裡必須是同一個意思（否則就沒辦法互相比較），所以色調只染表頭與表框。
+    改成把左上角切成兩塊三角，中間留一道縫（寬度和九宮格之間的縫一樣，所以它
+    看起來是格線的一部分，不是一條特別粗的斜線），軸名各站一邊。
     """
     tmp = tmp_path or _tmp()
     out = tmp / "site"
@@ -883,20 +883,87 @@ def test_the_matrix_says_which_axis_is_which_and_the_three_bands_read_apart(tmp_
     js = (out / "assets" / "site.js").read_text("utf-8")
     css = (out / "assets" / "site.css").read_text("utf-8")
 
-    # 兩個軸名分開，而且是分開的元素——不是一個字串裡的斜線。
+    # 兩個軸名是分開的元素，不是一個字串裡的斜線。
     assert 'class="ax-col"' in js and 'class="ax-row"' in js
     assert "<th>淨利率" not in js          # 兩個軸名擠在一格裡的舊寫法
-    assert "th.corner" in css and "to top right" in css
+
+    # 三角形是背景畫出來的，中間那道縫必須透得出底色——所以底色要透明，
+    # 不能是 surface-2，否則縫會被填滿又變回一條線。
+    corner = css[css.index("table.matrix th.corner{"):][:400]
+    assert "background-color:transparent" in corner
+    assert corner.count("linear-gradient(to top right") == 2
 
     # 九個格子之間要有縫，不然色塊糊成一片。
     assert "border-spacing" in css
 
-    # 三張矩陣三種色調，而且色調只上在表頭與表框，不上在資料格。
-    for tone in ("--t1", "--t2", "--t3"):
-        assert tone in css
-    assert "table.matrix.mt1 thead th" in css
-    for cell in ("td.h0", "td.h1", "td.h2", "td.h3", "td.h4"):
-        assert f"table.matrix {cell}{{background:var(--m-h" in css.replace("\n", "")
 
-    # 圖例和格子共用同一組漸層，圖例對不上格子比沒有圖例更糟。
-    assert ".mlegend .sw.h4{background:var(--m-h4)}" in css
+def test_the_matrix_colours_by_size_not_by_distance_from_the_price(tmp_path=None):
+    """顏色改塗「這一格有多大」，離現價多遠讓給每一格的第二行。
+
+    兩件事各用一個管道講，比兩件事搶同一個管道好：顏色一旦讓出來，就能拿去做
+    另一件顏色擅長的事——讓三張本益比矩陣一眼分得出來。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    js = (out / "assets" / "site.js").read_text("utf-8")
+    css = (out / "assets" / "site.css").read_text("utf-8")
+
+    # 階數是相對這張表自己的極值算的，不是絕對門檻。
+    assert "function stepper(" in js and "(v - lo) / span * 4" in js
+    # 第二行：正的是預期報酬，負的是預期風險。
+    assert "預期報酬 " in js and "預期風險 " in js
+    assert 'class="d"' in js and 'class="v"' in js
+    # 預估 EPS 那張不比現價——EPS 不是價格。
+    assert "'n', 0, false" in js
+    # 三張目標價矩陣三個色相。
+    assert "['a', 'b', 'c']" in js
+
+    # 四組色階 × 五階，每一階都自帶前景色（深底不能配深字）。
+    for fam in "nabc":
+        for i in range(5):
+            assert f"--m{fam}{i}:linear-gradient" in css
+            assert f"table.matrix td.m{fam}{i}{{background:var(--m{fam}{i});" in css
+            assert f"color:var(--m{fam}{i}-fg)}}" in css
+    # 深色主題自己一組——淺色的最淺階在深底上是一塊發光的白，不是「小」。
+    assert css.count("--mn0:linear-gradient") == 2
+
+    # 格子置中：這裡不是拿來縱向掃一欄數字比大小的，顏色已經在做那件事。
+    assert "table.matrix td{background:var(--surface-2);font-variant-numeric:tabular-nums;" in css
+    assert "text-align:center" in css
+
+
+def test_every_matrix_step_keeps_its_text_readable():
+    """深底配深字是這種色階最容易犯的錯，而且只有在最深的那一兩階才看得出來。
+
+    四組 × 五階 × 兩個主題 = 40 個組合，全部要 >= 4.5:1。這是算的，不是看的。
+    """
+    import re
+
+    css = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.css").read_text("utf-8")
+
+    def lin(c: float) -> float:
+        return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+    def lum(hexcode: str) -> float:
+        r, g, b = (int(hexcode[i : i + 2], 16) / 255 for i in (1, 3, 5))
+        return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+
+    def ratio(a: str, b: str) -> float:
+        la, lb = lum(a), lum(b)
+        hi, lo = max(la, lb), min(la, lb)
+        return (hi + 0.05) / (lo + 0.05)
+
+    INK = "#0b1220"  # --badge-ink，兩個主題共用
+    pattern = re.compile(
+        r"--m([nabc])(\d):linear-gradient\(150deg,(#[0-9a-f]{6}),(#[0-9a-f]{6})\); "
+        r"--m\1\2-fg:(#fff|var\(--badge-ink\));"
+    )
+    found = pattern.findall(css)
+    assert len(found) == 40, f"色階數不對：{len(found)}"
+    for fam, step, c1, c2, fg in found:
+        ink = INK if fg.startswith("var") else "#ffffff"
+        # 漸層的兩端都要過，不是只有中間那個平均值。
+        for stop in (c1, c2):
+            r = ratio(stop, ink)
+            assert r >= 4.5, f"--m{fam}{step} 的 {stop} 配 {fg} 只有 {r:.2f}:1"

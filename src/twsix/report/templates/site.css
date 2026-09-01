@@ -27,18 +27,37 @@
   /* 河流圖分區底色：只是背景，每一區另有虛線與右側名稱，顏色不單獨承載意義 */
   --zone-0:#cdece0; --zone-1:#ddf2e6; --zone-2:#e6edf2;
   --zone-3:#fbecc9; --zone-4:#fbdccf; --zone-5:#f8c8ba;
-  /* 九宮格的格子：同一組等第色，但改成漸層。平塗的九塊接在一起會糊成一片，
-     每格帶一點斜向明暗之後，即使是相鄰的同級格子也看得出邊界。 */
-  --m-h4:linear-gradient(150deg,#3ad9a8,#0a9b74);
-  --m-h3:linear-gradient(150deg,#4ad7c0,#17a892);
-  --m-h2:linear-gradient(150deg,#a3b2c4,#6f8299);
-  --m-h1:linear-gradient(150deg,#f7c260,#e5941a);
-  --m-h0:linear-gradient(150deg,#f88574,#dc4130);
-  /* 三張目標價矩陣的色調。只染表框與表頭，由低本益比到高本益比：青綠 → 靛藍
-     → 紫紅。這是標籤，不是刻度——資料格的顏色三張表共用同一把尺。 */
-  --t1:#0b6f63; --t1-bg:#d4ebe6; --t1-line:#7cc4b8;
-  --t2:#3b4fc4; --t2-bg:#dfe3fa; --t2-line:#96a2ee;
-  --t3:#8d3fae; --t3-bg:#eeddf7; --t3-line:#c99ade;
+  /* 九宮格的格子：四組色階，每組五階，淺 → 深對應數值小 → 大。
+     每一階是一道斜向漸層而不是平塗——九塊平塗的填色接在一起會糊成一片，帶一點
+     明暗之後即使相鄰的同階格子也看得出邊界。
+     mn 中性（預估 EPS）、ma 藍（低本益比）、mb 綠（中）、mc 橘（高）。
+     每一階都配好前景色：40 個組合的對比全部 >= 4.5:1，是算出來的不是挑出來的
+     （scripts 裡那段 HSL 產生器，見 commit 訊息）。 */
+  --mn0:linear-gradient(150deg,#f3f5f6,#e2e7ea); --mn0-fg:var(--badge-ink);
+  --mn1:linear-gradient(150deg,#cdd5db,#bcc7cf); --mn1-fg:var(--badge-ink);
+  --mn2:linear-gradient(150deg,#a7b5bf,#97a7b3); --mn2-fg:var(--badge-ink);
+  --mn3:linear-gradient(150deg,#8196a4,#718898); --mn3-fg:var(--badge-ink);
+  --mn4:linear-gradient(150deg,#607585,#546774); --mn4-fg:#fff;
+  --ma0:linear-gradient(150deg,#eef4fb,#d7e5f6); --ma0-fg:var(--badge-ink);
+  --ma1:linear-gradient(150deg,#b1cded,#9abee7); --ma1-fg:var(--badge-ink);
+  --ma2:linear-gradient(150deg,#74a6de,#5d97d9); --ma2-fg:var(--badge-ink);
+  --ma3:linear-gradient(150deg,#2e74c4,#2967ad); --ma3-fg:#fff;
+  --ma4:linear-gradient(150deg,#245a98,#1e4c81); --ma4-fg:#fff;
+  --mb0:linear-gradient(150deg,#ebf9f4,#d5f2e7); --mb0-fg:var(--badge-ink);
+  --mb1:linear-gradient(150deg,#afe6d2,#99dfc5); --mb1-fg:var(--badge-ink);
+  --mb2:linear-gradient(150deg,#73d3af,#5dcca3); --mb2-fg:var(--badge-ink);
+  --mb3:linear-gradient(150deg,#3bbb8c,#34a67c); --mb3-fg:var(--badge-ink);
+  --mb4:linear-gradient(150deg,#287f5f,#21694f); --mb4-fg:#fff;
+  --mc0:linear-gradient(150deg,#fdf5ec,#fae7d3); --mc0-fg:var(--badge-ink);
+  --mc1:linear-gradient(150deg,#f5d2ab,#f2c592); --mc1-fg:var(--badge-ink);
+  --mc2:linear-gradient(150deg,#edb06b,#eaa251); --mc2-fg:var(--badge-ink);
+  --mc3:linear-gradient(150deg,#e58e2a,#d77f1b); --mc3-fg:var(--badge-ink);
+  --mc4:linear-gradient(150deg,#a76315,#8e5412); --mc4-fg:#fff;
+  /* 三張目標價矩陣的標題與表框，跟著各自格子的色相走：由低本益比到高本益比，
+     藍 → 綠 → 橘。這是標籤，不是刻度——一格的深淺才是刻度。 */
+  --t1:#23619f; --t1-bg:#dbe8f8; --t1-line:#97bce7;
+  --t2:#1c6b50; --t2-bg:#d9f2e8; --t2-line:#7fd3b4;
+  --t3:#8f540e; --t3-bg:#fbeada; --t3-line:#f1c38f;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
   --ground:#0b1016; --surface:#141b22; --surface-2:#1c252e;
@@ -54,16 +73,31 @@
   --m3:#e85f7c; --m4:#5490e6; --m5:#7ba233;
   --zone-0:#18453b; --zone-1:#193830; --zone-2:#232d36;
   --zone-3:#3d3320; --zone-4:#472d20; --zone-5:#52291d;
-  /* 格子的漸層兩個主題共用——亮底深字本來就兩邊都成立。 */
-  --m-h4:linear-gradient(150deg,#3ad9a8,#0a9b74);
-  --m-h3:linear-gradient(150deg,#4ad7c0,#17a892);
-  --m-h2:linear-gradient(150deg,#a3b2c4,#6f8299);
-  --m-h1:linear-gradient(150deg,#f7c260,#e5941a);
-  --m-h0:linear-gradient(150deg,#f88574,#dc4130);
+  /* 深色主題重排一次：淺色的最淺階在深底上是一塊發光的白，不是「小」。 */
+  --mn0:linear-gradient(150deg,#313c43,#252d33); --mn0-fg:#fff;
+  --mn1:linear-gradient(150deg,#475763,#3b4952); --mn1-fg:#fff;
+  --mn2:linear-gradient(150deg,#5e7382,#526471); --mn2-fg:#fff;
+  --mn3:linear-gradient(150deg,#7b909f,#6a8293); --mn3-fg:var(--badge-ink);
+  --mn4:linear-gradient(150deg,#97a8b4,#869aa8); --mn4-fg:var(--badge-ink);
+  --ma0:linear-gradient(150deg,#15355a,#102843); --ma0-fg:#fff;
+  --ma1:linear-gradient(150deg,#21538c,#1b4574); --ma1-fg:#fff;
+  --ma2:linear-gradient(150deg,#2c70bd,#2762a6); --ma2-fg:#fff;
+  --ma3:linear-gradient(150deg,#518fd6,#3a80d1); --ma3-fg:var(--badge-ink);
+  --ma4:linear-gradient(150deg,#82afe2,#6ba0dc); --ma4-fg:var(--badge-ink);
+  --mb0:linear-gradient(150deg,#19513c,#133b2c); --mb0-fg:#fff;
+  --mb1:linear-gradient(150deg,#267759,#1f6249); --mb1-fg:#fff;
+  --mb2:linear-gradient(150deg,#34a67c,#2e906c); --mb2-fg:var(--badge-ink);
+  --mb3:linear-gradient(150deg,#40c393,#37af83); --mb3-fg:var(--badge-ink);
+  --mb4:linear-gradient(150deg,#67cfa9,#51c89d); --mb4-fg:var(--badge-ink);
+  --mc0:linear-gradient(150deg,#673d0d,#4e2e0a); --mc0-fg:#fff;
+  --mc1:linear-gradient(150deg,#955812,#7b490f); --mc1-fg:#fff;
+  --mc2:linear-gradient(150deg,#d47e1a,#bb6f17); --mc2-fg:var(--badge-ink);
+  --mc3:linear-gradient(150deg,#e58d29,#d67f1a); --mc3-fg:var(--badge-ink);
+  --mc4:linear-gradient(150deg,#eaa556,#e7983d); --mc4-fg:var(--badge-ink);
   /* 表頭的色調要重挑：淺色的粉彩底在深底上會變成三塊發光的貼紙。 */
-  --t1:#5fd8c6; --t1-bg:#123430; --t1-line:#2c6f66;
-  --t2:#94a2ff; --t2-bg:#1c2145; --t2-line:#4a54a8;
-  --t3:#d78ff0; --t3-bg:#2f1e3c; --t3-line:#7a4a94;
+  --t1:#85b1e2; --t1-bg:#16334f; --t1-line:#2e5f92;
+  --t2:#6ad0aa; --t2-bg:#133a2d; --t2-line:#2a6b53;
+  --t3:#eba759; --t3-bg:#3c2a12; --t3-line:#7a5520;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);
@@ -396,20 +430,50 @@ button.star:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
 tbody tr[hidden]{display:none}
 
 
+/* -- EPS預估與估價：計算方式說明 ---------------------------------------- */
+details.methodology{margin:14px 0 20px;border:1px solid var(--rule);border-radius:6px;
+  background:var(--surface);padding:12px 16px}
+details.methodology summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink-2)}
+details.methodology[open] summary{margin-bottom:12px}
+details.methodology summary:hover{color:var(--accent-2)}
+details.methodology ol.steps{list-style:none;counter-reset:step;margin:0;padding:0;
+  display:flex;flex-direction:column;gap:10px}
+details.methodology ol.steps li{counter-increment:step;position:relative;
+  padding:8px 12px 8px 34px;border-left:3px solid var(--accent-2);
+  background:var(--surface-2);border-radius:0 4px 4px 0;font-size:13px;color:var(--ink-2)}
+details.methodology ol.steps li::before{content:counter(step);position:absolute;left:10px;top:8px;
+  width:18px;height:18px;border-radius:50%;background:var(--accent-2);color:#fff;
+  font-size:11px;font-weight:700;line-height:18px;text-align:center}
+details.methodology ol.steps li b:first-of-type{color:var(--ink);font-size:13.5px}
+details.methodology .formula{margin:4px 0 0;font-size:12px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+details.methodology .plug{margin:4px 0 0;font-size:12.5px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums}
+details.methodology .plug b{color:var(--accent);font-weight:700}
+details.methodology .note{margin:4px 0 0;font-size:12px;color:var(--muted);max-width:none}
+
 /* -- 目標價試算盤 -------------------------------------------------------- */
 .calc{margin:22px 0 0;padding:16px 18px;border:1px solid var(--rule);border-radius:6px;
   background:var(--surface)}
 .calc h4{margin:0 0 10px;font-size:15.5px;font-weight:700;color:var(--ink)}
 .calc h5{margin:18px 0 6px;font-size:14px;color:var(--ink)}
-.calc-inputs{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+.calc-inputs{display:grid;gap:10px;
+  grid-template-columns:repeat(5,minmax(0,1fr));
   margin:14px 0 10px}
-.calc-inputs label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;
-  color:var(--ink-2);font-weight:600}
-.calc-inputs .hint{font-weight:400;font-size:11px;color:var(--muted)}
-.calc-inputs input{padding:7px 10px;border:1px solid var(--rule);border-radius:5px;
-  background:var(--ground);color:var(--ink);font:inherit;font-size:14px;
-  font-variant-numeric:tabular-nums}
+.calc-inputs label{display:flex;flex-direction:column;gap:4px;
+  font-size:clamp(10.5px,1.8vw,12.5px);color:var(--ink-2);font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.calc-inputs .hint{font-weight:400;font-size:clamp(9px,1.4vw,11px);color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calc-inputs input{padding:7px 8px;border:1px solid var(--rule);border-radius:5px;
+  background:var(--ground);color:var(--ink);font:inherit;
+  font-size:clamp(11.5px,1.6vw,14px);
+  font-variant-numeric:tabular-nums;min-width:0;width:100%}
 .calc-inputs input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+@media (max-width:560px){
+  .calc-inputs{grid-template-columns:1fr;gap:12px}
+  .calc-inputs label{white-space:normal}
+}
 .calc-formula{margin:0 0 12px;font-size:12px;color:var(--muted);
   padding:8px 10px;border-left:3px solid var(--accent);background:var(--surface-2);
   border-radius:0 4px 4px 0;max-width:none}
@@ -427,46 +491,70 @@ table.matrix{width:auto}
 table.matrix thead th.num,table.matrix td{width:7.5em}
 /* 第一欄是列標題，不是資料。不釘住寬度的話那句長標題會把數字全推到右邊，
    而矩陣要能一眼看出行列關係，靠的正是格子等寬。 */
-table.matrix th:first-child{width:8em;white-space:normal;line-height:1.35}
-table.matrix th,table.matrix td{border-bottom:0;border-radius:6px;padding:8px 10px}
+table.matrix th:first-child{width:9.5em;white-space:normal;line-height:1.35}
+table.matrix th,table.matrix td{border-bottom:0;border-radius:6px;padding:7px 8px}
 table.matrix th[scope=row],table.matrix thead th{background:var(--surface-2);font-weight:600;
-  color:var(--ink-2);position:static}
+  color:var(--ink-2);position:static;text-align:center}
+/* 格子裡是兩行：預估值，和它相對現價的預期報酬／風險。置中，因為這裡沒有要
+   讓人縱向掃一欄數字比大小——顏色已經在做那件事了，數字是拿來讀單一格的。 */
 table.matrix td{background:var(--surface-2);font-variant-numeric:tabular-nums;
-  text-align:right;font-weight:600}
-/* 預估 EPS 那張沒有上色，表頭得靠自己和資料格分開。 */
-table.matrix.mt0 th[scope=row],table.matrix.mt0 thead th,
-table.matrix.mt0 th.corner{background-color:var(--rule)}
+  text-align:center;font-weight:600;line-height:1.25}
+table.matrix td .v{display:block;font-size:13px}
+/* 第二行用同一個前景色降透明度，不用紅綠——底色已經有四種色相五個明度，再疊
+   一組紅綠上去，在深階的格子上兩種都讀不到。正負由符號本身表示。 */
+table.matrix td .d{display:block;font-size:10.5px;font-weight:600;opacity:.75;
+  margin-top:1px}
 
-/* 左上角那一格是兩個座標軸，不是一個標題。「淨利率＼成長率」印成一行，讀者得
-   自己猜哪個是橫的——猜錯就整張表看反。畫一條真的斜線，兩個軸名各站一邊：
-   右上是欄（淨利率），左下是列（成長率）。 */
-table.matrix th.corner{position:relative;padding:0;height:48px;background:var(--surface-2);
-  background-image:linear-gradient(to top right,transparent calc(50% - 0.6px),
-    var(--rule) calc(50% - 0.6px),var(--rule) calc(50% + 0.6px),
-    transparent calc(50% + 0.6px))}
-th.corner span{position:absolute;font-size:11px;font-weight:600;color:var(--ink-2);
+/* -- 左上角：兩個三角形，中間留一道縫 --------------------------------------
+   「淨利率＼成長率」印成一行，讀者得自己猜哪個是橫的——猜錯就整張表看反。
+   一條畫出來的斜線又太搶眼（它比表格裡任何一條線都粗）。改成用背景把這一格
+   切成兩塊三角，中間那道縫透出底色，寬度和九宮格之間的縫一樣——所以它看起來
+   不是一條線，是同一套格線的一部分。 */
+table.matrix th.corner{position:relative;padding:0;height:52px;
+  background-color:transparent;
+  background-image:
+    linear-gradient(to top right,var(--surface-2) calc(50% - 2.5px),
+      transparent calc(50% - 2.5px)),
+    linear-gradient(to top right,transparent calc(50% + 2.5px),
+      var(--surface-2) calc(50% + 2.5px))}
+th.corner span{position:absolute;font-size:11px;font-weight:700;color:var(--ink-2);
   letter-spacing:.02em}
-th.corner .ax-col{top:5px;right:8px}
-th.corner .ax-row{bottom:5px;left:8px}
+th.corner .ax-col{top:6px;right:9px}      /* 淨利率：欄，貼著上緣 */
+th.corner .ax-row{bottom:6px;left:9px}    /* 成長率：列，貼著左緣 */
 
-/* 五級：綠 = 現價之上很多，紅 = 現價之下。亮底深字，和等第徽章同一套邏輯；
-   改成漸層之後相鄰的同級格子也分得開。 */
-table.matrix td.h4{background:var(--m-h4);color:var(--badge-ink)}
-table.matrix td.h3{background:var(--m-h3);color:var(--badge-ink)}
-table.matrix td.h2{background:var(--m-h2);color:var(--badge-ink)}
-table.matrix td.h1{background:var(--m-h1);color:var(--badge-ink)}
-table.matrix td.h0{background:var(--m-h0);color:var(--badge-ink)}
+/* 四組色階 × 五階。階數是「這一格的值在這張表裡有多大」，不是它離現價多遠——
+   離現價多遠寫在格子的第二行，那是一個數字，不需要用顏色再講一次。 */
+table.matrix td.mn0{background:var(--mn0);color:var(--mn0-fg)}
+table.matrix td.mn1{background:var(--mn1);color:var(--mn1-fg)}
+table.matrix td.mn2{background:var(--mn2);color:var(--mn2-fg)}
+table.matrix td.mn3{background:var(--mn3);color:var(--mn3-fg)}
+table.matrix td.mn4{background:var(--mn4);color:var(--mn4-fg)}
+table.matrix td.ma0{background:var(--ma0);color:var(--ma0-fg)}
+table.matrix td.ma1{background:var(--ma1);color:var(--ma1-fg)}
+table.matrix td.ma2{background:var(--ma2);color:var(--ma2-fg)}
+table.matrix td.ma3{background:var(--ma3);color:var(--ma3-fg)}
+table.matrix td.ma4{background:var(--ma4);color:var(--ma4-fg)}
+table.matrix td.mb0{background:var(--mb0);color:var(--mb0-fg)}
+table.matrix td.mb1{background:var(--mb1);color:var(--mb1-fg)}
+table.matrix td.mb2{background:var(--mb2);color:var(--mb2-fg)}
+table.matrix td.mb3{background:var(--mb3);color:var(--mb3-fg)}
+table.matrix td.mb4{background:var(--mb4);color:var(--mb4-fg)}
+table.matrix td.mc0{background:var(--mc0);color:var(--mc0-fg)}
+table.matrix td.mc1{background:var(--mc1);color:var(--mc1-fg)}
+table.matrix td.mc2{background:var(--mc2);color:var(--mc2-fg)}
+table.matrix td.mc3{background:var(--mc3);color:var(--mc3-fg)}
+table.matrix td.mc4{background:var(--mc4);color:var(--mc4-fg)}
 
-/* 圖例。三張表的格子共用這一把尺，所以尺只印一次。 */
-.mlegend{margin:14px 0 10px;font-size:12px;color:var(--muted);line-height:2}
-.mlegend .sw{display:inline-block;width:22px;height:11px;border-radius:3px;
-  margin-right:5px;vertical-align:-1px}
-.mlegend .sw.h4{background:var(--m-h4)}.mlegend .sw.h3{background:var(--m-h3)}
-.mlegend .sw.h2{background:var(--m-h2)}.mlegend .sw.h1{background:var(--m-h1)}
-.mlegend .sw.h0{background:var(--m-h0)}
+/* 圖例。每張矩陣一條，因為每張的色相和端點值都不同——一條共用的圖例對不上任何
+   一張表。 */
+.mlegend{margin:0 0 8px;font-size:11.5px;color:var(--muted);
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mlegend .ramp{display:inline-flex;gap:2px}
+.mlegend .sw{display:inline-block;width:20px;height:11px;border-radius:3px}
+.mlegend b{color:var(--ink-2);font-weight:600}
 
-/* 三張目標價矩陣的色調：本益比由低到高，青綠 → 靛藍 → 紫紅。只染標題、表框與
-   表頭——資料格的顏色在三張表裡必須是同一個意思，才比得起來。 */
+/* 三張目標價矩陣的色調：本益比由低到高，藍 → 綠 → 橘。標題與表框跟著格子的
+   色相走，捲動時分得出自己在看哪一張。 */
 .calc h5.mtitle{border-left:4px solid var(--rule);padding-left:9px}
 .calc h5.mt1{border-left-color:var(--t1);color:var(--t1)}
 .calc h5.mt2{border-left-color:var(--t2);color:var(--t2)}
@@ -474,12 +562,21 @@ table.matrix td.h0{background:var(--m-h0);color:var(--badge-ink)}
 .mwrap.mt1{border-color:var(--t1-line)}
 .mwrap.mt2{border-color:var(--t2-line)}
 .mwrap.mt3{border-color:var(--t3-line)}
+/* 表頭也跟著色相走。左上角那一格的兩塊三角是用背景畫的，所以要換的是
+   背景「圖」裡的顏色，不是 background-color——那一格的 background-color 必須
+   保持透明，縫才透得出底色。 */
 table.matrix.mt1 th[scope=row],table.matrix.mt1 thead th{background:var(--t1-bg);color:var(--t1)}
 table.matrix.mt2 th[scope=row],table.matrix.mt2 thead th{background:var(--t2-bg);color:var(--t2)}
 table.matrix.mt3 th[scope=row],table.matrix.mt3 thead th{background:var(--t3-bg);color:var(--t3)}
-table.matrix.mt1 th.corner{background-color:var(--t1-bg)}
-table.matrix.mt2 th.corner{background-color:var(--t2-bg)}
-table.matrix.mt3 th.corner{background-color:var(--t3-bg)}
+table.matrix.mt1 th.corner{background-color:transparent;background-image:
+  linear-gradient(to top right,var(--t1-bg) calc(50% - 2.5px),transparent calc(50% - 2.5px)),
+  linear-gradient(to top right,transparent calc(50% + 2.5px),var(--t1-bg) calc(50% + 2.5px))}
+table.matrix.mt2 th.corner{background-color:transparent;background-image:
+  linear-gradient(to top right,var(--t2-bg) calc(50% - 2.5px),transparent calc(50% - 2.5px)),
+  linear-gradient(to top right,transparent calc(50% + 2.5px),var(--t2-bg) calc(50% + 2.5px))}
+table.matrix.mt3 th.corner{background-color:transparent;background-image:
+  linear-gradient(to top right,var(--t3-bg) calc(50% - 2.5px),transparent calc(50% - 2.5px)),
+  linear-gradient(to top right,transparent calc(50% + 2.5px),var(--t3-bg) calc(50% + 2.5px))}
 table.matrix.mt1 th.corner span{color:var(--t1)}
 table.matrix.mt2 th.corner span{color:var(--t2)}
 table.matrix.mt3 th.corner span{color:var(--t3)}
@@ -496,8 +593,6 @@ table.matrix.mt3 th.corner span{color:var(--t3)}
 /* 出處那一欄最長，讓它換行而不是把整張表推出畫面——這張表是拿來讀的，不是拿來
    左右捲的。 */
 table.basis-t{font-size:12.5px;min-width:0;table-layout:fixed}
-/* 全站的 th,td 是 nowrap（數字表格要的），但這張表是拿來讀的句子，必須換行——
-   不換行的話出處那一欄會把整張表推出畫面，變成一張要左右捲的說明。 */
 table.basis-t th,table.basis-t td{white-space:normal;vertical-align:top;line-height:1.6}
 table.basis-t th:nth-child(1),table.basis-t td:nth-child(1){width:8.5em}
 table.basis-t th:nth-child(2),table.basis-t td:nth-child(2){width:31%}

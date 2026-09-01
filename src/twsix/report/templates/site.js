@@ -727,56 +727,79 @@
       .filter(function(v){ return !isNaN(v); });
   }
 
-  function heat(target){
-    /* 相對現價的上檔空間。沒有現價就不上色——沒有基準的顏色是裝飾，不是資訊。 */
-    if(price === null || !target) return '';
-    var up = target / price - 1;
-    if(up >= 0.5) return 'h4';
-    if(up >= 0.2) return 'h3';
-    if(up >= 0) return 'h2';
-    if(up >= -0.2) return 'h1';
-    return 'h0';
+  /* 顏色的意思。
+     原本塗的是「離現價多遠」，現在改塗「這一格在這張表裡有多大」——淺到深就是
+     小到大。離現價多遠沒有被丟掉，它變成每一格的第二行，那是一個數字，不必再
+     用顏色講第二次；而顏色一旦讓出來，就能拿去做另一件顏色比較擅長的事：讓三
+     張本益比矩陣一眼分得出來。
+
+     階數是相對這張表自己的極值算的，不是絕對門檻。一張表裡九個值可能只差 10%，
+     絕對門檻會把它們塗成同一塊；相對極值則永遠用滿五階，而「最深的是最大的」
+     這句話在每一張表上都成立。 */
+  function stepper(values){
+    var lo = Math.min.apply(null, values), hi = Math.max.apply(null, values);
+    var span = hi - lo;
+    return function(v){
+      if(!isFinite(v)) return 0;
+      return span <= 0 ? 2 : Math.round((v - lo) / span * 4);
+    };
   }
 
-  /* 相對現價那把尺，寫一次，圖例和格子共用——圖例對不上格子的顏色，比沒有圖例
-     更糟。 */
-  var LEVELS = [
-    ['h0', '低於現價 20% 以上'], ['h1', '低於現價 0 ~ 20%'],
-    ['h2', '高於現價 0 ~ 20%'], ['h3', '高於現價 20 ~ 50%'],
-    ['h4', '高於現價 50% 以上']
-  ];
+  /* 相對現價的漲跌，寫在格子第二行。
+     正的是預期報酬，負的是預期風險——同一條算式，符號決定它叫什麼。 */
+  function delta(target){
+    if(price === null || !target) return null;
+    var up = target / price - 1;
+    var txt = (up >= 0 ? '+' : '−') + (Math.abs(up) * 100).toFixed(1) + '%';
+    return { text: txt, title: (up >= 0 ? '預期報酬 ' : '預期風險 ') + txt +
+             '（相對現價 ' + price.toFixed(2) + '）' };
+  }
 
-  function legend(){
-    if(price === null) return '';
-    return '<p class="mlegend"><b>格子顏色</b>　相對現價 ' + price.toFixed(2) +
-      ' 的上檔空間，不是數字大小：' + LEVELS.map(function(x){
-        return '<span class="sw ' + x[0] + '"></span>' + x[1];
-      }).join('　') + '</p>';
+  function legend(fam, lo, hi, fmt){
+    return '<p class="mlegend"><b>顏色</b>　數值由小到大、由淺至深' +
+      '<span class="ramp">' + [0,1,2,3,4].map(function(i){
+        return '<span class="sw" style="background:var(--m' + fam + i + ')"></span>';
+      }).join('') + '</span>' +
+      '<span>' + fmt(lo) + ' → ' + fmt(hi) + '</span>' +
+      (price === null ? '' :
+       '<span>　每格第二行是相對現價 ' + price.toFixed(2) +
+       ' 的預期報酬（＋）或預期風險（−）</span>') + '</p>';
   }
 
   /* 表頭左上角是兩個座標軸，不是一個標題。「淨利率＼成長率」要讀者自己猜哪個
-     是橫的哪個是直的，而猜錯的代價是整張表都看反——所以畫一條真的斜線，把兩個
-     軸名分別放到它們指的那一邊：右上是欄（淨利率），左下是列（成長率）。 */
+     是橫的哪個是直的，而猜錯的代價是整張表都看反——所以把這一格切成兩塊三角，
+     軸名各站一邊：右上是欄（淨利率），左下是列（成長率）。 */
   var CORNER = '<th class="corner">' +
     '<span class="ax-col">淨利率 →</span>' +
     '<span class="ax-row">↓ 成長率</span></th>';
 
-  /* tone 只染表框、表頭和標題，不染資料格：三張目標價矩陣要一眼分得出來，但
-     格子的顏色在三張表裡必須是同一個意思，否則就沒辦法互相比較。 */
-  function matrix(title, note, values, fmt, colour, tone){
+  /* fam 是色相家族（mn 中性／ma 藍／mb 綠／mc 橘），tone 是標題與表框的色調。
+     withDelta 為真時每格加上相對現價的第二行——預估 EPS 那張沒有，因為 EPS
+     不是價格，拿它跟股價比是把兩個單位相除。 */
+  function matrix(title, values, fmt, fam, tone, withDelta){
     var g = nums(el.g.value), m = nums(el.m.value);
+    var rows = g.slice().reverse();
+    var flat = [];
+    rows.forEach(function(gv){ m.forEach(function(mv){ flat.push(values(gv, mv)); }); });
+    if(!flat.length) return '';
+    var step = stepper(flat);
     var t = ' mt' + (tone || 0);
+
     var h = '<h5 class="mtitle' + t + '">' + title + '</h5>';
-    if(note) h += '<p class="muted">' + note + '</p>';
+    h += legend(fam, Math.min.apply(null, flat), Math.max.apply(null, flat), fmt);
     h += '<div class="scroll mwrap' + t + '"><table class="matrix' + t + '"><thead><tr>' +
          CORNER;
     m.forEach(function(v){ h += '<th class="num">' + v + '%</th>'; });
     h += '</tr></thead><tbody>';
-    g.slice().reverse().forEach(function(gv){
+    rows.forEach(function(gv){
       h += '<tr><th scope="row">' + gv + '%</th>';
       m.forEach(function(mv){
         var v = values(gv, mv);
-        h += '<td class="num ' + (colour ? colour(v) : '') + '">' + fmt(v) + '</td>';
+        var d = withDelta ? delta(v) : null;
+        h += '<td class="num m' + fam + step(v) + '"' +
+             (d ? ' title="' + d.title + '"' : '') + '>' +
+             '<span class="v">' + fmt(v) + '</span>' +
+             (d ? '<span class="d">' + d.text + '</span>' : '') + '</td>';
       });
       h += '</tr>';
     });
@@ -792,19 +815,20 @@
     /* 年營收（百萬元）× (1+成長率) × 淨利率 ÷ 股數（億股）
        百萬元 ÷ 億股 = 百萬元 / 一億股 -> 元/股 要再除以 100。 */
     function eps(gv, mv){ return rev * (1 + gv / 100) * (mv / 100) / (sh * 100); }
+    function money(v){ return Math.round(v).toLocaleString(); }
 
-    var html = matrix('預估 EPS（元）', '', eps,
-      function(v){ return v.toFixed(2); }, null, 0);
+    var html = matrix('預估 EPS（元）', eps,
+      function(v){ return v.toFixed(2); }, 'n', 0, false);
 
-    /* 本益比由低到高，三張表用三種色調——低估、中性、樂觀，捲動時分得出自己
-       在看哪一張。超過三個 PE 就從頭輪，色調是標籤不是刻度。 */
-    var pes = nums(el.pe.value).slice().sort(function(a, b){ return a - b; });
-    if(pes.length) html += legend();
-    pes.forEach(function(pe, i){
-      html += matrix('預估目標價（元）　本益比 ' + pe, '',
-        function(gv, mv){ return eps(gv, mv) * pe; },
-        function(v){ return Math.round(v).toLocaleString(); }, heat, i % 3 + 1);
-    });
+    /* 本益比由低到高，三張表三個色相：藍 → 綠 → 橘。捲動時分得出自己在看哪
+       一張，而不必回頭找標題。超過三個 PE 就從頭輪——色相是標籤，不是刻度。 */
+    var fams = ['a', 'b', 'c'];
+    nums(el.pe.value).slice().sort(function(a, b){ return a - b; })
+      .forEach(function(pe, i){
+        html += matrix('預估目標價（元）　本益比 ' + pe,
+          function(gv, mv){ return eps(gv, mv) * pe; },
+          money, fams[i % 3], i % 3 + 1, true);
+      });
     el.out.innerHTML = html;
   }
 
