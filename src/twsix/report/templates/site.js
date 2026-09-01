@@ -727,29 +727,35 @@
       .filter(function(v){ return !isNaN(v); });
   }
 
-  function heat(target){
-    /* 相對現價的上檔空間。沒有現價就不上色——沒有基準的顏色是裝飾，不是資訊。 */
+  function heat(target, hue){
+    /* 相對現價的上檔空間。沒有現價就不上色——沒有基準的顏色是裝飾，不是資訊。
+       hue 決定色相家族（三個本益比矩陣各自一組），數字決定同一色相裡的深淺階，
+       這樣三張矩陣一眼就能分清楚是哪一個本益比算出來的，同時仍看得出漲跌幅。 */
     if(price === null || !target) return '';
     var up = target / price - 1;
-    if(up >= 0.5) return 'h4';
-    if(up >= 0.2) return 'h3';
-    if(up >= 0) return 'h2';
-    if(up >= -0.2) return 'h1';
-    return 'h0';
+    var step;
+    if(up >= 0.5) step = 4;
+    else if(up >= 0.2) step = 3;
+    else if(up >= 0) step = 2;
+    else if(up >= -0.2) step = 1;
+    else step = 0;
+    return (hue || 'h') + step;
   }
 
-  function matrix(title, note, values, fmt, colour){
+  function matrix(title, note, values, fmt, colour, hue){
     var g = nums(el.g.value), m = nums(el.m.value);
     var h = '<h5>' + title + '</h5>';
     if(note) h += '<p class="muted">' + note + '</p>';
-    h += '<div class="scroll"><table class="matrix"><thead><tr><th>淨利率＼成長率</th>';
+    h += '<div class="scroll"><table class="matrix"><thead><tr>' +
+      '<th class="corner"><span class="corner-inner">' +
+      '<span class="corner-a">淨利率</span><span class="corner-b">成長率</span></span></th>';
     m.forEach(function(v){ h += '<th class="num">' + v + '%</th>'; });
     h += '</tr></thead><tbody>';
     g.slice().reverse().forEach(function(gv){
       h += '<tr><th scope="row">' + gv + '%</th>';
       m.forEach(function(mv){
         var v = values(gv, mv);
-        h += '<td class="num ' + (colour ? colour(v) : '') + '">' + fmt(v) + '</td>';
+        h += '<td class="num ' + (colour ? colour(v, hue) : '') + '">' + fmt(v) + '</td>';
       });
       h += '</tr>';
     });
@@ -769,11 +775,14 @@
     var html = matrix('預估 EPS（元）', '', eps,
       function(v){ return v.toFixed(2); }, null);
 
-    nums(el.pe.value).forEach(function(pe){
+    /* 三個本益比各自一個色相：低本益比＝藍、中＝綠、高＝橘，
+       和目標價卡片上「本益比低點/目標價/下檔價」的直覺順序對齊。 */
+    var hues = ['pe-lo', 'pe-mid', 'pe-hi'];
+    nums(el.pe.value).forEach(function(pe, i){
       html += matrix('預估目標價（元）　本益比 ' + pe,
-        price ? '顏色是相對現價 ' + price.toFixed(2) + ' 的上檔空間，不是數字大小。' : '',
+        price ? '顏色是相對現價 ' + price.toFixed(2) + ' 的上檔空間，不是數字大小；三張矩陣的色調對應各自的本益比。' : '',
         function(gv, mv){ return eps(gv, mv) * pe; },
-        function(v){ return Math.round(v).toLocaleString(); }, heat);
+        function(v){ return Math.round(v).toLocaleString(); }, heat, hues[i] || 'pe-hi');
     });
     el.out.innerHTML = html;
   }

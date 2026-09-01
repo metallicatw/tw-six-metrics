@@ -186,6 +186,57 @@
 <p class="stale">{{ p.gaps.forecast or p.gaps.pe }}——此區塊無法計算。</p>
 {% endif %}
 
+{% if p.methodology %}
+{% set mo = p.methodology %}
+<details class="methodology">
+  <summary>計算方式說明——公式與本檔實際代入的數字</summary>
+  <ol class="steps">
+    <li>
+      <b>預估成長率</b>　{{ mo.growth_method_label }}
+      <div class="formula">{{ mo.growth_method_formula }}</div>
+      <div class="plug">本檔代入結果：<b>{{ mo.growth_rate }}</b></div>
+    </li>
+    <li>
+      <b>預估營收</b>　去年全年營收 ÷ 1000 ×（1 ＋ 預估成長率）
+      <div class="plug">
+        {{ mo.last_year_revenue }} × (1 + {{ mo.growth_rate }}) ＝
+        <b>{{ mo.projected_revenue }}</b>　百萬元
+      </div>
+    </li>
+    <li>
+      <b>稅後淨利率</b>　{{ mo.margin_method_label }}
+      <div class="formula">{{ mo.margin_method_formula }}</div>
+      <div class="plug">本檔代入結果：<b>{{ mo.net_margin }}</b></div>
+    </li>
+    <li>
+      <b>預估淨利</b>　預估營收 × 稅後淨利率
+      <div class="plug">{{ mo.projected_revenue }} × {{ mo.net_margin }} ＝ <b>{{ mo.projected_income }}</b>　百萬元</div>
+    </li>
+    <li>
+      <b>預估 EPS</b>　預估淨利 ÷ 加權平均股數
+      <div class="plug">{{ mo.projected_income }} ÷ {{ mo.weighted_shares }} ＝ <b>{{ mo.forecast_eps }}</b>　元</div>
+    </li>
+    <li>
+      <b>本益比區間</b>　{{ mo.pe_basis_label }}
+      <div class="formula">{{ mo.pe_basis_formula }}</div>
+      <div class="plug">本檔代入結果：<b>{{ mo.band_low }} – {{ mo.band_high }}</b></div>
+    </li>
+    <li>
+      <b>目標價 / 下檔價</b>　本益比高點 × 預估EPS　／　本益比低點 × 預估EPS
+      <div class="plug">
+        {{ mo.band_high }} × {{ mo.forecast_eps }} ＝ <b>{{ mo.target_price }}</b>　／
+        {{ mo.band_low }} × {{ mo.forecast_eps }} ＝ <b>{{ mo.downside_price }}</b>
+      </div>
+    </li>
+  </ol>
+  <p class="note">
+    以上為本次建置採用的參數（{{ mo.growth_method_label }} ／ {{ mo.margin_method_label }} ／
+    {{ mo.pe_basis_label }}），可在 config/settings.toml 調整；下方「目標價試算盤」可暫時
+    覆寫這些假設重新試算，不影響此處記錄的引擎結果。
+  </p>
+</details>
+{% endif %}
+
 {% if p.forecast %}
 <div class="val">
   <section>

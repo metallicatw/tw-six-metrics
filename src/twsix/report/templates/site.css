@@ -374,20 +374,50 @@ button.star:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
 tbody tr[hidden]{display:none}
 
 
+/* -- EPS預估與估價：計算方式說明 ---------------------------------------- */
+details.methodology{margin:14px 0 20px;border:1px solid var(--rule);border-radius:6px;
+  background:var(--surface);padding:12px 16px}
+details.methodology summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink-2)}
+details.methodology[open] summary{margin-bottom:12px}
+details.methodology summary:hover{color:var(--accent-2)}
+details.methodology ol.steps{list-style:none;counter-reset:step;margin:0;padding:0;
+  display:flex;flex-direction:column;gap:10px}
+details.methodology ol.steps li{counter-increment:step;position:relative;
+  padding:8px 12px 8px 34px;border-left:3px solid var(--accent-2);
+  background:var(--surface-2);border-radius:0 4px 4px 0;font-size:13px;color:var(--ink-2)}
+details.methodology ol.steps li::before{content:counter(step);position:absolute;left:10px;top:8px;
+  width:18px;height:18px;border-radius:50%;background:var(--accent-2);color:#fff;
+  font-size:11px;font-weight:700;line-height:18px;text-align:center}
+details.methodology ol.steps li b:first-of-type{color:var(--ink);font-size:13.5px}
+details.methodology .formula{margin:4px 0 0;font-size:12px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+details.methodology .plug{margin:4px 0 0;font-size:12.5px;color:var(--ink-2);
+  font-variant-numeric:tabular-nums}
+details.methodology .plug b{color:var(--accent);font-weight:700}
+details.methodology .note{margin:4px 0 0;font-size:12px;color:var(--muted);max-width:none}
+
 /* -- 目標價試算盤 -------------------------------------------------------- */
 .calc{margin:22px 0 0;padding:16px 18px;border:1px solid var(--rule);border-radius:6px;
   background:var(--surface)}
 .calc h4{margin:0 0 10px;font-size:15.5px;font-weight:700;color:var(--ink)}
 .calc h5{margin:18px 0 6px;font-size:14px;color:var(--ink)}
-.calc-inputs{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+.calc-inputs{display:grid;gap:10px;
+  grid-template-columns:repeat(5,minmax(0,1fr));
   margin:14px 0 10px}
-.calc-inputs label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;
-  color:var(--ink-2);font-weight:600}
-.calc-inputs .hint{font-weight:400;font-size:11px;color:var(--muted)}
-.calc-inputs input{padding:7px 10px;border:1px solid var(--rule);border-radius:5px;
-  background:var(--ground);color:var(--ink);font:inherit;font-size:14px;
-  font-variant-numeric:tabular-nums}
+.calc-inputs label{display:flex;flex-direction:column;gap:4px;
+  font-size:clamp(10.5px,1.8vw,12.5px);color:var(--ink-2);font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.calc-inputs .hint{font-weight:400;font-size:clamp(9px,1.4vw,11px);color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calc-inputs input{padding:7px 8px;border:1px solid var(--rule);border-radius:5px;
+  background:var(--ground);color:var(--ink);font:inherit;
+  font-size:clamp(11.5px,1.6vw,14px);
+  font-variant-numeric:tabular-nums;min-width:0;width:100%}
 .calc-inputs input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+@media (max-width:560px){
+  .calc-inputs{grid-template-columns:1fr;gap:12px}
+  .calc-inputs label{white-space:normal}
+}
 .calc-formula{margin:0 0 12px;font-size:12px;color:var(--muted);
   padding:8px 10px;border-left:3px solid var(--accent);background:var(--surface-2);
   border-radius:0 4px 4px 0;max-width:none}
@@ -396,12 +426,56 @@ tbody tr[hidden]{display:none}
 table.mini,table.matrix{min-width:0;font-size:12.5px;table-layout:fixed}
 /* 第一欄是列標題，不是資料。不釘住寬度的話那句長標題會把數字全推到右邊，
    而矩陣要能一眼看出行列關係，靠的正是格子等寬。 */
-table.matrix th:first-child{width:8.5em;white-space:normal;line-height:1.35}
+table.matrix th:first-child{width:9.5em;white-space:normal;line-height:1.35}
 table.matrix th[scope=row],table.matrix thead th{background:var(--surface-2);font-weight:600}
 table.matrix td{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
-/* 五級：綠 = 現價之上很多，紅 = 現價之下。亮底深字，和等第徽章同一套邏輯。 */
-table.matrix td.h4{background:var(--g4);color:var(--badge-ink)}
-table.matrix td.h3{background:var(--g3);color:var(--badge-ink)}
-table.matrix td.h2{background:var(--g2);color:var(--badge-ink)}
-table.matrix td.h1{background:var(--g1);color:var(--badge-ink)}
-table.matrix td.h0{background:var(--g0);color:var(--badge-ink)}
+/* 格子之間留白縫隙，不然色塊會糊成一片看不出分界——用 border-spacing
+   取代 border-collapse，縫隙處露出頁面底色。 */
+table.matrix{border-collapse:separate;border-spacing:3px}
+table.matrix th,table.matrix td{border-radius:3px}
+
+/* -- 左上角：斜線分隔「淨利率＼成長率」-------------------------------------
+   一個字串塞在一格裡最容易看反：到底哪個字對應橫向、哪個對應縱向。
+   用對角線把格子切成兩個三角，字各自貼著它管轄的那條表頭。 */
+table.matrix th.corner{position:relative;padding:0;background:var(--surface-2);
+  min-width:9em}
+table.matrix th.corner::before{content:"";position:absolute;inset:0;
+  background-image:linear-gradient(to top right,
+    transparent calc(50% - 1px),var(--ink-2) calc(50% - 1px),
+    var(--ink-2) calc(50% + 1px),transparent calc(50% + 1px));
+  opacity:.45}
+table.matrix .corner-inner{position:relative;display:block;width:100%;height:100%;
+  min-height:3.4em}
+table.matrix .corner-a,table.matrix .corner-b{position:absolute;font-size:10.5px;
+  font-weight:700;color:var(--ink-2);white-space:nowrap}
+table.matrix .corner-a{left:8px;bottom:5px}     /* 淨利率：對齊縱向（列）表頭 */
+table.matrix .corner-b{right:8px;top:5px}       /* 成長率：對齊橫向（欄）表頭 */
+
+/* 五級連續漸層，紅→綠，格子間縫隙靠 border-spacing 呈現，不是色塊本身留白。
+   預估 EPS 矩陣沒有色相分類，用中性藍灰系。 */
+table.matrix td.h0{background:#c0392b;color:#fff}
+table.matrix td.h1{background:#e08283;color:#3a1414}
+table.matrix td.h2{background:#f2d0a4;color:#4a3418}
+table.matrix td.h3{background:#8fc9a0;color:#12321c}
+table.matrix td.h4{background:#2f9e5c;color:#fff}
+
+/* 本益比「低」矩陣：藍色系漸層（冷→仍冷，但深淺分明） */
+table.matrix td.pe-lo0{background:#1e3a5f;color:#fff}
+table.matrix td.pe-lo1{background:#3f6690;color:#fff}
+table.matrix td.pe-lo2{background:#7ea6c9;color:#0d2338}
+table.matrix td.pe-lo3{background:#a9c9e3;color:#0d2338}
+table.matrix td.pe-lo4{background:#5aa9dd;color:#06263f}
+
+/* 本益比「中」矩陣：綠色系漸層 */
+table.matrix td.pe-mid0{background:#7a4a1e;color:#fff}
+table.matrix td.pe-mid1{background:#a67c3f;color:#2b1a06}
+table.matrix td.pe-mid2{background:#c9dba9;color:#233312}
+table.matrix td.pe-mid3{background:#8fc98f;color:#12321c}
+table.matrix td.pe-mid4{background:#2f9e5c;color:#fff}
+
+/* 本益比「高」矩陣：橘色系漸層 */
+table.matrix td.pe-hi0{background:#7a2e1e;color:#fff}
+table.matrix td.pe-hi1{background:#b5563a;color:#fff}
+table.matrix td.pe-hi2{background:#e3a97e;color:#3a2108}
+table.matrix td.pe-hi3{background:#f0c68f;color:#3a2108}
+table.matrix td.pe-hi4{background:#e08b2f;color:#3a2108}
