@@ -78,6 +78,34 @@ class Store:
     def exists(self, table: str) -> bool:
         return self.path(table).exists()
 
+    def upsert(
+        self,
+        table: str,
+        key_field: str,
+        key: str,
+        rows: Iterable[dict[str, Any]],
+        columns: Sequence[str],
+        *,
+        sort_by: Sequence[str] | None = None,
+    ) -> int:
+        """Replace every row whose ``key_field`` is ``key``, keep the rest.
+
+        The whole-market table is one snapshot of 1,741 stocks taken from the
+        workbook, and it cannot be re-taken — but a single stock *can* be
+        re-fetched, and when it is, its row in that table is the one thing on
+        the site still showing last year's answer.  This is the seam: one
+        stock's rows are replaced, everyone else's are copied through
+        untouched, so the table becomes 「1,740 檔是舊的、這一檔是新的」 rather
+        than all-or-nothing.
+
+        Returns the number of rows written for ``key`` (0 means the stock was
+        removed, which no caller currently wants).
+        """
+        fresh = list(rows)
+        kept = [r for r in self.read(table) if r.get(key_field) != key]
+        self.write(table, kept + fresh, columns, sort_by=sort_by)
+        return len(fresh)
+
     # -- json blobs -------------------------------------------------------
 
     def write_json(self, name: str, payload: Any) -> Path:

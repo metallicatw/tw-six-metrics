@@ -717,6 +717,60 @@ def _g(value: object) -> str:
     return "—" if value is None else f"{float(value):g}"  # type: ignore[arg-type]
 
 
+def _vintage(row: dict[str, str]) -> tuple[str, str]:
+    """一列資料有多新：財報季別優先，同季再比營收月份。
+
+    兩個欄位都是可以直接比字串的格式（``2026.2Q``、``115/07``），因為年份在
+    最前面而且位數固定——這不是巧合，是活頁簿本來就這樣印的。
+    """
+    return (row.get("fiscal_quarter") or "", row.get("revenue_month") or "")
+
+
+def _store_rating(root: Path, rating: Any) -> None:
+    """把剛算好的評等寫回全市場表，讓〔評等清單〕跟著這一次抓取一起動。
+
+    在這之前，抓一檔股票會更新它的個股頁，卻不會更新清單上它那一列——於是
+    清單永遠停在活頁簿匯入時的那個快照（2025.2Q），而個股頁已經是 2026.2Q。
+    同一個網站上兩個數字互相矛盾，而且沒有任何一處說明為什麼。
+
+    只在新的比舊的新的時候才覆蓋。抓取可能失敗成「拿到一份比較短的資料」——
+    鏡像站給了半份、某一季還沒公布——那種時候維持舊值，比用一份退化的資料
+    蓋掉一份完整的舊資料好：清單上一個過期但正確的評等，仍然是一個評等。
+    """
+    from .store.snapshots import RATING_COLUMNS, Store, rating_rows
+
+    fresh = rating_rows(rating)
+    newest = next((r for r in fresh if str(r.get("period_index")) == "1"), None)
+    if newest is None:
+        return
+    store = Store(root)
+    stored = [
+        r
+        for r in store.read("ratings")
+        if r.get("stock_id") == rating.stock_id and r.get("period_index") == "1"
+    ]
+    if stored and _vintage(stored[0]) > _vintage({k: str(v) for k, v in newest.items()}):
+        print(
+            f"  清單維持原值（表上是 {stored[0].get('fiscal_quarter')}，"
+            f"這次抓到的是 {newest.get('fiscal_quarter')}）"
+        )
+        return
+    # 個股抓取拿不到「市場」和「產業」——那兩欄在活頁簿的全市場清單裡，不在任何
+    # 一張個股報表上。不補回來的話，更新一檔股票會把它的產業清空，於是它從清單的
+    # 產業篩選和搜尋索引裡消失：更新一檔的代價是弄丟它。
+    if stored:
+        for row in fresh:
+            for field in ("name", "market", "industry"):
+                if not row.get(field):
+                    row[field] = stored[0].get(field, "")
+    n = store.upsert(
+        "ratings", "stock_id", rating.stock_id, fresh, RATING_COLUMNS,
+        sort_by=("stock_id", "period_index"),
+    )
+    print(f"  評等清單已更新（{newest.get('fiscal_quarter')} / "
+          f"{newest.get('revenue_month')}，{n} 期）")
+
+
 def cmd_page(args: argparse.Namespace) -> int:
     """個股四頁：評價簡表、六大財務指標評等、EPS預估與估價、殖利率估價.
 
@@ -763,6 +817,8 @@ def cmd_page(args: argparse.Namespace) -> int:
         sheets_present=list(grids),
         settings=settings,
     )
+
+    _store_rating(root, rating)
 
     out = Path(args.out) if args.out else Path(settings.report.site_dir) / "stock"
     target = build_stock_page(

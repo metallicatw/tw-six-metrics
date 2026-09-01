@@ -231,14 +231,40 @@ def rows_from_store(records: Iterable[dict[str, str]]) -> list[Row]:
 
 
 def data_vintage(rows: list[Row]) -> tuple[str, str]:
-    """The newest 財報季度 and 營收月份 actually present in the data.
+    """The 財報季度 and 營收月份 that *most* of the table is on.
+
+    Not the newest.  Once a single stock can be re-fetched on its own — and it
+    can, that is what 「立即更新」 does — ``max`` starts answering a question
+    nobody asked: one refreshed stock would make the header claim all 1,741
+    are on the new quarter.  That is the 「理直氣壯地過時」 failure this file
+    warns about elsewhere, arrived at from the opposite direction.
+
+    The mode is what the reader needs, because the header labels the *table*.
+    How many rows are ahead of it is a separate number, and
+    :func:`fresher_than` is where that one lives.
 
     Both labels sort correctly as strings — ``"2026.2Q" > "2025.4Q"`` and
-    ``"115/07" > "114/12"`` — because the year leads and is fixed width.
+    ``"115/07" > "114/12"`` — because the year leads and is fixed width; ties
+    in the count break towards the older label, so a 50/50 split does not
+    silently promote half the table.
     """
-    quarters = [r.fiscal_quarter for r in rows if r.fiscal_quarter]
-    months = [r.revenue_month for r in rows if r.revenue_month]
-    return (max(quarters) if quarters else "", max(months) if months else "")
+
+    def common(values: list[str]) -> str:
+        if not values:
+            return ""
+        counts = Counter(values)
+        top = max(counts.values())
+        return min(v for v, n in counts.items() if n == top)
+
+    return (
+        common([r.fiscal_quarter for r in rows if r.fiscal_quarter]),
+        common([r.revenue_month for r in rows if r.revenue_month]),
+    )
+
+
+def fresher_than(rows: list[Row], quarter: str) -> int:
+    """How many rows are on a newer 財報季度 than the table's own label."""
+    return sum(1 for r in rows if r.fiscal_quarter and r.fiscal_quarter > quarter)
 
 
 #: How many months past the newest 營收月份 before the site says so out loud.
@@ -483,7 +509,8 @@ def build_site(
     # a record.  The listing is the same data without the ranking, and it is
     # where the search box and the per-stock pages actually lead.
     env.get_template("list.html.j2").stream(
-        **base, page="list", rel="", rows=rows
+        **base, page="list", rel="", rows=rows,
+        fresh_count=fresher_than(rows, quarter),
     ).dump(str(out_dir / "index.html"))
     written["index.html（評等清單）"] = 1
 

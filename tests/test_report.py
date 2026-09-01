@@ -15,6 +15,7 @@ from twsix.report.build import (
     _parse_roc_month,
     _valuation_view,
     data_vintage,
+    fresher_than,
     rows_from_store,
     vintage_note,
 )
@@ -41,12 +42,35 @@ def _row(stock_id: str, quarter: str, month: str, composite: float) -> Row:
 
 def test_vintage_reads_the_data_not_the_first_row():
     """The regression: rows are sorted by composite, so rows[0] is the top
-    scorer — which may sit on an older quarter than the market's newest."""
+    scorer — which may sit on a different quarter from the rest of the table."""
     rows = [
-        _row("1111", "2025.2Q", "114/08", 4.0),  # sorts first, but is stale
+        _row("1111", "2025.2Q", "114/08", 4.0),  # sorts first
         _row("2222", "2026.2Q", "115/07", 1.0),
+        _row("3333", "2026.2Q", "115/07", 2.0),
     ]
     assert data_vintage(rows) == ("2026.2Q", "115/07")
+
+
+def test_vintage_is_what_most_of_the_table_is_on_not_the_newest_row():
+    """一檔股票按過「立即更新」之後，表就是混齡的。
+
+    取 max 的話，一列新的會讓標題宣稱整張 1,741 檔都是新的那一季——那正是這個
+    檔案別處警告的「理直氣壯地過時」，只是從反方向到達。標題標的是這張表，
+    所以標題要說多數在哪一季；有幾列比它新，是另一個數字。
+    """
+    rows = [_row(str(1000 + i), "2025.2Q", "114/08", 1.0) for i in range(9)]
+    rows.append(_row("5439", "2026.2Q", "115/07", 3.2))
+    assert data_vintage(rows) == ("2025.2Q", "114/08")
+    assert fresher_than(rows, "2025.2Q") == 1
+
+
+def test_a_dead_even_split_does_not_promote_half_the_table():
+    """平手的時候往舊的那一邊靠。標題寧可保守，也不要幫一半的資料背書。"""
+    rows = [
+        _row("1111", "2025.2Q", "114/08", 1.0),
+        _row("2222", "2026.2Q", "115/07", 1.0),
+    ]
+    assert data_vintage(rows) == ("2025.2Q", "114/08")
 
 
 def test_vintage_of_an_empty_table_is_blank_not_an_error():
