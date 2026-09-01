@@ -826,7 +826,12 @@ def build_stock_page(
     The four are one document because they are four views of one fetch; the
     section nav at the top is the workbook's own tab strip.
     """
-    from .stock_page import REWARD_RISK_NOTES, REWARD_RISK_RULES
+    from .stock_page import (
+        FORECAST_BASIS,
+        FORECAST_BASIS_NOTES,
+        REWARD_RISK_NOTES,
+        REWARD_RISK_RULES,
+    )
 
     env = _env(assets=assets)
     out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -853,5 +858,7 @@ def build_stock_page(
         indicator_labels=[INDICATOR_LABELS[k] for k in INDICATOR_ORDER],
         reward_risk_rules=REWARD_RISK_RULES,
         reward_risk_notes=REWARD_RISK_NOTES,
+        forecast_basis=FORECAST_BASIS,
+        forecast_basis_notes=FORECAST_BASIS_NOTES,
     ).dump(str(out_file))
     return out_file

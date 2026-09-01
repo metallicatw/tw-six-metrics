@@ -10,12 +10,20 @@ workbook actually computed and that the golden extraction captured:
 * 〔BASIC〕C9 殖利率 — pins the dividend and its one-year lag.
 * 〔BASIC〕E11 每股淨值 vs E15 股價淨值比 — pins book value.
 
-**Not reconciled.**  〔EPS預估與估價〕 and 〔殖利率估價〕 were *not* captured
-into the fixtures, so the target price, the PEG block and the 便宜/合理/昂貴
-prices have no Excel answer to diff against.  Those tests below pin the
-behaviour of *our* implementation — they catch regressions, they do not prove
-agreement with the workbook.  Anyone extracting those two sheets later should
-promote them into the reconciled tier.
+* 〔EPS預估與估價〕D/K/L/I — 預估成長率、本益比高低點與預估EPS, against the
+  newest forecast row the workbook itself computed.  This sheet *was* captured
+  (687 cells); an earlier version of this docstring said it had not been, and
+  said so for long enough that the claim outlived its own truth.
+
+**Not reconciled.**  〔殖利率估價〕's 便宜/合理/昂貴 prices and the PEG block
+have no captured answer to diff against, so the tests below pin the behaviour
+of *our* implementation — they catch regressions, they do not prove agreement
+with the workbook.
+
+One difference worth naming rather than hiding: the .xlsm was saved with K2 on
+「3年平均」, while the shipped config defaults to 「5年平均」.  Both figures are
+in 〔BASIC2〕 (K7:K8 and L7:L8), so the reconciling test passes ``avg_3y``
+explicitly instead of relying on the default.
 """
 
 from __future__ import annotations

@@ -738,11 +738,38 @@
     return 'h0';
   }
 
-  function matrix(title, note, values, fmt, colour){
+  /* 相對現價那把尺，寫一次，圖例和格子共用——圖例對不上格子的顏色，比沒有圖例
+     更糟。 */
+  var LEVELS = [
+    ['h0', '低於現價 20% 以上'], ['h1', '低於現價 0 ~ 20%'],
+    ['h2', '高於現價 0 ~ 20%'], ['h3', '高於現價 20 ~ 50%'],
+    ['h4', '高於現價 50% 以上']
+  ];
+
+  function legend(){
+    if(price === null) return '';
+    return '<p class="mlegend"><b>格子顏色</b>　相對現價 ' + price.toFixed(2) +
+      ' 的上檔空間，不是數字大小：' + LEVELS.map(function(x){
+        return '<span class="sw ' + x[0] + '"></span>' + x[1];
+      }).join('　') + '</p>';
+  }
+
+  /* 表頭左上角是兩個座標軸，不是一個標題。「淨利率＼成長率」要讀者自己猜哪個
+     是橫的哪個是直的，而猜錯的代價是整張表都看反——所以畫一條真的斜線，把兩個
+     軸名分別放到它們指的那一邊：右上是欄（淨利率），左下是列（成長率）。 */
+  var CORNER = '<th class="corner">' +
+    '<span class="ax-col">淨利率 →</span>' +
+    '<span class="ax-row">↓ 成長率</span></th>';
+
+  /* tone 只染表框、表頭和標題，不染資料格：三張目標價矩陣要一眼分得出來，但
+     格子的顏色在三張表裡必須是同一個意思，否則就沒辦法互相比較。 */
+  function matrix(title, note, values, fmt, colour, tone){
     var g = nums(el.g.value), m = nums(el.m.value);
-    var h = '<h5>' + title + '</h5>';
+    var t = ' mt' + (tone || 0);
+    var h = '<h5 class="mtitle' + t + '">' + title + '</h5>';
     if(note) h += '<p class="muted">' + note + '</p>';
-    h += '<div class="scroll"><table class="matrix"><thead><tr><th>淨利率＼成長率</th>';
+    h += '<div class="scroll mwrap' + t + '"><table class="matrix' + t + '"><thead><tr>' +
+         CORNER;
     m.forEach(function(v){ h += '<th class="num">' + v + '%</th>'; });
     h += '</tr></thead><tbody>';
     g.slice().reverse().forEach(function(gv){
@@ -767,13 +794,16 @@
     function eps(gv, mv){ return rev * (1 + gv / 100) * (mv / 100) / (sh * 100); }
 
     var html = matrix('預估 EPS（元）', '', eps,
-      function(v){ return v.toFixed(2); }, null);
+      function(v){ return v.toFixed(2); }, null, 0);
 
-    nums(el.pe.value).forEach(function(pe){
-      html += matrix('預估目標價（元）　本益比 ' + pe,
-        price ? '顏色是相對現價 ' + price.toFixed(2) + ' 的上檔空間，不是數字大小。' : '',
+    /* 本益比由低到高，三張表用三種色調——低估、中性、樂觀，捲動時分得出自己
+       在看哪一張。超過三個 PE 就從頭輪，色調是標籤不是刻度。 */
+    var pes = nums(el.pe.value).slice().sort(function(a, b){ return a - b; });
+    if(pes.length) html += legend();
+    pes.forEach(function(pe, i){
+      html += matrix('預估目標價（元）　本益比 ' + pe, '',
         function(gv, mv){ return eps(gv, mv) * pe; },
-        function(v){ return Math.round(v).toLocaleString(); }, heat);
+        function(v){ return Math.round(v).toLocaleString(); }, heat, i % 3 + 1);
     });
     el.out.innerHTML = html;
   }

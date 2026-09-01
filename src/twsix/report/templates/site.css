@@ -27,6 +27,18 @@
   /* 河流圖分區底色：只是背景，每一區另有虛線與右側名稱，顏色不單獨承載意義 */
   --zone-0:#cdece0; --zone-1:#ddf2e6; --zone-2:#e6edf2;
   --zone-3:#fbecc9; --zone-4:#fbdccf; --zone-5:#f8c8ba;
+  /* 九宮格的格子：同一組等第色，但改成漸層。平塗的九塊接在一起會糊成一片，
+     每格帶一點斜向明暗之後，即使是相鄰的同級格子也看得出邊界。 */
+  --m-h4:linear-gradient(150deg,#3ad9a8,#0a9b74);
+  --m-h3:linear-gradient(150deg,#4ad7c0,#17a892);
+  --m-h2:linear-gradient(150deg,#a3b2c4,#6f8299);
+  --m-h1:linear-gradient(150deg,#f7c260,#e5941a);
+  --m-h0:linear-gradient(150deg,#f88574,#dc4130);
+  /* 三張目標價矩陣的色調。只染表框與表頭，由低本益比到高本益比：青綠 → 靛藍
+     → 紫紅。這是標籤，不是刻度——資料格的顏色三張表共用同一把尺。 */
+  --t1:#0b6f63; --t1-bg:#d4ebe6; --t1-line:#7cc4b8;
+  --t2:#3b4fc4; --t2-bg:#dfe3fa; --t2-line:#96a2ee;
+  --t3:#8d3fae; --t3-bg:#eeddf7; --t3-line:#c99ade;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
   --ground:#0b1016; --surface:#141b22; --surface-2:#1c252e;
@@ -42,6 +54,16 @@
   --m3:#e85f7c; --m4:#5490e6; --m5:#7ba233;
   --zone-0:#18453b; --zone-1:#193830; --zone-2:#232d36;
   --zone-3:#3d3320; --zone-4:#472d20; --zone-5:#52291d;
+  /* 格子的漸層兩個主題共用——亮底深字本來就兩邊都成立。 */
+  --m-h4:linear-gradient(150deg,#3ad9a8,#0a9b74);
+  --m-h3:linear-gradient(150deg,#4ad7c0,#17a892);
+  --m-h2:linear-gradient(150deg,#a3b2c4,#6f8299);
+  --m-h1:linear-gradient(150deg,#f7c260,#e5941a);
+  --m-h0:linear-gradient(150deg,#f88574,#dc4130);
+  /* 表頭的色調要重挑：淺色的粉彩底在深底上會變成三塊發光的貼紙。 */
+  --t1:#5fd8c6; --t1-bg:#123430; --t1-line:#2c6f66;
+  --t2:#94a2ff; --t2-bg:#1c2145; --t2-line:#4a54a8;
+  --t3:#d78ff0; --t3-bg:#2f1e3c; --t3-line:#7a4a94;
 }}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);
@@ -394,14 +416,90 @@ tbody tr[hidden]{display:none}
 .calc .btn-grab{font-size:13px;padding:7px 16px}
 .calc .linkish{margin-left:12px}
 table.mini,table.matrix{min-width:0;font-size:12.5px;table-layout:fixed}
+/* 九個格子之間留縫。原本 border-collapse 讓九塊填色直接相鄰，兩個同級的格子就
+   黏成一塊，讀者數不出這是 3×3；分開之後每一格是一個獨立的假設，看起來也是。 */
+table.matrix{border-collapse:separate;border-spacing:5px}
+/* 外框貼著表格收邊，不要拉一條橫跨版面的空框——那條框會讓人以為右邊還有欄。 */
+.mwrap{padding:3px;display:inline-block;max-width:100%;vertical-align:top}
+/* 九宮格要看起來像九宮格。撐滿整個版面寬度的話，三欄各兩百多像素，九個格子變成
+   九條橫槓，行列關係反而讀不出來——所以這張表不吃滿寬度，欄寬釘死。 */
+table.matrix{width:auto}
+table.matrix thead th.num,table.matrix td{width:7.5em}
 /* 第一欄是列標題，不是資料。不釘住寬度的話那句長標題會把數字全推到右邊，
    而矩陣要能一眼看出行列關係，靠的正是格子等寬。 */
-table.matrix th:first-child{width:8.5em;white-space:normal;line-height:1.35}
-table.matrix th[scope=row],table.matrix thead th{background:var(--surface-2);font-weight:600}
-table.matrix td{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
-/* 五級：綠 = 現價之上很多，紅 = 現價之下。亮底深字，和等第徽章同一套邏輯。 */
-table.matrix td.h4{background:var(--g4);color:var(--badge-ink)}
-table.matrix td.h3{background:var(--g3);color:var(--badge-ink)}
-table.matrix td.h2{background:var(--g2);color:var(--badge-ink)}
-table.matrix td.h1{background:var(--g1);color:var(--badge-ink)}
-table.matrix td.h0{background:var(--g0);color:var(--badge-ink)}
+table.matrix th:first-child{width:8em;white-space:normal;line-height:1.35}
+table.matrix th,table.matrix td{border-bottom:0;border-radius:6px;padding:8px 10px}
+table.matrix th[scope=row],table.matrix thead th{background:var(--surface-2);font-weight:600;
+  color:var(--ink-2);position:static}
+table.matrix td{background:var(--surface-2);font-variant-numeric:tabular-nums;
+  text-align:right;font-weight:600}
+/* 預估 EPS 那張沒有上色，表頭得靠自己和資料格分開。 */
+table.matrix.mt0 th[scope=row],table.matrix.mt0 thead th,
+table.matrix.mt0 th.corner{background-color:var(--rule)}
+
+/* 左上角那一格是兩個座標軸，不是一個標題。「淨利率＼成長率」印成一行，讀者得
+   自己猜哪個是橫的——猜錯就整張表看反。畫一條真的斜線，兩個軸名各站一邊：
+   右上是欄（淨利率），左下是列（成長率）。 */
+table.matrix th.corner{position:relative;padding:0;height:48px;background:var(--surface-2);
+  background-image:linear-gradient(to top right,transparent calc(50% - 0.6px),
+    var(--rule) calc(50% - 0.6px),var(--rule) calc(50% + 0.6px),
+    transparent calc(50% + 0.6px))}
+th.corner span{position:absolute;font-size:11px;font-weight:600;color:var(--ink-2);
+  letter-spacing:.02em}
+th.corner .ax-col{top:5px;right:8px}
+th.corner .ax-row{bottom:5px;left:8px}
+
+/* 五級：綠 = 現價之上很多，紅 = 現價之下。亮底深字，和等第徽章同一套邏輯；
+   改成漸層之後相鄰的同級格子也分得開。 */
+table.matrix td.h4{background:var(--m-h4);color:var(--badge-ink)}
+table.matrix td.h3{background:var(--m-h3);color:var(--badge-ink)}
+table.matrix td.h2{background:var(--m-h2);color:var(--badge-ink)}
+table.matrix td.h1{background:var(--m-h1);color:var(--badge-ink)}
+table.matrix td.h0{background:var(--m-h0);color:var(--badge-ink)}
+
+/* 圖例。三張表的格子共用這一把尺，所以尺只印一次。 */
+.mlegend{margin:14px 0 10px;font-size:12px;color:var(--muted);line-height:2}
+.mlegend .sw{display:inline-block;width:22px;height:11px;border-radius:3px;
+  margin-right:5px;vertical-align:-1px}
+.mlegend .sw.h4{background:var(--m-h4)}.mlegend .sw.h3{background:var(--m-h3)}
+.mlegend .sw.h2{background:var(--m-h2)}.mlegend .sw.h1{background:var(--m-h1)}
+.mlegend .sw.h0{background:var(--m-h0)}
+
+/* 三張目標價矩陣的色調：本益比由低到高，青綠 → 靛藍 → 紫紅。只染標題、表框與
+   表頭——資料格的顏色在三張表裡必須是同一個意思，才比得起來。 */
+.calc h5.mtitle{border-left:4px solid var(--rule);padding-left:9px}
+.calc h5.mt1{border-left-color:var(--t1);color:var(--t1)}
+.calc h5.mt2{border-left-color:var(--t2);color:var(--t2)}
+.calc h5.mt3{border-left-color:var(--t3);color:var(--t3)}
+.mwrap.mt1{border-color:var(--t1-line)}
+.mwrap.mt2{border-color:var(--t2-line)}
+.mwrap.mt3{border-color:var(--t3-line)}
+table.matrix.mt1 th[scope=row],table.matrix.mt1 thead th{background:var(--t1-bg);color:var(--t1)}
+table.matrix.mt2 th[scope=row],table.matrix.mt2 thead th{background:var(--t2-bg);color:var(--t2)}
+table.matrix.mt3 th[scope=row],table.matrix.mt3 thead th{background:var(--t3-bg);color:var(--t3)}
+table.matrix.mt1 th.corner{background-color:var(--t1-bg)}
+table.matrix.mt2 th.corner{background-color:var(--t2-bg)}
+table.matrix.mt3 th.corner{background-color:var(--t3-bg)}
+table.matrix.mt1 th.corner span{color:var(--t1)}
+table.matrix.mt2 th.corner span{color:var(--t2)}
+table.matrix.mt3 th.corner span{color:var(--t3)}
+
+/* 計算依據。預設收合，但它是頁面的一部分，不是附錄。 */
+.basis{margin:16px 0 0;border:1px solid var(--rule);border-radius:6px;
+  background:var(--surface);padding:0}
+.basis>summary{padding:10px 14px;cursor:pointer;font-size:13.5px;font-weight:600;
+  color:var(--ink);list-style-position:inside}
+.basis>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+.basis[open]>summary{border-bottom:1px solid var(--rule)}
+.basis>.scroll{margin:12px 14px;border-radius:5px}
+.basis>.warnings{margin:0 14px 14px;padding-left:18px}
+/* 出處那一欄最長，讓它換行而不是把整張表推出畫面——這張表是拿來讀的，不是拿來
+   左右捲的。 */
+table.basis-t{font-size:12.5px;min-width:0;table-layout:fixed}
+/* 全站的 th,td 是 nowrap（數字表格要的），但這張表是拿來讀的句子，必須換行——
+   不換行的話出處那一欄會把整張表推出畫面，變成一張要左右捲的說明。 */
+table.basis-t th,table.basis-t td{white-space:normal;vertical-align:top;line-height:1.6}
+table.basis-t th:nth-child(1),table.basis-t td:nth-child(1){width:8.5em}
+table.basis-t th:nth-child(2),table.basis-t td:nth-child(2){width:31%}
+table.basis-t td.f{font-weight:600;color:var(--ink)}
+table.basis-t td.q{font-variant-numeric:tabular-nums}

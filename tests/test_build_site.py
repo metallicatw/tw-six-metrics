@@ -832,3 +832,71 @@ def test_the_target_price_calculator_is_seeded_from_the_stocks_own_numbers(tmp_p
 
     js = (out / "assets" / "site.js").read_text("utf-8")
     assert "預估目標價" in js and "上檔空間" in js
+
+
+def test_every_forecast_field_on_the_page_says_where_its_formula_came_from(tmp_path=None):
+    """一個沒有出處的估值和一個猜出來的估值，在畫面上長得一模一樣。
+
+    〔EPS預估與估價〕的每一格都是活頁簿的公式搬過來的，但公式原本只活在程式的
+    docstring 裡——讀者看到的只有數字。這個測試釘住的是：畫面上出現的每一個欄位，
+    說明欄裡都找得到它的公式與活頁簿出處。
+
+    釘住「每一個」而不是「有這個區塊」，是因為之後新增欄位很容易只加畫面不加說明，
+    而那正是這個區塊存在的理由被悄悄抽掉的方式。
+    """
+    from twsix.report.stock_page import FORECAST_BASIS, FORECAST_BASIS_NOTES
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "stock" / "5439.html").read_text("utf-8")
+
+    assert "各欄的計算依據" in page
+    for field, formula, source in FORECAST_BASIS:
+        assert field and formula and source, f"{field} 少了公式或出處"
+        assert field in page, f"說明欄漏了 {field}"
+        assert source in page, f"{field} 的出處沒有印出來"
+    for note in FORECAST_BASIS_NOTES:
+        assert note in page
+
+    # 畫面上實際印出來的每一個欄位，說明欄都要涵蓋。
+    labelled = {f for f, _, _ in FORECAST_BASIS}
+    for shown in ("預估成長率", "預估營收", "稅後淨利率", "預估淨利",
+                  "加權平均股數", "預估 EPS", "近四季 EPS", "目標價",
+                  "下檔價", "預期報酬", "預期風險", "報酬風險比",
+                  "預估本益比", "EPS 成長率", "PEG"):
+        assert shown in labelled, f"{shown} 印在頁面上，卻沒有計算依據"
+
+    # 對帳的強弱要說出來：本益比基準和活頁簿存檔時的設定不同，這件事必須寫明。
+    assert "pe_basis" in page and "排除極端值" in page
+
+
+def test_the_matrix_says_which_axis_is_which_and_the_three_bands_read_apart(tmp_path=None):
+    """「淨利率＼成長率」印成一行，讀者得自己猜哪個是橫的——猜錯就整張表看反。
+
+    改成一格裡兩個軸名各站斜線一邊；同時三張目標價矩陣要分得出來，而格子的顏色
+    在三張表裡必須是同一個意思（否則就沒辦法互相比較），所以色調只染表頭與表框。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    js = (out / "assets" / "site.js").read_text("utf-8")
+    css = (out / "assets" / "site.css").read_text("utf-8")
+
+    # 兩個軸名分開，而且是分開的元素——不是一個字串裡的斜線。
+    assert 'class="ax-col"' in js and 'class="ax-row"' in js
+    assert "<th>淨利率" not in js          # 兩個軸名擠在一格裡的舊寫法
+    assert "th.corner" in css and "to top right" in css
+
+    # 九個格子之間要有縫，不然色塊糊成一片。
+    assert "border-spacing" in css
+
+    # 三張矩陣三種色調，而且色調只上在表頭與表框，不上在資料格。
+    for tone in ("--t1", "--t2", "--t3"):
+        assert tone in css
+    assert "table.matrix.mt1 thead th" in css
+    for cell in ("td.h0", "td.h1", "td.h2", "td.h3", "td.h4"):
+        assert f"table.matrix {cell}{{background:var(--m-h" in css.replace("\n", "")
+
+    # 圖例和格子共用同一組漸層，圖例對不上格子比沒有圖例更糟。
+    assert ".mlegend .sw.h4{background:var(--m-h4)}" in css

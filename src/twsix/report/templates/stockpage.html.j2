@@ -228,6 +228,27 @@
 </div>
 {% endif %}
 
+{# 說明欄。預設收合——每天看的人不需要每天讀一次公式，但第一次看到「目標價
+   392.82」的人一定會想問這個數字憑什麼。收合的 <details> 讓兩種人各取所需，
+   而且它在頁面裡、不在 README 裡：出處要跟數字待在同一個畫面才有用。 #}
+{% if forecast_basis %}
+<details class="basis">
+  <summary>各欄的計算依據<span class="muted">　公式與活頁簿出處，逐欄對照</span></summary>
+  <div class="scroll"><table class="basis-t">
+    <thead><tr><th>欄位</th><th>公式</th><th>活頁簿出處</th></tr></thead>
+    <tbody>
+      {% for field, formula, source in forecast_basis %}
+      <tr><td class="f">{{ field }}</td><td class="q">{{ formula }}</td>
+          <td class="muted">{{ source }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  <ul class="warnings">
+    {% for note in forecast_basis_notes %}<li>{{ note }}</li>{% endfor %}
+  </ul>
+</details>
+{% endif %}
+
 {% if p.figures.pe_band %}{{ p.figures.pe_band|safe }}{% endif %}
 
 {% if p.calc and p.calc.revenue and p.calc.shares %}
