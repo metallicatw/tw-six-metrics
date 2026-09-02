@@ -103,8 +103,62 @@ jobs:
             git diff --name-only | sed 's/^/  /'
             exit 1
           fi
-          git pull --rebase origin main
-          git push origin HEAD:main
+          # 這一批動到哪幾檔——撞車的時候要用它把評等貼回去。
+          codes="$(git diff --name-only HEAD~1 HEAD -- data/sheets \
+                   | cut -d/ -f3 | sort -u | paste -sd, -)"
+          # 「加一檔個股」和這條排程用不同的 concurrency group，所以它們可以同時
+          # 在跑，而且兩邊都寫 data/ratings.csv 與 data/sheets/。不同股票的話
+          # CSV 會逐行自動合併；**同一檔**的話 .json.gz 是二進位，git 合不起來，
+          # 這一批就整個紅字結束——白抓一小時，而使用者那顆按鈕明明是好的。
+          #
+          # 所以衝突的時候讓給對方：對方那一版是使用者剛按下按鈕抓回來的，一樣新
+          # 或更新，而我們這一批其餘的九十幾檔沒有理由跟著陪葬。被讓掉的那一檔
+          # 下一批會重新排到（佇列是每次從資料重算的，不是一份存起來的名單）。
+          for attempt in 1 2 3; do
+            if ! git pull --rebase origin main; then
+              conflicted="$(git diff --name-only --diff-filter=U)"
+              if [ -z "$conflicted" ]; then
+                # 沒有衝突檔案的失敗多半是網路或權限，不是撞車。收乾淨再試一次。
+                git rebase --abort || true
+                echo "::notice::pull 失敗但沒有衝突檔案，第 $attempt 次重試"
+                sleep 5
+                continue
+              fi
+              echo "::warning::和另一條 workflow 撞上了，這幾個檔案讓給對方（它比較新）："
+              printf '%s\n' "$conflicted" | sed 's/^/  /'
+              # rebase 進行中的 --ours 指的是**已經在 main 上的那一版**，也就是
+              # 對方剛推上去的那一版。改名／刪除型的衝突沒有那一版可取，就移掉。
+              printf '%s\n' "$conflicted" | while read -r f; do
+                git checkout --ours -- "$f" 2>/dev/null || git rm -q -- "$f" || true
+              done
+              git add -A
+              # 讓掉 data/ratings.csv 的話，這一批**另外九十幾檔**的評等也跟著退
+              # 回去了——分頁還在硬碟上，清單卻是舊的。分頁已經抓好，重算一次不
+              # 必連網，所以把那幾列重新貼回對方那一版上面。期別的守門還在，
+              # 對方剛抓的那一檔不會被比較舊的資料蓋掉。
+              case "$conflicted" in
+                *data/ratings.csv*)
+                  # 讓掉分頁的那幾檔，評等也一併讓掉——它們的分頁現在是對方那一
+                  # 版，我們的評等是從自己那一版算出來的，貼回去只會讓兩者不一致。
+                  yielded="$(printf '%s\n' "$conflicted" \
+                             | sed -n 's#^data/sheets/\([^/]*\)/.*#\1#p' | sort -u)"
+                  keep="$(printf '%s\n' "${codes//,/$'\n'}" | grep -v '^$' \
+                          | { [ -n "$yielded" ] && grep -vxF "$yielded" || cat; } \
+                          | paste -sd, -)"
+                  [ -n "$keep" ] && twsix restate --codes "$keep" || true
+                  git add data/ratings.csv
+                  ;;
+              esac
+              # 讓掉之後這個 commit 可能一點內容都不剩，那就跳過它。
+              GIT_EDITOR=true git rebase --continue || git rebase --skip
+            fi
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "::notice::推不上去（多半是剛剛又有人推了），第 $attempt 次重試"
+          done
+          echo "::error::試了三次都推不上去"
+          exit 1
 
       # 資料進了 repo，網站還沒重建。這兩步讓補好的那一批當天就出現在清單上。
       # 沒有任何一列改變的時候不重建：那是一次沒有內容差異的發布。

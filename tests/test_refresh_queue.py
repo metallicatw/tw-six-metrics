@@ -124,3 +124,31 @@ def test_a_stock_that_is_already_complete_does_not_count_against_the_limit():
         )
     src = inspect.getsource(cmd_backfill)
     assert "worked >= limit" in src
+
+
+def test_a_collision_with_the_manual_button_does_not_sink_the_whole_batch():
+    """兩條 workflow 可以同時跑，而且都寫 data/ratings.csv 與 data/sheets/。
+
+    不同股票的話 CSV 逐行自動合併；**同一檔**的話 .json.gz 是二進位，git 合不
+    起來，整批紅字結束——白抓一小時，而使用者那顆按鈕明明是好的。
+
+    所以撞到的檔案讓給對方（對方是使用者剛按下按鈕抓回來的，一樣新或更新），
+    其餘的照樣進去。讓掉 ratings.csv 的時候要把這一批**其他**股票的評等重新貼
+    回去，否則分頁留在硬碟上、清單卻退回舊值——那是最難查的一種不一致。
+    """
+    wf = (ROOT / ".github/workflows/refresh.yml").read_text("utf-8")
+    assert "--diff-filter=U" in wf, "沒有處理衝突，撞到就整批紅字"
+    assert "git checkout --ours" in wf, "rebase 中的 --ours 才是對方那一版"
+    assert "twsix restate" in wf, "讓掉 ratings.csv 之後沒有把其他股票貼回去"
+    assert "rebase --skip" in wf, "讓掉之後可能整個 commit 都空了"
+
+
+def test_restating_needs_no_network_and_no_pages():
+    """重貼評等只讀本機分頁：撞車發生在 commit 的當下，那時不該再去連網。"""
+    import argparse
+
+    from twsix.cli import EXIT_OK, cmd_restate
+
+    root = _table([{"stock_id": "1101", "period_index": "1", "fiscal_quarter": "2026.2Q"}])
+    rc = cmd_restate(argparse.Namespace(config=None, data=str(root), codes="1101"))
+    assert rc == EXIT_OK, "沒有分頁的時候要安靜跳過，不是失敗"

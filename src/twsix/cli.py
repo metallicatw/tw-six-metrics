@@ -1522,6 +1522,45 @@ def cmd_refresh(args: argparse.Namespace) -> int:
     return EXIT_OK if done or not failed else EXIT_FAIL
 
 
+def cmd_restate(args: argparse.Namespace) -> int:
+    """用**本機已經有的**分頁重算評等、寫回清單。不連網、不建頁。
+
+    存在的理由是兩條 workflow 撞在一起的時候。補課和「加一檔個股」可以同時跑，
+    兩邊都寫 `data/ratings.csv`；撞到的時候補課會把整個檔案讓給對方（對方是使用
+    者剛按下按鈕抓回來的，一樣新或更新）。但那樣一讓，這一批另外九十幾檔的評等
+    也跟著回到讓出去的那一版——分頁還在硬碟上，清單卻退回去了。
+
+    這個指令就是把那幾列重新貼回去：分頁已經抓好了，重算一次不必再連網。期別的
+    守門仍然在 `_store_rating` 裡，所以對方那一檔不會被比較舊的資料蓋掉。
+    """
+    settings = Settings.load(args.config)
+    from .ingest.workbook import GridsSource  # noqa: PLC0415
+    from .rating.engine import rate  # noqa: PLC0415
+
+    root = Path(args.data or settings.data_dir)
+    if args.codes:
+        codes = [c.strip() for c in args.codes.split(",") if c.strip()]
+    else:
+        sheets = root / "sheets"
+        codes = sorted(p.name for p in sheets.glob("*") if p.is_dir()) if sheets.is_dir() else []
+    done = 0
+    for code in codes:
+        grids = _fetched_grids(root, code)
+        if grids is None:
+            print(f"  {code}：沒有分頁，跳過", file=sys.stderr)
+            continue
+        try:
+            data = GridsSource(grids=grids, stock_id=code).load()
+            rating = rate(data, settings.rules, settings.periods)
+        except Exception as exc:  # noqa: BLE001 - 一檔算不出來不該停下整批
+            print(f"  {code}：{exc}", file=sys.stderr)
+            continue
+        _store_rating(root, rating)
+        done += 1
+    print(f"重寫了 {done} 檔的評等")
+    return EXIT_OK
+
+
 def cmd_compact(args: argparse.Namespace) -> int:
     """把既有的未壓縮分頁換成 `.json.gz`。
 
@@ -2226,6 +2265,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="不先跟官方名單交集（預設會跳過已下市的代號）",
     )
     rf.set_defaults(func=cmd_refresh)
+
+    rs = sub.add_parser(
+        "restate",
+        help="用本機已有的分頁重算評等、寫回清單（不連網、不建頁）",
+    )
+    rs.add_argument("--data", help="資料目錄")
+    rs.add_argument("--codes", help="只重算這些代號，逗號分隔（預設全部）")
+    rs.set_defaults(func=cmd_restate)
 
     ck = sub.add_parser(
         "compact-sheets", help="把既有未壓縮的個股分頁換成 .json.gz（一次性搬家）"
