@@ -13,6 +13,7 @@ endings — so an unchanged fetch produces a byte-identical file and no commit.
 from __future__ import annotations
 
 import csv
+import io
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
@@ -21,6 +22,31 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA_VERSION = 1
+
+
+def atomic_write(target: Path, payload: bytes) -> Path:
+    """先寫暫存檔，再用 `os.replace` 換上去。
+
+    為什麼不能直接開檔寫：**有人正在讀**。「加一檔個股」那條 workflow 刻意讓測試
+    和抓取平行跑（省下二十幾秒的開機時間），而測試會讀 `data/ratings.csv` 當樣本；
+    抓取寫到一半的那一瞬間，讀到的是半份檔案，於是測試以
+    「UnicodeDecodeError: unexpected end of data」失敗——訊息裡完全看不出是誰在寫。
+
+    `os.replace` 是同一個檔案系統上的原子操作：讀到的不是舊的就是新的，沒有中間
+    狀態。同樣的保護也適用於 runner 被砍在寫入中途——那時留在 repo 裡的會是完整的
+    舊檔，而不是一份截斷的資料。
+    """
+    import os
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f".{target.name}.tmp{os.getpid()}")
+    try:
+        tmp.write_bytes(payload)
+        os.replace(tmp, target)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+    return target
 
 
 @dataclass
@@ -60,12 +86,11 @@ class Store:
         materialised = [{c: _fmt(r.get(c)) for c in columns} for r in rows]
         if sort_by:
             materialised.sort(key=lambda r: tuple(str(r.get(c, "")) for c in sort_by))
-        target = self.path(table)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with target.open("w", encoding="utf-8", newline="\n") as fh:
-            writer = csv.DictWriter(fh, fieldnames=list(columns), lineterminator="\n")
-            writer.writeheader()
-            writer.writerows(materialised)
+        text = io.StringIO()
+        writer = csv.DictWriter(text, fieldnames=list(columns), lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(materialised)
+        atomic_write(self.path(table), text.getvalue().encode("utf-8"))
         return len(materialised)
 
     def write_gz(
@@ -99,9 +124,7 @@ class Store:
         buf = io.BytesIO()
         with gzip.GzipFile(fileobj=buf, mode="wb", compresslevel=9, mtime=0) as fh:
             fh.write(text.getvalue().encode("utf-8"))
-        target = self.root / f"{table}.csv.gz"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(buf.getvalue())
+        atomic_write(self.root / f"{table}.csv.gz", buf.getvalue())
         return len(materialised)
 
     def read_gz(self, table: str) -> list[dict[str, str]]:
@@ -155,13 +178,12 @@ class Store:
     # -- json blobs -------------------------------------------------------
 
     def write_json(self, name: str, payload: Any) -> Path:
-        target = self.root / f"{name}.json"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
+        return atomic_write(
+            self.root / f"{name}.json",
+            (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
+                "utf-8"
+            ),
         )
-        return target
 
     def read_json(self, name: str, default: Any = None) -> Any:
         target = self.root / f"{name}.json"

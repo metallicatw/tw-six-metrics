@@ -52,6 +52,14 @@ CANDIDATES: tuple[Candidate, ...] = (
         expect="已驗證：全上市當日 OHLC，欄位 Date/Code/Name/OpeningPrice/…，日期是民國 1150831",
     ),
     Candidate(
+        name="twse_mi_index",
+        url="https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?type=ALLBUT0999&response=json",
+        expect=(
+            "未驗證：證交所網站自己用的每日收盤行情。存它的理由是 openapi 那份實測會"
+            "落後一個交易日——台北時間 16:30 還停在前一天，而這一份 00:36 已經是當天的"
+        ),
+    ),
+    Candidate(
         name="tpex_daily_openapi",
         url="https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
         expect="未驗證：猜是上櫃當日收盤行情",
@@ -110,11 +118,12 @@ def save(out_dir: Path, name: str, body: bytes, meta: dict[str, Any]) -> Path:
     buf = io.BytesIO()
     with gzip.GzipFile(fileobj=buf, mode="wb", compresslevel=9, mtime=0) as fh:
         fh.write(body)
-    target = out_dir / f"{name}.raw.gz"
-    target.write_bytes(buf.getvalue())
-    (out_dir / f"{name}.meta.json").write_text(
-        json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+    from ..store.snapshots import atomic_write  # noqa: PLC0415
+
+    target = atomic_write(out_dir / f"{name}.raw.gz", buf.getvalue())
+    atomic_write(
+        out_dir / f"{name}.meta.json",
+        (json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"),
     )
     return target
 

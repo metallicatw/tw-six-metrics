@@ -29,6 +29,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .snapshots import atomic_write
+
 SUFFIX = ".json.gz"
 PLAIN = ".json"
 
@@ -56,7 +58,8 @@ def write_grid(base: Path, sheet: str, grid: Any) -> Path:
     base.mkdir(parents=True, exist_ok=True)
     target = path_for(base, sheet)
     payload = (json.dumps(grid, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
-    target.write_bytes(_gzipped(payload) if target.suffix == ".gz" else payload)
+    # 原子寫入：建站與測試可能同時在讀這個目錄（「加一檔個股」讓兩件事平行跑）。
+    atomic_write(target, _gzipped(payload) if target.suffix == ".gz" else payload)
     return target
 
 
@@ -85,8 +88,9 @@ def compact(base: Path) -> list[str]:
         except ValueError:
             continue
         target = base / f"{path.stem}{SUFFIX}"
-        target.write_bytes(
-            _gzipped((json.dumps(grid, ensure_ascii=False, indent=1) + "\n").encode())
+        atomic_write(
+            target,
+            _gzipped((json.dumps(grid, ensure_ascii=False, indent=1) + "\n").encode()),
         )
         path.unlink()
         changed.append(path.stem)
