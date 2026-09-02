@@ -129,3 +129,21 @@ def test_a_run_that_skipped_everything_does_not_leave_the_panel_spinning():
     assert "已經是最新的" in js
     # 問不到就照舊等——那是原本的行為，不能因為多了這一段而變成不等。
     assert ".catch(keepWaiting)" in js
+
+
+def test_the_browser_asks_the_server_before_it_pays_for_a_runner():
+    """索引可能是這一頁載入時抓的，而 GitHub Pages 給 JSON 的是 max-age=600。
+
+    手上那份一舊，「已經是最新的」就擋不住，於是派了一台 runner 去問一個我們
+    已經知道答案的問題——實測那是 64 秒，而正確答案是「不必抓」。
+
+    一個 80 KB 的請求換掉一整台 runner 加一分鐘。問不到就用手上那份，不會比原本
+    更糟。
+    """
+    js = (ROOT / "src/twsix/report/templates/site.js").read_text("utf-8")
+    assert "function stampFromServer(" in js
+    assert "cache: 'no-store'" in js
+    # 平常瀏覽時的索引也要跟著建站編號換網址，否則同樣會拿到十分鐘前的快取。
+    assert "'?v=' + encodeURIComponent(TWSIX.built)" in js
+    # 送出之前的那一步要在確認之後才發生。
+    assert js.index("function stampFromServer(") < js.index("function dispatch(")
