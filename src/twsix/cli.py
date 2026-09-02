@@ -1081,7 +1081,7 @@ def _latest_custody_friday(today: date) -> date:
     return today - timedelta(days=(today.weekday() - 4) % 7)
 
 
-def _backfill_holders(args: argparse.Namespace, stock: str) -> None:
+def _backfill_holders(args: argparse.Namespace, stock: str) -> bool:
     """把這一檔缺的集保週資料補齊——一年 51 週。
 
     開放資料一個請求給整個市場，但只給最新一週。所以一檔股票剛加進來時，
@@ -1121,19 +1121,19 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> None:
     newest = _latest_custody_friday(datetime.now(_TAIPEI).date())
     if len(have) >= BACKFILL_WEEKS and max(have) >= newest:
         print(f"  集保週資料已是最新（{len(have)} 週）")
-        return
+        return False
 
     history = History(http)
     try:
         available = history.dates()[:BACKFILL_WEEKS]
     except Exception as exc:  # noqa: BLE001 - 補不到就算了
         print(f"  （集保週歷史沒補成：{exc}）", file=sys.stderr)
-        return
+        return False
 
     missing = [d for d in available if d not in have]
     if not missing:
         print(f"  集保週資料已是最新（{len(have)} 週）")
-        return
+        return False
 
     print(f"  補集保週資料：缺 {len(missing)} 週，約 {len(missing) * 1.6:.0f} 秒")
 
@@ -1186,6 +1186,7 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> None:
         )
     else:
         print(f"  集保週資料：共 {total} 週")
+    return True
 
 
 #: 董監月線回補幾個月。三年——董監持股是慢變數，看的是「這一年加碼還是減碼、
@@ -1193,7 +1194,7 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> None:
 BACKFILL_MONTHS = 36
 
 
-def _backfill_directors(args: argparse.Namespace, stock: str) -> None:
+def _backfill_directors(args: argparse.Namespace, stock: str) -> bool:
     """把這一檔缺的董監月資料補齊。
 
     開放資料只給最新一個月。公開資訊觀測站的個股查詢有 year/month，而且底部直接
@@ -1234,7 +1235,7 @@ def _backfill_directors(args: argparse.Namespace, stock: str) -> None:
     ]
     if not wanted:
         print(f"  董監月資料已是最新（{len(have)} 個月）")
-        return
+        return False
 
     print(f"  補董監月資料：缺 {len(wanted)} 個月，約 {len(wanted) * 2.2:.0f} 秒")
     http = HttpClient(
@@ -1279,6 +1280,7 @@ def _backfill_directors(args: argparse.Namespace, stock: str) -> None:
     # 被擋。被擋的時候立地板，會把一段真的存在的歷史永遠關在外面。
     if empty >= 3 and oldest is not None:
         own.save_director_floor(root, stock, oldest)
+    return True
 
 
 def _fold_ownership(args: argparse.Namespace, stock: str) -> None:
@@ -1323,14 +1325,22 @@ def cmd_backfill(args: argparse.Namespace) -> int:
     if not codes:
         print("沒有要補的股票", file=sys.stderr)
         return EXIT_FAIL
+    limit = getattr(args, "limit", 0) or 0
+    worked = 0
     for code in codes:
         print(f"{code}：")
         ns = argparse.Namespace(config=args.config, data=args.data)
+        did = False
         if args.what in ("all", "holders"):
-            _backfill_holders(ns, code)
+            did |= _backfill_holders(ns, code)
         if args.what in ("all", "directors"):
-            _backfill_directors(ns, code)
+            did |= _backfill_directors(ns, code)
         _fold_ownership(ns, code)
+        if did:
+            worked += 1
+            if limit and worked >= limit:
+                print(f"\n這一輪補了 {worked} 檔（--limit {limit}），其餘下次再補")
+                break
     return EXIT_OK
 
 
@@ -2190,6 +2200,13 @@ def build_parser() -> argparse.ArgumentParser:
     bf.add_argument(
         "--what", choices=["all", "holders", "directors"], default="all",
         help="只補其中一種（預設兩種都補）",
+    )
+    bf.add_argument(
+        "--limit", type=int, default=0,
+        help="這一輪最多補幾檔真的缺資料的股票（預設 0 = 不限）。"
+             "清單補課會讓 data/sheets 從 184 檔長到 1,700 檔，而一檔新股票的"
+             "股權歷史要 51 次 + 36 次請求、約兩分鐘——不設上限的話，兩週一次的"
+             "股權排程會撞上 runner 的六小時上限而整批失敗。",
     )
     bf.set_defaults(func=cmd_backfill)
 

@@ -94,3 +94,33 @@ def test_a_stock_with_a_fresh_rating_but_no_sheets_is_still_in_the_queue():
     (root / "sheets" / "5439").mkdir(parents=True)
     (root / "sheets" / "5439" / "ISQ.json.gz").write_bytes(b"x")
     assert sheetless_codes(root) == ["1101"]
+
+
+def test_the_ownership_backfill_is_bounded_now_that_the_watchlist_is_the_market():
+    """補課會讓 data/sheets 從 184 檔長到 1,700 檔。
+
+    股權排程的「補齊歷史」原本是逐檔跑、沒有上限——在 184 檔的世界裡那幾乎不花
+    時間（已經齊的一次都不連網），但一檔**新**股票要 51 次 + 36 次請求、約兩
+    分鐘。1,500 檔新股票就是五十個小時，撞上 runner 的六小時上限，整批失敗，
+    而失敗的方式會是「股權排程紅字」——看起來完全不像是補課造成的。
+    """
+    wf = (ROOT / ".github/workflows/ownership.yml").read_text("utf-8")
+    assert "backfill-ownership --limit" in wf, "股權回補沒有上限"
+
+
+def test_a_stock_that_is_already_complete_does_not_count_against_the_limit():
+    """上限要吃「真的補了東西的檔數」，不是「看過的檔數」。
+
+    否則每次都是同樣的前 40 檔被看一遍就用完額度，後面的永遠輪不到——而看一遍
+    已經齊的股票是不連網的，成本接近零。
+    """
+    import inspect
+
+    from twsix.cli import _backfill_directors, _backfill_holders, cmd_backfill
+
+    for fn in (_backfill_holders, _backfill_directors):
+        assert inspect.signature(fn).return_annotation == "bool", (
+            f"{fn.__name__} 要回報這一檔有沒有真的連網補東西"
+        )
+    src = inspect.getsource(cmd_backfill)
+    assert "worked >= limit" in src
