@@ -168,3 +168,31 @@ def test_the_manifest_does_not_churn_when_nothing_changed():
     # 內容變了才換時間戳。
     store.save_manifest(Manifest(counts={"market/twse_income/115Q2": 1050}))
     assert (root / "manifest.json").read_text("utf-8") != first
+
+
+def test_the_manifest_does_not_churn_when_only_the_fetch_order_changed():
+    """第一次排程就踩到的那個洞。
+
+    `sources` 是一個「每張表一筆」的集合，但它存成 list，而呼叫端是逐張表抓、
+    抓到就把那一筆移到尾巴——所以清單的順序會跟著**抓取順序**跑。內容一個字都
+    沒變，八筆的順序從字母序變成抓取序，diff 就有 20 行進 20 行出，照樣 commit
+    了一次。哪一張表這次失敗了也會讓順序不一樣。
+    """
+    from twsix.store.snapshots import Manifest
+
+    root = Path(tempfile.mkdtemp())
+    store = Store(root)
+    a = {"name": "twse_income", "period": "115Q2", "rows": 1048}
+    b = {"name": "tpex_income", "period": "115Q2", "rows": 883}
+    c = {"name": "twse_revenue", "period": "11507", "rows": 1085}
+
+    store.save_manifest(Manifest(sources=[a, b, c]))
+    first = (root / "manifest.json").read_text("utf-8")
+
+    # 同樣三筆，抓取順序不同——這不是內容的差異。
+    store.save_manifest(Manifest(sources=[c, a, b]))
+    assert (root / "manifest.json").read_text("utf-8") == first
+
+    # 少了一筆才是差異。
+    store.save_manifest(Manifest(sources=[a, b]))
+    assert (root / "manifest.json").read_text("utf-8") != first

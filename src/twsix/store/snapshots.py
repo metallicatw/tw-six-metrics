@@ -141,15 +141,33 @@ class Store:
 
         時間戳的意思因此收窄成一句更有用的話：**這份描述是什麼時候開始成立的**，
         不是「最後一次確認它還成立是什麼時候」。後者 git 已經記著了。
+
+        ``sources`` 寫出去之前先照名稱排序。它是一個「每張表一筆」的集合，不是
+        一份有順序的紀錄，但它存成 list——而呼叫端是逐張表抓、抓到就把那一筆移到
+        尾巴，所以**清單的順序會跟著抓取順序跑**。第一次排程就踩到了：內容一個
+        字都沒變，八筆的順序從字母序變成抓取序，於是 diff 有 20 行進 20 行出，
+        照樣 commit 了一次。哪一張表這次失敗了也會讓順序不一樣。
+
+        排過序之後，「這份描述有沒有變」問的才是內容。
         """
-        fresh = asdict(manifest)
+        fresh = self._normalised(manifest)
         old = self.read_json("manifest") or {}
         if {k: v for k, v in old.items() if k != "generated_at"} == {
             k: v for k, v in fresh.items() if k != "generated_at"
         }:
             return
         manifest.stamp()
-        self.write_json("manifest", asdict(manifest))
+        fresh["generated_at"] = manifest.generated_at
+        self.write_json("manifest", fresh)
+
+    @staticmethod
+    def _normalised(manifest: Manifest) -> dict[str, Any]:
+        """寫出去的樣子——順序不受抓取順序影響。"""
+        data = asdict(manifest)
+        data["sources"] = sorted(
+            data.get("sources") or [], key=lambda s: str(s.get("name", ""))
+        )
+        return data
 
 
 def _fmt(value: Any) -> str:
