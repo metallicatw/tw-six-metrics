@@ -16,12 +16,17 @@ name: 評等補課（清單上過期的那些）
 #
 #   一檔十六張分頁 205 KB，1,558 檔就是 319 MB 進版控。清單要的只是六個指標的
 #   評分，所以 `twsix refresh` 把報表抓進暫存目錄、算完評等、把那一列寫回
-#   `data/ratings.csv`，然後刪掉暫存。一批 50 檔的 commit 是幾十 KB，不是 10 MB。
+#   `data/ratings.csv`，然後刪掉暫存。一批 100 檔的 commit 是幾十 KB，不是 10 MB。
 #   個股快取只在有人真的要看那一頁的時候才值得留——那是「加一檔個股」的事。
 #
-# 節奏：一天四批、一批 50 檔，1,551 檔約八天走完。之後佇列會自己空掉（每一檔
+# 節奏：一天四批、一批 100 檔，1,665 檔約四天走完。之後佇列會自己空掉（每一檔
 # 補上就離開），排程照跑但每次都印「清單上沒有落後的股票」，不留 commit。
 # 一檔失敗不中斷整批：抓到幾檔就是幾檔，下一批會再遇到它。
+#
+# 一批 100 檔 = 1,300 個請求，分散在八個券商鏡像站、每站之間節流 1.2 秒，約
+# 25 分鐘。一天四批平均下來每個站台大約八秒一個請求——這是「一般讀者的閱讀
+# 速度」，不是壓力測試。要更快就加開時段，不要把單批拉大：單批越大，中途被
+# 中斷時丟掉的進度越多（補課本身沒有斷點續傳，靠的是佇列每次重新計算）。
 
 on:
   schedule:
@@ -32,7 +37,7 @@ on:
       limit:
         description: "這一批補幾檔"
         required: false
-        default: "50"
+        default: "100"
         type: string
 
 permissions:
@@ -53,7 +58,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    # 一批 50 檔約 25 分鐘（每檔 13 個請求、站台之間節流 1.2 秒）。給兩倍餘裕，
+    # 一批 100 檔約 25~50 分鐘（每檔 13 個請求、站台之間節流 1.2 秒）。給餘裕，
     # 但不給到六小時：卡住的時候應該早點失敗，而不是佔著 runner 到天亮。
     timeout-minutes: 90
     steps:
@@ -67,7 +72,7 @@ jobs:
       - run: pip install -e ".[report]"
 
       - name: 補課
-        run: twsix refresh --limit "${{ inputs.limit || 50 }}"
+        run: twsix refresh --limit "${{ inputs.limit || 100 }}"
 
       - name: Commit
         id: commit
@@ -95,7 +100,7 @@ jobs:
           git pull --rebase origin main
           git push origin HEAD:main
 
-      # 資料進了 repo，網站還沒重建。這兩步讓補好的那 50 檔當天就出現在清單上。
+      # 資料進了 repo，網站還沒重建。這兩步讓補好的那一批當天就出現在清單上。
       # 沒有任何一列改變的時候不重建：那是一次沒有內容差異的發布。
       - name: 建站
         if: steps.commit.outputs.changed == 'yes'
