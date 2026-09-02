@@ -185,12 +185,40 @@ footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--rule);
 .grab{position:absolute;z-index:45;left:0;right:0;top:calc(100% + 4px);
   background:var(--surface);border:1px solid var(--accent);border-radius:5px;
   padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.16)}
-.grab .head{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--ink);padding-right:20px}
+/* 三層：在做什麼＋等了多久、跑到哪一段、一條分段進度條。
+   時間靠右，因為它每秒都在變——擺在句子中間會讓整行跟著抖。 */
+.grab .head{display:flex;align-items:baseline;gap:10px;margin:0 0 3px;font-size:13px;
+  color:var(--ink);padding-right:20px}
+.grab .head b{font-weight:600}
+.grab .head .t{margin-left:auto;font-size:12px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.grab .stage{margin:0 0 8px;font-size:11.5px;color:var(--muted);max-width:none;
+  padding-right:20px}
+/* 分段進度條。格數照實測的時間比例分配給四段（送出 1、排隊 3、執行 7、
+   CDN 3），所以「走到一半大概還有一半」是真的——一條會騙人的進度條比沒有
+   進度條糟。 */
+.grab .bar{display:flex;gap:3px;margin:0 0 8px}
+.grab .bar i{flex:1 1 0;height:6px;border-radius:2px;background:var(--rule)}
+.grab .bar i.on{background:var(--accent)}
+.grab .bar i.bad{background:var(--g0)}
+.grab .bar i.now{background:var(--accent);animation:twsix-pulse 1.1s ease-in-out infinite}
+/* 跑動中的格子最亮也不到「已完成」那麼實：靜態截圖裡也分得出哪幾格已經過去、
+   哪一段還在跑。 */
+@keyframes twsix-pulse{0%,100%{opacity:.22}50%{opacity:.8}}
+/* 前庭敏感的人不該為了一條進度條付代價。不動的時候用半透明表示「這一段在跑」。 */
+@media (prefers-reduced-motion:reduce){
+  .grab .bar i.now{animation:none;opacity:.55}
+}
+.grab .detail{margin:0}
+.grab .detail>summary{font-size:11px;color:var(--muted);cursor:pointer;
+  list-style-position:inside}
+.grab .detail>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+.grab .detail[open]>summary{margin-bottom:4px}
 .grab .x{position:absolute;top:5px;right:6px;appearance:none;border:none;background:none;
   color:var(--muted);font:inherit;font-size:13px;line-height:1;padding:3px 5px;cursor:pointer;
   border-radius:3px}
 .grab .x:hover{background:var(--surface-2);color:var(--ink)}
-.grab .log{margin:0;max-height:180px;overflow:auto;font-size:11px;line-height:1.6;
+.grab .log{margin:0;max-height:160px;overflow:auto;font-size:11px;line-height:1.6;
   color:var(--muted);white-space:pre-wrap;word-break:break-all;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .tag.grabbtn{margin-left:6px;padding:1px 8px;border-radius:3px;font-size:10.5px;

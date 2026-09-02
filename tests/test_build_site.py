@@ -1009,3 +1009,34 @@ def test_the_narrow_layout_is_written_once_and_the_toggle_reuses_it():
     # 回到最上方：捲下去才出現，而且尊重「減少動態效果」。
     assert "#totop{position:fixed" in css
     assert "prefers-reduced-motion" in js
+
+
+def test_the_progress_panel_is_a_bar_that_does_not_lie():
+    """進度條會騙人的話，比沒有進度條糟。
+
+    格數照實測的時間比例分給四段（送出 1、排隊 3、執行 7、CDN 3），所以「走到
+    一半大概還有一半」是真的。段只能往前——輪詢會重複看到同一個狀態，GitHub 也
+    偶爾在 in_progress 之後又回報一次 queued，讓條子倒退回去看起來就是壞了。
+    """
+    root = Path(__file__).resolve().parents[1] / "src/twsix/report/templates"
+    js = (root / "site.js").read_text("utf-8")
+    css = (root / "site.css").read_text("utf-8")
+    html = (root / "base.html.j2").read_text("utf-8")
+
+    import re
+
+    cells = [int(n) for n in re.findall(r"cells:\s*(\d+)", js)]
+    assert cells == [1, 3, 7, 3], f"分段權重被改了：{cells}"
+    assert "if(i > phaseAt)" in js, "段可以倒退回去"
+
+    # 三層：在做什麼＋等了多久、跑到哪一段、條子。
+    for sel in ('class="head"', 'class="stage"', 'class="bar"'):
+        assert sel in html, sel
+    # 每一步第幾秒沒有被丟掉，只是收起來；出事的時候自動展開。
+    assert 'class="detail"' in html and 'class="log"' in html
+    assert "d.open = true" in js
+
+    assert "@keyframes twsix-pulse" in css
+    # 前庭敏感的人不該為了一條進度條付代價。
+    reduced = css[css.index("prefers-reduced-motion") :][:200]
+    assert "animation:none" in reduced

@@ -211,42 +211,101 @@
   }
 
   /* ---- 進度面板 ------------------------------------------------------- */
-  var started = 0, ticker = null, steps = [];
+  var started = 0, ticker = null, steps = [], phaseAt = -1, phaseNote = '';
+  var grabCode = '';
 
   function elapsed(){
     var s = Math.round((Date.now() - started) / 1000);
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
-  /* 每一行都掛上「按下按鈕之後第幾秒」。
-     這不是裝飾。整段等待橫跨三個我們管不到的東西——GitHub 派 runner 的排隊、
-     workflow 本身、Pages 的 CDN 換檔——而「總共兩分鐘」這個數字沒辦法告訴任何人
-     該去修哪一段。有了時間戳，一張截圖就分得出來。 */
-  function step(text){
+
+  /* 這條路上的四段，以及各自大概佔多少格。
+     格數不是隨便給的，是照實測的時間比例：排隊 10~30 秒、workflow 本身約一分鐘、
+     CDN 換檔十幾二十秒。所以條子走到一半的時候，「大概還有一半」這句話是真的
+     ——一條會騙人的進度條比沒有進度條糟。 */
+  var PHASES = [
+    { key: 'send',   cells: 1, label: '送出給 GitHub Actions' },
+    { key: 'queue',  cells: 3, label: '等 GitHub 派 runner（排隊，不算在 workflow 的執行時間裡）' },
+    { key: 'run',    cells: 7, label: '抓報表 → 補集保股權歷史 → 產生報告 → 建站 → 發布' },
+    { key: 'cdn',    cells: 3, label: 'workflow 完成，等 Pages CDN 換上新的一份' }
+  ];
+  var CELLS = PHASES.reduce(function(n, p){ return n + p.cells; }, 0);
+
+  function phaseIndex(key){
+    for(var i = 0; i < PHASES.length; i++) if(PHASES[i].key === key) return i;
+    return -1;
+  }
+
+  /* 段只會往前，不會往後。輪詢會重複看到同一個狀態，而 GitHub 偶爾會在
+     in_progress 之後又回報一次 queued——讓條子倒退回去，看起來就是壞了。 */
+  function phase(key){
+    var i = phaseIndex(key);
+    if(i > phaseAt){ phaseAt = i; phaseNote = ''; }
+  }
+
+  function bar(done, failed){
+    var html = '', filled = 0, i, j;
+    for(i = 0; i < PHASES.length; i++){
+      for(j = 0; j < PHASES[i].cells; j++){
+        var cls = '';
+        if(done) cls = failed ? 'bad' : 'on';
+        else if(i < phaseAt) cls = 'on';
+        else if(i === phaseAt) cls = 'now';
+        /* 同一段裡的方塊依序亮，看起來才像在跑而不是在閃。 */
+        var delay = cls === 'now' ? ' style="animation-delay:' + (j * 0.13) + 's"' : '';
+        html += '<i class="' + cls + '"' + delay + '></i>';
+        filled++;
+      }
+    }
+    return html;
+  }
+
+  function step(text, key){
+    if(key) phase(key);
     var line = elapsed() + '　' + text;
     if(steps[steps.length - 1] !== line) steps.push(line);
+    phaseNote = text;
     paint();
   }
+
   function paint(){
     if(!grab || !started) return;
     grab.hidden = false;
     /* 每秒重畫一次，讀者才看得出它還活著。一分半沒有任何動靜，看起來就是當掉
        ——那正是這個計時器存在的唯一理由。 */
-    grab.querySelector('.head').textContent = '抓取中… ' + elapsed();
+    grab.querySelector('.head').innerHTML =
+      '<b>立即更新' + (grabCode ? ' ' + grabCode : '') + '</b>' +
+      '<span class="t">' + elapsed() + '</span>';
+    var cur = PHASES[phaseAt];
+    grab.querySelector('.stage').textContent = cur ? cur.label : (phaseNote || '準備中…');
+    grab.querySelector('.bar').innerHTML = bar(false, false);
     grab.querySelector('.log').textContent = steps.join('\n');
   }
-  function beginPanel(){
-    started = Date.now(); steps = [];
+
+  function beginPanel(code){
+    started = Date.now(); steps = []; phaseAt = -1; phaseNote = '';
+    grabCode = code || '';
     clearInterval(ticker);
+    var d = grab && grab.querySelector('.detail');
+    if(d) d.open = false;
     ticker = setInterval(paint, 1000);
     paint();
   }
-  function endPanel(head, note){
+
+  function endPanel(head, note, ok){
     clearInterval(ticker); ticker = null;
     if(!grab) return;
     grab.hidden = false;
-    grab.querySelector('.head').textContent = head;
+    grab.querySelector('.head').innerHTML =
+      '<b>' + head + '</b><span class="t">' + elapsed() + '</span>';
+    grab.querySelector('.stage').textContent = note || '';
+    grab.querySelector('.bar').innerHTML = bar(true, ok === false);
     if(note) steps.push(note);
     grab.querySelector('.log').textContent = steps.join('\n');
+    /* 出事的時候把細節攤開。這時候「每一步第幾秒」正好是唯一有用的東西，
+       而要求一個剛看到「抓取失敗」的人再多按一下才看得到，是多餘的一步。 */
+    var d = grab.querySelector('.detail');
+    if(d && ok === false) d.open = true;
   }
 
   /* ---- 站內輪詢：資料進網站了沒 --------------------------------------- */
@@ -278,8 +337,8 @@
   var watching = null;
   function arrive(code, built){
     forget();
-    step('網站已換上新版，開啟報告');
-    endPanel(code + ' 好了（' + elapsed() + '），正在開啟報告…');
+    step('網站已換上新版，開啟報告', 'cdn');
+    endPanel(code + ' 好了', '正在開啟報告…', true);
     /* 停在同一頁時用 reload——它會帶 max-age=0，一定跟伺服器對過再顯示。
        換頁就不會：GitHub Pages 給 HTML 的是 Cache-Control: max-age=600，所以
        十分鐘內看過那一頁的瀏覽器會直接拿自己的快取，看起來就像「抓完了但沒變」。
@@ -342,7 +401,7 @@
     if(tries <= 0){
       forget(); watching = null;
       endPanel('等太久了，' + code + ' 還沒出現',
-               '到 Actions 看一下「加一檔個股」跑完了沒；跑完了重新整理這一頁。');
+               '到 Actions 看一下「加一檔個股」跑完了沒；跑完了重新整理這一頁。', false);
       return;
     }
     setTimeout(function(){ watch(code, tries - 1, was, deadline); }, WATCH_MS);
@@ -354,26 +413,30 @@
        index。先確定拿到手，才知道「按之前長什麼樣」，也才判斷得出好了沒。 */
     if(!data){ load().then(function(){ runOnGithub(code); }); return; }
     close();
-    beginPanel();
+    beginPanel(code);
     var was = currentMark(code);
     remember(code, was);
-    step('送出 ' + code + ' 給 GitHub Actions…');
+    step('送出 ' + code + ' 給 GitHub Actions…', 'send');
     var since = new Date(Date.now() - 60000).toISOString();
     gh('/actions/workflows/' + WORKFLOW + '/dispatches', {
       method: 'POST',
       body: JSON.stringify({ref: 'main', inputs: {stock: code}})
     }).then(function(r){
-      if(r.status === 204){ step('已送出。等 GitHub 派 runner（這一段是排隊，不算在 workflow 的執行時間裡）'); pollRun(code, since, 180, was); return; }
+      if(r.status === 204){
+        step('已送出。等 GitHub 派 runner（這一段是排隊，不算在 workflow 的執行時間裡）', 'queue');
+        pollRun(code, since, 180, was); return;
+      }
       if(r.status === 401 || r.status === 403){
         setToken('');
-        endPanel('權杖無效或權限不足', '請重新設定一把 fine-grained PAT，勾選這個 repo 的 Actions 讀寫。');
+        endPanel('權杖無效或權限不足',
+                 '請重新設定一把 fine-grained PAT，勾選這個 repo 的 Actions 讀寫。', false);
         return;
       }
       return r.text().then(function(t){
-        endPanel('送出失敗（HTTP ' + r.status + '）', t.slice(0, 300));
+        endPanel('送出失敗（HTTP ' + r.status + '）', t.slice(0, 300), false);
       });
     }).catch(function(e){
-      endPanel('送不出去', String(e));
+      endPanel('送不出去', String(e), false);
     });
   }
 
@@ -381,24 +444,24 @@
      的一檔要向集保逐週問滿 51 週，那是〔大戶持股〕有沒有走勢的差別。每 4 秒問
      一次狀態，把 GitHub 自己的字串翻成人看得懂的一行，讀者才知道它在哪一步。 */
   function pollRun(code, since, tries, was){
-    if(tries <= 0){ step('狀態查不到了，改用網站本身判斷…'); watch(code, 180, was, 0); return; }
+    if(tries <= 0){ step('狀態查不到了，改用網站本身判斷…', 'run'); watch(code, 180, was, 0); return; }
     gh('/actions/workflows/' + WORKFLOW + '/runs?per_page=5&created=%3E' +
        encodeURIComponent(since))
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(j){
         var run = j && j.workflow_runs && j.workflow_runs[0];
         if(!run){ setTimeout(function(){ pollRun(code, since, tries - 1, was); }, 2000); return; }
-        if(run.status === 'queued') step('GitHub 已建立這次執行，還在排隊');
+        if(run.status === 'queued') step('GitHub 已建立這次執行，還在排隊', 'queue');
         else if(run.status === 'in_progress') step(
-          'runner 開始跑：抓報表 → 補集保股權歷史 → 產生報告 → 建站 → 發布');
+          'runner 開始跑：抓報表 → 補集保股權歷史 → 產生報告 → 建站 → 發布', 'run');
         else if(run.status === 'completed'){
           if(run.conclusion === 'success'){
-            step('workflow 完成。剩下的是 Pages CDN 換檔');
+            step('workflow 完成。剩下的是 Pages CDN 換檔', 'cdn');
             watch(code, 180, was, Date.now() + SETTLE_MS);
           } else {
             forget();
             endPanel('抓取失敗（' + run.conclusion + '）',
-                     '執行紀錄：' + run.html_url);
+                     '執行紀錄：' + run.html_url, false);
           }
           return;
         }
@@ -428,10 +491,10 @@
     if(token()) return runOnGithub(code);
     if(askToken()) return runOnGithub(code);
     /* 取消了設定權杖。什麼都不做會變成「按了沒反應」——說一聲它為什麼沒動。 */
-    close(); beginPanel();
+    close(); beginPanel(code);
     endPanel('還沒設定抓取權杖',
              '線上抓取要一把 GitHub fine-grained PAT（只勾這個 repo、Actions 讀寫）。\n'
-             + '按頁首的「設定抓取權杖」貼上，之後就不用再貼。');
+             + '按頁首的「設定抓取權杖」貼上，之後就不用再貼。', false);
     return;
   }
   window.twsixAskGithub = askGithub;
@@ -442,7 +505,7 @@
   function pollLocal(code){
     fetch(base + 'api/job/' + code).then(function(r){ return r.json(); })
       .then(function(j){
-        if(j.error){ endPanel('抓取失敗', j.error); return; }
+        if(j.error){ endPanel('抓取失敗', j.error, false); return; }
         if(!j.done){
           /* 本機那條路每一行都是 twsix report 自己印的，直接照抄。 */
           steps = j.lines.slice(); paint();
@@ -451,20 +514,20 @@
         }
         steps = j.lines.slice();
         if(j.ok) arrive(code);
-        else endPanel('抓取失敗', '八個鏡像站都拒絕通常代表 IP 被擋，換個網路再試。');
+        else endPanel('抓取失敗', '八個鏡像站都拒絕通常代表 IP 被擋，換個網路再試。', false);
       })
-      .catch(function(){ endPanel('抓取中斷', '連不上本機服務'); });
+      .catch(function(){ endPanel('抓取中斷', '連不上本機服務', false); });
   }
   function fetchStock(code){
-    close(); beginPanel(); remember(code, currentMark(code));
-    step('正在抓取 ' + code + '…');
+    close(); beginPanel(code); remember(code, currentMark(code));
+    step('正在抓取 ' + code + '…', 'run');
     fetch(base + 'api/fetch/' + code, {method: 'POST'})
       .then(function(r){ return r.json(); })
       .then(function(j){
-        if(j.error){ endPanel('抓取失敗', j.error); return; }
+        if(j.error){ endPanel('抓取失敗', j.error, false); return; }
         pollLocal(code);
       })
-      .catch(function(){ endPanel('抓取中斷', '連不上本機服務'); });
+      .catch(function(){ endPanel('抓取中斷', '連不上本機服務', false); });
   }
   window.twsixFetch = fetchStock;
   window.twsixLive = function(){ return live; };
@@ -475,8 +538,8 @@
     var j = pendingJob();
     if(!j) return;
     setTimeout(function(){
-      beginPanel();
-      step('等 ' + j.code + ' 的資料進到網站…');
+      beginPanel(j.code);
+      step('等 ' + j.code + ' 的資料進到網站…', 'cdn');
       watch(j.code, 180, j.was, Date.now() + 90000);
     }, 1200);
   })();
