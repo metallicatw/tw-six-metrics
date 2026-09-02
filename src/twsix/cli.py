@@ -1622,6 +1622,66 @@ def cmd_restate(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_probe(args: argparse.Namespace) -> int:
+    """打一輪候選端點，把**真實回應**原樣存進 `reference/samples/`。不解析。
+
+    存在的理由是這個專案最貴的一次錯誤：原本的 `ingest/` 照官方 API 文件寫、
+    從未實跑過，九張表裡六張欄位錯位——看起來全部正常，但都是錯的。從此改成
+    「先拿到真實回應，再寫解析器」。
+
+    這個指令是那條規則的前半段。它不解析、不寫進任何資料表，所以哪一個端點回了
+    404、回了一頁「因為安全性考量」的 HTML、或回了跟猜測完全不同的欄位，都不會
+    弄壞任何既有的功能——只會多一份存下來的事實。
+    """
+    from .ingest.base import HttpClient  # noqa: PLC0415
+    from .ingest.probe import CANDIDATES, groups, head, save, stamp  # noqa: PLC0415
+
+    settings = Settings.load(args.config)
+    out = Path(args.out or "reference/samples")
+    wanted = [
+        c
+        for c in CANDIDATES
+        if (not args.group or c.group == args.group)
+        and (not args.name or c.name == args.name)
+    ]
+    if not wanted:
+        print(f"沒有符合的候選端點（group 可選：{'、'.join(groups())}）", file=sys.stderr)
+        return EXIT_FAIL
+
+    http = HttpClient(
+        cache_dir=None,  # 樣本要的是「現在真的回什麼」，快取會給出昨天的答案
+        cache_ttl=0,
+        min_interval=settings.ingest.min_interval_seconds,
+        retries=2,
+    )
+    ok = 0
+    for c in wanted:
+        print(f"\n{c.name}\n  {c.url}\n  預期：{c.expect}")
+        meta: dict[str, Any] = {
+            "name": c.name,
+            "url": c.url,
+            "expect": c.expect,
+            "group": c.group,
+            "fetched_at": stamp(),
+        }
+        try:
+            body = http.get(c.url, headers=c.headers or None, use_cache=False)
+        except Exception as exc:  # noqa: BLE001 - 打不通也是一種事實，要存下來
+            meta["error"] = str(exc)
+            save(out, c.name, b"", meta)
+            print(f"  失敗：{exc}", file=sys.stderr)
+            continue
+        meta["bytes"] = len(body)
+        meta["head"] = head(body)
+        save(out, c.name, body, meta)
+        ok += 1
+        print(f"  {len(body):,} 位元組 -> {out / (c.name + '.raw.gz')}")
+        print(f"  開頭：{head(body, 200)}")
+    print(f"\n存下 {len(wanted)} 份（{ok} 份有內容），全部在 {out}")
+    print("下一步是**讀**它們，不是直接寫解析器——這個指令刻意不解析任何東西。")
+    return EXIT_OK
+
+
 def cmd_compact(args: argparse.Namespace) -> int:
     """把既有的未壓縮分頁換成 `.json.gz`。
 
@@ -2352,6 +2412,15 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--data", help="資料目錄")
     rs.add_argument("--codes", help="只重算這些代號，逗號分隔（預設全部）")
     rs.set_defaults(func=cmd_restate)
+
+    pb = sub.add_parser(
+        "probe",
+        help="打候選端點，把真實回應原樣存進 reference/samples/（不解析）",
+    )
+    pb.add_argument("--group", help="只打這一組（daily／statements）")
+    pb.add_argument("--name", help="只打這一個候選端點")
+    pb.add_argument("--out", help="樣本輸出目錄（預設 reference/samples）")
+    pb.set_defaults(func=cmd_probe)
 
     ck = sub.add_parser(
         "compact-sheets", help="把既有未壓縮的個股分頁換成 .json.gz（一次性搬家）"
