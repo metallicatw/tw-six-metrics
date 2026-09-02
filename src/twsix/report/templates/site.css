@@ -105,7 +105,10 @@ body{margin:0;background:var(--ground);color:var(--ink);
   -webkit-font-smoothing:antialiased}
 a{color:var(--accent-2);text-underline-offset:2px}
 a:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
-.wrap{max-width:1240px;margin:0 auto;padding:0 20px 44px}
+/* --pad 是版面左右留白的唯一出處。釘住的那三列要向外溢出剛好這麼多，才會和
+   內容切齊；兩個地方各寫一個數字的話，改了其中一個就會在窄螢幕上多出幾像素的
+   橫向捲動——而那幾像素在桌機上永遠看不到。 */
+.wrap{--pad:20px;max-width:1240px;margin:0 auto;padding:0 var(--pad) 44px}
 header.top{background:var(--surface);border-bottom:1px solid var(--rule);margin-bottom:14px}
 header.top .in{max-width:1240px;margin:0 auto;padding:12px 20px 10px}
 header.top h1{margin:0;font-size:17px;letter-spacing:-.01em}
@@ -216,7 +219,7 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
   font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
 /* -- 個股頁：固定頁首與分頁 ------------------------------------------ */
 .ident.sticky{position:sticky;top:0;z-index:30;background:var(--ground);
-  margin:0 -20px 16px;padding:12px 20px 0;
+  margin:0 calc(-1 * var(--pad)) 16px;padding:12px var(--pad) 0;
   box-shadow:0 1px 0 var(--rule),0 6px 14px -12px rgba(0,0,0,.4)}
 .ident.sticky h2{margin:0;font-size:19px;border:none;padding:0;letter-spacing:-.01em}
 .ident .facts{display:flex;flex-wrap:wrap;gap:4px 18px;margin:5px 0 9px;
@@ -395,7 +398,7 @@ details.chart-data .scroll{margin-top:8px;max-height:260px;overflow-y:auto}
 tr.here{background:var(--surface-2)}
 tr.here th{font-weight:700}
 @media(max-width:640px){svg.chart{height:200px}}
-@media(max-width:640px){.wrap{padding:0 14px 60px}}
+@media(max-width:640px){.wrap{--pad:14px;padding:0 var(--pad) 60px}}
 
 
 /* -- 評等清單：排序、篩選、觀察清單 ------------------------------------- */
