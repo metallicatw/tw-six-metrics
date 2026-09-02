@@ -17,7 +17,11 @@
 
   function load(){
     if(data) return Promise.resolve(data);
-    return fetch(base+'search.json').then(function(r){return r.json();})
+    /* 掛上這一次建站的編號。GitHub Pages 給 JSON 的是 max-age=600，所以不掛的
+       話，剛重建完的十分鐘內瀏覽器會拿自己快取裡的舊索引——而那份索引正是「這
+       一檔幾點抓的」的來源。它一舊，「已經是最新的就別抓」就擋不住。 */
+    var v = (window.TWSIX && TWSIX.built) ? ('?v=' + encodeURIComponent(TWSIX.built)) : '';
+    return fetch(base+'search.json'+v).then(function(r){return r.json();})
       .then(function(j){ data=j; return j; })
       .catch(function(){ data=[]; return data; });
   }
@@ -451,6 +455,20 @@
     for(var i=0;i<data.length;i++) if(data[i][0] === code) return data[i][5] || '';
     return '';
   }
+  /* 送出之前再問伺服器一次。
+     瀏覽器手上那份索引可能是這一頁載入時抓的，而中間也許有別人更新過這一檔、
+     或是剛重建過站。一個 80 KB 的請求，換掉一整台 runner 加一分鐘——這筆帳無論
+     怎麼算都划算。問不到就用手上那份，不會比原本更糟。 */
+  function stampFromServer(code){
+    return fetch(base + 'search.json?t=' + Date.now(), {cache: 'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(rows){
+        if(!rows) return stampOf(code);
+        data = rows;
+        return stampOf(code);
+      })
+      .catch(function(){ return stampOf(code); });
+  }
   function isFresh(stamp){
     if(!stamp || stamp.indexOf('T') < 0) return false;
     var t = Date.parse(stamp);
@@ -469,17 +487,20 @@
        index。先確定拿到手，才知道「按之前長什麼樣」，也才判斷得出好了沒。 */
     if(!data){ load().then(function(){ runOnGithub(code); }); return; }
     close();
-    var stamp = stampOf(code);
+    beginPanel(code);
+    step('先確認 ' + code + ' 需不需要抓…', 'send');
+    stampFromServer(code).then(function(stamp){ dispatch(code, stamp); });
+  }
+
+  function dispatch(code, stamp){
     if(isFresh(stamp) && !forced[code]){
       forced[code] = true;
-      beginPanel(code);
       endPanel(code + ' 已經是最新的',
                '最後抓取 ' + prettyStamp(stamp) + '，之後沒有任何一個來源更新過'
                + '（收盤行情與三大法人下午才上站，界線抓在 17:00）。'
-               + '這次沒有送出抓取。真的要重抓的話，再按一次。', true);
+               + '這次沒有派 runner。真的要重抓的話，再按一次。', true);
       return;
     }
-    beginPanel(code);
     var force = !!forced[code] && isFresh(stamp);
     var was = currentMark(code);
     remember(code, was);

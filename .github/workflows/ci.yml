@@ -3,6 +3,11 @@ name: ci
 on:
   push:
     branches: [main]
+    # 只改文件不必跑整套測試與 lint。資料的改動**照跑**：測試裡有好幾條在守資料
+    # 本身的規則（分頁不能有未壓縮的、評等表的欄位形狀、端點樣本的長相），跳過
+    # 它們等於把最容易悄悄壞掉的那一類改動放行。
+    paths-ignore:
+      - "**.md"
   pull_request:
   workflow_dispatch:
 
