@@ -1622,6 +1622,61 @@ def cmd_restate(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_fetch_daily(args: argparse.Namespace) -> int:
+    """每日全市場：收盤行情與三大法人買賣超。**四個請求，換到整個市場。**
+
+    這是〈架構檢討〉裡「工作單位是一檔股票，資料的發布單位是一個期別的全市場」
+    那個落差最貴的一格：今天的收盤價原本要按一次按鈕、抓 13 頁才換到一檔的，
+    而交易所一個請求就給整個市場。
+
+    檔名是**每一列自己帶的日期**，不是抓取當天：上市與上櫃的開放資料不一定同一
+    時間更新（存下來的樣本裡就差了一天），照抓取日命名會把兩天的資料寫進同一個
+    檔案。所以一次抓取可能寫出兩個日期的檔案，那是對的。
+
+    寫下去就不再改，所以壓縮存：一天約 2,000 列、壓縮後 25 KB，一年 6 MB。
+    """
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient  # noqa: PLC0415
+    from .ingest.daily import (  # noqa: PLC0415
+        INSTITUTIONAL_COLUMNS,
+        PRICE_COLUMNS,
+        Daily,
+        by_date,
+    )
+
+    http = HttpClient(
+        cache_dir=None,   # 要的是今天的收盤，快取只會給出昨天的
+        cache_ttl=0,
+        min_interval=settings.ingest.min_interval_seconds,
+        retries=settings.ingest.retries,
+    )
+    store = Store(args.out or settings.data_dir)
+    daily = Daily(http)
+    written = 0
+    failed: list[str] = []
+    for label, fetch, columns, folder in (
+        ("收盤行情", daily.prices, PRICE_COLUMNS, "prices"),
+        ("三大法人", daily.institutional, INSTITUTIONAL_COLUMNS, "institutional"),
+    ):
+        try:
+            rows = fetch()
+        except Exception as exc:  # noqa: BLE001 - 一邊掛掉不該把另一邊丟掉
+            print(f"  {label:<6} 失敗：{exc}", file=sys.stderr)
+            failed.append(f"{label}：{exc}")
+            continue
+        if not rows:
+            print(f"  {label:<6} 沒有資料（可能是非交易日）")
+            continue
+        for day, group in sorted(by_date(rows).items()):
+            table = f"market/daily/{folder}/{day}"
+            n = store.write_gz(table, group, columns, sort_by=("code",))
+            written += 1
+            print(f"  {label:<6} {day}　{n} 檔 -> {store.root / (table + '.csv.gz')}")
+    for line in failed:
+        print(f"::warning::{line}")
+    return EXIT_OK if written or not failed else EXIT_FAIL
+
+
 def cmd_probe(args: argparse.Namespace) -> int:
     """打一輪候選端點，把**真實回應**原樣存進 `reference/samples/`。不解析。
 
@@ -2412,6 +2467,13 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--data", help="資料目錄")
     rs.add_argument("--codes", help="只重算這些代號，逗號分隔（預設全部）")
     rs.set_defaults(func=cmd_restate)
+
+    fd = sub.add_parser(
+        "fetch-daily",
+        help="每日全市場：收盤行情與三大法人買賣超（四個請求）",
+    )
+    fd.add_argument("--out", help="資料目錄")
+    fd.set_defaults(func=cmd_fetch_daily)
 
     pb = sub.add_parser(
         "probe",

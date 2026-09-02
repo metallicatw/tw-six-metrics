@@ -68,6 +68,52 @@ class Store:
             writer.writerows(materialised)
         return len(materialised)
 
+    def write_gz(
+        self,
+        table: str,
+        rows: Iterable[dict[str, Any]],
+        columns: Sequence[str],
+        *,
+        sort_by: Sequence[str] | None = None,
+    ) -> int:
+        """壓縮存的表——給**寫下去就不再改**的資料用（例如每天一個檔的收盤行情）。
+
+        一天約 2,000 列、100 KB，一年 250 個交易日。壓縮之後每天約 25 KB，一年
+        6 MB。這種檔案 diff 不需要讀懂：它不會被改寫，只會多一個——「這一天的資
+        料」本身就是一整個 commit 的內容。反而是評等表那種**會被改寫**的，diff
+        就是稽核軌跡，所以那些留在未壓縮的 CSV。
+
+        gzip 固定 mtime=0：同樣的內容寫兩次得到同一個檔案，所以排程一天跑兩次
+        （早收盤一次、晚上補一次）不會製造出第二個 commit。
+        """
+        import gzip
+        import io
+
+        materialised = [{c: _fmt(r.get(c)) for c in columns} for r in rows]
+        if sort_by:
+            materialised.sort(key=lambda r: tuple(str(r.get(c, "")) for c in sort_by))
+        text = io.StringIO()
+        writer = csv.DictWriter(text, fieldnames=list(columns), lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(materialised)
+        buf = io.BytesIO()
+        with gzip.GzipFile(fileobj=buf, mode="wb", compresslevel=9, mtime=0) as fh:
+            fh.write(text.getvalue().encode("utf-8"))
+        target = self.root / f"{table}.csv.gz"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(buf.getvalue())
+        return len(materialised)
+
+    def read_gz(self, table: str) -> list[dict[str, str]]:
+        import gzip
+        import io
+
+        target = self.root / f"{table}.csv.gz"
+        if not target.exists():
+            return []
+        text = gzip.decompress(target.read_bytes()).decode("utf-8")
+        return list(csv.DictReader(io.StringIO(text)))
+
     def read(self, table: str) -> list[dict[str, str]]:
         target = self.path(table)
         if not target.exists():
