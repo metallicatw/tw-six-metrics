@@ -1,0 +1,94 @@
+name: 存一份真實回應（候選端點）
+
+# 這個專案有一條鐵律：**沒有真實回應就不寫解析器**。
+#
+# 原本的 `ingest/` 是照官方 API 文件寫的、從未實跑過，結果九張表裡有六張欄位對錯
+# 位——看起來全部正常，但都是錯的。從此改成兩段式：先把回應原封不動存下來，有人
+# 讀過那些位元組之後才寫解析器，而那份樣本同時變成測試的定樁。
+#
+# 這條 workflow 是前半段。它**不解析、不寫進任何資料表**，只把回應存進
+# `reference/samples/`：哪一個端點回 200、哪一個回 404、哪一個回了一頁寫著「因為
+# 安全性考量」的 HTML，存下來才知道，而且不會弄壞任何既有的功能。
+#
+# 為什麼需要 runner 而不是在本機跑：證交所會擋機房 IP（openapi 曾經整段回一頁
+# 「FOR SECURITY REASONS」），而 GitHub runner 的 IP 是通的——每天的〔全市場官方
+# 資料〕排程就是這樣抓的。哪一邊通得了，本身也是這份 meta 要記下來的事實之一。
+
+on:
+  workflow_dispatch:
+    inputs:
+      group:
+        description: "哪一組（daily = 每日股價與三大法人；statements = 公開資訊觀測站的彙總報表）"
+        required: false
+        default: "daily"
+        type: choice
+        options: [daily, statements, ""]
+      name:
+        description: "只打其中一個候選端點（填名稱，例如 twse_t86_rwd）"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e .
+
+      # 打不通也是一種事實：失敗的那一個會存下一份只有 meta 的樣本，說明它為什麼
+      # 沒拿到。所以這一步不該因為某個端點掛掉就紅字。
+      - name: 抓樣本
+        run: |
+          args=""
+          [ -n "${{ inputs.group }}" ] && args="$args --group ${{ inputs.group }}"
+          [ -n "${{ inputs.name }}" ] && args="$args --name ${{ inputs.name }}"
+          twsix probe $args
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reference/samples
+          if git diff --cached --quiet; then
+            # 端點沒改版的時候，同一天重跑會拿到同一份回應——gzip 固定 mtime=0，
+            # 所以位元組一樣就是真的沒有差異。
+            echo "::notice::樣本沒有變化"
+            exit 0
+          fi
+          git commit -m "端點樣本：$(date -u +%Y-%m-%d)" \
+                     -m "由「存一份真實回應」workflow 抓取。只存原始回應，不解析。"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      # 讀樣本是人的工作，但至少把「每一份長什麼樣」印在 summary 上，不必下載
+      # 才知道這一輪拿到了什麼。
+      - name: 摘要
+        if: always()
+        run: |
+          {
+            echo "### 這一輪存下的樣本"
+            echo ""
+            echo "| 端點 | 位元組 | 開頭 |"
+            echo "|---|---:|---|"
+            python - <<'PY'
+          import json, pathlib
+          for f in sorted(pathlib.Path("reference/samples").glob("*.meta.json")):
+              m = json.loads(f.read_text("utf-8"))
+              head = (m.get("error") or m.get("head", ""))[:120].replace("|", "\\|")
+              print(f"| `{m['name']}` | {m.get('bytes', 0):,} | {head} |")
+          PY
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,5 +1,12 @@
 # 活頁簿實際使用的資料來源
 
+> **寫解析器之前先看 `reference/samples/`。** 那裡是候選端點的**真實回應**，由
+> `twsix probe`（或 GitHub 上的〔存一份真實回應〕workflow）原封不動存下來，
+> 一份 `.raw.gz` 加一份 `.meta.json`（網址、狀態、大小、開頭）。
+>
+> 這條規則的由來就寫在下面：這個專案的 `ingest/` 原本是照文件寫的，九張表裡六張
+> 欄位錯位。從此改成兩段式——先存回應，讀過那些位元組之後才寫解析器。
+
 由 `scripts/extract_vba.py` 從 `vbaProject.bin` 還原的 47 個模組整理而來
 （原始碼在 `reference/vba/`）。
 

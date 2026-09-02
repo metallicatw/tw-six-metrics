@@ -1,0 +1,9 @@
+{
+  "bytes": 4229706,
+  "expect": "未驗證：猜是上櫃當日收盤行情",
+  "fetched_at": "2026-09-02T16:01:34+00:00",
+  "group": "daily",
+  "head": "[ {\"Date\":\"1150902\",\"SecuritiesCompanyCode\":\"00411A\",\"CompanyName\":\"主動統一前沿科技\",\"Close\":\"9.50\",\"Change\":\"-0.19 \",\"Open\":\"9.61\",\"High\":\"9.61\",\"Low\":\"9.50\",\"Average\":\"9.52\",\"TradingShares\":\"20006803\",\"TransactionAmount\":\"190428634\",\"TransactionNumber\":\"4828\",\"LatestBidPrice\":\"9.49\",\"LatesAskPrice\":\"9.50\",\"Capitals\":\"660076000\",\"NextReferencePrice\":\"9.50\",\"NextLimitUp\":\"9999.95\",\"NextLi",
+  "name": "tpex_daily_openapi",
+  "url": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
+}

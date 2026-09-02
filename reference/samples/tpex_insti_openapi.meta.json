@@ -1,0 +1,9 @@
+{
+  "bytes": 844296,
+  "expect": "未驗證：猜是上櫃三大法人買賣超",
+  "fetched_at": "2026-09-02T16:02:23+00:00",
+  "group": "daily",
+  "head": "[ {\"Date\":\"1150902\",\"SecuritiesCompanyCode\":\"00411A\",\"CompanyName\":\"主動統一前沿科技\",\"Foreign Investors include Mainland Area Investors (Foreign Dealers excluded)-Total Buy\":\"115550\",\" Foreign Investors include Mainland Area Investors (Foreign Dealers excluded)-Total Sell\":\"256000\",\"Foreign Investors include Mainland Area Investors (Foreign Dealers excluded)-Difference\":\"-140450\",\"Foreign",
+  "name": "tpex_insti_openapi",
+  "url": "https://www.tpex.org.tw/openapi/v1/tpex_3insti_daily_trading"
+}
