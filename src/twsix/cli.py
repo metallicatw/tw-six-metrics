@@ -538,7 +538,6 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
     disk so a failed parse can be inspected without hitting the sites again —
     the pages change, and the saved grid is the evidence of what came back.
     """
-    import json
 
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient
@@ -661,7 +660,6 @@ def _fetch_extras(http, stock: str, out_dir: Path, offline: bool) -> int:
     and nothing else; missing news costs one section.  So a failure here is
     reported and counted, and the eleven sheets that matter are already saved.
     """
-    import json
 
     from .ingest import news as news_mod
     from .ingest import weekly_prices
@@ -710,7 +708,6 @@ def _fetch_extras(http, stock: str, out_dir: Path, offline: bool) -> int:
 
 def _fetched_grids(root: Path, stock: str):
     """The grids ``fetch-stock``/``fetch-yearly`` saved, with formula columns filled."""
-    import json
 
     from .ingest.derive import enrich
 
@@ -1290,7 +1287,6 @@ def _fold_ownership(args: argparse.Namespace, stock: str) -> None:
     ``fetch-ownership`` 抓的是整個市場，所以一檔股票第一次被加進來的時候，它
     過去每一週的資料其實已經躺在 ``data/ownership/`` 裡了。這一步不連網。
     """
-    import json
 
     from .ingest.tdcc import merge
     from .store import ownership as own
@@ -1308,7 +1304,7 @@ def _fold_ownership(args: argparse.Namespace, stock: str) -> None:
             continue
         base = data_dir / "sheets" / stock
         existing = sheet_store.read_grid(base, sheet) or []
-        target = sheet_store.write_grid(base, sheet, merge(existing, fresh))
+        sheet_store.write_grid(base, sheet, merge(existing, fresh))
 
 
 def cmd_backfill(args: argparse.Namespace) -> int:
@@ -1523,8 +1519,6 @@ def cmd_compact(args: argparse.Namespace) -> int:
     而讀取端兩種格式都認得，所以搬與不搬都不會壞——搬只是為了不要讓同一批資料
     用兩種大小躺在同一個目錄裡。
     """
-    from .store import sheets as sheet_store  # noqa: PLC0415
-
     settings = Settings.load(args.config)
     root = Path(args.data or settings.data_dir) / "sheets"
     if not root.is_dir():
@@ -1617,7 +1611,6 @@ def _save_table(sheets_dir: Path, table: Any, code: str = "") -> None:
     （見 ``tdcc.merge``），所以官方每週累積的新資料會蓋在上面，匯進來的舊週原封
     不動留著。這也是為什麼欄名一定要一致。
     """
-    import json
 
     sheets_dir.mkdir(parents=True, exist_ok=True)
     existing: list[list[str]] = sheet_store.read_grid(sheets_dir, table.sheet) or []
@@ -1684,7 +1677,6 @@ def cmd_deep(args: argparse.Namespace) -> int:
 
     所以這裡不抓任何東西，只回答兩個問題：還缺哪幾檔，網址是什麼。
     """
-    import json
 
     settings = Settings.load(args.config)
     data_dir = Path(args.data or settings.data_dir)
@@ -1974,7 +1966,6 @@ def cmd_fetch_ownership(args: argparse.Namespace) -> int:
 
     # 把快照折成個股表。只折已經有目錄的那些——別的股票的歷史留在檔案庫裡，
     # 哪天加進來的時候一次補齊，這正是「存整個市場」買到的東西。
-    import json
 
     sheets = data_dir / "sheets"
     codes = sorted(p.name for p in sheets.glob("*") if p.is_dir()) if sheets.is_dir() else []
@@ -1992,7 +1983,7 @@ def cmd_fetch_ownership(args: argparse.Namespace) -> int:
             existing = sheet_store.read_grid(base, sheet) or []
             # 既有的可能是使用者從 Goodinfo 匯入的長歷史；官方資料補在它前面，
             # 同一期以官方為準。欄名一致，所以這一步不需要任何轉換。
-            target = sheet_store.write_grid(base, sheet, merge(existing, fresh))
+            sheet_store.write_grid(base, sheet, merge(existing, fresh))
             touched += 1
     if codes:
         print(f"  更新 {touched} 張個股表（{len(codes)} 檔）")
