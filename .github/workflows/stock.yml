@@ -196,6 +196,9 @@ jobs:
           test: "false"
           setup: "false"   # 上面已經 setup 過了
           incremental: "true"
+          # 只取回、不存回：存一份 66 MB 的快取要十幾秒，而這條路上的每一秒都是
+          # 使用者盯著螢幕在等的。快取由每天跑六次的那幾條排程保持新鮮。
+          save_cache: "false"
 
 
       - name: 發布
