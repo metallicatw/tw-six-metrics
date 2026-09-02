@@ -353,13 +353,14 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         print("請指定要抓什麼：--companies / --revenue / --statements / --all")
         return EXIT_FAIL
 
-    failures = 0
+    failed: list[str] = []
+    written = 0
     for name, fn in plan:
         try:
             rows = fn()  # type: ignore[operator]
         except Exception as exc:  # noqa: BLE001 - one bad feed must not stop the rest
             print(f"  {name:<18} 失敗：{exc}", file=sys.stderr)
-            failures += 1
+            failed.append(f"{name}：{exc}")
             continue
         columns = sorted({k for r in rows for k in r}) if rows else []
         if not columns:
@@ -369,11 +370,11 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             period = "" if name in UNDATED else period_of(rows)
         except MixedPeriods as exc:
             print(f"  {name:<18} 失敗：一批資料裡有多個期別（{exc}）", file=sys.stderr)
-            failures += 1
+            failed.append(f"{name}：一批資料裡有多個期別（{exc}）")
             continue
         if not period and name not in UNDATED:
             print(f"  {name:<18} 失敗：資料裡找不到期別欄位", file=sys.stderr)
-            failures += 1
+            failed.append(f"{name}：資料裡找不到期別欄位")
             continue
         table = market_path(name, period)
         # Sort before writing.  The store promises that an unchanged fetch
@@ -384,9 +385,10 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         shrink = _shrank(store, table, len(rows))
         if shrink:
             print(f"  {name:<18} 跳過：{shrink}", file=sys.stderr)
-            failures += 1
+            failed.append(f"{name}：{shrink}")
             continue
         n = store.write(table, rows, columns, sort_by=_id_columns(columns))
+        written += 1
         # 舊的扁平鍵（`twse_income`）指向一個已經不存在的檔案。留著它，manifest
         # 就會同時聲稱兩個版面都成立。
         if table != name:
@@ -399,7 +401,30 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         print(f"  {name:<18} {period or '（無期別）':<8} {n} 列 -> {store.path(table)}")
 
     store.save_manifest(manifest)
-    return EXIT_OK if failures == 0 else EXIT_FAIL
+    return _fetch_status(written, failed)
+
+
+def _fetch_status(written: int, failed: list[str]) -> int:
+    """抓到幾張就留幾張——一個端點掛掉不該把另外七張整批丟掉。
+
+    第一次排程真的跑起來的那天：`tpex_companies` 回了一份截斷的 JSON，另外七張
+    表全部抓好、寫進 `data/market/` 了，然後這個函式回傳 1、`twsix fetch --all`
+    以 exit 1 結束、workflow 在 Commit 那一步之前就死掉——七張抓好的資料連同那
+    一期的歷史，一起被丟進垃圾桶。
+
+    而且丟掉的代價不對稱：官方端點只給最新一期，沒有日期參數。今天沒存下來的
+    那一期，不是「明天再抓一次就好」，是**永遠拿不到**。相對地，八張裡缺一張只
+    是「那一張明天再補」——下一次排程會把它寫進同一個期別的檔案裡。
+
+    所以退出碼問的問題收窄成一句：**這次跑有沒有存下任何東西**。有，就是成功，
+    失敗的那幾張用 GitHub 的 warning 標注出來（annotation 會出現在 run 的摘要
+    上，不會被埋在幾百行 log 裡）；一張都沒有，才是真的失敗。
+    """
+    for line in failed:
+        print(f"::warning::抓取失敗（其餘照常存檔）：{line}")
+    if failed and written:
+        print(f"::notice::{written} 張表已存檔，{len(failed)} 張失敗，下次排程再補")
+    return EXIT_OK if written or not failed else EXIT_FAIL
 
 
 # =========================================================================

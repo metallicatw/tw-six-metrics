@@ -196,3 +196,40 @@ def test_the_manifest_does_not_churn_when_only_the_fetch_order_changed():
     # 少了一筆才是差異。
     store.save_manifest(Manifest(sources=[a, b]))
     assert (root / "manifest.json").read_text("utf-8") != first
+
+
+def test_one_dead_endpoint_does_not_throw_away_the_seven_tables_that_worked():
+    """第一次排程真的跑起來的那天發生的事。
+
+    `tpex_companies` 回了一份截斷的 JSON，另外七張表全部抓好、寫進 `data/market/`
+    了，然後 `twsix fetch --all` 以 exit 1 結束，workflow 在 Commit 那一步之前就
+    死掉——七張抓好的資料，連同那一期的歷史，一起被丟掉。
+
+    丟掉的代價不對稱：官方端點只給最新一期，沒有日期參數，今天沒存下來的那一期
+    是永遠拿不到；缺一張表則只是明天再補。所以退出碼問的是「有沒有存下任何
+    東西」，不是「有沒有任何一張失敗」。
+    """
+    from twsix.cli import EXIT_FAIL, EXIT_OK, _fetch_status
+
+    assert _fetch_status(7, ["tpex_companies：IncompleteRead"]) == EXIT_OK
+    assert _fetch_status(8, []) == EXIT_OK
+    # 一張都沒存下來就沒有什麼可留的了，那才是失敗。
+    assert _fetch_status(0, ["tpex_companies：IncompleteRead"]) == EXIT_FAIL
+
+
+def test_a_truncated_response_is_retried_instead_of_being_fatal():
+    """`IncompleteRead` 不是 OSError 的子類別，於是它整個漏過了重試迴圈。
+
+    伺服器宣告了 Content-Length 卻在送完之前關掉連線——所有失敗裡最該重試的一
+    種，而我們一次都沒有重試過：tpex_companies 在四次排程裡失敗了三次。
+    """
+    import http.client
+    import inspect
+
+    from twsix.ingest.base import HttpClient
+
+    src = inspect.getsource(HttpClient.get)
+    assert "http.client.HTTPException" in src, "重試迴圈還是接不住截斷的回應"
+    assert not issubclass(http.client.IncompleteRead, OSError), (
+        "如果哪天 IncompleteRead 變成 OSError 的子類別，這個 except 就多餘了"
+    )

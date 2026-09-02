@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import http.client
 import http.cookiejar
 import json
 import logging
@@ -253,7 +254,20 @@ class HttpClient:
                 if cache_path is not None:
                     cache_path.write_bytes(data)
                 return data
-            except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+            except (
+                urllib.error.HTTPError,
+                urllib.error.URLError,
+                OSError,
+                # 連線斷在半路上：伺服器宣告了 Content-Length，卻在送完之前就把
+                # 連線關掉，`resp.read()` 於是丟 IncompleteRead。這是所有失敗裡
+                # 最該重試的一種——但 IncompleteRead 不是 OSError 的子類別（它掛
+                # 在 http.client.HTTPException 底下），所以它從上面三個名字底下
+                # 整個漏了出去，一路飛過重試迴圈變成致命錯誤。
+                #
+                # 症狀是 tpex_companies 在四次排程裡失敗了三次：一個 1 MB 的端點
+                # 偶爾截斷很正常，而我們一次都沒有重試過。
+                http.client.HTTPException,
+            ) as exc:
                 last_error = exc
                 status = getattr(exc, "code", None)
                 if status in (400, 401, 403, 404):
