@@ -16,7 +16,7 @@ import argparse
 import re
 import sys
 from collections.abc import Sequence
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -290,6 +290,34 @@ def market_path(name: str, period: str) -> str:
     return f"market/{name}/{period}" if period else name
 
 
+#: 一期的資料可以變多（同一季裡陸續有公司申報），但不該突然少一大截。
+#: 少於這個比例就當作「這次抓到的是半份」，不覆蓋。
+SHRINK_FLOOR = 0.9
+
+
+def _shrank(store: Any, table: str, incoming: int) -> str:
+    """既有的那一期比新抓回來的多很多——回一句話說明，否則回空字串。
+
+    這是同一個教訓的第三次。回補的快取判斷只看「新」，於是跑到一半被擋之後那些
+    洞永遠補不回來；`_store_rating` 沒有比較期別，於是一份退化的抓取會蓋掉完整
+    的舊評等。共同的形狀是：**抓取很少乾脆地失敗，它比較常「成功地拿到半份」**，
+    而半份資料和完整資料在程式裡長得一模一樣。
+
+    這裡尤其要擋，因為這條排程每天跑、每天寫同一個期別的檔案。端點只要有一天回
+    了一份截斷的 JSON，完整的那一份就被換掉了，而且要等到季度評等算出奇怪的
+    結果才會有人發現。
+
+    往上長是正常的：同一季裡公司陸續申報，1,017 → 1,048 就是這樣來的。
+    """
+    try:
+        existing = len(store.read(table))
+    except Exception:  # noqa: BLE001 - 讀不到就當作沒有
+        return ""
+    if existing == 0 or incoming >= existing * SHRINK_FLOOR:
+        return ""
+    return f"既有 {existing} 列，這次只有 {incoming} 列，看起來是半份，不覆蓋"
+
+
 def cmd_fetch(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient
@@ -304,7 +332,6 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     )
     store = Store(args.out or settings.data_dir)
     manifest = store.load_manifest()
-    now = datetime.now(UTC).isoformat(timespec="seconds")
 
     twse, tpex = Twse(http), Tpex(http)
     plan: list[tuple[str, object]] = []
@@ -354,11 +381,21 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         # lives in CSV — but these feeds do not guarantee row order, so an
         # unsorted write rewrote data/tpex_companies.csv in full between two
         # runs on the same day.
+        shrink = _shrank(store, table, len(rows))
+        if shrink:
+            print(f"  {name:<18} 跳過：{shrink}", file=sys.stderr)
+            failures += 1
+            continue
         n = store.write(table, rows, columns, sort_by=_id_columns(columns))
+        # 舊的扁平鍵（`twse_income`）指向一個已經不存在的檔案。留著它，manifest
+        # 就會同時聲稱兩個版面都成立。
+        if table != name:
+            manifest.counts.pop(name, None)
         manifest.counts[table] = n
-        manifest.sources.append(
-            {"name": name, "period": period, "fetched_at": now, "rows": n}
-        )
+        # 取代，不是追加。這個排程每天跑一次，追加的話 manifest 一年會長出
+        # 2,900 筆「同一張表又抓了一次」——而那件事 git 的歷史已經記著了。
+        manifest.sources = [s for s in manifest.sources if s.get("name") != name]
+        manifest.sources.append({"name": name, "period": period, "rows": n})
         print(f"  {name:<18} {period or '（無期別）':<8} {n} 列 -> {store.path(table)}")
 
     store.save_manifest(manifest)

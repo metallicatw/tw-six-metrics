@@ -7,150 +7,54 @@
     "market/twse_income/115Q2": 1048,
     "market/twse_revenue/11507": 1085,
     "ratings": 15669,
-    "tpex_balance": 873,
     "tpex_companies": 890,
-    "tpex_income": 873,
-    "tpex_revenue": 890,
-    "twse_balance": 1017,
-    "twse_companies": 1094,
-    "twse_income": 1017,
-    "twse_revenue": 1085
+    "twse_companies": 1094
   },
-  "generated_at": "2026-09-02T08:55:10+00:00",
+  "generated_at": "2026-09-02T09:08:26+00:00",
   "notes": [
     "baseline imported from 評等清單 v6.62 (published snapshot)"
   ],
   "schema_version": 1,
   "sources": [
     {
-      "fetched_at": "2026-08-28T08:12:37+00:00",
-      "name": "twse_companies",
-      "rows": 1095
-    },
-    {
-      "fetched_at": "2026-08-28T08:12:37+00:00",
-      "name": "tpex_companies",
-      "rows": 890
-    },
-    {
-      "fetched_at": "2026-08-28T08:16:12+00:00",
-      "name": "twse_companies",
-      "rows": 1095
-    },
-    {
-      "fetched_at": "2026-08-28T08:16:12+00:00",
-      "name": "tpex_companies",
-      "rows": 890
-    },
-    {
-      "fetched_at": "2026-08-28T13:30:24+00:00",
-      "name": "twse_companies",
-      "rows": 1095
-    },
-    {
-      "fetched_at": "2026-08-28T13:30:24+00:00",
-      "name": "tpex_companies",
-      "rows": 890
-    },
-    {
-      "fetched_at": "2026-08-28T13:30:24+00:00",
-      "name": "twse_revenue",
-      "rows": 1085
-    },
-    {
-      "fetched_at": "2026-08-28T13:30:24+00:00",
-      "name": "tpex_revenue",
-      "rows": 890
-    },
-    {
-      "fetched_at": "2026-08-28T13:30:24+00:00",
-      "name": "twse_income",
-      "rows": 1017
-    },
-    {
-      "fetched_at": "2026-08-28T13:30:24+00:00",
-      "name": "twse_balance",
-      "rows": 1017
-    },
-    {
-      "fetched_at": "2026-08-28T13:30:24+00:00",
-      "name": "tpex_income",
-      "rows": 873
-    },
-    {
-      "fetched_at": "2026-08-28T13:30:24+00:00",
       "name": "tpex_balance",
-      "rows": 873
+      "period": "115Q2",
+      "rows": 883
     },
     {
-      "fetched_at": "2026-08-28T13:35:25+00:00",
-      "name": "twse_companies",
-      "rows": 1095
-    },
-    {
-      "fetched_at": "2026-08-28T13:35:25+00:00",
       "name": "tpex_companies",
+      "period": "",
       "rows": 890
     },
     {
-      "fetched_at": "2026-09-02T08:41:30+00:00",
-      "name": "twse_revenue",
-      "period": "11507",
-      "rows": 1085
+      "name": "tpex_income",
+      "period": "115Q2",
+      "rows": 883
     },
     {
-      "fetched_at": "2026-09-02T08:41:30+00:00",
-      "name": "tpex_revenue",
-      "period": "11507",
-      "rows": 890
+      "name": "twse_balance",
+      "period": "115Q2",
+      "rows": 1048
     },
     {
-      "fetched_at": "2026-09-02T08:51:57+00:00",
       "name": "twse_companies",
       "period": "",
       "rows": 1094
     },
     {
-      "fetched_at": "2026-09-02T08:51:57+00:00",
-      "name": "tpex_companies",
-      "period": "",
-      "rows": 890
-    },
-    {
-      "fetched_at": "2026-09-02T08:51:57+00:00",
-      "name": "twse_revenue",
-      "period": "11507",
-      "rows": 1085
-    },
-    {
-      "fetched_at": "2026-09-02T08:51:57+00:00",
-      "name": "tpex_revenue",
-      "period": "11507",
-      "rows": 890
-    },
-    {
-      "fetched_at": "2026-09-02T08:51:57+00:00",
       "name": "twse_income",
       "period": "115Q2",
       "rows": 1048
     },
     {
-      "fetched_at": "2026-09-02T08:51:57+00:00",
-      "name": "twse_balance",
-      "period": "115Q2",
-      "rows": 1048
+      "name": "twse_revenue",
+      "period": "11507",
+      "rows": 1085
     },
     {
-      "fetched_at": "2026-09-02T08:51:57+00:00",
-      "name": "tpex_income",
-      "period": "115Q2",
-      "rows": 883
-    },
-    {
-      "fetched_at": "2026-09-02T08:51:57+00:00",
-      "name": "tpex_balance",
-      "period": "115Q2",
-      "rows": 883
+      "name": "tpex_revenue",
+      "period": "11507",
+      "rows": 890
     }
   ]
 }

@@ -111,3 +111,60 @@ def test_there_is_a_schedule_that_actually_accumulates():
     add = text[text.index("git add ") : text.index("if git diff --cached --quiet")]
     assert "data/market" in add
     assert "git diff --name-only" in text, "漏了「還有什麼沒被 commit」的自白"
+
+
+def test_a_half_sized_fetch_does_not_overwrite_a_complete_one():
+    """抓取很少乾脆地失敗，它比較常「成功地拿到半份」。
+
+    這是同一個教訓的第三次：回補的快取判斷只看「新」，於是跑到一半被擋之後那些
+    洞永遠補不回來；`_store_rating` 沒有比較期別，於是一份退化的抓取會蓋掉完整
+    的舊評等。半份資料和完整資料在程式裡長得一模一樣。
+
+    這裡尤其要擋，因為排程每天跑、每天寫同一個期別的檔案。端點只要有一天回了一
+    份截斷的 JSON，完整的那一份就被換掉了，而且要等到季度評等算出奇怪的結果才會
+    有人發現。
+    """
+    from twsix.cli import _shrank
+
+    root = Path(tempfile.mkdtemp())
+    store = Store(root)
+    cols = ["公司代號", "營業收入"]
+    store.write(
+        "market/twse_income/115Q2",
+        [{"公司代號": str(1000 + i), "營業收入": "1"} for i in range(1000)],
+        cols,
+    )
+
+    # 往上長是正常的：同一季裡公司陸續申報，1,017 → 1,048 就是這樣來的。
+    assert _shrank(store, "market/twse_income/115Q2", 1048) == ""
+    # 掉一點點也還好——偶爾有公司下市。
+    assert _shrank(store, "market/twse_income/115Q2", 950) == ""
+    # 掉一大截就是半份。
+    assert "半份" in _shrank(store, "market/twse_income/115Q2", 400)
+    # 還沒有這個期別的時候，什麼都不擋。
+    assert _shrank(store, "market/twse_income/115Q3", 3) == ""
+
+
+def test_the_manifest_does_not_churn_when_nothing_changed():
+    """這個檔案每天被排程寫一次。
+
+    每次都蓋上「現在幾點」的話，即使整批資料一個位元組都沒變，manifest 自己也會
+    製造出一個 commit——一年 365 個只有時間戳在動的雜訊，而且會讓「這次抓取有沒
+    有拿到新東西」從 git 歷史上再也讀不出來。
+    """
+    from twsix.store.snapshots import Manifest
+
+    root = Path(tempfile.mkdtemp())
+    store = Store(root)
+    m = Manifest(counts={"market/twse_income/115Q2": 1048})
+    store.save_manifest(m)
+    first = (root / "manifest.json").read_text("utf-8")
+    assert '"generated_at"' in first and Manifest(**store.read_json("manifest")).generated_at
+
+    # 同樣的內容再存一次：檔案一個位元組都不該動。
+    store.save_manifest(Manifest(counts={"market/twse_income/115Q2": 1048}))
+    assert (root / "manifest.json").read_text("utf-8") == first
+
+    # 內容變了才換時間戳。
+    store.save_manifest(Manifest(counts={"market/twse_income/115Q2": 1050}))
+    assert (root / "manifest.json").read_text("utf-8") != first

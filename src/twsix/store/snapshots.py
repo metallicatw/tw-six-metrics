@@ -132,6 +132,22 @@ class Store:
         return Manifest(**raw)
 
     def save_manifest(self, manifest: Manifest) -> None:
+        """只有在描述真的變了的時候才重寫，時間戳也才跟著換。
+
+        這個檔案每天被排程寫一次。如果每次都蓋上「現在幾點」，那麼即使整批資料
+        一個位元組都沒變，manifest 自己也會製造出一個 commit——一年 365 個只有
+        時間戳在動的雜訊 commit，而且會讓「這次抓取有沒有拿到新東西」這件事，
+        從 git 歷史上再也讀不出來。
+
+        時間戳的意思因此收窄成一句更有用的話：**這份描述是什麼時候開始成立的**，
+        不是「最後一次確認它還成立是什麼時候」。後者 git 已經記著了。
+        """
+        fresh = asdict(manifest)
+        old = self.read_json("manifest") or {}
+        if {k: v for k, v in old.items() if k != "generated_at"} == {
+            k: v for k, v in fresh.items() if k != "generated_at"
+        }:
+            return
         manifest.stamp()
         self.write_json("manifest", asdict(manifest))
 
