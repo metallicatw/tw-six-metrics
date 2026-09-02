@@ -177,3 +177,46 @@ def test_the_daily_schedule_publishes_what_it_fetched():
     assert "build-site" in wf and "deploy-pages" in wf
     assert 'incremental: "true"' in wf
     assert '[report]' in wf, "建站需要 jinja2，裸的 pip install -e . 會少一個相依"
+
+
+def test_the_exchanges_own_website_is_a_day_ahead_of_its_open_data():
+    """實測：台北 16:30，openapi 還停在 09-01；同一時間證交所網站已經是 09-02。
+
+    所以上市抓兩份不是保險，是因為它們**不同步**。哪一份先有今天的資料，今天的
+    價格就從哪一份來。
+    """
+    web = daily.parse_twse_mi_index(_sample("twse_mi_index"))
+    api = daily.parse_twse_prices(_sample("twse_daily_all"))
+    assert {r["date"] for r in web} == {"2026-09-02"}
+    assert {r["date"] for r in api} == {"2026-09-01"}
+    assert len(web) == 1093 and len(api) == 1093
+
+
+def test_the_change_column_is_html_not_a_number():
+    """`漲跌(+/-)` 欄放的是 `<p style= color:green>-</p>`，數字在另一欄。
+
+    直接把那一欄當數字讀會全部變成 None（漲跌不見了）；只讀數字那一欄則會把跌
+    讀成漲——後者更糟，因為看起來完全正常。
+    """
+    rows = {r["code"]: r for r in daily.parse_twse_mi_index(_sample("twse_mi_index"))}
+    assert rows["2330"]["close"] == 2385.0
+    assert rows["2330"]["change"] == -55.0, "綠色的 - 代表跌"
+    assert rows["2611"]["change"] == -0.15
+
+
+def test_the_quotes_table_is_found_by_title_not_by_index():
+    """那個回應裡有十張表，每日收盤行情只是其中一張，現在排第九個。
+
+    照索引取就是「今天對、改版就錯」，而且錯的方式是安靜地讀到價格指數。
+    """
+    payload = _sample("twse_mi_index")
+    shuffled = {**payload, "tables": list(reversed(payload["tables"]))}
+    assert len(daily.parse_twse_mi_index(shuffled)) == 1093
+
+
+def test_two_sources_for_the_same_day_do_not_double_the_rows():
+    web = daily.parse_twse_mi_index(_sample("twse_mi_index"))
+    merged = daily.merge_prices(web, web, daily.parse_tpex_prices(_sample("tpex_daily_openapi")))
+    assert len(merged) == len(web) + 887
+    keys = {(r["date"], r["code"]) for r in merged}
+    assert len(keys) == len(merged)
