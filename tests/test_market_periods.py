@@ -1,0 +1,113 @@
+"""全市場資料的期別，以及為什麼它必須出現在檔名裡。
+
+在這之前，每一季抓回來的財報都寫進同一個 `data/twse_income.csv`，下一季直接
+覆蓋。於是六大指標需要的九期，永遠只有不斷被換掉的那一期——〔評等清單〕停在
+一年前的活頁簿快照，原因不是官方端點給不出資料，是我們把它丟掉了。
+
+一個檔名的問題，擋住了整個全市場評等。
+"""
+
+from __future__ import annotations
+
+import tempfile
+from pathlib import Path
+
+from twsix.cli import UNDATED, MixedPeriods, market_path, period_of
+from twsix.store.snapshots import Store
+
+
+def test_the_period_comes_from_the_data_not_the_clock():
+    """8/17 抓回來的是 7 月的營收；8/28 抓回來的是第 2 季的財報。
+
+    用抓取日期命名，等於把「什麼時候拿到」寫在應該寫「這是哪一期」的地方，
+    而且每年會有幾天剛好落在跨月跨季的邊界上算錯。
+    """
+    # 證交所：中文欄名
+    assert period_of([{"公司代號": "1101", "年度": "115", "季別": "2"}]) == "115Q2"
+    assert period_of([{"公司代號": "1101", "資料年月": "11507"}]) == "11507"
+    # 櫃買的損益表：同一件事換成英文欄名
+    assert period_of([{"SecuritiesCompanyCode": "1240", "Year": "115", "Season": "2"}]) == "115Q2"
+
+
+def test_a_batch_with_two_periods_is_an_error_not_a_guess():
+    """挑第一列的期別當檔名，會安靜地把兩期混進同一個檔案。
+
+    那代表端點的行為變了（例如某天開始一次回好幾期），而這裡最不該發生的事，
+    就是在那種時候若無其事地寫下去。
+    """
+    rows = [
+        {"公司代號": "1101", "年度": "115", "季別": "2"},
+        {"公司代號": "1102", "年度": "115", "季別": "1"},
+    ]
+    try:
+        period_of(rows)
+    except MixedPeriods as exc:
+        assert "115Q1" in str(exc) and "115Q2" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("兩個期別混在一起卻沒有報錯")
+
+
+def test_no_period_at_all_is_reported_as_empty_not_invented():
+    assert period_of([{"公司代號": "1101"}]) == ""
+    assert period_of([]) == ""
+
+
+def test_company_master_data_has_no_period_and_should_not_get_one():
+    """公司基本資料是「現在的樣子」，不是某一期的紀錄。
+
+    改名、換產業別的時候我們要的是最新那一份，不是一份一份存下來的歷史。
+    """
+    assert "twse_companies" in UNDATED and "tpex_companies" in UNDATED
+    assert market_path("twse_companies", "") == "twse_companies"
+
+
+def test_two_quarters_land_in_two_files_instead_of_overwriting():
+    """這就是整件事的重點。"""
+    root = Path(tempfile.mkdtemp())
+    store = Store(root)
+    cols = ["公司代號", "年度", "季別", "營業收入"]
+
+    q1 = [{"公司代號": "1101", "年度": "115", "季別": "1", "營業收入": "100"}]
+    q2 = [{"公司代號": "1101", "年度": "115", "季別": "2", "營業收入": "220"}]
+    for rows in (q1, q2):
+        store.write(market_path("twse_income", period_of(rows)), rows, cols)
+
+    assert (root / "market/twse_income/115Q1.csv").is_file()
+    assert (root / "market/twse_income/115Q2.csv").is_file()
+    # 第一季沒有被第二季蓋掉——在這個改動之前，這一行會失敗。
+    assert store.read("market/twse_income/115Q1")[0]["營業收入"] == "100"
+    assert store.read("market/twse_income/115Q2")[0]["營業收入"] == "220"
+
+
+def test_the_files_we_already_had_were_moved_into_the_new_layout():
+    """既有的 115Q2 與 11507 是我們手上唯一的資料點，搬進來而不是重抓。"""
+    data = Path(__file__).resolve().parents[1] / "data"
+    if not (data / "market").is_dir():  # pragma: no cover - 資料目錄可能沒帶下來
+        return
+    for name in ("twse_income", "twse_balance", "tpex_income", "tpex_balance"):
+        assert (data / "market" / name / "115Q2.csv").is_file(), name
+    for name in ("twse_revenue", "tpex_revenue"):
+        assert (data / "market" / name / "11507.csv").is_file(), name
+    # 舊的扁平檔案不該還在——留著它只會讓人不確定該讀哪一個。
+    for name in ("twse_income", "twse_revenue"):
+        assert not (data / f"{name}.csv").exists(), f"{name}.csv 還在"
+
+
+def test_there_is_a_schedule_that_actually_accumulates():
+    """把期別放進檔名，不會自己讓歷史長出來——要有人每天去問。
+
+    在這個改動之前，`twsix fetch` 沒有任何排程在跑：repo 裡那份 115Q2 是手動跑
+    一次留下的。所以檔名改對了，第二個資料點還是不會出現。
+
+    每天跑一次而不是照申報截止日排：期別沒變的時候寫出來的位元組一模一樣，
+    workflow 自己會判定沒有差異而結束；照日子排則要算五條規則，而算錯的代價是
+    整整一期永遠拿不到——官方端點只給最新一期，沒有日期參數。
+    """
+    wf = Path(__file__).resolve().parents[1] / ".github/workflows/market.yml"
+    text = wf.read_text("utf-8")
+    assert "twsix fetch --all" in text
+    assert "cron:" in text and "* * *" in text, "不是每天跑"
+    # 白名單式的 git add 漏檔案的症狀，是下一行 pull 失敗而且不提檔名。踩過兩次。
+    add = text[text.index("git add ") : text.index("if git diff --cached --quiet")]
+    assert "data/market" in add
+    assert "git diff --name-only" in text, "漏了「還有什麼沒被 commit」的自白"

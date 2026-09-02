@@ -224,6 +224,72 @@ def _id_columns(columns: Sequence[str]) -> tuple[str, ...]:
     return tuple(columns)
 
 
+#: 期別欄位。同一件事在四個端點上有四種寫法——證交所用中文、櫃買的損益表用
+#: 英文、櫃買的資產負債表又用中文——所以是一組別名，不是一個欄名。
+YEAR_KEYS: tuple[str, ...] = ("年度", "Year")
+SEASON_KEYS: tuple[str, ...] = ("季別", "Season")
+MONTH_KEYS: tuple[str, ...] = ("資料年月",)
+
+#: 這些沒有期別：它們是「現在的樣子」，不是某一期的紀錄。公司基本資料改名、
+#: 換產業別的時候，我們要的是最新那一份，不是一份一份存下來的歷史。
+UNDATED: frozenset[str] = frozenset({"twse_companies", "tpex_companies"})
+
+
+class MixedPeriods(ValueError):
+    """一批資料裡不只一個期別。"""
+
+
+def _first(row: dict[str, Any], keys: Sequence[str]) -> str:
+    for k in keys:
+        v = str(row.get(k, "") or "").strip()
+        if v:
+            return v
+    return ""
+
+
+def period_of(rows: Sequence[dict[str, Any]]) -> str:
+    """這批資料是哪一期——**從資料本身讀，不從時鐘猜**。
+
+    月報回 ``11507``（民國年月），季報回 ``115Q2``。兩者都是可以直接當檔名、
+    而且字典序就是時間序的格式。
+
+    為什麼不看系統時間：抓取的那一天和資料的期別不是同一件事。8 月 17 日抓回來
+    的是 7 月的營收；8 月 28 日抓回來的是第 2 季的財報。用抓取日期命名，等於把
+    「什麼時候拿到」寫在應該寫「這是哪一期」的地方，而且每年會有幾天剛好在跨月
+    跨季的邊界上算錯。
+
+    整批的期別必須一致。不一致就丟 :class:`MixedPeriods`——那代表端點的行為變了
+    （例如某天開始一次回好幾期），而在那種時候「挑第一列的期別當檔名」會安靜地
+    把好幾期的資料混進同一個檔案，是這裡最不該發生的事。
+    """
+    seen: set[str] = set()
+    for row in rows:
+        year, season = _first(row, YEAR_KEYS), _first(row, SEASON_KEYS)
+        if year and season:
+            seen.add(f"{year}Q{season}")
+            continue
+        month = _first(row, MONTH_KEYS)
+        if month:
+            seen.add(month)
+    if not seen:
+        return ""
+    if len(seen) > 1:
+        raise MixedPeriods("、".join(sorted(seen)))
+    return seen.pop()
+
+
+def market_path(name: str, period: str) -> str:
+    """全市場資料在 store 裡的位置。
+
+    ``market/twse_income/115Q2`` 而不是 ``twse_income``。**這個改動是後面所有
+    事情的前提。** 在這之前每一季抓回來的財報都寫進同一個
+    ``data/twse_income.csv``，下一季直接覆蓋——於是六大指標需要的九期，永遠只有
+    不斷被換掉的那一期。〔評等清單〕停在一年前的活頁簿快照，原因不是官方端點
+    給不出資料，是我們把它丟掉了。
+    """
+    return f"market/{name}/{period}" if period else name
+
+
 def cmd_fetch(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient
@@ -269,15 +335,31 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             failures += 1
             continue
         columns = sorted({k for r in rows for k in r}) if rows else []
+        if not columns:
+            print(f"  {name:<18} 0 列")
+            continue
+        try:
+            period = "" if name in UNDATED else period_of(rows)
+        except MixedPeriods as exc:
+            print(f"  {name:<18} 失敗：一批資料裡有多個期別（{exc}）", file=sys.stderr)
+            failures += 1
+            continue
+        if not period and name not in UNDATED:
+            print(f"  {name:<18} 失敗：資料裡找不到期別欄位", file=sys.stderr)
+            failures += 1
+            continue
+        table = market_path(name, period)
         # Sort before writing.  The store promises that an unchanged fetch
         # produces a byte-identical file — that is the whole reason the data
         # lives in CSV — but these feeds do not guarantee row order, so an
         # unsorted write rewrote data/tpex_companies.csv in full between two
         # runs on the same day.
-        n = store.write(name, rows, columns, sort_by=_id_columns(columns)) if columns else 0
-        manifest.counts[name] = n
-        manifest.sources.append({"name": name, "fetched_at": now, "rows": n})
-        print(f"  {name:<18} {n} 列")
+        n = store.write(table, rows, columns, sort_by=_id_columns(columns))
+        manifest.counts[table] = n
+        manifest.sources.append(
+            {"name": name, "period": period, "fetched_at": now, "rows": n}
+        )
+        print(f"  {name:<18} {period or '（無期別）':<8} {n} 列 -> {store.path(table)}")
 
     store.save_manifest(manifest)
     return EXIT_OK if failures == 0 else EXIT_FAIL

@@ -1,0 +1,85 @@
+name: 全市場官方資料（月營收／季財報）
+
+# 每天抓一次全市場的月營收與季財報，依期別存檔累積。
+#
+# 為什麼是「每天」而不是照申報截止日排：
+#
+#   月營收 10 日前申報、季報 5/15、8/14、11/14、年報 3/31——把這些日子寫成 cron
+#   要算五條規則，而算錯的代價是整整一期永遠拿不到（官方端點只給最新一期，沒有
+#   日期參數）。每天跑一次不必算：期別沒變的時候寫出來的位元組一模一樣，
+#   `git diff --cached --quiet` 就會判定沒有差異、直接結束，不留空 commit。
+#
+#   成本是每天 8 次請求（上市／上櫃 × 公司／營收／損益／資產負債），全部是政府
+#   開放資料。用可靠性換這 8 次請求，划算得不必猶豫。
+#
+# 為什麼這件事重要：
+#
+#   在把期別放進檔名之前，每一季抓回來的財報都寫進同一個 data/twse_income.csv，
+#   下一季直接覆蓋。於是六大指標需要的九期，永遠只有不斷被換掉的那一期——
+#   〔評等清單〕停在一年前的活頁簿快照，原因不是官方端點給不出資料，是我們把它
+#   丟掉了。
+#
+#   歷史只能往前累積：今天不開始，第二個資料點就要再等三個月。
+#
+# 這條排程**還不會改變網站上的任何數字**。它只負責把資料存下來；把這些檔案接進
+# 評等引擎是下一階段的事（見〈架構檢討：每天自動最新的資料庫方案〉階段一）。
+# 所以這裡不建站、不發布——沒有東西可發布。
+
+on:
+  schedule:
+    # 台北時間每天 09:20。營收與財報都在盤前就已經公告，不必等收盤。
+    - cron: "20 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: market
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # 抓取本身不需要 jinja2——這條排程不建站。
+      - run: pip install -e .
+
+      - name: 抓取
+        run: twsix fetch --all
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/market \
+                  data/twse_companies.csv data/tpex_companies.csv \
+                  data/manifest.json
+          if git diff --cached --quiet; then
+            # 一個月裡有二十幾天不會有新的一期，那是正常的，不是失敗。
+            echo "::notice::期別沒有變，沒有新的一期要存"
+            exit 0
+          fi
+          # 訊息裡放的是「新增／變動了哪幾個期別的檔案」，不是抓取當天的日期——
+          # 抓取日和資料的期別不是同一件事，而 commit 想回答的是後者。
+          periods="$(git diff --cached --name-only -- data/market \
+                     | sed 's#.*/##; s#\.csv$##' | sort -u | paste -sd' ' -)"
+          git commit -m "全市場：${periods:-$(date -u +%Y-%m-%d)}" \
+                     -m "月營收與季財報，依期別存檔。"
+          # 白名單式的 git add 會漏掉引擎新寫的檔案，而那件事的症狀是下一行
+          # 「cannot pull with rebase: You have unstaged changes」——一句完全不提
+          # 檔名的訊息。先自己講清楚。
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
+          git pull --rebase origin main
+          git push origin HEAD:main
