@@ -151,3 +151,13 @@ def test_the_fetch_stamp_is_read_from_disk_not_copied_from_the_last_build():
         if r[0] == "5439"
     )
     assert row[5].startswith("2026-09-03T"), "沿用的那一頁把時間戳弄丟了"
+
+
+def test_the_interactive_path_does_not_pay_to_save_the_cache():
+    """存一份 66 MB 的快取要十幾秒，而「加一檔個股」那條路上的每一秒都是使用者
+    盯著螢幕在等的。取回照舊（那是增量建站的前提），存回交給每天跑六次的排程。"""
+    action = (ROOT / ".github/actions/build-site/action.yml").read_text("utf-8")
+    assert "save_cache" in action
+    assert "inputs.save_cache == 'true'" in action
+    stock = (ROOT / ".github/workflows/stock.yml").read_text("utf-8")
+    assert 'save_cache: "false"' in stock

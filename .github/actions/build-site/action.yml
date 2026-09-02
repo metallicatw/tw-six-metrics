@@ -21,6 +21,12 @@ inputs:
   setup:
     description: 要不要裝 Python 與相依。呼叫端同一個 job 裡已經裝過就填 "false"。
     default: "true"
+  save_cache:
+    description: >-
+      跑完之後要不要把 site/ 存回快取。互動那條路（「加一檔個股」）填 "false"：
+      存一份 66 MB 的快取要十幾秒，而那十幾秒是使用者盯著螢幕在等的；排程每天跑
+      六次，快取由它們保持新鮮就夠了。
+    default: "true"
   incremental:
     description: >-
       只重畫內容真的變了的那幾檔（拿內容指紋跟上一次建站比對）。要搭配把 site/
@@ -76,7 +82,7 @@ runs:
         fi
       shell: bash
 
-    - if: inputs.incremental == 'true'
+    - if: inputs.incremental == 'true' && inputs.save_cache == 'true'
       uses: actions/cache/save@v4
       with:
         path: site
