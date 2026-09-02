@@ -546,6 +546,25 @@ def test_stock_workflow_commits_the_directors_backfill_it_paid_for():
     assert '"data/ownership/directors_stock/$code."*' in text
 
 
+def test_stock_workflow_commits_the_rating_it_just_recomputed():
+    """`twsix report` 會把重算的評等寫回全市場表；那個檔案也必須被 commit。
+
+    漏掉它有兩個後果，而且都不像「漏了一個檔案」：
+
+    1. 個股頁是新的、清單是舊的——同一個網站上兩個數字互相矛盾。
+    2. 下一行 `git pull --rebase` 會因為工作區有未暫存的變更而整個失敗，
+       訊息是「cannot pull with rebase: You have unstaged changes」，完全
+       不提是哪一個檔案。這個坑真的踩過，而且是先看到症狀 1 才找到原因。
+
+    白名單式的 `git add` 就是會這樣：引擎多寫一個檔案，workflow 不會知道。
+    所以除了這一行斷言，workflow 裡也留了一段「還有什麼沒被 commit」的自白。
+    """
+    text = (ROOT.parent / ".github" / "workflows" / "stock.yml").read_text("utf-8")
+    add = text[text.index("git add "):text.index("if git diff --cached --quiet")]
+    assert "data/ratings.csv" in add, "commit 那一步沒有 add data/ratings.csv"
+    assert "git diff --name-only" in text, "漏了「還有什麼沒被 commit」的自白"
+
+
 def _assert_tracked(path: Path) -> None:
     """這個檔案有沒有真的進版控？沒有 git 就跳過（測試本身零相依）。"""
     import shutil

@@ -736,6 +736,11 @@ def _store_rating(root: Path, rating: Any) -> None:
     只在新的比舊的新的時候才覆蓋。抓取可能失敗成「拿到一份比較短的資料」——
     鏡像站給了半份、某一季還沒公布——那種時候維持舊值，比用一份退化的資料
     蓋掉一份完整的舊資料好：清單上一個過期但正確的評等，仍然是一個評等。
+
+    **只更新既有的列，不新增。** 這張表的成員名單是全市場快照決定的，不該被
+    「某人搜尋過這一檔」改變。而且個股報表上沒有市場與產業，硬塞進去只會得到
+    一列半空的資料——比不在那裡更糟：它會出現在清單上、產業欄空白、篩選不到。
+    實際踩到的是 2882（國泰金），金融保險業本來就不在六大指標的適用範圍裡。
     """
     from .store.snapshots import RATING_COLUMNS, Store, rating_rows
 
@@ -749,7 +754,10 @@ def _store_rating(root: Path, rating: Any) -> None:
         for r in store.read("ratings")
         if r.get("stock_id") == rating.stock_id and r.get("period_index") == "1"
     ]
-    if stored and _vintage(stored[0]) > _vintage({k: str(v) for k, v in newest.items()}):
+    if not stored:
+        print(f"  不在全市場清單裡（{rating.stock_id}），只產生個股頁，清單不動")
+        return
+    if _vintage(stored[0]) > _vintage({k: str(v) for k, v in newest.items()}):
         print(
             f"  清單維持原值（表上是 {stored[0].get('fiscal_quarter')}，"
             f"這次抓到的是 {newest.get('fiscal_quarter')}）"
@@ -758,11 +766,10 @@ def _store_rating(root: Path, rating: Any) -> None:
     # 個股抓取拿不到「市場」和「產業」——那兩欄在活頁簿的全市場清單裡，不在任何
     # 一張個股報表上。不補回來的話，更新一檔股票會把它的產業清空，於是它從清單的
     # 產業篩選和搜尋索引裡消失：更新一檔的代價是弄丟它。
-    if stored:
-        for row in fresh:
-            for field in ("name", "market", "industry"):
-                if not row.get(field):
-                    row[field] = stored[0].get(field, "")
+    for row in fresh:
+        for field in ("name", "market", "industry"):
+            if not row.get(field):
+                row[field] = stored[0].get(field, "")
     n = store.upsert(
         "ratings", "stock_id", rating.stock_id, fresh, RATING_COLUMNS,
         sort_by=("stock_id", "period_index"),

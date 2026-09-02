@@ -122,14 +122,28 @@ jobs:
           # ——否則下次在 runner 上跑同一檔又要重問一次。董監那一份還包含
           # `.floor`：記著「比這個月更早就查無資料」，沒有它，一檔近年才上市的
           # 股票每次更新都要花半分鐘重新確認上市之前確實沒有資料。
+          #
+          # ratings.csv 也要。`twsix report` 現在會把這一檔重算的評等寫回全市場
+          # 表，清單上那一列才會跟著動；漏掉它有兩個後果，而且都不像「漏了一個
+          # 檔案」：個股頁是新的、清單是舊的（使用者看到的第一個症狀），以及
+          # 下面那句 `git pull --rebase` 會因為工作區有未暫存的變更而整個失敗。
           git add "data/sheets/$code" \
                   "data/ownership/stock/$code.csv.gz" \
-                  "data/ownership/directors_stock/$code."* || true
+                  "data/ownership/directors_stock/$code."* \
+                  data/ratings.csv || true
           if git diff --cached --quiet; then
             echo "::notice::$code 的資料沒有變化，不需要 commit"
             exit 0
           fi
           git commit -m "watchlist: $code" -m "由「加一檔個股」workflow 抓取。"
+          # 上面那份 git add 是白名單，所以「引擎多寫了一個檔案」這件事會以
+          # 「cannot pull with rebase: You have unstaged changes」的形式出現在
+          # 下一行——一個完全不提檔名的訊息。先自己講清楚。
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
           # 這期間可能有別的 commit 進來（例如另一次抓取），rebase 再推。
           git pull --rebase origin main
           git push origin HEAD:main

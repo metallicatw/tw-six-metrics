@@ -128,8 +128,23 @@ def test_vintage_compares_quarter_first_then_month():
     assert _vintage({"fiscal_quarter": "", "revenue_month": ""}) == ("", "")
 
 
-def test_upsert_on_a_table_that_does_not_exist_yet_just_writes():
+def test_a_stock_that_is_not_on_the_list_does_not_get_added_to_it():
+    """這張表的成員名單是全市場快照決定的，不該被「某人搜尋過這一檔」改變。
+
+    而且個股報表上沒有市場與產業，硬塞進去只會得到一列半空的資料——比不在那裡
+    更糟：它會出現在清單上、產業欄空白、用產業篩選找不到。實際踩到的是 2882
+    （國泰金），金融保險業本來就不在六大指標的適用範圍裡。
+    """
+    root = _tmp()
+    _seed(root)
+    _store_rating(root, _Rating("2882", "2026.2Q", "115/07", name="國泰金"))
+
+    codes = {r["stock_id"] for r in Store(root).read("ratings")}
+    assert codes == {"1101", "5439"}
+
+
+def test_no_table_at_all_means_nothing_to_update():
+    """連表都還沒有的時候也一樣：先有全市場快照，才有「更新其中一列」。"""
     root = _tmp()
     _store_rating(root, _Rating("5439", "2026.2Q", "115/07", name="高技"))
-    rows = Store(root).read("ratings")
-    assert [r["stock_id"] for r in rows] == ["5439", "5439"]
+    assert Store(root).read("ratings") == []
