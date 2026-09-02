@@ -1,0 +1,71 @@
+name: 每日全市場（收盤行情／三大法人）
+
+# 四個請求，換到整個市場的當日收盤與法人買賣超。
+#
+# 這是〈架構檢討〉裡最貴的那一格落差：今天的收盤價原本要按一次按鈕、抓 13 頁才
+# 換到**一檔**，而交易所一個請求就給整個市場。1,741 檔 × 一天一次，和 4 個請求
+# 一天兩次，是同一件事的兩種做法。
+#
+# 為什麼一天跑兩次：
+#
+#   實測（台北時間 16:12）證交所的 openapi 還停在**前一個交易日**，而櫃買已經是
+#   當天的。所以早的那一輪先把櫃買存下來，晚的那一輪補上市——檔名是每一列自己帶
+#   的日期，不是抓取當天，所以兩輪寫進的是不同的檔案，不會互相蓋掉。
+#
+#   同一份資料重抓不會製造 commit：gzip 固定 mtime=0、列先排序，所以位元組一樣。
+#
+# 這條排程**還不會改變網頁上的任何數字**。它只負責把每天的行情存下來；接進個股
+# 頁的市價與報酬風險比是下一步。所以這裡不建站、不發布——沒有東西可發布。
+
+on:
+  schedule:
+    # 台北 17:30 與 23:30。前者趕在盤後資訊上站之後，後者收尾。
+    - cron: "30 9 * * 1-5"
+    - cron: "30 15 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e .
+
+      - name: 抓取
+        run: twsix fetch-daily
+
+      - name: Commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/market/daily
+          if git diff --cached --quiet; then
+            # 非交易日、或這一輪抓到的和上一輪一模一樣——都是正常的，不是失敗。
+            echo "::notice::沒有新的一天要存"
+            exit 0
+          fi
+          days="$(git diff --cached --name-only -- data/market/daily \
+                  | sed 's#.*/##; s#\.csv\.gz$##' | sort -u | paste -sd' ' -)"
+          git commit -m "每日行情：${days:-$(date -u +%Y-%m-%d)}" \
+                     -m "全市場收盤與三大法人買賣超，四個請求。"
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
+          git pull --rebase origin main
+          git push origin HEAD:main
