@@ -260,12 +260,32 @@
     return html;
   }
 
+  /* 記的是**狀態改變**，不是輪詢次數。
+     去重原本比對「時間戳＋文字」，而時間戳每兩秒就不一樣——於是 runner 跑一分鐘
+     會印出三十行一模一樣的「runner 開始跑：…」，把面板撐得比它要說的事還長。
+     現在只比文字：同一個狀態只佔一行，時間戳留第一次進入那一刻（那才是有意義的
+     時間點），後面掛上「已 34 秒」讓人看得出它還在那一段。 */
   function step(text, key){
     if(key) phase(key);
-    var line = elapsed() + '　' + text;
-    if(steps[steps.length - 1] !== line) steps.push(line);
+    var last = steps[steps.length - 1];
+    if(!last || last.text !== text){
+      steps.push({ at: elapsed(), since: Date.now(), text: text });
+    }
     phaseNote = text;
     paint();
+  }
+
+  function lines(){
+    return steps.map(function(s, i){
+      var held = '';
+      /* 只有最後一行需要「還在這裡待著」——前面那些的停留時間，看下一行的
+         時間戳就知道了。 */
+      if(i === steps.length - 1 && ticker){
+        var n = Math.round((Date.now() - s.since) / 1000);
+        if(n >= 5) held = '（已 ' + n + ' 秒）';
+      }
+      return s.at + '　' + s.text + held;
+    }).join('\n');
   }
 
   function paint(){
@@ -279,7 +299,7 @@
     var cur = PHASES[phaseAt];
     grab.querySelector('.stage').textContent = cur ? cur.label : (phaseNote || '準備中…');
     grab.querySelector('.bar').innerHTML = bar(false, false);
-    grab.querySelector('.log').textContent = steps.join('\n');
+    grab.querySelector('.log').textContent = lines();
   }
 
   function beginPanel(code){
@@ -300,8 +320,8 @@
       '<b>' + head + '</b><span class="t">' + elapsed() + '</span>';
     grab.querySelector('.stage').textContent = note || '';
     grab.querySelector('.bar').innerHTML = bar(true, ok === false);
-    if(note) steps.push(note);
-    grab.querySelector('.log').textContent = steps.join('\n');
+    if(note) steps.push({ at: elapsed(), since: Date.now(), text: note });
+    grab.querySelector('.log').textContent = lines();
     /* 出事的時候把細節攤開。這時候「每一步第幾秒」正好是唯一有用的東西，
        而要求一個剛看到「抓取失敗」的人再多按一下才看得到，是多餘的一步。 */
     var d = grab.querySelector('.detail');

@@ -729,7 +729,10 @@ def test_every_progress_line_says_how_long_it_took(tmp_path=None):
     build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
     js = (out / "assets" / "site.js").read_text("utf-8")
 
-    assert "var line = elapsed() + " in js, "進度行沒有時間戳"
+    # 時間戳記的是「進入這個狀態的那一刻」，不是每次輪詢的時刻——那是有意義的
+    # 時間點，也讓同一個狀態只佔一行。
+    assert "at: elapsed()" in js, "進度行沒有時間戳"
+    assert "s.at + '　' + s.text" in js
     assert "這一段是排隊，不算在 workflow 的執行時間裡" in js
     assert "剩下的是 Pages CDN 換檔" in js
 
@@ -1035,6 +1038,12 @@ def test_the_progress_panel_is_a_bar_that_does_not_lie():
     # 每一步第幾秒沒有被丟掉，只是收起來；出事的時候自動展開。
     assert 'class="detail"' in html and 'class="log"' in html
     assert "d.open = true" in js
+
+    # 日誌記的是狀態改變，不是輪詢次數。去重原本比「時間戳＋文字」，而時間戳
+    # 每兩秒就不一樣——runner 跑一分鐘會印出三十行一模一樣的「runner 開始跑」，
+    # 把面板撐得比它要說的事還長。
+    assert "last.text !== text" in js
+    assert "steps.join" not in js
 
     assert "@keyframes twsix-pulse" in css
     # 前庭敏感的人不該為了一條進度條付代價。
