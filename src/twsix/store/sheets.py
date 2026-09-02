@@ -1,7 +1,7 @@
 """個股分頁的存取——一檔一個目錄，一張分頁一個檔案，壓縮存。
 
 十六張分頁未壓縮是每檔 256 KB。1,741 檔就是 **446 MB 進版控**，而〈架構檢討〉
-量到的正是這條成長路徑。gzip 之後每檔約 42 KB，全市場約 **73 MB**：可以把整個
+量到的正是這條成長路徑。gzip 之後實測平均每檔 34 KB，全市場約 **57 MB**：可以把整個
 市場的原始報表都留在 repo 裡，而不只是留有人點過的那 184 檔。
 
 為什麼留原始分頁，而不是只留四頁用得到的那些數字（那樣只要 10~17 MB）：
@@ -56,10 +56,7 @@ def write_grid(base: Path, sheet: str, grid: Any) -> Path:
     base.mkdir(parents=True, exist_ok=True)
     target = path_for(base, sheet)
     payload = (json.dumps(grid, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
-    if target.suffix == ".gz":
-        target.write_bytes(_gzipped(payload))
-    else:
-        target.write_bytes(payload)
+    target.write_bytes(_gzipped(payload) if target.suffix == ".gz" else payload)
     return target
 
 
