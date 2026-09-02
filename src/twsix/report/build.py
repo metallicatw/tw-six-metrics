@@ -562,21 +562,25 @@ def build_site(
     reused = 0
     template = env.get_template("stock.html.j2")
     for stock_id, group in grouped.items():
-        if only is not None and stock_id not in only:
-            # 沿用上一次畫好的那一頁——連同「它是不是完整版、什麼時候抓的」，
-            # 因為那兩件事是渲染的副產品，跳過渲染就問不出來。
-            if (out_dir / "stock" / f"{stock_id}.html").exists():
-                if stock_id in set(previous.get("rich") or ()):
-                    rich_ids.add(stock_id)
-                when = (previous.get("fetched") or {}).get(stock_id)
-                if when:
-                    fetched_at[stock_id] = when
-                ts = (previous.get("fetched_ts") or {}).get(stock_id)
-                if ts:
-                    fetched_ts[stock_id] = ts
-                reused += 1
-                count += 1
-                continue
+        # 沿用上一次畫好的那一頁——連同「它是不是完整版、什麼時候抓的」，因為那
+        # 兩件事是渲染的副產品，跳過渲染就問不出來。上一次沒有那一頁（新加進來的
+        # 股票）就照常畫。
+        if (
+            only is not None
+            and stock_id not in only
+            and (out_dir / "stock" / f"{stock_id}.html").exists()
+        ):
+            if stock_id in set(previous.get("rich") or ()):
+                rich_ids.add(stock_id)
+            when = (previous.get("fetched") or {}).get(stock_id)
+            if when:
+                fetched_at[stock_id] = when
+            ts = (previous.get("fetched_ts") or {}).get(stock_id)
+            if ts:
+                fetched_ts[stock_id] = ts
+            reused += 1
+            count += 1
+            continue
         # A stock whose sheets were fetched gets the full page — the ten
         # sections, the river, the news — instead of the grade table.
         #
