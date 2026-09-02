@@ -1052,3 +1052,25 @@ def test_the_progress_panel_is_a_bar_that_does_not_lie():
     # 前庭敏感的人不該為了一條進度條付代價。
     reduced = css[css.index("prefers-reduced-motion") :][:200]
     assert "animation:none" in reduced
+
+
+def test_the_chart_windows_match_the_tables_below_them():
+    """圖和表看同一段時間，而且那段時間是資料天生的長度。
+
+    〔大戶持股〕的表列 52 週、集保查詢頁也只給 51 週，圖卻畫五年（260 點）；
+    〔董監持股〕的表列 36 個月、公開資訊觀測站也只回三年，圖卻畫十年。同一頁上
+    圖和表講不同的時間，讀者要自己換算，而那兩張多出來的點在 SVG 裡是實打實的
+    位元組——五年那張 32 KB，兩張就 64 KB。
+
+    河流圖同理：七年 365 個點 58 KB，五年 260 點少三成，而它要回答的「現在站在
+    哪一區」，五年已經跨過一輪多空。資料照舊完整存，這只是畫圖的視窗。
+    """
+    from twsix.ingest.weekly_prices import DEFAULT_YEARS
+    from twsix.report.sections import DIRECTOR_MONTHS, HOLDER_WEEKS
+
+    assert HOLDER_WEEKS == 52
+    assert DIRECTOR_MONTHS == 36
+    assert DEFAULT_YEARS == 5
+
+    tpl = (ROOT.parent / "src/twsix/report/templates/stockpage.html.j2").read_text("utf-8")
+    assert "h.weeks[:52]" in tpl and "dr.months[:36]" in tpl, "表和圖要一樣長"

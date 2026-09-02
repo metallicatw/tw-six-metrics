@@ -108,8 +108,9 @@ def test_the_workflow_asks_before_it_fetches():
     wf = (ROOT / ".github/workflows/stock.yml").read_text("utf-8")
     assert "twsix fresh" in wf
     assert "steps.need.outputs.stale == 'yes'" in wf
-    # 抓、commit、建站、發布——四步都要跟著跳過，否則會發布一份沒有變的網站。
-    assert wf.count("steps.need.outputs.stale == 'yes'") == 4
+    # 抓、commit、建站、發布，以及發布之後那一步存快取——全部跟著跳過，否則會
+    # 發布一份沒有變的網站，或存一份沒有變的快取。
+    assert wf.count("steps.need.outputs.stale == 'yes'") == 5
 
 
 def test_a_run_that_skipped_everything_does_not_leave_the_panel_spinning():
