@@ -364,9 +364,19 @@ def market_close(reader: CellReader) -> tuple[float | None, str]:
 
 
 def read_valuation_input(
-    reader: CellReader, stock_id: str = "", name: str = "", as_of: str = ""
+    reader: CellReader,
+    stock_id: str = "",
+    name: str = "",
+    as_of: str = "",
+    market_price: float | None = None,
 ) -> ValuationInput:
-    """Assemble one stock's :class:`ValuationInput` from the sheets."""
+    """Assemble one stock's :class:`ValuationInput` from the sheets.
+
+    ``market_price`` 蓋掉從分頁讀出來的收盤價。給它的是每日全市場行情
+    （`data/market/daily/`）——那份資料一天抓一次、涵蓋 1,980 檔，而分頁上的收盤
+    要等使用者按下那一檔的「立即更新」才會動。價格是頁面上唯一每天都變的東西，
+    它不該綁在「有沒有人按過按鈕」上。
+    """
     months = monthly_revenue(reader)
     newest_month = months[0][0] if months else ""
     prior_year = (roc_year(newest_month) or 0) - 1
@@ -409,7 +419,7 @@ def read_valuation_input(
         name=name,
         as_of=as_of,
         revenue_month=newest_month,
-        market_price=market_close(reader)[0],
+        market_price=market_close(reader)[0] if market_price is None else market_price,
         last_year_revenue=last_year_revenue or None,
         monthly_revenue_yoy=merged_revenue_yoy(reader),
         monthly_revenue=[v for _, v in months],

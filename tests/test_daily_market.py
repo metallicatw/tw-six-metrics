@@ -109,3 +109,71 @@ def test_there_is_a_schedule_that_runs_twice_because_the_feeds_lag():
     assert "twsix fetch-daily" in wf
     assert wf.count("cron:") == 2, "只跑一次的話，落後的那個市場會缺一天"
     assert "git add data/market/daily" in wf
+
+
+def test_each_stock_gets_its_own_newest_row_not_the_newest_file():
+    """兩個交易所不同步，所以「最新的那個檔案」裡可能只有上櫃的 887 檔。
+
+    一檔上市股票要的那一列，在前一天的檔案裡——照「最新檔案」讀，那 1,093 檔會
+    集體沒有價格。
+    """
+    from twsix.store.daily import latest_quotes
+
+    root = Path(tempfile.mkdtemp())
+    store = Store(root)
+    store.write_gz(
+        "market/daily/prices/2026-09-01",
+        [{"date": "2026-09-01", "code": "1101", "close": 25.3}],
+        daily.PRICE_COLUMNS,
+    )
+    store.write_gz(
+        "market/daily/prices/2026-09-02",
+        [{"date": "2026-09-02", "code": "5439", "close": 269.5}],
+        daily.PRICE_COLUMNS,
+    )
+    quotes = latest_quotes(root)
+    assert quotes["1101"].close == 25.3 and quotes["1101"].date == "2026-09-01"
+    assert quotes["5439"].close == 269.5
+    assert quotes["5439"].label == "2026.09.02", "頁面上那個註記的格式"
+
+    # 同一檔出現在兩天：要拿新的那一天。
+    store.write_gz(
+        "market/daily/prices/2026-09-02",
+        [
+            {"date": "2026-09-02", "code": "5439", "close": 269.5},
+            {"date": "2026-09-02", "code": "1101", "close": 26.0},
+        ],
+        daily.PRICE_COLUMNS,
+    )
+    assert latest_quotes(root)["1101"].close == 26.0
+
+
+def test_no_daily_data_at_all_is_not_an_error():
+    """還沒有這份資料的時候（例如別人剛 clone），市價要退回從分頁讀。"""
+    from twsix.store.daily import latest_quotes
+
+    assert latest_quotes(Path(tempfile.mkdtemp())) == {}
+
+
+def test_a_new_closing_price_makes_the_page_rebuild():
+    """少了這一條，每日排程存下新價格之後，增量建站會沿用昨天的頁面。
+
+    資料是新的、畫面是舊的，而且沒有任何錯誤訊息——整個階段二會卡在最後一格。
+    """
+    from twsix.report.build import stock_signature
+    from twsix.store.daily import Quote
+
+    base = Path(tempfile.mkdtemp())
+    rows = [{"stock_id": "1101", "composite": "3.0"}]
+    a = stock_signature(rows, base, Quote(date="2026-09-01", close=25.3))
+    b = stock_signature(rows, base, Quote(date="2026-09-02", close=25.9))
+    assert a != b
+    assert a == stock_signature(rows, base, Quote(date="2026-09-01", close=25.3))
+
+
+def test_the_daily_schedule_publishes_what_it_fetched():
+    """價格進了 repo 而網頁沒換，等於沒做。"""
+    wf = (ROOT / ".github/workflows/daily.yml").read_text("utf-8")
+    assert "build-site" in wf and "deploy-pages" in wf
+    assert 'incremental: "true"' in wf
+    assert '[report]' in wf, "建站需要 jinja2，裸的 pip install -e . 會少一個相依"

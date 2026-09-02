@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
+from ..store.daily import latest_quotes
 
 ENGINE_VERSION = "0.1.0"
 TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -194,7 +195,9 @@ def read_build_state(out_dir: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def stock_signature(rows: list[dict[str, str]], sheet_dir: Path) -> str:
+def stock_signature(
+    rows: list[dict[str, str]], sheet_dir: Path, quote: Any = None
+) -> str:
     """一檔股票的「內容指紋」——分頁的位元組加上它在評等表裡的那幾列。
 
     增量建站要回答的是「這一頁重畫出來會不一樣嗎」，而不是「git 有沒有 commit」。
@@ -204,6 +207,11 @@ def stock_signature(rows: list[dict[str, str]], sheet_dir: Path) -> str:
     全市場 57 MB 算一輪約 0.5 秒，換掉 22 秒的整站重建。
     """
     h = hashlib.sha1(usedforsecurity=False)
+    # 今天的收盤價也算進去。少了這一行，每日行情排程存下新的價格之後，增量建站
+    # 會認為「這一檔沒變」而沿用昨天的頁面——資料是新的、畫面是舊的，而且沒有
+    # 任何錯誤訊息。這正是整個階段二要解掉的那件事，卡在最後一格。
+    if quote is not None:
+        h.update(f"{quote.date}|{quote.close}".encode())
     for row in rows:
         h.update(("\x1f".join(f"{k}={row.get(k, '')}" for k in sorted(row))).encode())
         h.update(b"\x1e")
@@ -498,6 +506,10 @@ def build_site(
     (out_dir / "stock").mkdir(exist_ok=True)
     write_assets(out_dir)
 
+    # 每日全市場行情：一次讀進來，1,742 頁共用。價格是頁面上唯一每天都變的東西，
+    # 而它現在來自一天四個請求的排程，不是「有沒有人按過那一檔的更新」。
+    quotes = latest_quotes(sheets_dir.parent) if sheets_dir is not None else {}
+
     composites = [r.composite_value for r in rows if r.composite_value is not None]
     # The vintage is a property of the *data*, not of whichever stock happens
     # to sort first — reading rows[0] gave the top-scoring stock's quarter.
@@ -542,7 +554,11 @@ def build_site(
     # 全市場 57 MB 約 0.5 秒。
     sigs: dict[str, str] = {
         code: stock_signature(
-            group, (sheets_dir / code) if sheets_dir else Path("/nonexistent")
+            group,
+            (sheets_dir / code) if sheets_dir else Path("/nonexistent"),
+            # 只有畫得出完整版的那些才看報價——表格版的頁面上沒有市價，把價格算進
+            # 它的指紋只會讓 1,500 張不會變的頁面每天重畫一次。
+            quotes.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
         )
         for code, group in grouped.items()
     }
@@ -590,7 +606,8 @@ def build_site(
         # real, tested, and invisible to anyone who had not cloned the repo.
         if sheets_dir is not None:
             full = _full_stock_page(
-                stock_id, sheets_dir, out_dir, base, rules=rules
+                stock_id, sheets_dir, out_dir, base, rules=rules,
+                quote=quotes.get(stock_id),
             )
             if full:
                 count += 1
@@ -929,6 +946,7 @@ def _full_stock_page(
     base: dict[str, Any],
     *,
     rules: Any = None,
+    quote: Any = None,
 ) -> bool:
     """Render the ten-section page for one stock, if its sheets are on disk.
 
@@ -968,7 +986,11 @@ def _full_stock_page(
         rating = rate(data, settings.rules, settings.periods)
         reader = GridSource(grids)
         valuation = evaluate(
-            read_valuation_input(reader, stock_id=stock_id),
+            read_valuation_input(
+                reader,
+                stock_id=stock_id,
+                market_price=quote.close if quote is not None else None,
+            ),
             ValuationOptions(
                 growth_method=settings.forecast.revenue_growth_method,
                 margin_method=settings.forecast.margin_method,
@@ -983,6 +1005,7 @@ def _full_stock_page(
             data=data,
             sheets_present=list(grids),
             settings=settings,
+            quote=quote,
         )
     except Exception:  # noqa: BLE001 - a bad cache must not fail the build
         return False

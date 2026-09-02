@@ -485,6 +485,7 @@ def build_page(
     data: Any = None,
     sheets_present: Sequence[str] = (),
     settings: Any = None,
+    quote: Any = None,
 ) -> StockPage:
     """Assemble the four sections from one rating and one valuation.
 
@@ -505,7 +506,8 @@ def build_page(
         stock_id=rating.stock_id or valuation.stock_id,
         name=rating.name or valuation.name,
         market_price=valuation.market_price,
-        price_date=market_close(reader)[1],
+        # 有每日全市場行情就用它的日期；沒有才退回從分頁推出來的那一個。
+        price_date=quote.label if quote is not None else market_close(reader)[1],
         excluded=getattr(rating, "excluded", "") or "",
         gaps=dict(valuation.gaps or {}),
     )

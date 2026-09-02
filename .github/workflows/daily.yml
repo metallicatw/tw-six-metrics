@@ -14,8 +14,11 @@ name: 每日全市場（收盤行情／三大法人）
 #
 #   同一份資料重抓不會製造 commit：gzip 固定 mtime=0、列先排序，所以位元組一樣。
 #
-# 這條排程**還不會改變網頁上的任何數字**。它只負責把每天的行情存下來；接進個股
-# 頁的市價與報酬風險比是下一步。所以這裡不建站、不發布——沒有東西可發布。
+# 存完之後就建站發布：個股頁的市價、報酬風險比、九宮格的第二行、河流圖今天那一
+# 點，全部讀這份資料。這就是「每天打開網頁都是最新的，不用按更新」的最後一格。
+#
+# 增量建站只會重畫**有完整版**的那些（表格版的頁面上沒有市價，價格不算進它的
+# 指紋），所以每天重畫的張數等於觀察清單的大小，不是 1,742。
 
 on:
   schedule:
@@ -26,6 +29,9 @@ on:
 
 permissions:
   contents: write
+  # 建站與發布在同一個 job 裡做：用 GITHUB_TOKEN 推的 commit 不會觸發 pages.yml。
+  pages: write
+  id-token: write
 
 concurrency:
   group: daily
@@ -34,6 +40,9 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -43,12 +52,14 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - run: pip install -e .
+      # 建站要 jinja2，所以是 [report] 而不是裸的 .
+      - run: pip install -e ".[report]"
 
       - name: 抓取
         run: twsix fetch-daily
 
       - name: Commit
+        id: commit
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -56,8 +67,10 @@ jobs:
           if git diff --cached --quiet; then
             # 非交易日、或這一輪抓到的和上一輪一模一樣——都是正常的，不是失敗。
             echo "::notice::沒有新的一天要存"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "changed=yes" >> "$GITHUB_OUTPUT"
           days="$(git diff --cached --name-only -- data/market/daily \
                   | sed 's#.*/##; s#\.csv\.gz$##' | sort -u | paste -sd' ' -)"
           git commit -m "每日行情：${days:-$(date -u +%Y-%m-%d)}" \
@@ -69,3 +82,17 @@ jobs:
           fi
           git pull --rebase origin main
           git push origin HEAD:main
+
+      # 價格進了 repo，網頁還沒換。這兩步讓今天的收盤當天就出現在個股頁上。
+      - name: 建站
+        if: steps.commit.outputs.changed == 'yes'
+        uses: ./.github/actions/build-site
+        with:
+          test: "false"
+          setup: "false"   # 上面已經 setup 過了
+          incremental: "true"
+
+      - name: 發布
+        id: deployment
+        if: steps.commit.outputs.changed == 'yes'
+        uses: actions/deploy-pages@v4

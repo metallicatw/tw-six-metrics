@@ -1003,8 +1003,18 @@ def cmd_page(args: argparse.Namespace) -> int:
     data = GridsSource(grids=grids, stock_id=args.stock).load()
     rating = rate(data, settings.rules, settings.periods)
     reader = GridSource(grids)
+    # 每日全市場行情裡有這一檔的話，市價用它——那份資料一天抓一次、涵蓋 1,980
+    # 檔，而分頁上的收盤要等有人按下這一檔的「立即更新」才會動。
+    from .store.daily import latest_quotes  # noqa: PLC0415
+
+    quote = latest_quotes(root).get(args.stock)
     valuation = evaluate(
-        read_valuation_input(reader, stock_id=args.stock, as_of=args.as_of or ""),
+        read_valuation_input(
+            reader,
+            stock_id=args.stock,
+            as_of=args.as_of or "",
+            market_price=quote.close if quote is not None else None,
+        ),
         ValuationOptions(
             growth_method=settings.forecast.revenue_growth_method,
             margin_method=settings.forecast.margin_method,
@@ -1019,6 +1029,7 @@ def cmd_page(args: argparse.Namespace) -> int:
         data=data,
         sheets_present=list(grids),
         settings=settings,
+        quote=quote,
     )
 
     _store_rating(root, rating)
