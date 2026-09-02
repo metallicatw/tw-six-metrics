@@ -870,7 +870,7 @@ def _vintage(row: dict[str, str]) -> tuple[str, str]:
     return (row.get("fiscal_quarter") or "", row.get("revenue_month") or "")
 
 
-def _store_rating(root: Path, rating: Any) -> None:
+def _store_rating(root: Path, rating: Any, *, meta: dict[str, str] | None = None) -> None:
     """把剛算好的評等寫回全市場表，讓〔評等清單〕跟著這一次抓取一起動。
 
     在這之前，抓一檔股票會更新它的個股頁，卻不會更新清單上它那一列——於是
@@ -899,8 +899,17 @@ def _store_rating(root: Path, rating: Any) -> None:
         if r.get("stock_id") == rating.stock_id and r.get("period_index") == "1"
     ]
     if not stored:
-        print(f"  不在全市場清單裡（{rating.stock_id}），只產生個股頁，清單不動")
-        return
+        if meta is None:
+            print(f"  不在全市場清單裡（{rating.stock_id}），只產生個股頁，清單不動")
+            return
+        # 例外：呼叫端拿著官方名單，知道這一檔的市場與產業。
+        #
+        # 上面那條規則擋的是「個股報表上沒有市場與產業，硬塞會得到半空的一列」。
+        # 補課走的是另一條路：官方公司基本資料與月營收表就有這兩欄，所以塞得
+        # 進去的是完整的一列。量到的是 251 檔——活頁簿快照之後才上市、清單上
+        # 從來沒出現過的股票。少了這條路，它們永遠不會出現。
+        stored = [dict(meta)]
+        print(f"  新上市（{rating.stock_id} {meta.get('name','')}），加進清單")
     if _vintage(stored[0]) > _vintage({k: str(v) for k, v in newest.items()}):
         print(
             f"  清單維持原值（表上是 {stored[0].get('fiscal_quarter')}，"
@@ -1357,6 +1366,20 @@ def cmd_backfill(args: argparse.Namespace) -> int:
 # =========================================================================
 
 
+def new_listings(root: Path, market: Any) -> list[str]:
+    """官方名單上有、〔評等清單〕上沒有的股票——快照之後才上市的那些。
+
+    量到的是 251 檔。金融保險業不算（六大指標本來就不適用），所以扣掉之後
+    是「應該在清單上、但從來沒出現過」的那一批。
+    """
+    known = {r.get("stock_id", "") for r in Store(root).read("ratings")}
+    return [
+        code
+        for code in market.codes()
+        if code not in known and not market.financials(code).excluded
+    ]
+
+
 def official_universe(root: Path) -> set[str]:
     """今天真的還在市場上的股票代號（`data/market/` 與兩份公司基本資料）。
 
@@ -1418,12 +1441,19 @@ def cmd_refresh(args: argparse.Namespace) -> int:
     from .ingest.workbook import GridsSource  # noqa: PLC0415
     from .rating.engine import rate  # noqa: PLC0415
 
+    from .ingest.market import MarketData  # noqa: PLC0415
+
     root = Path(args.data or settings.data_dir)
+    market = None if args.any_code else MarketData.load(root)
     if args.codes:
         queue = [(c.strip(), "") for c in args.codes.split(",") if c.strip()]
     else:
-        universe = None if args.any_code else official_universe(root)
+        universe = None if market is None else set(market.codes())
         queue = stale_codes(root, universe=universe)
+        if market is not None:
+            # 過期的先補完，才輪到新上市的：螢幕上錯的東西，比缺的東西急。
+            queue += [(code, "新上市") for code in new_listings(root, market)]
+    known = {r.get("stock_id", "") for r in Store(root).read("ratings")}
     total = len(queue)
     if args.limit:
         queue = queue[: args.limit]
@@ -1458,7 +1488,15 @@ def cmd_refresh(args: argparse.Namespace) -> int:
         except Exception as exc:  # noqa: BLE001 - 一檔算不出來不該停下整批
             failed.append(f"{code}：{exc}")
             continue
-        _store_rating(root, rating)
+        meta = None
+        if code not in known and market is not None:
+            official = market.financials(code)
+            meta = {
+                "name": official.name,
+                "market": official.market,
+                "industry": official.industry,
+            }
+        _store_rating(root, rating, meta=meta)
         done.append(code)
         # 暫存的十六張分頁到這裡就沒有用了。留著它們就是 319 MB 的那條路。
         shutil.rmtree(scratch / "sheets" / code, ignore_errors=True)

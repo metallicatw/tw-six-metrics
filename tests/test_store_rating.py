@@ -148,3 +148,36 @@ def test_no_table_at_all_means_nothing_to_update():
     root = _tmp()
     _store_rating(root, _Rating("5439", "2026.2Q", "115/07", name="高技"))
     assert Store(root).read("ratings") == []
+
+
+def test_a_new_listing_gets_added_when_the_caller_brings_the_official_metadata():
+    """上一條規則擋的是「半空的一列」，不是「永遠不准新增」。
+
+    官方公司基本資料與月營收表就有市場與產業，所以補課塞得進去的是完整的一列。
+    量到的是 221 檔——活頁簿快照之後才上市、清單上從來沒出現過、而且不是金融
+    保險業的股票。少了這條路，它們永遠不會出現在清單上。
+    """
+    root = _tmp()
+    _seed(root)
+    _store_rating(
+        root,
+        _Rating("6741", "2026.2Q", "115/07", name="91APP*-KY"),
+        meta={"name": "91APP*-KY", "market": "上市", "industry": "電子商務業"},
+    )
+
+    rows = [r for r in Store(root).read("ratings") if r["stock_id"] == "6741"]
+    assert rows, "帶著官方資料來的新上市應該進得了清單"
+    assert rows[0]["market"] == "上市" and rows[0]["industry"] == "電子商務業"
+
+
+def test_metadata_from_the_stored_row_still_wins_over_the_official_one():
+    """既有的列不受影響：meta 只在「這一檔還不在表上」的時候才派上用場。"""
+    root = _tmp()
+    _seed(root)
+    _store_rating(
+        root,
+        _Rating("1101", "2026.2Q", "115/07", name="台泥"),
+        meta={"name": "錯的", "market": "錯的", "industry": "錯的"},
+    )
+    row = next(r for r in Store(root).read("ratings") if r["stock_id"] == "1101")
+    assert row["industry"] != "錯的"
