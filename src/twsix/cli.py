@@ -1352,6 +1352,123 @@ def cmd_backfill(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# =========================================================================
+# 清單補課：把停在去年的那 1,558 列，一批一批換成新的
+# =========================================================================
+
+
+def official_universe(root: Path) -> set[str]:
+    """今天真的還在市場上的股票代號（`data/market/` 與兩份公司基本資料）。
+
+    量出來的落差：清單上有 1,741 檔，官方名單上有 1,985 檔；其中 **7 檔清單有、
+    官方沒有**（已下市），**251 檔官方有、清單沒有**（活頁簿快照之後才上市的）。
+    補課的時候先跟官方名單交集一次，是為了不要拿 13 個請求去問一檔已經不存在的
+    股票——那不只是慢，而且會失敗得像是網路有問題。
+    """
+    from .ingest.market import MarketData  # noqa: PLC0415
+
+    return set(MarketData.load(root).codes())
+
+
+def stale_codes(root: Path, *, universe: set[str] | None = None) -> list[tuple[str, str]]:
+    """清單上落後最新期別的股票，最舊的排最前面。回傳 ``(代號, 表上的期別)``。
+
+    「最新期別」是這張表自己說了算，不是時鐘說了算：已經有 183 檔被逐檔抓到
+    2026.2Q，其餘 1,558 檔還停在活頁簿匯入的 2025.2Q。所以佇列就是「和跑在最前
+    面的那些相比，還差一截的那些」，而一檔被補上之後就自己離開佇列。
+    """
+    store = Store(root)
+    latest = {
+        r.get("stock_id", ""): r.get("fiscal_quarter", "")
+        for r in store.read("ratings")
+        if r.get("period_index") == "1"
+    }
+    latest.pop("", None)
+    if not latest:
+        return []
+    newest = max(latest.values())
+    out = [
+        (code, quarter)
+        for code, quarter in latest.items()
+        if quarter < newest and (universe is None or code in universe)
+    ]
+    out.sort(key=lambda pair: (pair[1], pair[0]))
+    return out
+
+
+def cmd_refresh(args: argparse.Namespace) -> int:
+    """一批一批把清單上過期的評等重算，但**不留下 205 KB 的個股快取**。
+
+    為什麼不直接跑 `twsix report`：那個指令會把十六張分頁寫進
+    `data/sheets/<代號>/`，一檔 205 KB。1,558 檔就是 **319 MB** 進版控——正是
+    〈架構檢討〉裡點名的那條成長路徑。而清單要的只是六個指標的評分，個股快取
+    只有在那一檔真的有人要看個股頁的時候才值得留。
+
+    所以這裡把報表抓進一個暫存目錄，算完評等、把那一列寫回 `data/ratings.csv`，
+    然後把暫存目錄刪掉。留下來的差異只有清單那幾列——一次補 50 檔的 commit
+    大約幾十 KB，而不是 10 MB。
+
+    一檔失敗不中斷整批，理由和 `twsix fetch` 那次一樣：抓到幾檔就是幾檔，
+    下一批會再遇到它。
+    """
+    import shutil  # noqa: PLC0415
+    import tempfile  # noqa: PLC0415
+
+    settings = Settings.load(args.config)
+    from .ingest.workbook import GridsSource  # noqa: PLC0415
+    from .rating.engine import rate  # noqa: PLC0415
+
+    root = Path(args.data or settings.data_dir)
+    if args.codes:
+        queue = [(c.strip(), "") for c in args.codes.split(",") if c.strip()]
+    else:
+        universe = None if args.any_code else official_universe(root)
+        queue = stale_codes(root, universe=universe)
+    total = len(queue)
+    if args.limit:
+        queue = queue[: args.limit]
+    if not queue:
+        print("清單上沒有落後的股票，不需要補課")
+        return EXIT_OK
+
+    scratch = Path(args.scratch) if args.scratch else Path(tempfile.mkdtemp(prefix="twsix-refresh-"))
+    print(f"待補 {total} 檔，這一批 {len(queue)} 檔（暫存於 {scratch}）")
+
+    done: list[str] = []
+    failed: list[str] = []
+    for code, was in queue:
+        print(f"\n{code}（表上 {was or '—'}）：")
+        rc = cmd_fetch_stock(
+            argparse.Namespace(
+                config=args.config, stock=code, sheet=None, host=args.host,
+                save_html=None, from_html=None, retries=args.retries,
+                out=str(scratch), fresh=True,
+            )
+        )
+        if rc != EXIT_OK:
+            failed.append(f"{code}：報表沒抓齊")
+            continue
+        grids = _fetched_grids(scratch, code)
+        if grids is None:
+            failed.append(f"{code}：抓完了卻讀不回來")
+            continue
+        try:
+            data = GridsSource(grids=grids, stock_id=code).load()
+            rating = rate(data, settings.rules, settings.periods)
+        except Exception as exc:  # noqa: BLE001 - 一檔算不出來不該停下整批
+            failed.append(f"{code}：{exc}")
+            continue
+        _store_rating(root, rating)
+        done.append(code)
+        # 暫存的十六張分頁到這裡就沒有用了。留著它們就是 319 MB 的那條路。
+        shutil.rmtree(scratch / "sheets" / code, ignore_errors=True)
+
+    print(f"\n補好 {len(done)} 檔，失敗 {len(failed)} 檔，還剩 {total - len(done)} 檔")
+    for line in failed:
+        print(f"::warning::補課失敗（其餘照常寫回）：{line}")
+    return EXIT_OK if done or not failed else EXIT_FAIL
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     """把網站跑在本機，並讓網頁上的搜尋框真的能去抓資料.
 
@@ -2032,6 +2149,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="只補其中一種（預設兩種都補）",
     )
     bf.set_defaults(func=cmd_backfill)
+
+    rf = sub.add_parser(
+        "refresh",
+        help="補課：把〔評等清單〕上過期的評等一批一批重算（不留個股快取）",
+    )
+    rf.add_argument("--data", help="資料目錄")
+    rf.add_argument(
+        "--limit", type=int, default=50, help="這一批補幾檔（預設 50；0 表示全部）"
+    )
+    rf.add_argument("--codes", help="直接指定要補的代號，逗號分隔")
+    rf.add_argument("--host", help="優先使用的券商站台")
+    rf.add_argument("--retries", type=int, default=1, help="每個站台重試次數")
+    rf.add_argument("--scratch", help="暫存目錄（預設用系統暫存區，跑完就刪）")
+    rf.add_argument(
+        "--any-code", dest="any_code", action="store_true",
+        help="不先跟官方名單交集（預設會跳過已下市的代號）",
+    )
+    rf.set_defaults(func=cmd_refresh)
 
     pg = sub.add_parser("page", help="個股四頁：評價簡表／六大／EPS預估與估價／殖利率估價")
     pg.add_argument("stock", help="股票代號")
