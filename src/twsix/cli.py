@@ -1438,10 +1438,9 @@ def cmd_refresh(args: argparse.Namespace) -> int:
     import tempfile  # noqa: PLC0415
 
     settings = Settings.load(args.config)
+    from .ingest.market import MarketData  # noqa: PLC0415
     from .ingest.workbook import GridsSource  # noqa: PLC0415
     from .rating.engine import rate  # noqa: PLC0415
-
-    from .ingest.market import MarketData  # noqa: PLC0415
 
     root = Path(args.data or settings.data_dir)
     market = None if args.any_code else MarketData.load(root)
