@@ -12,18 +12,23 @@ name: 評等補課（清單上過期的那些）
 #   券商鏡像則是一次給九季、六個指標全有，而且已經被證明可行：首頁上那 183 檔
 #   就是這樣抓來的，其中 3029 是由 runner 抓的。
 #
-# 為什麼補課不留個股快取：
+# 為什麼補課要把原始分頁留下來：
 #
-#   一檔十六張分頁 205 KB，1,558 檔就是 319 MB 進版控。清單要的只是六個指標的
-#   評分，所以 `twsix refresh` 把報表抓進暫存目錄、算完評等、把那一列寫回
-#   `data/ratings.csv`，然後刪掉暫存。一批 100 檔的 commit 是幾十 KB，不是 10 MB。
-#   個股快取只在有人真的要看那一頁的時候才值得留——那是「加一檔個股」的事。
+#   第一版是抓完就刪，理由是未壓縮每檔 256 KB、1,741 檔等於 446 MB 進版控。
+#   代價是那些股票只有〔六大財務指標評等〕一頁——另外三頁（評價簡表、EPS預估與
+#   估價、殖利率估價）需要原始分頁當原料。
+#
+#   改法不是少存，是壓縮：gzip 之後實測平均每檔 34 KB，全市場約 57 MB。留原始
+#   分頁而不是只留四頁用得到的數字（那樣只要 10~17 MB），是因為原始分頁是
+#   **來源層**——之後想算的任何東西都不必再跟鏡像站要一次。
+#
+#   gzip 固定 mtime=0，所以沒變的分頁重寫會得到同一個檔案，不會製造假差異。
 #
 # 節奏：一天四批、一批 100 檔，1,665 檔約四天走完。之後佇列會自己空掉（每一檔
 # 補上就離開），排程照跑但每次都印「清單上沒有落後的股票」，不留 commit。
 # 一檔失敗不中斷整批：抓到幾檔就是幾檔，下一批會再遇到它。
 #
-# 一批 100 檔 = 1,300 個請求，分散在八個券商鏡像站、每站之間節流 1.2 秒，約
+# 一批 100 檔 = 1,500 個請求，分散在八個券商鏡像站、每站之間節流 1.2 秒，約
 # 25 分鐘。一天四批平均下來每個站台大約八秒一個請求——這是「一般讀者的閱讀
 # 速度」，不是壓力測試。要更快就加開時段，不要把單批拉大：單批越大，中途被
 # 中斷時丟掉的進度越多（補課本身沒有斷點續傳，靠的是佇列每次重新計算）。
@@ -58,9 +63,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    # 一批 100 檔約 25~50 分鐘（每檔 13 個請求、站台之間節流 1.2 秒）。給餘裕，
+    # 一批 100 檔約 30~60 分鐘（每檔 15 個請求、站台之間節流 1.2 秒）。給餘裕，
     # 但不給到六小時：卡住的時候應該早點失敗，而不是佔著 runner 到天亮。
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +76,7 @@ jobs:
 
       - run: pip install -e ".[report]"
 
+      # 每檔 15 個請求（十三張鏡像分頁 + 證交所與櫃買的年度交易資訊）。
       - name: 補課
         run: twsix refresh --limit "${{ inputs.limit || 100 }}"
 
@@ -79,7 +85,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/ratings.csv
+          git add data/ratings.csv data/sheets
           if git diff --cached --quiet; then
             echo "::notice::這一批沒有任何一列改變"
             echo "changed=no" >> "$GITHUB_OUTPUT"
@@ -88,7 +94,7 @@ jobs:
           echo "changed=yes" >> "$GITHUB_OUTPUT"
           count="$(git diff --cached --numstat -- data/ratings.csv | awk '{print $1}')"
           git commit -m "評等補課：${count:-0} 列" \
-                     -m "由券商鏡像重算，只寫回清單，不留個股快取。"
+                     -m "由券商鏡像重算，原始分頁壓縮存進 data/sheets/。"
           # 白名單式的 git add 會漏掉引擎新寫的檔案，而那件事的症狀是下一行
           # 「cannot pull with rebase: You have unstaged changes」——一句完全不提
           # 檔名的訊息。先自己講清楚。

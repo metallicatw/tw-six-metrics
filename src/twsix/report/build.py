@@ -772,21 +772,17 @@ def _full_stock_page(
     if not base_dir.is_dir():
         return False
 
-    import json
-
     from ..config import Settings
     from ..ingest.derive import enrich
     from ..ingest.moneydj import GridSource
     from ..ingest.valuation_source import read_valuation_input
     from ..ingest.workbook import GridsSource
     from ..rating.engine import rate
+    from ..store import sheets as sheet_store
     from ..valuation import ValuationOptions, evaluate
     from .stock_page import build_page
 
-    grids = {
-        p.stem: json.loads(p.read_text(encoding="utf-8"))
-        for p in sorted(base_dir.glob("*.json"))
-    }
+    grids = sheet_store.read_all(base_dir)
     if not grids:
         return False
 

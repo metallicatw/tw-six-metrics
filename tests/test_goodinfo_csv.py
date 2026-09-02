@@ -214,6 +214,7 @@ def test_each_file_lands_in_its_own_stocks_folder():
     import tempfile
 
     from twsix.cli import cmd_fetch_page
+    from twsix.store import sheets as sheet_store
 
     tmp = Path(tempfile.mkdtemp(prefix="twsix-batch-"))
     box = tmp / "csv"
@@ -231,9 +232,10 @@ def test_each_file_lands_in_its_own_stocks_folder():
     )
     assert rc == 0
     sheets = tmp / "data" / "sheets"
-    assert (sheets / "5439" / f"{HOLDERS}.json").is_file()
-    assert (sheets / "5439" / f"{DIRECTORS}.json").is_file()
-    assert (sheets / "2330" / f"{HOLDERS}.json").is_file()
+    # 壓縮或未壓縮都算數：分頁的儲存格式是 store.sheets 的事，不是這裡的事。
+    assert sheet_store.read_grid(sheets / "5439", HOLDERS)
+    assert sheet_store.read_grid(sheets / "5439", DIRECTORS)
+    assert sheet_store.read_grid(sheets / "2330", HOLDERS)
     # 命令列上那個代號只是退路，這一批用不到它。
     assert not (sheets / "9999").exists()
 
