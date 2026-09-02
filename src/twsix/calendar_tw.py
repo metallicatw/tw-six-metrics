@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime, time, timedelta
 
 ROC_OFFSET = 1911
 
@@ -64,6 +65,35 @@ def latest_quarter_for_month(month: int, *, after_filing: bool = True) -> Calend
     if not rows:
         raise ValueError(f"month out of range: {month}")
     return rows[-1] if after_filing else rows[0]
+
+
+# -- 「資料可能變了嗎」 ------------------------------------------------------
+
+#: 台北時間幾點之後，當天的盤後資料才算齊。
+#:
+#: 收盤是 13:30，但盤後資訊不是那一秒就到位：收盤行情約 14:00 上站，三大法人約
+#: 16:00。抓早了會拿到昨天的數字配今天的日期——這個專案已經因為那件事錯過一次
+#: （〔BASIC〕的「最近交易日」跑在自己的 OHLC 前面）。17:00 是安全的界線。
+DATA_HOUR = 17
+
+
+def data_epoch(now: datetime) -> datetime:
+    """最近一次「這一檔的資料有可能變了」的時刻。
+
+    用來回答一個很實際的問題：**剛剛才更新過，再按一次更新有意義嗎？**
+
+    沒有的話就不該再花 13 個請求、一分半鐘去把同一份資料抓回來——尤其是那一分半
+    鐘裡使用者是盯著螢幕在等的。
+
+    週末往回退到週五：星期六不會有新的盤後資料。國定假日沒有處理（專案裡沒有
+    交易日曆），代價是假日按第二次會多抓一次，那比「漏掉一天的新資料」安全。
+    """
+    day = now.date()
+    if now.hour < DATA_HOUR:
+        day -= timedelta(days=1)
+    while day.weekday() >= 5:  # 5=六 6=日
+        day -= timedelta(days=1)
+    return datetime.combine(day, time(DATA_HOUR), tzinfo=now.tzinfo)
 
 
 # -- quarter arithmetic ----------------------------------------------------
