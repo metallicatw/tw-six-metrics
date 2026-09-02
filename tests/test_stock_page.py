@@ -228,31 +228,53 @@ def test_a_missing_sheet_is_named_rather_than_left_blank():
     assert page.gaps["yield"] in html
 
 
-def test_the_market_price_carries_the_day_it_closed():
-    """整頁的估值——目標價、下檔價、報酬風險比——都是拿這個股價算的。
+def test_the_close_comes_from_the_freshest_source_not_the_one_with_the_label():
+    """〔BASIC〕的「最近交易日」會跑在它自己的數字前面。
 
-    〔BASIC〕只印月/日，對一張每天開來看的活頁簿夠了；對一張會被存起來、三個月後
-    再打開的網頁不夠。年份用抓取當天補：交易日不可能在未來。
+    2026-09-02 下午抓回來的那一份實測：標籤已經寫 09/02，OHLC 卻還是 09/01 的
+    （開 269 / 高 280.5 / 低 263 / 收 275，漲跌 +7.5 ⇒ 前一日收 267.5）。同一次
+    抓取裡，〔股價(週)〕最新那根的收盤是 269.5、最低 262——低於 BASIC 的 263，
+    也就是有一個 BASIC 沒看到的交易日跌破了它的低點；〔三大法人〕也已經有
+    115/09/02 那一列。
+
+    照標籤走的後果不是慢一天，是**把昨天的價格標上今天的日期**。
     """
-    import datetime
-
-    from twsix.report.stock_page import price_date
+    from twsix.ingest.valuation_source import market_close
 
     class R:
-        def __init__(self, text: str):
-            self._t = text
+        """只回這三張表的最小 reader，形狀和 GridSource 一樣。"""
+
+        def __init__(self, weekly, inst, basic_close=275.0):
+            self._g = {"股價(週)": weekly, "三大法人": inst}
+            self._c = basic_close
+
+        def grid(self, sheet):
+            return self._g.get(sheet, [])
+
+        def num(self, sheet, col, row):
+            return self._c
 
         def text(self, sheet, col, row):
-            return self._t if (sheet, col, row) == ("BASIC", "A", 4) else ""
+            return ""
 
-    day = datetime.date(2026, 9, 1)
-    assert price_date(R("最近交易日:08/28   市值單位:百萬"), day) == "2026.08.28"
-    assert price_date(R("最近交易日：8/28"), day) == "2026.08.28"
-    # 月份看起來超前今天的，是去年的——跨年那幾天最容易錯一整年。
-    assert price_date(R("最近交易日:12/30"), datetime.date(2026, 1, 5)) == "2025.12.30"
-    # 抓不到就留空。編一個日期出來，比沒有日期糟得多。
-    assert price_date(R("市值單位:百萬"), day) == ""
-    assert price_date(R("最近交易日:13/40"), day) == ""
+    head = ["年度", "日期", "收盤價", "開盤價", "最高價", "最低價", "成交量"]
+    weekly = [head, ["2026", "2026/08/31", "269.5", "265", "280.5", "262", "15208"]]
+    inst = [["日期", "外資"], ["115/09/02", "-493"], ["115/09/01", "-245"]]
+
+    price, when = market_close(R(weekly, inst))
+    assert price == 269.5, "取到的是 BASIC 那個舊的收盤"
+    assert when == "2026.09.02"
+
+    # 盤中：法人買賣超要收盤後才公布，所以當天的法人資料還沒進來時不能宣稱
+    # 今天的收盤——那個價格是盤中的。
+    stale_inst = [["日期", "外資"], ["115/08/29", "-1"]]
+    price, when = market_close(R(weekly, stale_inst))
+    assert price == 269.5
+    assert when == "", "法人資料不在這一週，卻還是標了日期"
+
+    # 兩張表都沒有（活頁簿來源就是這樣）→ 退回 BASIC，但不給日期。
+    price, when = market_close(R([], []))
+    assert price == 275.0 and when == ""
 
 
 def test_the_page_shows_that_date_next_to_the_price(tmp_path=None):

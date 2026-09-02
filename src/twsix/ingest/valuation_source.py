@@ -25,8 +25,10 @@ Coordinates below come from the sheets themselves, not from memory:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
-from typing import Protocol
+from datetime import date, timedelta
+from typing import Any, Protocol
 
 from ..valuation.assemble import ValuationInput
 
@@ -43,6 +45,8 @@ RATING = "六大財務指標評等"
 TRADING = "年度交易資訊_上市櫃合併_"
 TRADING_RAW = "年度交易資訊(上市櫃合併)"
 SUMMARY = "評價簡表"
+WEEKLY = "股價(週)"
+INSTITUTIONAL = "三大法人"
 
 # -- cell coordinates ------------------------------------------------------
 
@@ -261,6 +265,104 @@ def yearly_prices(
     )
 
 
+# -- 收盤價，和它究竟屬於哪一個交易日 --------------------------------------
+
+#: 〔股價(週)〕的欄序，來自 weekly_prices.to_grid：年度 / 日期 / 收盤價 / …
+WEEK_COL_DATE, WEEK_COL_CLOSE = 1, 2
+#: 〔三大法人〕第一欄是日期（民國），表頭那一列寫「日期」。
+INST_COL_DATE = 0
+
+_ROC_DAY = re.compile(r"^(\d{2,3})/(\d{1,2})/(\d{1,2})$")
+_GREG_DAY = re.compile(r"^(\d{4})/(\d{1,2})/(\d{1,2})$")
+
+
+def _grid(reader: Any, sheet: str) -> list[list[str]]:
+    """這個 reader 拿不拿得到整張表。活頁簿來源沒有 ``grid``，回空的。"""
+    fn = getattr(reader, "grid", None)
+    if fn is None:
+        return []
+    try:
+        return list(fn(sheet) or [])
+    except Exception:  # noqa: BLE001 - 少一張表不該讓整份估值算不出來
+        return []
+
+
+def _day(text: str) -> date | None:
+    """``115/09/02``（民國）或 ``2026/09/02``（西元）都吃。"""
+    t = (text or "").strip()
+    m = _GREG_DAY.match(t)
+    if m:
+        y, mo, d = (int(x) for x in m.groups())
+    else:
+        m = _ROC_DAY.match(t)
+        if not m:
+            return None
+        y, mo, d = (int(x) for x in m.groups())
+        y += 1911
+    try:
+        return date(y, mo, d)
+    except ValueError:
+        return None
+
+
+def market_close(reader: CellReader) -> tuple[float | None, str]:
+    """收盤價，以及它屬於哪一個交易日（``YYYY.MM.DD``，說不出來就空字串）。
+
+    **〔BASIC〕的「最近交易日」會跑在它自己的數字前面。** 2026-09-02 下午抓回來的
+    那一份實測：標籤已經寫 09/02，OHLC 卻還是 09/01 的（開 269 / 高 280.5 /
+    低 263 / 收 275，漲跌 +7.5 ⇒ 前一日收 267.5）。同一次抓取裡另外兩張表都已經
+    有 09/02：〔股價(週)〕最新那根的收盤是 269.5、最低 262（低於 BASIC 的 263，
+    也就是有一個 BASIC 沒看到的交易日跌破了它的低點），〔三大法人〕也已經有
+    115/09/02 那一列。三個互相獨立的跡證指向同一件事——BASIC 少了一個交易日，
+    而它的標籤沒有少。
+
+    照著標籤走的後果不是「慢一天」，是**把昨天的價格標上今天的日期**：整頁的
+    目標價、下檔價、報酬風險比、九宮格的第二行全都掛在這個數字上，而日期會讓人
+    以為它們比實際新。
+
+    所以改成：價格取〔股價(週)〕最新一根的收盤，日期取〔三大法人〕最新一列，
+    而且**兩者必須落在同一週**才算數。同一週這個條件順便擋掉盤中——法人買賣超
+    要收盤後才公布，所以在當天的法人資料進來之前，我們不會把一個盤中價說成當日
+    收盤。
+
+    對不上、或這個 reader 根本沒有那兩張表（活頁簿來源就是這樣）時，退回
+    〔BASIC〕I5，但**不給日期**。一個沒有日期的股價只是少了一個資訊；一個標錯
+    日期的股價是一句假話。
+    """
+    fallback = reader.num(BASIC, BASIC_COL_CLOSE, BASIC_ROW_CLOSE)
+
+    weekly = _grid(reader, WEEKLY)
+    bar = next(
+        (
+            row
+            for row in reversed(weekly)
+            if len(row) > WEEK_COL_CLOSE and _day(str(row[WEEK_COL_DATE]))
+        ),
+        None,
+    )
+    if bar is None:
+        return fallback, ""
+    week_start = _day(str(bar[WEEK_COL_DATE]))
+    try:
+        close = float(str(bar[WEEK_COL_CLOSE]).replace(",", ""))
+    except (TypeError, ValueError):
+        return fallback, ""
+
+    session = None
+    for row in _grid(reader, INSTITUTIONAL):
+        if not row:
+            continue
+        d = _day(str(row[INST_COL_DATE]))
+        if d and (session is None or d > session):
+            session = d
+    if session is None or week_start is None:
+        return close, ""
+    # 同一週：週線那一根的日期是週起始標記，涵蓋它之後的六天。
+    if not (week_start <= session <= week_start + timedelta(days=6)):
+        return close, ""
+    return close, session.strftime("%Y.%m.%d")
+
+
 def read_valuation_input(
     reader: CellReader, stock_id: str = "", name: str = "", as_of: str = ""
 ) -> ValuationInput:
@@ -307,7 +409,7 @@ def read_valuation_input(
         name=name,
         as_of=as_of,
         revenue_month=newest_month,
-        market_price=reader.num(BASIC, BASIC_COL_CLOSE, BASIC_ROW_CLOSE),
+        market_price=market_close(reader)[0],
         last_year_revenue=last_year_revenue or None,
         monthly_revenue_yoy=merged_revenue_yoy(reader),
         monthly_revenue=[v for _, v in months],
