@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import tempfile
 from pathlib import Path
 
@@ -53,8 +54,6 @@ def test_the_old_file_survives_a_write_that_never_finishes():
         def __str__(self) -> str:  # 序列化到一半炸掉
             raise RuntimeError("boom")
 
-    try:
+    with contextlib.suppress(RuntimeError):
         store.write("ratings", [{"stock_id": Boom()}], ("stock_id",))
-    except RuntimeError:
-        pass
     assert store.path("ratings").read_bytes() == good, "失敗的寫入把舊資料弄壞了"
