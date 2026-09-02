@@ -196,8 +196,9 @@ jobs:
           test: "false"
           setup: "false"   # 上面已經 setup 過了
           incremental: "true"
-          # 只取回、不存回：存一份 66 MB 的快取要十幾秒，而這條路上的每一秒都是
-          # 使用者盯著螢幕在等的。快取由每天跑六次的那幾條排程保持新鮮。
+          # 這一步裡不存快取——存回去要十幾秒，而這條路上的每一秒都是使用者盯著
+          # 螢幕在等的。改成發布之後再存（見下面）：使用者的等待在 CDN 換好那一
+          # 刻就結束了，之後 runner 做什麼都不影響他。
           save_cache: "false"
 
 
@@ -205,6 +206,21 @@ jobs:
         id: deployment
         if: steps.need.outputs.stale == 'yes'
         uses: actions/deploy-pages@v4
+
+      # 發布之後才存快取。
+      #
+      # 存與不存的差別不是「快或慢」，是**下一次**要重畫幾張：快取裡的 site/ 越
+      # 新，下一次增量建站要重畫的越少。跳過不存，等於把這條路上每一次抓取的成果
+      # 都丟掉，讓下一次從排程的那一份重來——所以不是省，是欠。
+      #
+      # 但它十幾秒的代價可以完全不落在使用者身上：他等的是 CDN 換好，那件事在上
+      # 一步就結束了。放在這裡，兩邊都拿到。
+      - name: 存回網站快取
+        if: steps.need.outputs.stale == 'yes'
+        uses: actions/cache/save@v4
+        with:
+          path: site
+          key: site-${{ github.run_id }}
 
       - name: 說明
         env:

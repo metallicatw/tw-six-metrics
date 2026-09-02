@@ -38,7 +38,13 @@ SHEET = "股價(週)"
 
 #: 〔河流圖〕's combo box defaults to seven years back (J3 = 2019 in the
 #: workbook saved for 2026).  It is a window on the chart, not a data limit.
-DEFAULT_YEARS = 7
+#:
+#: 改成五年是量出來的決定：一張完整版的個股頁 344 KB，其中 SVG 佔 199 KB，而
+#: 河流圖一張就 58 KB——它畫的是每一週一個點。七年 365 點、五年 260 點，少掉
+#: 三成，而河流圖要讓人看的是「現在站在哪一區」，五年已經跨過一輪多空。
+#:
+#: 資料照舊完整存（1998 年以來），這只是畫圖的視窗。
+DEFAULT_YEARS = 5
 
 
 @dataclass(frozen=True)

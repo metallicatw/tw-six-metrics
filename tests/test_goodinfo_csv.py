@@ -182,20 +182,29 @@ def test_the_cards_skip_a_newest_row_that_has_no_data_yet():
     assert view.weeks[0]["week"] == "26W36"     # 但表格照樣從最新的那一列開始
 
 
-def test_the_chart_window_is_wide_enough_for_what_the_export_carries():
-    """窗開 156 週（三年）是「當時手上最多就那麼多」留下來的。
+def test_the_import_is_kept_whole_even_though_the_chart_draws_a_year():
+    """匯進來的 258 週不會被丟掉——但圖只畫 52 週。
 
-    籌碼的一輪循環——散戶進場、大戶收貨、再派發——本來就要好幾年才看得完。
-    匯進來 258 週卻只畫三年，等於把買來的東西丟掉四成。
+    這條原本斷言的是相反的事（「窗要開得夠寬，才對得起匯進來的 258 週」）。改掉
+    的理由有三個，而且都是後來才量到的：
+
+    * 同一頁上，下面那張表列的是 52 週。圖畫五年、表列一年，讀者要自己換算。
+    * 集保的查詢頁本來就只給 51 週，那是這份資料天生的長度；匯入的深歷史是例外，
+      不是常態，而圖的預設不該照例外設計。
+    * 260 個點的折線在 SVG 裡是 32 KB，兩張就 64 KB——一張完整版個股頁的五分之一。
+
+    匯進來的東西仍然完整存著，也仍然完整列在表上（往下捲得到），所以「丟掉買來的
+    東西」這件事沒有發生：改的是預設畫多長。
     """
     from twsix.report.sections import HOLDER_WEEKS, holders
 
-    assert HOLDER_WEEKS >= 258
+    assert HOLDER_WEEKS == 52
 
     view = holders(_csv(HOLDERS).grid)
+    assert len(view.weeks) > 250, "匯進來的深歷史要留著"
     labels = view.figures["big"]
-    assert "21W36" in labels                    # 五年前那一週有畫上去
-    assert "26W36" in labels
+    assert "26W36" in labels                    # 最近那一週在圖上
+    assert "21W36" not in labels                # 五年前那一週不在圖上
 
 
 # ---------------------------------------------------------------------------

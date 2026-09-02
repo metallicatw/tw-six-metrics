@@ -249,20 +249,25 @@ def test_the_river_is_drawn_from_weekly_closes_when_they_are_there():
     series — that part never needed weeks — so the zone assertions above hold
     either way, and this is only about whether the picture exists.
     """
+    from twsix.ingest.weekly_prices import DEFAULT_YEARS  # noqa: PLC0415
+
     page, _ = _page()
-    assert page.river.weeks > 300
+    assert page.river.weeks > 52 * (DEFAULT_YEARS - 1)
     assert "river-fig" in page.river.figure
     assert "本益比河流圖" in page.river.figure
     assert "<details" in page.river.figure  # numbers, not only a picture
 
 
-def test_the_river_window_is_seven_years_not_the_whole_history():
+def test_the_river_window_is_five_years_not_the_whole_history():
     """The mirror serves 1347 weeks back to 2000; plotting all of them lies.
 
     5439 spent twenty years under 60 and the last three above 200, so the full
     series flattens two decades into the bottom rule and squeezes the part
-    worth reading into the right-hand eighth.  〔河流圖〕's own combo box
-    defaults to seven years back; that is the window.
+    worth reading into the right-hand eighth.
+
+    七年（〔河流圖〕combo box 的預設）縮成五年是量出來的：一張完整版個股頁 344 KB
+    裡 SVG 佔 199 KB，河流圖一張就 58 KB——每一週一個點。五年 260 點少掉三成，而
+    它要回答的「現在站在哪一區」，五年已經跨過一輪多空。資料照舊完整存。
     """
     from twsix.ingest.weekly_prices import DEFAULT_YEARS
 

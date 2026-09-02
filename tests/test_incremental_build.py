@@ -153,11 +153,19 @@ def test_the_fetch_stamp_is_read_from_disk_not_copied_from_the_last_build():
     assert row[5].startswith("2026-09-03T"), "沿用的那一頁把時間戳弄丟了"
 
 
-def test_the_interactive_path_does_not_pay_to_save_the_cache():
-    """存一份 66 MB 的快取要十幾秒，而「加一檔個股」那條路上的每一秒都是使用者
-    盯著螢幕在等的。取回照舊（那是增量建站的前提），存回交給每天跑六次的排程。"""
+def test_the_interactive_path_saves_the_cache_after_it_has_published():
+    """存快取要十幾秒，但那十幾秒不必落在使用者身上。
+
+    跳過不存不是「省」，是「欠」：快取裡的 site/ 越舊，下一次增量建站要重畫的
+    越多。而使用者等的是 CDN 換好——那件事在發布那一步就結束了，之後 runner 做
+    什麼都不影響他。所以存，但放在發布之後。
+    """
     action = (ROOT / ".github/actions/build-site/action.yml").read_text("utf-8")
-    assert "save_cache" in action
     assert "inputs.save_cache == 'true'" in action
+
     stock = (ROOT / ".github/workflows/stock.yml").read_text("utf-8")
-    assert 'save_cache: "false"' in stock
+    assert 'save_cache: "false"' in stock, "建站那一步裡不存"
+    assert "actions/cache/save@v4" in stock, "但發布之後要存"
+    assert stock.index("deploy-pages") < stock.index("actions/cache/save@v4"), (
+        "存快取排在發布前面，等於把十幾秒放回使用者的等待裡"
+    )
