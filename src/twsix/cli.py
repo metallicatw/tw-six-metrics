@@ -591,6 +591,19 @@ def cmd_fresh(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _merged(out_dir: Path, sheet: str, grid: list[list[str]]) -> list[list[str]]:
+    """把剛抓回來的和手上那一份合起來。
+
+    券商鏡像給的是滑動視窗（〔ISQ〕只有八季），以前每次抓取整張覆蓋，於是滾出
+    視窗的期別就永遠不見了——「歷史抓進來就是資料庫」這句話，程式其實只做到一半。
+
+    合不起來就用新的那一份：歷史少一截，比一張拼錯的表安全得多。
+    """
+    from .ingest.merge_sheets import merge  # noqa: PLC0415
+
+    return merge(sheet, sheet_store.read_grid(out_dir, sheet), grid)
+
+
 def cmd_fetch_stock(args: argparse.Namespace) -> int:
     """單檔查詢：抓一支股票的九張報表，存成可離線重讀的格線.
 
@@ -646,8 +659,10 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
     skipped: list[str] = []
     if not args.sheet and not getattr(args, "full", False):
         from .ingest.cadence import should_fetch  # noqa: PLC0415
-        from .store import sheets as sheet_store  # noqa: PLC0415
 
+        # sheet_store 是模組層就 import 好的；在這裡再 import 一次會讓它變成整個
+        # 函式的區域變數，於是走 --full 這條路（跳過這一段）的時候會炸成
+        # UnboundLocalError。踩過一次。
         have = sheet_store.read_all(out_dir)
         today = datetime.now(_TAIPEI).date()
         keep: list[str] = []
@@ -702,7 +717,7 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
             print(f"  {name:<8} 失敗：{exc}", file=sys.stderr)
             failures += 1
             continue
-        target = sheet_store.write_grid(out_dir, name, grid)
+        target = sheet_store.write_grid(out_dir, name, _merged(out_dir, name, grid))
         saved += 1
         print(f"  {name:<8} {len(grid):>4} 列 -> {target}")
 
@@ -756,6 +771,7 @@ def _fetch_extras(http, stock: str, out_dir: Path, offline: bool) -> int:
     failures = 0
 
     def save(sheet: str, grid: list[list[str]]) -> None:
+        grid = _merged(out_dir, sheet, grid)
         target = sheet_store.write_grid(out_dir, sheet, grid)
         print(f"  {sheet:<8} {len(grid):>4} 列 -> {target}")
 
