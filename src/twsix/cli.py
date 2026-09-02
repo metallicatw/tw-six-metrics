@@ -22,6 +22,7 @@ from typing import Any
 
 from .config import REPO_ROOT, Settings
 from .models import INDICATOR_LABELS, INDICATOR_ORDER
+from .store import sheets as sheet_store
 from .store.snapshots import RATING_COLUMNS, Manifest, Store, rating_rows
 
 EXIT_OK = 0
@@ -617,10 +618,7 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
             print(f"  {name:<8} 失敗：{exc}", file=sys.stderr)
             failures += 1
             continue
-        target = out_dir / f"{name}.json"
-        target.write_text(
-            json.dumps(grid, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
-        )
+        target = sheet_store.write_grid(out_dir, name, grid)
         saved += 1
         print(f"  {name:<8} {len(grid):>4} 列 -> {target}")
 
@@ -675,10 +673,7 @@ def _fetch_extras(http, stock: str, out_dir: Path, offline: bool) -> int:
     failures = 0
 
     def save(sheet: str, grid: list[list[str]]) -> None:
-        target = out_dir / f"{sheet}.json"
-        target.write_text(
-            json.dumps(grid, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
-        )
+        target = sheet_store.write_grid(out_dir, sheet, grid)
         print(f"  {sheet:<8} {len(grid):>4} 列 -> {target}")
 
     # -- 股價(週) ---------------------------------------------------------
@@ -720,12 +715,7 @@ def _fetched_grids(root: Path, stock: str):
     from .ingest.derive import enrich
 
     base = root / "sheets" / stock
-    if not base.is_dir():
-        return None
-    grids = {
-        p.stem: json.loads(p.read_text(encoding="utf-8"))
-        for p in sorted(base.glob("*.json"))
-    }
+    grids = sheet_store.read_all(base)
     return enrich(grids, stock) if grids else None
 
 
@@ -788,12 +778,7 @@ def cmd_value(args: argparse.Namespace) -> int:
         if not base.is_dir():
             print(f"找不到樣本 {base}", file=sys.stderr)
             return EXIT_FAIL
-        reader = GridReader(
-            {
-                p.stem: json.loads(p.read_text(encoding="utf-8"))
-                for p in sorted(base.glob("*.json"))
-            }
-        )
+        reader = GridReader(sheet_store.read_all(base))
         inp = read_valuation_input(
             reader, stock_id=args.stock or args.golden, as_of=args.as_of or ""
         )
@@ -1321,17 +1306,9 @@ def _fold_ownership(args: argparse.Namespace, stock: str) -> None:
     ):
         if not fresh:
             continue
-        target = data_dir / "sheets" / stock / f"{sheet}.json"
-        existing = []
-        if target.exists():
-            try:
-                existing = json.loads(target.read_text("utf-8"))
-            except ValueError:
-                existing = []
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(
-            json.dumps(merge(existing, fresh), ensure_ascii=False), encoding="utf-8"
-        )
+        base = data_dir / "sheets" / stock
+        existing = sheet_store.read_grid(base, sheet) or []
+        target = sheet_store.write_grid(base, sheet, merge(existing, fresh))
 
 
 def cmd_backfill(args: argparse.Namespace) -> int:
@@ -1419,24 +1396,46 @@ def stale_codes(root: Path, *, universe: set[str] | None = None) -> list[tuple[s
     return out
 
 
+def sheetless_codes(root: Path, *, universe: set[str] | None = None) -> list[str]:
+    """清單上有、但 `data/sheets/` 裡沒有原始分頁的股票。
+
+    這一批的症狀是「評等是新的，但點進去只有〔六大財務指標評等〕一頁」——補課的
+    第一版抓完就把分頁刪了，那 107 檔就長這樣。它們的期別已經是最新的，所以
+    `stale_codes` 看不到它們；沒有這條，它們會永遠停在一頁。
+    """
+    sheets = root / "sheets"
+    codes = {
+        r.get("stock_id", "")
+        for r in Store(root).read("ratings")
+        if r.get("period_index") == "1"
+    }
+    codes.discard("")
+    return sorted(
+        code
+        for code in codes
+        if (universe is None or code in universe)
+        and not any((sheets / code).glob("*.json*"))
+    )
+
+
 def cmd_refresh(args: argparse.Namespace) -> int:
-    """一批一批把清單上過期的評等重算，但**不留下 205 KB 的個股快取**。
+    """一批一批把清單上過期的評等重算，**並且把原始分頁留下來**。
 
-    為什麼不直接跑 `twsix report`：那個指令會把十六張分頁寫進
-    `data/sheets/<代號>/`，一檔 205 KB。1,558 檔就是 **319 MB** 進版控——正是
-    〈架構檢討〉裡點名的那條成長路徑。而清單要的只是六個指標的評分，個股快取
-    只有在那一檔真的有人要看個股頁的時候才值得留。
+    第一版是抓進暫存目錄、算完評等就刪掉——理由是十六張分頁未壓縮每檔 256 KB，
+    1,741 檔就是 446 MB 進版控。代價是那些股票只有〔六大財務指標評等〕一頁：
+    另外三頁（評價簡表、EPS預估與估價、殖利率估價）需要原始分頁當原料，刪掉了
+    就生不出來。
 
-    所以這裡把報表抓進一個暫存目錄，算完評等、把那一列寫回 `data/ratings.csv`，
-    然後把暫存目錄刪掉。留下來的差異只有清單那幾列——一次補 50 檔的 commit
-    大約幾十 KB，而不是 10 MB。
+    改法不是「少存一點」，是**壓縮**：gzip 之後每檔約 42 KB，全市場約 73 MB。
+    留原始分頁而不是只留四頁用得到的數字（那樣只要 10~17 MB），是因為原始分頁
+    是來源層——之後想算的任何東西都不必再跟鏡像站要一次。
+
+    順便抓〔年度交易資訊〕（每檔多兩個請求，走證交所與櫃買）。沒有它，本益比
+    區間與殖利率估價這兩頁會是空的，等於四頁裡有兩頁只有骨架。
 
     一檔失敗不中斷整批，理由和 `twsix fetch` 那次一樣：抓到幾檔就是幾檔，
     下一批會再遇到它。
     """
-    import shutil  # noqa: PLC0415
-    import tempfile  # noqa: PLC0415
-
     settings = Settings.load(args.config)
     from .ingest.market import MarketData  # noqa: PLC0415
     from .ingest.workbook import GridsSource  # noqa: PLC0415
@@ -1449,8 +1448,15 @@ def cmd_refresh(args: argparse.Namespace) -> int:
     else:
         universe = None if market is None else set(market.codes())
         queue = stale_codes(root, universe=universe)
+        # 過期的先補完，再來是「評等新、但沒有分頁」的（點進去只有一頁），
+        # 最後才是新上市的：螢幕上錯的東西 > 只有半套的 > 還沒出現的。
+        seen = {code for code, _ in queue}
+        queue += [
+            (code, "缺分頁")
+            for code in sheetless_codes(root, universe=universe)
+            if code not in seen
+        ]
         if market is not None:
-            # 過期的先補完，才輪到新上市的：螢幕上錯的東西，比缺的東西急。
             queue += [(code, "新上市") for code in new_listings(root, market)]
     known = {r.get("stock_id", "") for r in Store(root).read("ratings")}
     total = len(queue)
@@ -1460,8 +1466,7 @@ def cmd_refresh(args: argparse.Namespace) -> int:
         print("清單上沒有落後的股票，不需要補課")
         return EXIT_OK
 
-    scratch = Path(args.scratch) if args.scratch else Path(tempfile.mkdtemp(prefix="twsix-refresh-"))
-    print(f"待補 {total} 檔，這一批 {len(queue)} 檔（暫存於 {scratch}）")
+    print(f"待補 {total} 檔，這一批 {len(queue)} 檔")
 
     done: list[str] = []
     failed: list[str] = []
@@ -1471,13 +1476,20 @@ def cmd_refresh(args: argparse.Namespace) -> int:
             argparse.Namespace(
                 config=args.config, stock=code, sheet=None, host=args.host,
                 save_html=None, from_html=None, retries=args.retries,
-                out=str(scratch), fresh=True,
+                out=str(root), fresh=True,
             )
         )
         if rc != EXIT_OK:
             failed.append(f"{code}：報表沒抓齊")
             continue
-        grids = _fetched_grids(scratch, code)
+        # 年度交易資訊來自交易所而不是鏡像站，少了它估值那兩頁沒有本益比區間。
+        # 失敗只是警告：另外八節仍然站得住。
+        cmd_fetch_yearly(
+            argparse.Namespace(
+                config=args.config, stock=code, save_raw=None, out=str(root),
+            )
+        )
+        grids = _fetched_grids(root, code)
         if grids is None:
             failed.append(f"{code}：抓完了卻讀不回來")
             continue
@@ -1497,13 +1509,37 @@ def cmd_refresh(args: argparse.Namespace) -> int:
             }
         _store_rating(root, rating, meta=meta)
         done.append(code)
-        # 暫存的十六張分頁到這裡就沒有用了。留著它們就是 319 MB 的那條路。
-        shutil.rmtree(scratch / "sheets" / code, ignore_errors=True)
 
     print(f"\n補好 {len(done)} 檔，失敗 {len(failed)} 檔，還剩 {total - len(done)} 檔")
     for line in failed:
         print(f"::warning::補課失敗（其餘照常寫回）：{line}")
     return EXIT_OK if done or not failed else EXIT_FAIL
+
+
+def cmd_compact(args: argparse.Namespace) -> int:
+    """把既有的未壓縮分頁換成 `.json.gz`。
+
+    一次性的搬家：repo 裡原本那 184 檔是未壓縮寫下的，37 MB。壓縮之後約 8 MB，
+    而讀取端兩種格式都認得，所以搬與不搬都不會壞——搬只是為了不要讓同一批資料
+    用兩種大小躺在同一個目錄裡。
+    """
+    from .store import sheets as sheet_store  # noqa: PLC0415
+
+    settings = Settings.load(args.config)
+    root = Path(args.data or settings.data_dir) / "sheets"
+    if not root.is_dir():
+        print(f"{root} 不存在", file=sys.stderr)
+        return EXIT_FAIL
+    stocks = 0
+    total = 0
+    for folder in sorted(p for p in root.iterdir() if p.is_dir()):
+        changed = sheet_store.compact(folder)
+        if changed:
+            stocks += 1
+            total += len(changed)
+            print(f"  {folder.name}　{len(changed)} 張")
+    print(f"壓縮了 {stocks} 檔、{total} 張分頁")
+    return EXIT_OK
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
@@ -1584,17 +1620,11 @@ def _save_table(sheets_dir: Path, table: Any, code: str = "") -> None:
     import json
 
     sheets_dir.mkdir(parents=True, exist_ok=True)
-    target = sheets_dir / f"{table.sheet}.json"
-    existing: list[list[str]] = []
-    if target.exists():
-        try:
-            existing = json.loads(target.read_text(encoding="utf-8"))
-        except ValueError:
-            existing = []
+    existing: list[list[str]] = sheet_store.read_grid(sheets_dir, table.sheet) or []
     from .ingest.tdcc import merge
 
     grid = merge(existing, table.grid) if existing else table.grid
-    target.write_text(json.dumps(grid, ensure_ascii=False), encoding="utf-8")
+    target = sheet_store.write_grid(sheets_dir, table.sheet, grid)
     print(f"  匯入 {code or sheets_dir.name} {table.sheet}："
           f"{len(table.rows)} 列 × {len(table.columns)} 欄"
           f"　-> {target}（合併後 {len(grid) - 1} 列）")
@@ -1668,13 +1698,8 @@ def cmd_deep(args: argparse.Namespace) -> int:
         names.setdefault(row.get("stock_id", ""), row.get("name", ""))
 
     def depth(code: str, sheet: str) -> int:
-        target = sheets / code / f"{sheet}.json"
-        if not target.exists():
-            return 0
-        try:
-            return max(len(json.loads(target.read_text(encoding="utf-8"))) - 1, 0)
-        except ValueError:
-            return 0
+        grid = sheet_store.read_grid(sheets / code, sheet)
+        return max(len(grid) - 1, 0) if grid else 0
 
     watched = sorted(d.name for d in sheets.iterdir() if d.is_dir() and d.name.isdigit())
     if not watched:
@@ -1963,18 +1988,11 @@ def cmd_fetch_ownership(args: argparse.Namespace) -> int:
         ):
             if not fresh:
                 continue
-            target = sheets / code / f"{sheet}.json"
-            existing = []
-            if target.exists():
-                try:
-                    existing = json.loads(target.read_text("utf-8"))
-                except ValueError:
-                    existing = []
+            base = sheets / code
+            existing = sheet_store.read_grid(base, sheet) or []
             # 既有的可能是使用者從 Goodinfo 匯入的長歷史；官方資料補在它前面，
             # 同一期以官方為準。欄名一致，所以這一步不需要任何轉換。
-            grid = merge(existing, fresh)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(json.dumps(grid, ensure_ascii=False), encoding="utf-8")
+            target = sheet_store.write_grid(base, sheet, merge(existing, fresh))
             touched += 1
     if codes:
         print(f"  更新 {touched} 張個股表（{len(codes)} 檔）")
@@ -2032,10 +2050,7 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
 
     out_dir = Path(args.out or settings.data_dir) / "sheets" / args.stock
     out_dir.mkdir(parents=True, exist_ok=True)
-    target = out_dir / f"{SHEET}.json"
-    target.write_text(
-        json.dumps(grid, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
-    )
+    target = sheet_store.write_grid(out_dir, SHEET, grid)
     years = [row[0] for row in grid if row and row[0]]
     where = "、".join({"twse": "證交所", "tpex": "櫃買"}.get(s, s) for s in sources)
     print(
@@ -2198,12 +2213,17 @@ def build_parser() -> argparse.ArgumentParser:
     rf.add_argument("--codes", help="直接指定要補的代號，逗號分隔")
     rf.add_argument("--host", help="優先使用的券商站台")
     rf.add_argument("--retries", type=int, default=1, help="每個站台重試次數")
-    rf.add_argument("--scratch", help="暫存目錄（預設用系統暫存區，跑完就刪）")
     rf.add_argument(
         "--any-code", dest="any_code", action="store_true",
         help="不先跟官方名單交集（預設會跳過已下市的代號）",
     )
     rf.set_defaults(func=cmd_refresh)
+
+    ck = sub.add_parser(
+        "compact-sheets", help="把既有未壓縮的個股分頁換成 .json.gz（一次性搬家）"
+    )
+    ck.add_argument("--data", help="資料目錄")
+    ck.set_defaults(func=cmd_compact)
 
     pg = sub.add_parser("page", help="個股四頁：評價簡表／六大／EPS預估與估價／殖利率估價")
     pg.add_argument("stock", help="股票代號")
