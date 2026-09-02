@@ -3,7 +3,7 @@
    那一行 60 個位元組，換掉 20 KB 的複本。 */
 /* 全站個股搜尋。
  *
- * search.json 是 [代號, 名稱, 產業, 綜合評分, 完整頁的更新日期] 的陣列，順序固定，
+ * search.json 是 [代號, 名稱, 產業, 綜合評分, 完整頁的更新日期, 抓取時間戳] 的陣列，順序固定，
  * 只有這裡讀它。索引是延後載入的：訪客多半只是看清單頁，不該為了一個可能
  * 不會用到的搜尋框先付 85 KB。第一次聚焦才抓，抓過就留著。
  *
@@ -427,20 +427,68 @@
     setTimeout(function(){ watch(code, tries - 1, was, deadline); }, WATCH_MS);
   }
 
+  /* ---- 還需要抓嗎 ------------------------------------------------------
+     剛更新完再按一次，換回來的是一模一樣的資料——13 個請求、一分半鐘，而那一分
+     半鐘裡使用者是盯著螢幕在等的。所以在**送出之前**就先判斷。
+
+     界線是「最近一個交易日的 17:00（台北）」：收盤 13:30，但收盤行情約 14:00、
+     三大法人約 16:00 才上站，17:00 是安全的。上一次抓取晚於那個時刻，就代表中間
+     沒有任何一個來源更新過。
+
+     瀏覽器可能在任何時區，所以一律換算成絕對時刻比較：17:00 台北 = 09:00 UTC。
+     國定假日沒有處理（這份靜態網站裡沒有交易日曆），代價是假日按第二次會多抓
+     一次——那比漏掉一天的新資料安全。 */
+  function dataEpoch(){
+    var tp = new Date(Date.now() + 8*3600000);   /* 用 UTC getter 讀就是台北時間 */
+    var y = tp.getUTCFullYear(), m = tp.getUTCMonth(), d = tp.getUTCDate();
+    if(tp.getUTCHours() < 17) d -= 1;
+    var e = new Date(Date.UTC(y, m, d, 9, 0, 0));  /* 09:00 UTC = 17:00 台北 */
+    while(e.getUTCDay() === 0 || e.getUTCDay() === 6){ e.setUTCDate(e.getUTCDate() - 1); }
+    return e.getTime();
+  }
+  function stampOf(code){
+    if(!data) return '';
+    for(var i=0;i<data.length;i++) if(data[i][0] === code) return data[i][5] || '';
+    return '';
+  }
+  function isFresh(stamp){
+    if(!stamp || stamp.indexOf('T') < 0) return false;
+    var t = Date.parse(stamp);
+    return !isNaN(t) && t >= dataEpoch();
+  }
+  function prettyStamp(stamp){
+    return stamp.slice(0, 10) + ' ' + stamp.slice(11, 16);
+  }
+  /* 第一次按告訴他「已經是最新的」，第二次按就照做。那顆按鈕不必多一個選項，
+     而「我知道，我就是要重抓」也不必跑去 Actions 分頁。 */
+  var forced = {};
+
   /* ---- 直接跑 workflow ------------------------------------------------ */
   function runOnGithub(code){
     /* 索引是延後載入的，而頁首那顆按鈕不必先打字就能按——所以這裡可能還沒有
        index。先確定拿到手，才知道「按之前長什麼樣」，也才判斷得出好了沒。 */
     if(!data){ load().then(function(){ runOnGithub(code); }); return; }
     close();
+    var stamp = stampOf(code);
+    if(isFresh(stamp) && !forced[code]){
+      forced[code] = true;
+      beginPanel(code);
+      endPanel(code + ' 已經是最新的',
+               '最後抓取 ' + prettyStamp(stamp) + '，之後沒有任何一個來源更新過'
+               + '（收盤行情與三大法人下午才上站，界線抓在 17:00）。'
+               + '這次沒有送出抓取。真的要重抓的話，再按一次。', true);
+      return;
+    }
     beginPanel(code);
+    var force = !!forced[code] && isFresh(stamp);
     var was = currentMark(code);
     remember(code, was);
     step('送出 ' + code + ' 給 GitHub Actions…', 'send');
     var since = new Date(Date.now() - 60000).toISOString();
     gh('/actions/workflows/' + WORKFLOW + '/dispatches', {
       method: 'POST',
-      body: JSON.stringify({ref: 'main', inputs: {stock: code}})
+      body: JSON.stringify({ref: 'main',
+                            inputs: {stock: code, force: force ? 'true' : 'false'}})
     }).then(function(r){
       if(r.status === 204){
         step('已送出。等 GitHub 派 runner（這一段是排隊，不算在 workflow 的執行時間裡）', 'queue');

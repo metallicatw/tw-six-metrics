@@ -525,9 +525,63 @@ FETCHED_STAMP = "_fetched.txt"
 
 
 def _stamp_fetched(out_dir: Path) -> None:
+    """寫下「這一檔是什麼時候抓的」。
+
+    前十個字元仍然是 `YYYY-MM-DD`（清單上顯示的就是它），後面接上時間——因為
+    「今天抓過了」不足以回答「再按一次有沒有意義」：早上十點抓的和下午六點抓的
+    是兩份不同的資料。
+    """
     (out_dir / FETCHED_STAMP).write_text(
-        datetime.now(_TAIPEI).strftime("%Y-%m-%d") + "\n", encoding="utf-8"
+        datetime.now(_TAIPEI).isoformat(timespec="seconds") + "\n", encoding="utf-8"
     )
+
+
+def fetched_at(base: Path) -> datetime | None:
+    """這一檔最後一次抓取的時刻；沒有記號或壞掉就是 None。
+
+    舊格式只有日期（這個機制之前留下的），當成那天的 00:00——也就是「一定過期」，
+    第一次按下更新會真的去抓，之後就有完整的時間戳了。
+    """
+    stamp = base / FETCHED_STAMP
+    if not stamp.exists():
+        return None
+    text = stamp.read_text(encoding="utf-8").strip()
+    try:
+        when = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=_TAIPEI)
+
+
+def is_fresh(base: Path, now: datetime | None = None) -> bool:
+    """這一檔的資料，自從上次抓取之後有沒有可能變過。
+
+    沒有的話再抓一次就是白抓：13 個請求、一分半鐘，換回一份一模一樣的資料，
+    而那一分半鐘裡使用者是盯著螢幕在等的。
+    """
+    from .calendar_tw import data_epoch  # noqa: PLC0415
+
+    when = fetched_at(base)
+    if when is None:
+        return False
+    if not any(base.glob("ISQ.json*")):  # 連損益表都沒有，記號再新也不算數
+        return False
+    return when >= data_epoch(now or datetime.now(_TAIPEI))
+
+
+def cmd_fresh(args: argparse.Namespace) -> int:
+    """印出 `fresh` 或 `stale`——給排程在真的去抓之前問一句。"""
+    settings = Settings.load(args.config)
+    base = Path(args.data or settings.data_dir) / "sheets" / args.stock
+    when = fetched_at(base)
+    if is_fresh(base):
+        print("fresh")
+        print(f"  {args.stock} 的資料是最新的（最後抓取 {when:%Y-%m-%d %H:%M}）")
+    else:
+        print("stale")
+        print(f"  {args.stock} 需要更新"
+              + (f"（最後抓取 {when:%Y-%m-%d %H:%M}）" if when else "（還沒有抓過）"))
+    return EXIT_OK
 
 
 def cmd_fetch_stock(args: argparse.Namespace) -> int:
@@ -2265,6 +2319,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="不先跟官方名單交集（預設會跳過已下市的代號）",
     )
     rf.set_defaults(func=cmd_refresh)
+
+    fr = sub.add_parser(
+        "fresh",
+        help="這一檔需要重抓嗎？印出 fresh 或 stale（不連網）",
+    )
+    fr.add_argument("stock", help="股票代號")
+    fr.add_argument("--data", help="資料目錄")
+    fr.set_defaults(func=cmd_fresh)
 
     rs = sub.add_parser(
         "restate",

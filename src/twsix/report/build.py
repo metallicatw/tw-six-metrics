@@ -431,6 +431,7 @@ def build_site(
     #: 清單上原本標的是「完整」，但那個字只說了「有沒有」，沒說「什麼時候」——
     #: 而一份三個月前抓的完整報告，和昨天抓的完整報告，讀者要做的判斷不一樣。
     fetched_at: dict[str, str] = {}
+    fetched_ts: dict[str, str] = {}
     template = env.get_template("stock.html.j2")
     for stock_id, group in grouped.items():
         # A stock whose sheets were fetched gets the full page — the ten
@@ -450,6 +451,9 @@ def build_site(
                 when = _fetched_on(sheets_dir / stock_id)
                 if when:
                     fetched_at[stock_id] = when
+                ts = _fetched_ts(sheets_dir / stock_id)
+                if ts:
+                    fetched_ts[stock_id] = ts
                 continue
         group.sort(key=lambda x: int(x.get("period_index") or 0))
         head = group[0]
@@ -579,7 +583,7 @@ def build_site(
     written["about.html"] = 1
 
 
-    _write_search_index(out_dir, rows, rich_ids, fetched_at)
+    _write_search_index(out_dir, rows, rich_ids, fetched_at, fetched_ts)
     written["search.json"] = 1
 
     # 最後才寫，而且要在 .nojekyll 之前——它是「這一份網站已經完整」的signal，
@@ -607,10 +611,26 @@ def _fetched_on(base_dir: Path) -> str:
     if not stamp.exists():
         return ""
     text = stamp.read_text(encoding="utf-8").strip()
-    # 只認 YYYY-MM-DD。壞掉的內容當作沒有，而不是原樣印到頁面上。
-    if len(text) == 10 and text[4] == "-" and text[7] == "-":
-        return text
+    # 前十個字元要長得像 YYYY-MM-DD；後面可以接時間（記號在「同一天抓過還要不要
+    # 再抓」那件事之後改成完整時間戳）。壞掉的內容當作沒有，而不是原樣印出去。
+    head = text[:10]
+    if len(head) == 10 and head[4] == "-" and head[7] == "-":
+        return head
     return ""
+
+
+def _fetched_ts(base_dir: Path) -> str:
+    """抓取記號的完整時間戳（`2026-09-02T18:22:31+08:00`）。
+
+    舊格式只有日期，那回答不了「再按一次有沒有意義」，所以只認帶 `T` 的那種；
+    看到舊的就回空字串，等於「不知道時間」，於是按下去會真的重抓一次——一次
+    之後就有時間戳了。
+    """
+    stamp = base_dir / "_fetched.txt"
+    if not stamp.exists():
+        return ""
+    text = stamp.read_text(encoding="utf-8").strip()
+    return text if "T" in text and len(text) >= 19 else ""
 
 
 def _write_search_index(
@@ -618,6 +638,7 @@ def _write_search_index(
     rows: list[Row],
     rich_ids: set[str],
     fetched_at: dict[str, str] | None = None,
+    fetched_ts: dict[str, str] | None = None,
 ) -> None:
     """``search.json`` — what the header search box matches against.
 
@@ -647,6 +668,10 @@ def _write_search_index(
             # 是假的——所以讀它的那段 JS 原本的 if 判斷全部照舊，只是多了一個
             # 可以直接印出來的字串。沒有日期但有完整頁的，退回 "1"。
             (fetched_at or {}).get(r.stock_id) or (1 if r.stock_id in rich_ids else 0),
+            # 第六欄：完整的抓取時間戳。第五欄只有日期，而「今天抓過了」回答不了
+            # 「再按一次有沒有意義」——早上十點抓的和下午六點抓的是兩份不同的
+            # 資料。瀏覽器拿它來判斷要不要送出抓取，所以它必須帶到時分。
+            (fetched_ts or {}).get(r.stock_id, ""),
         ]
         for r in sorted(rows, key=lambda x: x.stock_id)
     ]

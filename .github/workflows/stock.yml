@@ -28,6 +28,11 @@ on:
         description: "股票代號（例如 2330）。一次一檔。"
         required: true
         type: string
+      force:
+        description: "就算今天已經抓過也重抓一次"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -94,7 +99,36 @@ jobs:
       #
       # report 會順便向集保補這一檔的 51 週股權歷史（第一次約一分鐘，之後只補
       # 新的那一週）。沒有那一年的走勢，〔大戶持股〕只有一個點。
+      # 先問一句：這一檔今天已經抓過了嗎？
+      #
+      # 使用者按第二次的時候，13 個請求、一分半鐘換回來的是一模一樣的資料——而
+      # 那一分半鐘裡他是盯著螢幕在等的。收盤 13:30、盤後資訊約 17:00 到齊，所以
+      # 「上一次抓取晚於最近一個交易日的 17:00」就代表沒有新東西可抓。
+      #
+      # 這一步不連網，只讀 data/sheets/<代號>/_fetched.txt。
+      - name: 需要抓嗎
+        id: need
+        run: |
+          code="${{ steps.pick.outputs.code }}"
+          if [ "${{ inputs.force }}" = "true" ]; then
+            echo "::notice::強制重抓 $code"
+            echo "stale=yes" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          out="$(twsix fresh "$code" || true)"
+          echo "$out"
+          case "$out" in
+            fresh*)
+              echo "::notice::$code 的資料已經是最新的，這次不抓（要強制重抓的話用 Actions 分頁的 Run workflow，勾 force）"
+              echo "stale=no" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "stale=yes" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - name: 測試並抓取
+        if: steps.need.outputs.stale == 'yes'
         run: |
           python -c "import twsix.cli"
           python scripts/run_tests.py > /tmp/tests.log 2>&1 &
@@ -114,6 +148,7 @@ jobs:
           exit "$fetch"
 
       - name: Commit
+        if: steps.need.outputs.stale == 'yes'
         run: |
           code="${{ steps.pick.outputs.code }}"
           git config user.name  "github-actions[bot]"
@@ -155,6 +190,7 @@ jobs:
       #
       # 測試上面剛跑過同一份程式碼，不重跑。
       - name: 建站
+        if: steps.need.outputs.stale == 'yes'
         uses: ./.github/actions/build-site
         with:
           test: "false"
@@ -162,6 +198,7 @@ jobs:
 
       - name: 發布
         id: deployment
+        if: steps.need.outputs.stale == 'yes'
         uses: actions/deploy-pages@v4
 
       - name: 說明
@@ -186,9 +223,16 @@ jobs:
           NUM: ${{ github.event.issue.number }}
         run: |
           url="https://metallicatw.github.io/tw-six-metrics/stock/$CODE.html"
-          gh issue comment "$NUM" --body "$CODE 抓好了，網站重建完成後在這裡：$url
+          if [ "${{ steps.need.outputs.stale }}" = "no" ]; then
+            gh issue comment "$NUM" --body "$CODE 的資料已經是最新的，這次沒有重抓：$url
 
-          （網頁上那一頁會自己跳過去，不用手動重新整理。）"
+            （收盤行情與三大法人下午才上站，所以界線抓在 17:00。真的要重抓的話，
+            在網頁上對同一檔再按一次「立即更新」。）"
+          else
+            gh issue comment "$NUM" --body "$CODE 抓好了，網站重建完成後在這裡：$url
+
+            （網頁上那一頁會自己跳過去，不用手動重新整理。）"
+          fi
           gh issue close "$NUM"
 
       - name: 失敗時也說一聲
