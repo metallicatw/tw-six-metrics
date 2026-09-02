@@ -51,8 +51,19 @@
       {# 面板蓋在搜尋結果上面。跑完會自己換頁，但失敗或逾時的時候它會一直留著，
          把搜尋框整個擋住——所以要給一個關得掉的辦法。 #}
       <button type="button" class="x" id="grab-x" aria-label="關閉進度">✕</button>
+      {# 三層：這在做什麼（含已經等了多久）、現在跑到哪一段、一條分段進度條。
+         條子本身 aria-hidden——它講的事情 .stage 那一行已經用文字講過一次了，
+         螢幕閱讀器不需要聽到十四個方塊。 #}
       <p class="head"></p>
-      <pre class="log" aria-live="polite"></pre>
+      <p class="stage" aria-live="polite"></p>
+      <div class="bar" aria-hidden="true"></div>
+      {# 每一步第幾秒。預設收起來——平常看的人只要知道「還在跑、跑到哪」，
+         但這段等待橫跨三個我們管不到的東西（GitHub 排隊、workflow、Pages CDN），
+         而「總共兩分鐘」沒辦法告訴任何人該修哪一段。出事的時候自動展開。 #}
+      <details class="detail">
+        <summary>詳細</summary>
+        <pre class="log" aria-live="polite"></pre>
+      </details>
     </div>
   </form>
   {# 動作，不是頁面，所以放在 nav 外面。只有線上版才需要——本機服務在跑的
