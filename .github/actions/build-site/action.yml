@@ -21,6 +21,11 @@ inputs:
   setup:
     description: 要不要裝 Python 與相依。呼叫端同一個 job 裡已經裝過就填 "false"。
     default: "true"
+  incremental:
+    description: >-
+      只重畫內容真的變了的那幾檔（拿內容指紋跟上一次建站比對）。要搭配把 site/
+      從快取取回來——沒有上一次的成果可以沿用時會自動整站重建，不會畫錯。
+    default: "false"
 
 runs:
   using: composite
@@ -50,9 +55,32 @@ runs:
       run: twsix verify
       shell: bash
 
+    # 上一次建好的網站。有它，這次就只重畫內容真的變了的那幾檔——整站重建是
+    # 1,742 頁、二十幾秒，而那二十幾秒是使用者按下按鈕之後真的在等的時間。
+    #
+    # 快取取不到（第一次跑、被淘汰、換分支）會自動整站重建，所以這一步失敗不會
+    # 讓網站少一頁；而「程式或樣板變了」也會強制整站重建，因為內容指紋只看資料。
+    - if: inputs.incremental == 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: site
+        key: site-${{ github.run_id }}
+        restore-keys: site-
+
     - name: 建立網站
-      run: twsix build
+      run: |
+        if [ "${{ inputs.incremental }}" = "true" ]; then
+          twsix build --incremental
+        else
+          twsix build
+        fi
       shell: bash
+
+    - if: inputs.incremental == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: site
+        key: site-${{ github.run_id }}
 
     - uses: actions/configure-pages@v5
     - uses: actions/upload-pages-artifact@v3

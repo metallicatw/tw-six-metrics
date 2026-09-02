@@ -171,6 +171,97 @@ def write_build_stamp(out_dir: Path, ident: str) -> None:
     )
 
 
+#: 增量建站要接續上一次，靠的是這個檔案。
+#:
+#: 每一頁的內容都算得出來，但「哪些股票有完整版」「各自是什麼時候抓的」這兩件事
+#: 是**渲染的副產品**——完整版能不能生出來，要真的跑過那一檔才知道（快取半份的
+#: 會退回表格版）。跳過渲染就不會知道，而清單上的標記需要它。
+#:
+#: 不進版控：和 site/ 一樣是衍生品，隨時能用一次完整建站重建。
+BUILD_STATE = "_state.json"
+
+
+def read_build_state(out_dir: Path) -> dict[str, Any] | None:
+    import json
+
+    target = out_dir / BUILD_STATE
+    if not target.exists():
+        return None
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def stock_signature(rows: list[dict[str, str]], sheet_dir: Path) -> str:
+    """一檔股票的「內容指紋」——分頁的位元組加上它在評等表裡的那幾列。
+
+    增量建站要回答的是「這一頁重畫出來會不一樣嗎」，而不是「git 有沒有 commit」。
+    用內容判斷比用 git 可靠：CI 的 checkout 是淺的（問不到舊 commit）、本機的改動
+    還沒 commit、而 mtime 在每次 checkout 都會被設成當下。
+
+    全市場 57 MB 算一輪約 0.5 秒，換掉 22 秒的整站重建。
+    """
+    h = hashlib.sha1(usedforsecurity=False)
+    for row in rows:
+        h.update(("\x1f".join(f"{k}={row.get(k, '')}" for k in sorted(row))).encode())
+        h.update(b"\x1e")
+    if sheet_dir.is_dir():
+        for f in sorted(sheet_dir.iterdir()):
+            if f.is_file():
+                h.update(f.name.encode())
+                h.update(f.read_bytes())
+    return h.hexdigest()[:16]
+
+
+@functools.lru_cache(maxsize=1)
+def renderer_signature() -> str:
+    """畫這些頁面的程式本身的指紋。
+
+    內容指紋只看**資料**，所以樣板改一行、CSS 換一個顏色，1,741 檔的指紋一個都
+    不會變——增量建站會若無其事地沿用上一批用舊樣板畫出來的頁面，而那正是「改了
+    卻沒生效」這種最耗時的除錯。所以程式一變就整站重建。
+    """
+    h = hashlib.sha1(usedforsecurity=False)
+    pkg = Path(__file__).resolve().parents[1]
+    for f in sorted(pkg.rglob("*")):
+        if f.is_file() and f.suffix in (".py", ".j2", ".css", ".js", ".html"):
+            h.update(str(f.relative_to(pkg)).encode())
+            h.update(f.read_bytes())
+    return h.hexdigest()[:16]
+
+
+def write_build_state(
+    out_dir: Path,
+    rich_ids: set[str],
+    fetched_at: dict[str, str],
+    fetched_ts: dict[str, str],
+    signatures: dict[str, str] | None = None,
+) -> None:
+    import json
+
+    (out_dir / BUILD_STATE).write_text(
+        json.dumps(
+            {
+                "rich": sorted(rich_ids),
+                "fetched": fetched_at,
+                "fetched_ts": fetched_ts,
+                # 每一檔的內容指紋。下一次建站拿它比對，一樣的就沿用上一次畫好
+                # 的那一頁。
+                "sig": signatures or {},
+                # 畫頁面的程式的指紋。它一變，所有頁面都要重畫——資料指紋看不到
+                # 樣板的改動。
+                "engine": renderer_signature(),
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
 def write_assets(out_dir: Path) -> None:
     target = out_dir / "assets"
     target.mkdir(parents=True, exist_ok=True)
@@ -383,7 +474,21 @@ def build_site(
     top_n: int = 50,
     valuations: list[dict[str, str]] | None = None,
     sheets_dir: Path | None = None,
+    only: set[str] | None = None,
+    incremental: bool = False,
 ) -> dict[str, int]:
+    """*only* 給定時，只重畫那幾檔的個股頁，其餘沿用上一次建站的成果。
+
+    抓一檔股票會改變兩件事：那一檔的頁，以及清單上它那一列。但整站重建要畫
+    1,742 頁、本機實測 23 秒，而那 23 秒是使用者按下「立即更新」之後真的在等的
+    時間的一大段——只為了另外 1,741 頁一個位元組都沒變。
+
+    清單、首頁、觀察清單、搜尋索引仍然每次重畫：它們本來就是「全部 1,741 列」
+    的一張表，而且各自只有一份。
+
+    上一次的 `site/` 不在（例如 CI 是全新 checkout）或沒有狀態檔的時候，自動退回
+    完整建站——少畫一頁的代價是網站上少一頁，那不能用猜的。
+    """
     env = _env(assets=True)
     rows = rows_from_store(records)
     valuation_by_stock = {
@@ -432,8 +537,46 @@ def build_site(
     #: 而一份三個月前抓的完整報告，和昨天抓的完整報告，讀者要做的判斷不一樣。
     fetched_at: dict[str, str] = {}
     fetched_ts: dict[str, str] = {}
+    # 增量：先算出每一檔的內容指紋，和上一次建站留下的比對，一樣的就沿用。
+    # 每次都算——包含整站重建的時候，因為那份指紋正是下一次增量建站的依據。
+    # 全市場 57 MB 約 0.5 秒。
+    sigs: dict[str, str] = {
+        code: stock_signature(
+            group, (sheets_dir / code) if sheets_dir else Path("/nonexistent")
+        )
+        for code, group in grouped.items()
+    }
+    previous = read_build_state(out_dir) if (incremental or only is not None) else None
+    old_sigs: dict[str, str] = (previous or {}).get("sig") or {}
+    if (incremental or only is not None) and previous is None:
+        print("  （沒有上一次建站的成果可以沿用，這次整站重建）")
+        only = None
+        incremental = False
+    elif incremental and previous.get("engine") != renderer_signature():
+        print("  （樣板或程式變了，這次整站重建）")
+        only = None
+        incremental = False
+    if incremental and only is None:
+        only = {code for code in grouped if sigs.get(code) != old_sigs.get(code)}
+        print(f"  增量建站：{len(only)} 檔的內容變了，其餘沿用上一次")
+    reused = 0
     template = env.get_template("stock.html.j2")
     for stock_id, group in grouped.items():
+        if only is not None and stock_id not in only:
+            # 沿用上一次畫好的那一頁——連同「它是不是完整版、什麼時候抓的」，
+            # 因為那兩件事是渲染的副產品，跳過渲染就問不出來。
+            if (out_dir / "stock" / f"{stock_id}.html").exists():
+                if stock_id in set(previous.get("rich") or ()):
+                    rich_ids.add(stock_id)
+                when = (previous.get("fetched") or {}).get(stock_id)
+                if when:
+                    fetched_at[stock_id] = when
+                ts = (previous.get("fetched_ts") or {}).get(stock_id)
+                if ts:
+                    fetched_ts[stock_id] = ts
+                reused += 1
+                count += 1
+                continue
         # A stock whose sheets were fetched gets the full page — the ten
         # sections, the river, the news — instead of the grade table.
         #
@@ -495,6 +638,8 @@ def build_site(
         ).dump(str(out_dir / "stock" / f"{stock_id}.html"))
         count += 1
     written["stock/*.html"] = count
+    if reused:
+        written["  其中沿用上一次"] = reused
     if rich_ids:
         written["  其中完整版"] = len(rich_ids)
 
@@ -591,6 +736,7 @@ def build_site(
     write_build_stamp(out_dir, ctx.build_id)
     written[BUILD_STAMP] = 1
 
+    write_build_state(out_dir, rich_ids, fetched_at, fetched_ts, signatures=sigs)
     (out_dir / ".nojekyll").write_text("", encoding="utf-8")
     return written
 

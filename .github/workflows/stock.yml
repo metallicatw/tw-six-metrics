@@ -195,6 +195,8 @@ jobs:
         with:
           test: "false"
           setup: "false"   # 上面已經 setup 過了
+          incremental: "true"
+
 
       - name: 發布
         id: deployment
