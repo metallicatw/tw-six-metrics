@@ -10,41 +10,21 @@
     "tpex_companies": 890,
     "twse_companies": 1094
   },
-  "generated_at": "2026-09-02T09:08:26+00:00",
+  "generated_at": "2026-09-02T09:18:08+00:00",
   "notes": [
     "baseline imported from 評等清單 v6.62 (published snapshot)"
   ],
   "schema_version": 1,
   "sources": [
     {
-      "name": "tpex_balance",
-      "period": "115Q2",
-      "rows": 883
-    },
-    {
-      "name": "tpex_companies",
-      "period": "",
-      "rows": 890
-    },
-    {
-      "name": "tpex_income",
-      "period": "115Q2",
-      "rows": 883
-    },
-    {
-      "name": "twse_balance",
-      "period": "115Q2",
-      "rows": 1048
-    },
-    {
       "name": "twse_companies",
       "period": "",
       "rows": 1094
     },
     {
-      "name": "twse_income",
-      "period": "115Q2",
-      "rows": 1048
+      "name": "tpex_companies",
+      "period": "",
+      "rows": 890
     },
     {
       "name": "twse_revenue",
@@ -55,6 +35,26 @@
       "name": "tpex_revenue",
       "period": "11507",
       "rows": 890
+    },
+    {
+      "name": "twse_income",
+      "period": "115Q2",
+      "rows": 1048
+    },
+    {
+      "name": "twse_balance",
+      "period": "115Q2",
+      "rows": 1048
+    },
+    {
+      "name": "tpex_income",
+      "period": "115Q2",
+      "rows": 883
+    },
+    {
+      "name": "tpex_balance",
+      "period": "115Q2",
+      "rows": 883
     }
   ]
 }
