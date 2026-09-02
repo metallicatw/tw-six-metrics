@@ -191,6 +191,11 @@ def cmd_build(args: argparse.Namespace) -> int:
 
     out = Path(args.out or settings.report.site_dir)
     valuations = store.read("valuations")
+    only = (
+        {c.strip() for c in args.only.split(",") if c.strip()}
+        if getattr(args, "only", None)
+        else None
+    )
     written = build_site(
         records,
         out,
@@ -199,6 +204,8 @@ def cmd_build(args: argparse.Namespace) -> int:
         repo=settings.report.repo,
         valuations=valuations,
         sheets_dir=store.root / "sheets",
+        only=only,
+        incremental=bool(getattr(args, "incremental", False)),
     )
     if not valuations:
         print("  （尚無 data/valuations.csv，個股頁不會顯示估值；見 twsix value）")
@@ -2190,6 +2197,16 @@ def build_parser() -> argparse.ArgumentParser:
     b = sub.add_parser("build", help="產生靜態網站")
     b.add_argument("--data", help="資料目錄")
     b.add_argument("--out", help="輸出目錄")
+    b.add_argument(
+        "--incremental", action="store_true",
+        help="只重畫內容真的變了的那幾檔（拿每一檔的內容指紋和上一次建站的比對）。"
+             "沒有上一次的成果可以沿用就自動整站重建。",
+    )
+    b.add_argument(
+        "--only",
+        help="只重畫這幾檔的個股頁（逗號分隔），其餘沿用上一次建站的成果。"
+             "清單、首頁、搜尋索引仍然每次重畫。上一次的 site/ 不在就自動退回整站重建。",
+    )
     b.set_defaults(func=cmd_build)
 
     f = sub.add_parser("fetch", help="從官方來源抓取資料")

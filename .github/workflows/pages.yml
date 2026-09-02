@@ -48,6 +48,8 @@ jobs:
         with:
           ref: main
       - uses: ./.github/actions/build-site
+        with:
+          incremental: "true"
 
   deploy:
     needs: build

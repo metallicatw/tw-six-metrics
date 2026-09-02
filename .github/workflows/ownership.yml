@@ -103,6 +103,7 @@ jobs:
       - name: 建站
         uses: ./.github/actions/build-site
         with:
+          incremental: "true"
           test: "false"
           setup: "false"
 
