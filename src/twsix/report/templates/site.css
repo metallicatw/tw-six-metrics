@@ -394,8 +394,6 @@ details.chart-data .scroll{margin-top:8px;max-height:260px;overflow-y:auto}
 .criteria .warnings li{margin-top:4px}
 tr.here{background:var(--surface-2)}
 tr.here th{font-weight:700}
-  background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin-bottom:20px}
-  padding:2px 0;color:var(--ink-2)}
 @media(max-width:640px){svg.chart{height:200px}}
 @media(max-width:640px){.wrap{padding:0 14px 60px}}
 
@@ -462,18 +460,51 @@ details.methodology .note{margin:4px 0 0;font-size:12px;color:var(--muted);max-w
   margin:14px 0 10px}
 .calc-inputs label{display:flex;flex-direction:column;gap:4px;
   font-size:clamp(10.5px,1.8vw,12.5px);color:var(--ink-2);font-weight:600;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.calc-inputs .hint{font-weight:400;font-size:clamp(9px,1.4vw,11px);color:var(--muted);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  min-width:0}
+/* 欄名和提示同一列。提示放到下一列的話，有提示的三欄比沒提示的兩欄高一行，
+   五個輸入框的上緣就對不齊——而那條參差是整個區塊裡最先被看到的東西。 */
+.calc-inputs .lab{display:flex;align-items:baseline;gap:6px;min-width:0;
+  white-space:nowrap}
+.calc-inputs .lab .t{overflow:hidden;text-overflow:ellipsis}
+.calc-inputs .hint{margin-left:auto;flex:0 0 auto;font-weight:400;
+  font-size:clamp(9px,1.3vw,10.5px);color:var(--muted)}
 .calc-inputs input{padding:7px 8px;border:1px solid var(--rule);border-radius:5px;
   background:var(--ground);color:var(--ink);font:inherit;
   font-size:clamp(11.5px,1.6vw,14px);
   font-variant-numeric:tabular-nums;min-width:0;width:100%}
 .calc-inputs input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
-@media (max-width:560px){
-  .calc-inputs{grid-template-columns:1fr;gap:12px}
-  .calc-inputs label{white-space:normal}
-}
+/* 窄版的規則全部集中在檔案最後那一段 @container 裡——寫成 @container 而不是
+   @media，是為了讓「切換手機版」那顆按鈕真的有用：那顆按鈕只是把 .wrap 的寬度
+   釘窄，容器查詢就跟著生效，於是大螢幕上看到的窄版和手機上看到的是同一份版面，
+   不是另外維護的第二套。 */
+
+/* -- 兩種估價法 -----------------------------------------------------------
+   上下兩區的數字長得一模一樣，可信度卻完全不同：上面是引擎依規則算出的一個
+   答案，下面是讀者自己的假設。原本只用一條空白隔開，等於要人從上下文自己推。 */
+.way{margin:18px 0 0;border:1px solid var(--rule);border-left:5px solid var(--accent);
+  border-radius:6px;padding:2px 16px 16px;background:var(--surface)}
+.way2{border-left-color:var(--accent-2)}
+.way-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  margin:14px 0 4px;font-size:15px;color:var(--ink)}
+.way-h .n{display:inline-block;padding:2px 9px;border-radius:99px;
+  background:var(--accent);color:#fff;font-size:12px;font-weight:700;
+  letter-spacing:.03em}
+.way2 .way-h .n{background:var(--accent-2)}
+.way-h .sub{flex:1 1 100%;font-size:11.5px;font-weight:400;color:var(--muted)}
+.way>.calc{margin-top:10px;border:0;padding:0;background:none}
+
+/* 成長模型的說明。四個裸數字原本沒有一個字說它在做什麼。 */
+.growth-note{margin:14px 0 0;border:1px solid var(--rule);border-radius:6px;
+  background:var(--surface-2)}
+.growth-note>summary{padding:9px 14px;cursor:pointer;font-size:13px;font-weight:600;
+  color:var(--ink);list-style-position:inside}
+.growth-note>summary:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+.growth-note>*:not(summary){margin-left:14px;margin-right:14px}
+.growth-note>p:first-of-type{margin-top:10px}
+.growth-note .terms{margin:0 14px 10px;font-size:12.5px}
+.growth-note .terms dt{font-weight:700;color:var(--ink);margin-top:8px}
+.growth-note .terms dd{margin:2px 0 0;color:var(--ink-2);line-height:1.65}
+.growth-note table.mini{min-width:0}
 .calc-formula{margin:0 0 12px;font-size:12px;color:var(--muted);
   padding:8px 10px;border-left:3px solid var(--accent);background:var(--surface-2);
   border-radius:0 4px 4px 0;max-width:none}
@@ -598,3 +629,58 @@ table.basis-t th:nth-child(1),table.basis-t td:nth-child(1){width:8.5em}
 table.basis-t th:nth-child(2),table.basis-t td:nth-child(2){width:31%}
 table.basis-t td.f{font-weight:600;color:var(--ink)}
 table.basis-t td.q{font-variant-numeric:tabular-nums}
+
+
+/* -- 回到最上方 / 版面切換 ------------------------------------------------ */
+#totop{position:fixed;right:18px;bottom:18px;z-index:60;
+  width:42px;height:42px;border-radius:50%;border:1px solid var(--rule);
+  background:var(--surface);color:var(--ink-2);font-size:19px;line-height:1;
+  cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+#totop:hover{color:var(--accent-2);border-color:var(--accent-2)}
+#totop:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+#viewmode{margin-left:14px}
+
+/* -- 窄版 -----------------------------------------------------------------
+   用 @container 而不是 @media：這樣「切換手機版」那顆按鈕真的有用——它只是把
+   .wrap 釘窄，容器查詢就跟著生效。大螢幕上看到的窄版和手機上看到的是同一份
+   版面，不是另外維護的第二套；維護兩套版面的專案，壞掉的永遠是沒人在看的那一套。 */
+.wrap{container-type:inline-size;container-name:page}
+:root[data-view=mobile] .wrap,
+:root[data-view=mobile] header.top .in{max-width:430px}
+:root[data-view=mobile] body{background:var(--rule)}
+:root[data-view=mobile] .wrap{background:var(--ground);min-height:100vh}
+
+@container page (max-width:760px){
+  .calc-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* 標題那一列在窄版要能換行，不然欄名全變成省略號——一排讀不出名字的輸入框，
+     比堆疊還難用。 */
+  .calc-inputs .lab{white-space:normal}
+  .calc-inputs .hint{margin-left:6px}
+  .val dl{font-size:12.5px}
+  .way{padding:2px 11px 13px}
+  .way-h{font-size:14px}
+  h2{font-size:16px}
+  .ident.sticky h2{font-size:17px}
+  .ident .facts{gap:3px 12px;font-size:11.5px}
+  table.matrix thead th.num,table.matrix td{width:6.2em}
+  table.matrix th:first-child{width:6.6em}
+  table.matrix th.corner{height:46px}
+  th.corner span{font-size:10px}
+  .basis>.scroll,.basis>.warnings{margin-left:10px;margin-right:10px}
+  table.basis-t th:nth-child(2),table.basis-t td:nth-child(2){width:36%}
+}
+@container page (max-width:480px){
+  .calc-inputs{grid-template-columns:1fr;gap:12px}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mlegend{font-size:11px}
+  /* 四位數的目標價在 6.2em 裡還放得下，但擠三欄之後每欄只剩不到 5em；
+     讓矩陣自己橫向捲，而不是把數字折成兩行。 */
+  table.matrix thead th.num,table.matrix td{width:5.6em}
+  table.matrix{border-spacing:4px}
+}
+
+/* 市價旁邊的收盤日。斜體小字、不搶主數字，但一定要在同一個視線裡——整頁的估值
+   都掛在那個股價上，而一個沒有日期的股價看起來永遠像今天的。 */
+.asof{font-style:normal;font-size:10.5px;color:var(--muted);font-weight:400;
+  white-space:nowrap;margin-left:5px}
+.card .asof{margin-left:0}

@@ -59,6 +59,10 @@
      時候不必給權杖。 #}
   <p class="stamp">
     <button type="button" id="tokenlink" class="linkish" hidden>設定抓取權杖</button>
+    {# 手機上這個站預設就是窄版，但表格很寬，有時候讀者寧可縮小字捲著看完整的
+       欄位；在桌機上反過來，有人想預覽窄版長什麼樣。兩邊各有一個理由，所以給
+       一顆按鈕而不是替他決定。選擇存在這台瀏覽器裡。 #}
+    <button type="button" id="viewmode" class="linkish" aria-pressed="false">切換手機版</button>
   </p>
   {# 這一行原本擠了四件事：產生時間、檔數、財報季別、營收月份。後面三件在別的
      地方各自說過一次了——檔數與季別在〔評等清單〕的第一句，落後多久在下面那條
@@ -80,6 +84,10 @@
   由公開資料自動產生，僅供研究參考，不構成投資建議。
 </footer>
 </div>
+{# 個股頁十個分頁，每個分頁自己就有好幾螢幕；捲到底想換分頁，得一路捲回去。
+   一顆固定在右下角的按鈕解決這件事，而且只在真的捲下去之後才出現——沒捲的時候
+   它只是擋住內容。 #}
+<button type="button" id="totop" hidden aria-label="回到頁面最上方" title="回到最上方">↑</button>
 <script>window.TWSIX={rel:{{ rel|tojson }},repo:{{ (repo or '')|tojson }},built:{{ (build_id or '')|tojson }}};</script>
 {% if assets %}<script src="{{ rel }}assets/site.js?v={{ asset_v }}" defer></script>
 {% else %}<script>{{ site_js }}</script>{% endif %}

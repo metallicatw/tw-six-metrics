@@ -668,6 +668,12 @@
   try{ seed = JSON.parse(box.getAttribute('data-seed') || '{}'); }catch(e){ return; }
   var price = parseFloat(box.getAttribute('data-price'));
   if(isNaN(price)) price = null;
+  /* 現價是哪一天的收盤價。矩陣裡每一格的報酬與風險都是拿它算的，所以每一次
+     提到它都要帶日期——一個沒有日期的股價看起來永遠像今天的。 */
+  var priceDate = box.getAttribute('data-price-date') || '';
+  function priceLabel(){
+    return price.toFixed(2) + (priceDate ? '（' + priceDate + ' 收盤）' : '');
+  }
 
   var el = {
     rev: document.getElementById('c-rev'), sh: document.getElementById('c-sh'),
@@ -752,7 +758,7 @@
     var up = target / price - 1;
     var txt = (up >= 0 ? '+' : '−') + (Math.abs(up) * 100).toFixed(1) + '%';
     return { text: txt, title: (up >= 0 ? '預期報酬 ' : '預期風險 ') + txt +
-             '（相對現價 ' + price.toFixed(2) + '）' };
+             '（相對現價 ' + priceLabel() + '）' };
   }
 
   function legend(fam, lo, hi, fmt){
@@ -762,7 +768,7 @@
       }).join('') + '</span>' +
       '<span>' + fmt(lo) + ' → ' + fmt(hi) + '</span>' +
       (price === null ? '' :
-       '<span>　每格第二行是相對現價 ' + price.toFixed(2) +
+       '<span>　每格第二行是相對現價 ' + priceLabel() +
        ' 的預期報酬（＋）或預期風險（−）</span>') + '</p>';
   }
 
@@ -844,4 +850,56 @@
   fill(defaults());
   basis();
   run();
+})();
+
+
+/* =========================================================================
+ * 回到最上方，與電腦版／手機版切換
+ *
+ * 兩顆按鈕放在一起，因為它們是同一件事的兩面：這個站在小螢幕上要能讀，在大
+ * 螢幕上要能一次看完一張寬表，而讀者比我們更清楚自己現在要哪一種。
+ * ========================================================================= */
+(function(){
+  var top = document.getElementById('totop');
+  if(top){
+    /* 只在真的捲下去之後才出現。一直掛在那裡的話，它在沒捲的畫面上只是一塊
+       擋住內容的東西。 */
+    var show = function(){
+      top.hidden = (window.pageYOffset || document.documentElement.scrollTop) < 400;
+    };
+    window.addEventListener('scroll', show, { passive: true });
+    show();
+    top.addEventListener('click', function(){
+      /* 尊重「減少動態效果」的系統設定：平滑捲動對前庭敏感的人是不舒服的。 */
+      var soft = !window.matchMedia ||
+                 !matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: soft ? 'smooth' : 'auto' });
+    });
+  }
+
+  var vm = document.getElementById('viewmode');
+  if(vm){
+    var KEY = 'twsix.viewmode';
+    var read = function(){
+      try{ return localStorage.getItem(KEY) || ''; }catch(e){ return ''; }
+    };
+    var write = function(v){
+      try{ v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); }
+      catch(e){}
+    };
+    /* 「手機版」不是另一份 HTML，是把版面寬度釘成窄的——同一份頁面、同一組
+       樣式，只是走 CSS 裡本來就有的那條窄螢幕分支。維護兩份版面才是真正會
+       壞掉的做法。 */
+    var apply = function(mode){
+      document.documentElement.setAttribute('data-view', mode || 'auto');
+      var narrow = mode === 'mobile';
+      vm.textContent = narrow ? '切換電腦版' : '切換手機版';
+      vm.setAttribute('aria-pressed', narrow ? 'true' : 'false');
+    };
+    apply(read());
+    vm.addEventListener('click', function(){
+      var next = read() === 'mobile' ? '' : 'mobile';
+      write(next); apply(next);
+    });
+  }
 })();

@@ -226,3 +226,39 @@ def test_a_missing_sheet_is_named_rather_than_left_blank():
     assert any(not s["ok"] for s in page.sources)
     html = _render(page, Path("/tmp/twsix-test"))
     assert page.gaps["yield"] in html
+
+
+def test_the_market_price_carries_the_day_it_closed():
+    """整頁的估值——目標價、下檔價、報酬風險比——都是拿這個股價算的。
+
+    〔BASIC〕只印月/日，對一張每天開來看的活頁簿夠了；對一張會被存起來、三個月後
+    再打開的網頁不夠。年份用抓取當天補：交易日不可能在未來。
+    """
+    import datetime
+
+    from twsix.report.stock_page import price_date
+
+    class R:
+        def __init__(self, text: str):
+            self._t = text
+
+        def text(self, sheet, col, row):
+            return self._t if (sheet, col, row) == ("BASIC", "A", 4) else ""
+
+    day = datetime.date(2026, 9, 1)
+    assert price_date(R("最近交易日:08/28   市值單位:百萬"), day) == "2026.08.28"
+    assert price_date(R("最近交易日：8/28"), day) == "2026.08.28"
+    # 月份看起來超前今天的，是去年的——跨年那幾天最容易錯一整年。
+    assert price_date(R("最近交易日:12/30"), datetime.date(2026, 1, 5)) == "2025.12.30"
+    # 抓不到就留空。編一個日期出來，比沒有日期糟得多。
+    assert price_date(R("市值單位:百萬"), day) == ""
+    assert price_date(R("最近交易日:13/40"), day) == ""
+
+
+def test_the_page_shows_that_date_next_to_the_price(tmp_path=None):
+    import tempfile
+
+    page, _ = _page()
+    assert page.price_date, "個股頁沒有收盤日"
+    html = _render(page, tmp_path or Path(tempfile.mkdtemp()))
+    assert f'class="asof">{page.price_date} 收盤' in html

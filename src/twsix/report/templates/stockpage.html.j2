@@ -10,7 +10,8 @@
   <p class="facts">
     <span>財報 <b>{{ p.fiscal_quarter or "—" }}</b></span>
     <span>營收 <b>{{ p.revenue_month or "—" }}</b></span>
-    {%- if p.market_price %}<span>股價 <b>{{ "%.2f"|format(p.market_price) }}</b></span>{% endif %}
+    {%- if p.market_price %}<span>股價 <b>{{ "%.2f"|format(p.market_price) }}</b>
+      {%- if p.price_date %}<i class="asof">{{ p.price_date }} 收盤</i>{% endif %}</span>{% endif %}
     {%- if p.latest_composite is not none %}
     <span>綜合 <b>{{ "%.2f"|format(p.latest_composite) }}</b></span>
     {%- endif %}
@@ -50,9 +51,11 @@
     <b>{{ "%.2f"|format(p.latest_composite) if p.latest_composite is not none else "—" }}</b>
     <span>最新綜合評分</span>
   </div>
+  {# 市價要帶日期。整頁的估值——目標價、下檔價、報酬風險比——都是拿這個數字算的，
+     而一個沒有日期的股價，在一張存起來三個月後再打開的網頁上，看起來永遠像今天的。 #}
   <div class="card">
     <b>{{ "%.2f"|format(p.market_price) if p.market_price else "—" }}</b>
-    <span>市價</span>
+    <span>市價{% if p.price_date %}　<i class="asof">{{ p.price_date }} 收盤</i>{% endif %}</span>
   </div>
   <div class="card">
     <b>{{ p.pe.reward_risk if p.pe else "—" }}</b>
@@ -186,6 +189,14 @@
 <p class="stale">{{ p.gaps.forecast or p.gaps.pe }}——此區塊無法計算。</p>
 {% endif %}
 
+{# 這一頁上下其實是兩件事，而它們原本只用一條空白隔開：上半是「引擎依活頁簿的
+   規則算出的一個答案」，下半是「你自己的假設會得到什麼答案」。兩者的數字長得
+   一模一樣，可信度卻完全不同——所以要用標題和色塊明白地分開，而不是靠讀者
+   自己從上下文推。 #}
+<section class="way way1">
+<h4 class="way-h"><span class="n">估值方式一</span>依規則自動估算
+  <span class="sub">參數在 config/settings.toml，本檔實際代入的數字見下方說明</span></h4>
+
 {% if p.methodology %}
 {% set mo = p.methodology %}
 <details class="methodology">
@@ -279,6 +290,65 @@
 </div>
 {% endif %}
 
+{# 成長模型原本只有四個裸數字，沒有一個字說它在做什麼——而它問的問題和上面那
+   兩塊不一樣：本益比估價問「歷史上市場願意給幾倍」，成長模型問「這個成長速度
+   值幾倍」。兩個答案不一致，正是它存在的用處。 #}
+{% if p.growth %}
+<details class="growth-note">
+  <summary>成長模型在算什麼</summary>
+  <p>
+    上面兩塊都從「市場過去給這一檔幾倍本益比」出發。成長模型換一個問法：
+    <b>以這個成長速度，這一檔值幾倍本益比</b>——完全不看歷史股價。
+    兩邊的答案不一致時，那個差距本身就是資訊。
+  </p>
+  <dl class="terms">
+    <dt>預估本益比</dt>
+    <dd>市價 ÷ 預估 EPS。用的是預估 EPS 而不是近四季 EPS，所以它是「以今天的價格
+        買進、用明年的獲利計算」的倍數。</dd>
+    <dt>EPS 成長率</dt>
+    <dd>(預估 EPS − 近四季 EPS) ÷ ｜近四季 EPS｜。負的代表預估比現在差，
+        此時 PEG 與總報酬本益比都不給值——把負成長代進去會得到負的目標價，
+        那不是便宜，是模型跑到定義域外面。</dd>
+    <dt>PEG</dt>
+    <dd>預估本益比 ÷（EPS 成長率 × 100）。<b>1 是分水嶺</b>：小於 1 表示付出的
+        倍數低於成長速度，大於 1 表示付得比成長快。</dd>
+    <dt>總報酬本益比</dt>
+    <dd>(EPS 成長率 ＋ 平均殖利率) ÷ 預估本益比 × 100。PEG 只看成長，
+        對配息穩定但成長慢的公司不公平；把殖利率加進分子就補上這一塊。
+        <b>越大越好</b>，方向和 PEG 相反。</dd>
+  </dl>
+  {% if p.growth.peg_prices or p.growth.total_return_prices %}
+  <p class="muted">活頁簿把這兩個模型各換算成四檔目標價（成長率的 66% / 75% /
+    100% / 120%），保守到樂觀：</p>
+  <div class="scroll"><table class="mini">
+    <thead><tr><th>模型</th><th class="num">66%</th><th class="num">75%</th>
+      <th class="num">100%</th><th class="num">120%</th></tr></thead>
+    <tbody>
+      {% if p.growth.peg_prices %}
+      <tr><td>PEG 估價</td>
+        {% for lvl in (66, 75, 100, 120) %}
+        <td class="num">{{ p.growth.peg_prices.get(lvl) or '—' }}</td>
+        {% endfor %}
+      </tr>
+      {% endif %}
+      {% if p.growth.total_return_prices %}
+      <tr><td>總報酬估價</td>
+        {% for lvl in (66, 75, 100, 120) %}
+        <td class="num">{{ p.growth.total_return_prices.get(lvl) or '—' }}</td>
+        {% endfor %}
+      </tr>
+      {% endif %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  <p class="muted">
+    出處：〔EPS預估與估價〕AA:AD 欄與 X1:AC2。<b>活頁簿只給了公式和欄名，沒有
+    寫下文字說明</b>——上面這幾段是依那些公式寫的解讀，不是活頁簿的原話。
+    公式本身則是逐格對照過的。
+  </p>
+</details>
+{% endif %}
+
 {# 說明欄。預設收合——每天看的人不需要每天讀一次公式，但第一次看到「目標價
    392.82」的人一定會想問這個數字憑什麼。收合的 <details> 讓兩種人各取所需，
    而且它在頁面裡、不在 README 裡：出處要跟數字待在同一個畫面才有用。 #}
@@ -301,16 +371,21 @@
 {% endif %}
 
 {% if p.figures.pe_band %}{{ p.figures.pe_band|safe }}{% endif %}
+</section>
 
 {% if p.calc and p.calc.revenue and p.calc.shares %}
-{# ================= 目標價試算盤 =================
-   上面那幾格是「引擎依規則算出來的一個答案」。這一區是「你自己的假設會得到什麼
+{# ================= 估值方式二：目標價試算盤 =================
+   上面那一區是「引擎依規則算出來的一個答案」。這一區是「你自己的假設會得到什麼
    答案」——同一條公式，參數交給讀者。
 
    預設值不是憑空填的，每一個都說得出出處（見下方說明），而且和坊間工具對得起來。
    打開的時候看到的是這一檔的事實，改動之後看到的是你的假設。 #}
+<section class="way way2">
+<h4 class="way-h"><span class="n">估值方式二</span>自訂假設試算
+  <span class="sub">同一條公式，參數由你決定；改動不影響上面記錄的引擎結果</span></h4>
 <section class="calc" id="calc"
-         data-seed='{{ p.calc|tojson }}' data-price="{{ p.market_price or '' }}">
+         data-seed='{{ p.calc|tojson }}' data-price="{{ p.market_price or '' }}"
+         data-price-date="{{ p.price_date }}">
   <h4>目標價試算盤<span class="muted">　改任何一格，下面的矩陣立刻重算</span></h4>
 
   <p class="note" id="calc-basis"></p>
@@ -330,14 +405,21 @@
   </table></div>
   {% endif %}
 
+  {# 提示字串和欄名同一列。放在下一列的話，有提示的三欄比沒提示的兩欄高一行，
+     五個輸入框的上緣就對不齊——而那條參差是整個區塊裡最先被看到的東西。 #}
   <div class="calc-inputs">
-    <label>年營收（百萬元）<input type="number" id="c-rev" step="any"></label>
-    <label>股數（億股）<input type="number" id="c-sh" step="any"></label>
-    <label>預估營收成長率（%）<span class="hint">悲觀, 中性, 樂觀</span>
+    <label><span class="lab"><span class="t">年營收（百萬元）</span></span>
+      <input type="number" id="c-rev" step="any"></label>
+    <label><span class="lab"><span class="t">股數（億股）</span></span>
+      <input type="number" id="c-sh" step="any"></label>
+    <label><span class="lab"><span class="t">預估營收成長率（%）</span>
+      <span class="hint">悲觀,中性,樂觀</span></span>
       <input type="text" id="c-g" inputmode="decimal"></label>
-    <label>預估淨利率（%）<span class="hint">悲觀, 中性, 樂觀</span>
+    <label><span class="lab"><span class="t">預估淨利率（%）</span>
+      <span class="hint">悲觀,中性,樂觀</span></span>
       <input type="text" id="c-m" inputmode="decimal"></label>
-    <label>預估本益比 PE<span class="hint">每個 PE 一張目標價矩陣</span>
+    <label><span class="lab"><span class="t">預估本益比 PE</span>
+      <span class="hint">一個 PE 一張矩陣</span></span>
       <input type="text" id="c-pe" inputmode="decimal"></label>
   </div>
   <p class="calc-formula">
@@ -349,8 +431,10 @@
 
   <div id="calc-out"></div>
 </section>
+</section>
 {% endif %}
 
+{# 兩種估價法都以「報酬風險比」收尾，所以這一段留在底部，兩邊共用。 #}
 <div class="criteria">
   <h4>報酬風險比判斷準則<span class="muted">　總大EPS、PER 動態調整推估法</span></h4>
   <ol>
@@ -758,7 +842,22 @@
 (function(){
   var tabs=[].slice.call(document.querySelectorAll('[role=tab]'));
   if(!tabs.length) return;
-  function show(id, push){
+  /* 切過去之後要停在那一頁的頁首。
+     不捲的話，從第八個分頁切到第二個，畫面留在原來的捲動位置——那個位置在新的
+     分頁裡是中段、是某張圖的一半、或是根本超過整頁的長度而彈回底部。切分頁的
+     人要的是「從頭看這一頁」，每一次都是。
+
+     捲到釘住的那三列底下，不是捲到 0：股名、季別、分頁列是 sticky 的，捲到頁面
+     最頂端會讓標題正好被它們蓋住。 */
+  var ident = document.querySelector('.ident.sticky');
+  function toTop(){
+    var y = 0;
+    var wrap = document.querySelector('.wrap');
+    if(wrap) y = wrap.offsetTop;
+    if(ident) y = Math.max(0, ident.offsetTop);
+    window.scrollTo({ top: y, behavior: 'auto' });
+  }
+  function show(id, push, scroll){
     tabs.forEach(function(t){
       var on = t.id === 'tab-'+id;
       t.setAttribute('aria-selected', on ? 'true':'false');
@@ -767,10 +866,11 @@
       if(panel) panel.hidden = !on;
     });
     if(push && history.replaceState) history.replaceState(null,'','#'+id);
+    if(scroll) toTop();
   }
   tabs.forEach(function(t){
     t.addEventListener('click', function(){
-      show(t.id.slice(4), true);
+      show(t.id.slice(4), true, true);
       t.focus();
     });
     t.addEventListener('keydown', function(e){
@@ -781,11 +881,11 @@
       else if(e.key==='End') j=n-1;
       if(j===null) return;
       e.preventDefault();
-      tabs[j].focus(); show(tabs[j].id.slice(4), true);
+      tabs[j].focus(); show(tabs[j].id.slice(4), true, true);
     });
   });
   var want=(location.hash||'').slice(1);
-  if(want && document.getElementById('tab-'+want)) show(want, false);
+  if(want && document.getElementById('tab-'+want)) show(want, false, false);
 })();
 </script>
 {% endblock %}

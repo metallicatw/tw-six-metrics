@@ -967,3 +967,45 @@ def test_every_matrix_step_keeps_its_text_readable():
         for stop in (c1, c2):
             r = ratio(stop, ink)
             assert r >= 4.5, f"--m{fam}{step} 的 {stop} 配 {fg} 只有 {r:.2f}:1"
+
+
+def test_the_stylesheet_has_no_orphan_declaration_blocks():
+    """少了選擇器的宣告區塊，瀏覽器會直接跳過——不會壞掉，只會靜靜地什麼都不做。
+
+    這是真的發生過的：`.scenarios` 那兩條規則的選擇器在某次編輯裡被刪掉了，
+    兩行宣告留在原地當孤兒，撐了好幾個 commit 都沒人發現，因為畫面上「少了一個
+    本來就沒人在看的區塊」和「一切正常」長得一樣。
+
+    大括號配平抓得到這一類：孤兒宣告會多出一個 `}`。
+    """
+    css = (
+        Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.css"
+    ).read_text("utf-8")
+    depth = 0
+    for n, line in enumerate(css.split("\n"), 1):
+        depth += line.count("{") - line.count("}")
+        assert depth >= 0, f"第 {n} 行多了一個 }}：{line.strip()[:70]}"
+    assert depth == 0, f"少了 {depth} 個 }}"
+
+
+def test_the_narrow_layout_is_written_once_and_the_toggle_reuses_it():
+    """「切換手機版」不是第二份版面，是把 .wrap 釘窄讓同一組規則生效。
+
+    維護兩套版面的專案，壞掉的永遠是沒人在看的那一套——所以窄版規則只能寫一次，
+    而要讓一顆按鈕觸發它，規則就必須掛在容器寬度上，不是視窗寬度上。
+    """
+    css = (
+        Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.css"
+    ).read_text("utf-8")
+    js = (
+        Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.js"
+    ).read_text("utf-8")
+
+    assert "container-type:inline-size" in css and "container-name:page" in css
+    assert "@container page (max-width:760px)" in css
+    assert ":root[data-view=mobile] .wrap" in css
+    # 按鈕只改屬性，不改版面——版面的話在 CSS 裡。
+    assert "data-view" in js and "twsix.viewmode" in js
+    # 回到最上方：捲下去才出現，而且尊重「減少動態效果」。
+    assert "#totop{position:fixed" in css
+    assert "prefers-reduced-motion" in js

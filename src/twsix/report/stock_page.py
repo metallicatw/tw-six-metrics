@@ -26,8 +26,10 @@ Two things are deliberately *not* silent:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from ..ingest.goodinfo import DIRECTORS, HOLDERS
@@ -73,6 +75,39 @@ REWARD_RISK_NOTES: tuple[str, ...] = (
 
 #: 〔操作說明〕's own filter, kept as the author wrote it.
 RESEARCH_THRESHOLD = 3.0
+
+#: 資料的時區是台北。用 UTC 判斷「今天」會在台北的清晨把日期算成前一天，
+#: 於是每天早上八小時內，交易日的年份都會被推到去年。
+_TAIPEI = timezone(timedelta(hours=8))
+
+#: 〔BASIC〕A4 —「最近交易日:08/28   市值單位:百萬」。
+_TRADE_DAY = re.compile(r"最近交易日\s*[:：]\s*(\d{1,2})\s*/\s*(\d{1,2})")
+
+
+def price_date(reader: Any, today: date | None = None) -> str:
+    """那個市價是哪一天的收盤價。
+
+    〔BASIC〕只印月/日，沒有年——對一張每天開來看的活頁簿來說夠了，對一張會被
+    存起來、三個月後再打開的網頁不夠。年份用抓取當天補：交易日不可能在未來，
+    所以月份看起來超前今天的，就是去年的。
+
+    抓不到就回空字串。編一個日期出來，比沒有日期糟得多——整頁的估值都掛在這個
+    股價上，而一個標錯日期的股價會讓人以為估值比實際新。
+    """
+    try:
+        text = reader.text("BASIC", "A", 4) or ""
+    except Exception:  # pragma: no cover - 讀不到就是沒有
+        return ""
+    m = _TRADE_DAY.search(str(text))
+    if not m:
+        return ""
+    month, day = int(m.group(1)), int(m.group(2))
+    now = today or datetime.now(_TAIPEI).date()
+    year = now.year - 1 if (month, day) > (now.month, now.day) else now.year
+    try:
+        return date(year, month, day).strftime("%Y.%m.%d")
+    except ValueError:
+        return ""
 
 
 #: 〔EPS預估與估價〕 field by field: (欄位, 公式, 活頁簿出處).
@@ -181,6 +216,9 @@ class StockPage:
     stock_id: str
     name: str = ""
     market_price: Number = None
+    #: 那個市價是哪一天的收盤價，``YYYY.MM.DD``。整頁的估值都掛在這個數字上，
+    #: 而一個沒有日期的股價看起來永遠像今天的。
+    price_date: str = ""
     fiscal_quarter: str = ""
     revenue_month: str = ""
     excluded: str = ""
@@ -501,6 +539,7 @@ def build_page(
         stock_id=rating.stock_id or valuation.stock_id,
         name=rating.name or valuation.name,
         market_price=valuation.market_price,
+        price_date=price_date(reader),
         excluded=getattr(rating, "excluded", "") or "",
         gaps=dict(valuation.gaps or {}),
     )
