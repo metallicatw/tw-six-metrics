@@ -1,0 +1,110 @@
+name: 評等補課（清單上過期的那些）
+
+# 〔評等清單〕上 1,741 檔裡，有 1,558 檔還停在活頁簿匯入的 2025.2Q——比首頁上
+# 那 183 檔整整舊了一年。這條排程一批一批把它們換成新的。
+#
+# 為什麼不是「全市場官方資料」那條路就好：
+#
+#   官方開放資料的資產負債表沒有存貨，也完全沒有現金流量表。六大指標裡的存貨
+#   週轉率與自由現金流量，那條路拿不到——不是還沒寫，是來源裡沒有。而且官方季報
+#   只給最新一期、沒有日期參數，所以九期只能往前累積，第二個資料點要等三個月。
+#
+#   券商鏡像則是一次給九季、六個指標全有，而且已經被證明可行：首頁上那 183 檔
+#   就是這樣抓來的，其中 3029 是由 runner 抓的。
+#
+# 為什麼補課不留個股快取：
+#
+#   一檔十六張分頁 205 KB，1,558 檔就是 319 MB 進版控。清單要的只是六個指標的
+#   評分，所以 `twsix refresh` 把報表抓進暫存目錄、算完評等、把那一列寫回
+#   `data/ratings.csv`，然後刪掉暫存。一批 50 檔的 commit 是幾十 KB，不是 10 MB。
+#   個股快取只在有人真的要看那一頁的時候才值得留——那是「加一檔個股」的事。
+#
+# 節奏：一天四批、一批 50 檔，1,551 檔約八天走完。之後佇列會自己空掉（每一檔
+# 補上就離開），排程照跑但每次都印「清單上沒有落後的股票」，不留 commit。
+# 一檔失敗不中斷整批：抓到幾檔就是幾檔，下一批會再遇到它。
+
+on:
+  schedule:
+    # 台北時間 02:10 / 08:10 / 14:10 / 20:10。避開整點，也避開盤中最忙的時段。
+    - cron: "10 18,0,6,12 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "這一批補幾檔"
+        required: false
+        default: "50"
+        type: string
+
+permissions:
+  contents: write
+  # 建站與發布就在這個 job 裡做。用 GITHUB_TOKEN 推的 commit **不會**觸發別的
+  # workflow，所以 pages.yml 的 `on: push` 不會醒——這是 GitHub 防止排程互相
+  # 觸發成無窮迴圈的規則，不是設定漏了。「加一檔個股」也是為了這件事自己建站。
+  pages: write
+  id-token: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # 一批 50 檔約 25 分鐘（每檔 13 個請求、站台之間節流 1.2 秒）。給兩倍餘裕，
+    # 但不給到六小時：卡住的時候應該早點失敗，而不是佔著 runner 到天亮。
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[report]"
+
+      - name: 補課
+        run: twsix refresh --limit "${{ inputs.limit || 50 }}"
+
+      - name: Commit
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ratings.csv
+          if git diff --cached --quiet; then
+            echo "::notice::這一批沒有任何一列改變"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=yes" >> "$GITHUB_OUTPUT"
+          count="$(git diff --cached --numstat -- data/ratings.csv | awk '{print $1}')"
+          git commit -m "評等補課：${count:-0} 列" \
+                     -m "由券商鏡像重算，只寫回清單，不留個股快取。"
+          # 白名單式的 git add 會漏掉引擎新寫的檔案，而那件事的症狀是下一行
+          # 「cannot pull with rebase: You have unstaged changes」——一句完全不提
+          # 檔名的訊息。先自己講清楚。
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      # 資料進了 repo，網站還沒重建。這兩步讓補好的那 50 檔當天就出現在清單上。
+      # 沒有任何一列改變的時候不重建：那是一次沒有內容差異的發布。
+      - name: 建站
+        if: steps.commit.outputs.changed == 'yes'
+        uses: ./.github/actions/build-site
+        with:
+          test: "false"
+          setup: "false"   # 上面已經 setup 過了
+
+      - name: 發布
+        id: deployment
+        if: steps.commit.outputs.changed == 'yes'
+        uses: actions/deploy-pages@v4
