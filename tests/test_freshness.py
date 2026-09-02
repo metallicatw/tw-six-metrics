@@ -110,3 +110,22 @@ def test_the_workflow_asks_before_it_fetches():
     assert "steps.need.outputs.stale == 'yes'" in wf
     # 抓、commit、建站、發布——四步都要跟著跳過，否則會發布一份沒有變的網站。
     assert wf.count("steps.need.outputs.stale == 'yes'") == 4
+
+
+def test_a_run_that_skipped_everything_does_not_leave_the_panel_spinning():
+    """「成功」有兩種：真的抓了並發布了，還有**什麼都沒做**。
+
+    workflow 判斷這一檔已經是最新的、四步一起跳過的時候，網站不會換——所以面板
+    再怎麼等 build.json 都不會變，會停在「等 Pages CDN 換檔」直到六分鐘後說
+    「等太久了，2308 還沒出現」。一次完全正常的判斷，看起來像當掉。實際踩到過。
+
+    所以完成之後要問一句 workflow 到底做了什麼：建站那一步被跳過，就代表沒有新
+    的一份要等。
+    """
+    js = (ROOT / "src/twsix/report/templates/site.js").read_text("utf-8")
+    assert "function afterRun(" in js
+    assert "/actions/runs/" in js and "/jobs" in js
+    assert "'skipped'" in js
+    assert "已經是最新的" in js
+    # 問不到就照舊等——那是原本的行為，不能因為多了這一段而變成不等。
+    assert ".catch(keepWaiting)" in js

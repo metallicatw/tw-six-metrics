@@ -524,8 +524,16 @@
           'runner 開始跑：抓報表 → 補集保股權歷史 → 產生報告 → 建站 → 發布', 'run');
         else if(run.status === 'completed'){
           if(run.conclusion === 'success'){
-            step('workflow 完成。剩下的是 Pages CDN 換檔', 'cdn');
-            watch(code, 180, was, Date.now() + SETTLE_MS);
+            /* 「成功」有兩種：真的抓了並發布了，還有**什麼都沒做**——workflow 自己
+               判斷這一檔已經是最新的，於是抓取、commit、建站、發布四步一起跳過。
+
+               後者的網站不會換，所以再怎麼等 build.json 都不會變：面板會停在
+               「等 Pages CDN 換檔」直到六分鐘後放棄，然後說「等太久了，還沒出
+               現」——一次完全正常的判斷，看起來像當掉。實際踩到過。
+
+               所以問一句 workflow 到底做了什麼：建站那一步被跳過，就代表沒有新
+               的一份要等。 */
+            afterRun(run, code, was);
           } else {
             forget();
             endPanel('抓取失敗（' + run.conclusion + '）',
@@ -536,6 +544,39 @@
         setTimeout(function(){ pollRun(code, since, tries - 1, was); }, 2000);
       })
       .catch(function(){ setTimeout(function(){ pollRun(code, since, tries - 1, was); }, 2000); });
+  }
+
+  /* workflow 完成之後：它到底抓了沒？
+
+     問 jobs API 拿每一步的結論。建站那一步是 `skipped`，就代表這一次什麼都沒
+     發布——不必等 CDN，直接告訴讀者「已經是最新的」。問不到（權限、改版、網路）
+     就照舊等，那是原本的行為，最壞情況只是回到六分鐘後放棄。 */
+  function afterRun(run, code, was){
+    function keepWaiting(){
+      step('workflow 完成。剩下的是 Pages CDN 換檔', 'cdn');
+      watch(code, 180, was, Date.now() + SETTLE_MS);
+    }
+    gh('/actions/runs/' + run.id + '/jobs')
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        var jobs = (j && j.jobs) || [];
+        var built = null;
+        for(var i = 0; i < jobs.length; i++){
+          var steps = jobs[i].steps || [];
+          for(var k = 0; k < steps.length; k++){
+            if(String(steps[k].name).indexOf('建站') > -1){ built = steps[k]; }
+          }
+        }
+        if(built && built.conclusion === 'skipped'){
+          forget();
+          endPanel(code + ' 已經是最新的',
+                   'workflow 判斷這一檔的資料沒有變，所以沒有重抓、也沒有重新發布'
+                   + '——網站上這一份就是最新的。真的要重抓的話，再按一次。', true);
+          return;
+        }
+        keepWaiting();
+      })
+      .catch(keepWaiting);
   }
 
   /* 曾經有一條「沒權杖就開一張 issue」的退路，已經拿掉。它把一次點擊變成換頁、

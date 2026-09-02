@@ -118,3 +118,36 @@ def test_the_workflows_keep_the_previous_site_around():
     for name in ("stock", "refresh", "pages", "ownership"):
         wf = (ROOT / f".github/workflows/{name}.yml").read_text("utf-8")
         assert 'incremental: "true"' in wf, f"{name}.yml 還在整站重建"
+
+
+def test_the_fetch_stamp_is_read_from_disk_not_copied_from_the_last_build():
+    """沿用一頁的時候，抓取記號要**重新讀檔**，不能從上一次的狀態抄。
+
+    抄的版本有一個會自己蔓延的錯：狀態檔是「時間戳」這個機制上線之後才開始記
+    它的，所以上線前建好的頁面在狀態裡沒有時間戳；沿用它們就一直沒有，於是搜尋
+    索引第六欄是空的，而瀏覽器那道「已經是最新的就別抓了」永遠擋不住那幾檔。
+
+    使用者看到的症狀就是這個：剛更新完再按一次，有時候擋得住、有時候直接又跑
+    一輪。擋不住的正好是那些「上線前就已經在網站上」的股票。
+    """
+    tmp = _tmp()
+    out = tmp / "site"
+    sheets = _sheets(tmp)
+    (sheets / "5439" / "_fetched.txt").write_text(
+        "2026-09-03T00:59:02+08:00\n", encoding="utf-8"
+    )
+    build_site(_records(), out, sheets_dir=sheets)
+
+    # 假裝上一次的狀態是舊版留下的：頁面都在，但沒有任何時間戳。
+    state = read_build_state(out)
+    state["fetched_ts"] = {}
+    state["fetched"] = {}
+    (out / BUILD_STATE).write_text(json.dumps(state), encoding="utf-8")
+
+    build_site(_records(), out, sheets_dir=sheets, incremental=True)
+    row = next(
+        r
+        for r in json.loads((out / "search.json").read_text("utf-8"))
+        if r[0] == "5439"
+    )
+    assert row[5].startswith("2026-09-03T"), "沿用的那一頁把時間戳弄丟了"

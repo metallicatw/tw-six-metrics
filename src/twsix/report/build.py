@@ -588,10 +588,18 @@ def build_site(
         ):
             if stock_id in set(previous.get("rich") or ()):
                 rich_ids.add(stock_id)
-            when = (previous.get("fetched") or {}).get(stock_id)
+            # 抓取記號**從檔案讀**，不是從上一次的狀態抄。
+            #
+            # 抄的版本有一個會自己蔓延的錯：狀態檔是這個機制上線之後才開始記
+            # 時間戳的，所以上線前建好的那些頁面在狀態裡沒有時間戳；沿用它們就
+            # 一直沒有，於是搜尋索引第六欄是空的，瀏覽器那道「已經是最新的就別
+            # 抓了」永遠擋不住那幾檔——而且要等到那一檔又被抓一次才會好。
+            #
+            # 記號只是一個幾十位元組的檔案，讀它不必重畫任何東西。
+            when = _fetched_on(sheets_dir / stock_id) if sheets_dir else ""
             if when:
                 fetched_at[stock_id] = when
-            ts = (previous.get("fetched_ts") or {}).get(stock_id)
+            ts = _fetched_ts(sheets_dir / stock_id) if sheets_dir else ""
             if ts:
                 fetched_ts[stock_id] = ts
             reused += 1

@@ -638,6 +638,30 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
 
     sheets = [args.sheet] if args.sheet else list(ORDER)
 
+    # 十六張裡有九張一季才變一次。按一次「立即更新」把它們全部重抓，就是使用者
+    # 說的「有的只是補上今天最新的數據而已，也是跑好久」——他是對的。
+    #
+    # 比的是**期別**不是時間戳：手上這一份最新到哪一季，今天照申報期程應該有到
+    # 哪一季。追上了就不必再問。實測 2404 在平常的一天從 14 張降到 4 張。
+    skipped: list[str] = []
+    if not args.sheet and not getattr(args, "full", False):
+        from .ingest.cadence import should_fetch  # noqa: PLC0415
+        from .store import sheets as sheet_store  # noqa: PLC0415
+
+        have = sheet_store.read_all(out_dir)
+        today = datetime.now(_TAIPEI).date()
+        keep: list[str] = []
+        for name in sheets:
+            want, why = should_fetch(name, have.get(name), today)
+            (keep if want else skipped).append(name)
+            if not want:
+                print(f"  {name:<8} 跳過：{why}")
+        sheets = keep
+    if not sheets:
+        print("  每一張都已經是最新的，這次不必抓")
+        _stamp_fetched(out_dir)
+        return EXIT_OK
+
     # 十三張表分散到八個鏡像站同時抓。節流仍然是「每個主機之間隔多久」，所以對
     # 任何一個站來說請求沒有變密——變快的是我們排隊的方式。存檔還原（--from-html）
     # 沒有主機可分，照舊逐張讀。
@@ -1094,7 +1118,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     rc = cmd_fetch_stock(
         ns(sheet=None, host=args.host, save_html=args.save_html,
            from_html=None, retries=args.retries, out=args.data,
-           fresh=not args.cached)
+           fresh=not args.cached, full=bool(getattr(args, "full", False)))
     )
     if rc != EXIT_OK:
         print(
@@ -1105,8 +1129,8 @@ def cmd_report(args: argparse.Namespace) -> int:
         return EXIT_FAIL
 
     print(f"[2/4] 抓取 {stock} 的年度交易資訊…")
-    if cmd_fetch_yearly(ns(save_raw=None, out=args.data,
-                          fresh=not args.cached)) != EXIT_OK:
+    if cmd_fetch_yearly(ns(save_raw=None, out=args.data, fresh=not args.cached,
+                          full=bool(getattr(args, "full", False)))) != EXIT_OK:
         print(
             "  年度交易資訊沒拿到——殖利率估價與本益比河流圖的分區會缺，"
             "其餘照常。",
@@ -1554,7 +1578,7 @@ def cmd_refresh(args: argparse.Namespace) -> int:
             argparse.Namespace(
                 config=args.config, stock=code, sheet=None, host=args.host,
                 save_html=None, from_html=None, retries=args.retries,
-                out=str(root), fresh=True,
+                out=str(root), fresh=True, full=False,
             )
         )
         if rc != EXIT_OK:
@@ -1565,6 +1589,7 @@ def cmd_refresh(args: argparse.Namespace) -> int:
         cmd_fetch_yearly(
             argparse.Namespace(
                 config=args.config, stock=code, save_raw=None, out=str(root),
+                full=False,
             )
         )
         grids = _fetched_grids(root, code)
@@ -2241,6 +2266,20 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
     from .ingest.base import HttpClient
     from .ingest.yearly_trading import SHEET, YearlyTrading
 
+    # 歷年最高／最低／收盤平均價一年才多一列，而這一張要**兩個**請求（證交所加
+    # 櫃買）。手上已經有去年那一列的話，今年再問十次也是同一份資料。
+    out_dir = Path(args.out or settings.data_dir) / "sheets" / args.stock
+    if not getattr(args, "full", False):
+        from .ingest.cadence import should_fetch  # noqa: PLC0415
+        from .store import sheets as sheet_store  # noqa: PLC0415
+
+        want, why = should_fetch(
+            SHEET, sheet_store.read_grid(out_dir, SHEET), datetime.now(_TAIPEI).date()
+        )
+        if not want:
+            print(f"  年度交易資訊 跳過：{why}")
+            return EXIT_OK
+
     http = HttpClient(
         cache_dir=Path(settings.ingest.cache_dir),
         cache_ttl=(
@@ -2376,6 +2415,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="每個站台重試次數（預設 1；輪替八個站台本身就是重試）",
     )
     fs.add_argument("--out", help="資料目錄")
+    fs.add_argument(
+        "--full", action="store_true",
+        help="每一張分頁都重抓，不管它這一季會不會變（除錯或懷疑資料有問題時用）",
+    )
     fs.add_argument(
         "--fresh", action="store_true",
         help="略過磁碟快取，一定重新向站台要（`report` 預設就是這樣）",
@@ -2536,6 +2579,10 @@ def build_parser() -> argparse.ArgumentParser:
     rp.add_argument(
         "--cached", action="store_true",
         help="允許使用磁碟快取（預設不用——「立即更新」要的是新資料）",
+    )
+    rp.add_argument(
+        "--full", action="store_true",
+        help="每一張分頁都重抓，不管它這一季會不會變",
     )
     rp.add_argument(
         "--no-backfill", dest="no_backfill", action="store_true",
