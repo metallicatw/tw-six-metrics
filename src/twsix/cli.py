@@ -1827,8 +1827,12 @@ def _fetch_daily_news(http: Any, store: Store) -> int:
     同一天重跑要合併而不是覆蓋：一天兩次排程，第二次抓到的是第一次之後才發的，
     覆蓋等於把早上那批丟掉。
     """
-    from .ingest.news import CATEGORY_PAGES, CATEGORY_URL, HEADERS  # noqa: PLC0415
-    from .ingest.news import parse_category  # noqa: PLC0415
+    from .ingest.news import (  # noqa: PLC0415
+        CATEGORY_PAGES,
+        CATEGORY_URL,
+        HEADERS,
+        parse_category,
+    )
     from .store import news as news_store  # noqa: PLC0415
 
     by_day: dict[str, dict[str, list[Any]]] = {}
