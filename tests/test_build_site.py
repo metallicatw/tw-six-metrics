@@ -1083,3 +1083,46 @@ def test_the_chart_windows_match_the_tables_below_them():
 
     tpl = (ROOT.parent / "src/twsix/report/templates/stockpage.html.j2").read_text("utf-8")
     assert "h.weeks[:52]" in tpl and "dr.months[:36]" in tpl, "表和圖要一樣長"
+
+
+def test_the_monitor_tab_appears_only_when_the_page_is_really_there(tmp_path=None):
+    """〔市場監控〕是另一個 repo（market-monitor）每天產生的一份自足報告。
+
+    建站流程在跑 `twsix build` **之前**把它複製成 `site/monitor.html`，所以導覽列
+    那一項是看檔案在不在才出現的——本機建站沒有那個檔案，寫死一個連結就是一個
+    404；而 CI 那邊 clone 失敗時少一項，也比多一個連到空氣的連結好。
+    """
+    from twsix.report.build import MONITOR_PAGE
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    sheets = _sheets(tmp)
+
+    build_site(_records(), out, sheets_dir=sheets)
+    assert "市場監控" not in (out / "index.html").read_text("utf-8")
+
+    out.mkdir(parents=True, exist_ok=True)
+    (out / MONITOR_PAGE).write_text("<html>報告</html>", encoding="utf-8")
+    build_site(_records(), out, sheets_dir=sheets)
+    listing = (out / "index.html").read_text("utf-8")
+    assert '<a href="monitor.html">市場監控</a>' in listing
+    # 個股頁在子目錄裡，連結要帶 ../。
+    assert '"../monitor.html"' in (out / "stock" / "5439.html").read_text("utf-8")
+
+
+def test_the_report_is_copied_in_before_the_build_and_a_failure_is_not_fatal():
+    """複製要排在建站之前，否則導覽列判斷「檔案在不在」的時候它還不在。
+
+    而 clone 失敗只能是警告：另一個 repo 拿不到，不該讓這個網站發不出去——
+    增量建站的快取裡若還留著上一次那一份，那一頁會繼續在。
+    """
+    repo = ROOT.parent
+    action = (repo / ".github/actions/build-site/action.yml").read_text("utf-8")
+    assert "market-monitor" in action
+    assert action.index("帶進〔市場監控〕") < action.index("建立網站")
+    assert "::warning::" in action
+
+    # 那邊 22:30 UTC 更新完，這邊四十分鐘後帶進來；沒有這一條，那一頁要等到這裡
+    # 因為別的理由重建才會換，最差落後一整天。
+    pages = (repo / ".github/workflows/pages.yml").read_text("utf-8")
+    assert 'cron: "10 23 * * 0-4"' in pages
