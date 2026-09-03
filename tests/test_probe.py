@@ -126,3 +126,24 @@ def test_there_is_a_way_to_refresh_the_samples_from_a_runner():
     assert "twsix probe" in wf
     assert "git add reference/samples" in wf
     assert "workflow_dispatch" in wf
+
+
+def test_the_whole_market_news_feed_carries_stock_codes():
+    """〔個股新聞〕能不能像三大法人一樣接上每日排程，取決於這一件事。
+
+    現在的來源是鉅亨網的**關鍵字索引**（`q=<代號>`），一檔一個請求——1,769 檔就是
+    1,769 個請求，不可能每天跑。分類新聞列表不一樣：一個請求換到一整批，而每一篇
+    帶著它提到的股票代號，所以可以反過來分派到個股。
+
+    留這份樣本與這條測試，是因為「它帶不帶代號」正是整條路成不成立的那一格。
+    """
+    body = load(SAMPLES, "cnyes_category_tw_stock").decode("utf-8", errors="replace")
+    assert len(body) > 100_000
+    data = json.loads(body)["items"]
+    assert data["per_page"] == 30, "一頁的篇數變了，排程要抓幾頁會跟著變"
+    assert data["total"] > 300
+    coded = [x for x in data["data"] if x.get("market")]
+    assert coded, "沒有任何一篇帶股票代號——這條路就不成立"
+    one = coded[0]["market"][0]
+    assert one["code"].strip() and one["name"].strip()
+    assert coded[0]["publishAt"] > 1_700_000_000, "publishAt 不是 epoch 秒了"

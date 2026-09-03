@@ -94,6 +94,26 @@ CANDIDATES: tuple[Candidate, ...] = (
     #: 資產總計／流動負債……」——和我們已經在抓的官方開放資料同一個彙總層級，
     #: **沒有存貨**。所以這條路解不掉六大指標缺的那兩個。留著樣本是為了讓「試過
     #: 了，它不是」有憑據。
+    #: 〔個股新聞〕現在是逐檔抓的（鉅亨網的關鍵字索引，`q=<代號>`），所以只有按下
+    #: 「立即更新」才會換。全市場的分類新聞列表是另一條路：**一個請求換到一整批**，
+    #: 而且每一篇帶著它提到的股票代號（`market[].code`），所以可以反過來分派到個股。
+    #:
+    #: 實測（2026-09-03）：`tw_stock` 共 645 篇、22 頁、一頁 30 篇（`limit` 被忽略）。
+    #: 前 7 頁 210 篇涵蓋 **196 檔股票**，時間橫跨兩天多。另一個分類 `tw_stock_news`
+    #: 477 篇，首頁 30 篇裡有 27 篇和 `tw_stock` 重複——所以只要抓前者。
+    #:
+    #: 要注意的一件事：**首頁 30 篇裡有 12 篇沒有任何股票代號**（大盤評論），那些
+    #: 分派不到任何一檔。這條路能給的是「有上新聞的那些股票」，不是全部 1,769 檔。
+    Candidate(
+        name="cnyes_category_tw_stock",
+        url="https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?limit=30",
+        expect="已驗證：全市場台股新聞列表，645 篇 22 頁；每篇的 market[].code 是股票代號",
+        group="news",
+        headers={
+            "Origin": "https://www.cnyes.com",
+            "Referer": "https://www.cnyes.com/",
+        },
+    ),
     Candidate(
         name="mops_balance_summary",
         url="https://mopsov.twse.com.tw/mops/web/ajax_t163sb05",
