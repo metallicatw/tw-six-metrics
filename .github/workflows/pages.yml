@@ -22,6 +22,11 @@ on:
     paths-ignore:
       - "**.md"
       - "reference/**"
+  # market-monitor 在 22:30 UTC（台北隔日 06:30）更新完它自己那份報告。這一條
+  # 排在四十分鐘後，把新的那一份帶進站內的〔市場監控〕——否則那一頁要等到這邊
+  # 因為別的理由重建才會換，最差落後一整天。
+  schedule:
+    - cron: "10 23 * * 0-4"
   workflow_dispatch:
 
 # 注意：這裡已經沒有 workflow_call 了。

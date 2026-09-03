@@ -60,6 +60,13 @@ HIDDEN_PAGES: frozenset[str] = frozenset({"picks", "stats", "about"})
 
 GRADE_KEYS = ["AA", "A", "BB", "B", "C", "不評分", "數據不足"]
 
+#: 〔市場監控〕。metallicatw/market-monitor 每天台北 06:30 自己產生的一份 924 KB
+#: 自足報告（自己的 CSS 與版面，只連一個 Chart.js CDN），由建站流程原樣複製進來。
+#:
+#: 不套這個網站的殼：兩套 CSS 會打架，而那個檔案每天重新產生一次——今天改對了，
+#: 明天它換個格式就又壞了。導覽列連過去，那一頁保持它原本的樣子。
+MONITOR_PAGE = "monitor.html"
+
 #: The site is about Taiwanese stocks, read in Taiwan, against 民國 quarters
 #: and 月營收 filed to a Taiwanese calendar.  Stamping it in UTC — or in
 #: whatever zone the build machine happens to sit in, which for GitHub Actions
@@ -583,8 +590,14 @@ def build_site(
         latest_quarter=quarter,
         build_id=build_id(),
     )
+    # 〔市場監控〕是另一個 repo 每天產生的一份自足報告，由建站流程在跑 `twsix
+    # build` 之前複製成 `site/monitor.html`。導覽列那一項**看檔案在不在**才出現：
+    # 本機建站沒有那個檔案，寫死一個連結就是一個 404。
+    has_monitor = (out_dir / MONITOR_PAGE).exists()
+
     base = dict(
         hidden_pages=sorted(HIDDEN_PAGES),
+        monitor_page=MONITOR_PAGE if has_monitor else "",
         repo=repo,
         site_title=ctx.site_title,
         generated_at=ctx.generated_at,
@@ -1121,6 +1134,7 @@ def _full_stock_page(
         assets=True,
         build_id=base.get("build_id", ""),
         delisted=delisted,
+        monitor_page=base.get("monitor_page", ""),
     )
     return True
 
@@ -1136,6 +1150,7 @@ def build_stock_page(
     assets: bool = False,
     build_id: str = "",
     delisted: bool = False,
+    monitor_page: str = "",
 ) -> Path:
     """Render 〔評價簡表〕〔六大財務指標評等〕〔EPS預估與估價〕〔殖利率估價〕.
 
@@ -1154,6 +1169,9 @@ def build_stock_page(
     env.get_template("stockpage.html.j2").stream(
         p=page,
         hidden_pages=sorted(HIDDEN_PAGES),
+        # 完整版是自己組 context 的（不是 `**base`），所以導覽列多一項就要記得
+        # 從這裡帶進去——漏掉的話那 1,769 頁的導覽列會比別的頁面少一項。
+        monitor_page=monitor_page,
         repo=repo,
         page="stock",
         # 完整版也給頁首那顆按鈕一個對象，字改成「重新抓取」：資料會過期，而且
