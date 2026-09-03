@@ -283,6 +283,11 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
    等寬數字讓 1,741 列的日期在垂直方向對齊，掃過去才讀得出新舊。 */
 .tag.when{font-variant-numeric:tabular-nums;letter-spacing:.02em;
   border-color:var(--rule);color:var(--muted)}
+/* 已下市：搜尋結果裡的一個小標。刻意用灰而不是紅——它不是警告，是一件事實，
+   而讀者本來就是打了那個代號才看到它的。 */
+.tag.gone{display:inline-block;padding:0 6px;margin-left:5px;border-radius:3px;
+  font-size:10.5px;line-height:1.6;vertical-align:1px;
+  border:1px solid var(--rule);color:var(--muted);background:transparent}
 /* -- 個股新聞 --------------------------------------------------------- */
 /* -- 六大指標：一個等第配一張圖 -------------------------------------- */
 .metric{margin:26px 0 0}

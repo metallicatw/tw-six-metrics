@@ -179,6 +179,12 @@ def cmd_verify(args: argparse.Namespace) -> int:
 # =========================================================================
 
 
+def _delisted_codes(root: Path) -> set[str]:
+    from .store import delisted as delisted_store  # noqa: PLC0415
+
+    return delisted_store.codes(root)
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .report.build import build_site
@@ -206,6 +212,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         sheets_dir=store.root / "sheets",
         only=only,
         incremental=bool(getattr(args, "incremental", False)),
+        delisted=_delisted_codes(store.root),
     )
     if not valuations:
         print("  （尚無 data/valuations.csv，個股頁不會顯示估值；見 twsix value）")
@@ -1632,7 +1639,80 @@ def cmd_refresh(args: argparse.Namespace) -> int:
     print(f"\n補好 {len(done)} 檔，失敗 {len(failed)} 檔，還剩 {total - len(done)} 檔")
     for line in failed:
         print(f"::warning::補課失敗（其餘照常寫回）：{line}")
+
+    # 收尾：把不在官方名單上的那幾檔標成已下市。跟補課同一支指令，是因為官方名單
+    # 這時剛好已經讀進來了，不必再跑一趟。
+    if market is not None:
+        mark_delisted(root, set(market.codes()))
     return EXIT_OK if done or not failed else EXIT_FAIL
+
+
+#: 官方名單少於這個數就不做標記。真實的名單是 1,985 檔（兩個交易所加起來），
+#: 所以這個門檻不是在猜「合理範圍」，是在擋一種很具體的事故：`data/market/` 有
+#: 一半沒抓到（某個端點 403、某一份 CSV 只寫了一半），名單縮成幾百檔，於是剩下
+#: 一千多檔「不在名單上」，一次全部被標成下市，首頁瞬間空掉。
+#:
+#: 標記的成本是一個 commit，取消標記的成本也是一個 commit——但中間那段時間網站
+#: 是錯的，而且錯得很大聲。名單看起來不完整的時候，什麼都不做才是對的。
+MIN_UNIVERSE = 1_500
+
+
+def mark_delisted(root: Path, universe: set[str]) -> tuple[int, int]:
+    """把清單上有、官方名單上沒有的代號記進 ``data/delisted.csv``。
+
+    回傳 ``(這次新標記的, 這次取消標記的)``。
+
+    ``since`` 只在第一次標記時寫入：重跑不會把日期往後推，否則「什麼時候不見的」
+    永遠是今天。重新出現在官方名單上的就從檔案裡拿掉——包含那些「其實只是那天的
+    名單不完整」的誤標，所以這件事必須是可逆的。
+    """
+    from .store import delisted as delisted_store  # noqa: PLC0415
+
+    if len(universe) < MIN_UNIVERSE:
+        print(f"官方名單只有 {len(universe)} 檔，看起來不完整，跳過下市標記")
+        return (0, 0)
+
+    known = {r.get("stock_id", "") for r in Store(root).read("ratings")}
+    known.discard("")
+    names = {
+        r.get("stock_id", ""): r.get("name", "")
+        for r in Store(root).read("ratings")
+        if r.get("period_index") == "1"
+    }
+    today = datetime.now(_TAIPEI).date().isoformat()
+
+    have = delisted_store.read(root)
+    gone = known - universe
+    rows = {
+        code: {
+            "stock_id": code,
+            "name": names.get(code, "") or have.get(code, {}).get("name", ""),
+            # 已經標記過的保留原本的日期。
+            "since": have.get(code, {}).get("since") or today,
+        }
+        for code in gone
+    }
+    added = sorted(set(rows) - set(have))
+    removed = sorted(set(have) - set(rows))
+    if rows or have:
+        delisted_store.write(root, rows)
+    for code in added:
+        print(f"  標記已下市：{code} {rows[code]['name']}")
+    for code in removed:
+        print(f"  取消下市標記（又出現在官方名單上）：{code}")
+    if not added and not removed:
+        print(f"下市標記沒有變動（目前 {len(rows)} 檔）")
+    return (len(added), len(removed))
+
+
+def cmd_delist(args: argparse.Namespace) -> int:
+    """單獨跑一次下市標記。補課收尾已經會做，這裡是為了不必為它跑一整批。"""
+    settings = Settings.load(args.config)
+    from .ingest.market import MarketData  # noqa: PLC0415
+
+    root = Path(args.data or settings.data_dir)
+    mark_delisted(root, set(MarketData.load(root).codes()))
+    return EXIT_OK
 
 
 def cmd_restate(args: argparse.Namespace) -> int:
@@ -2546,6 +2626,13 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--data", help="資料目錄")
     rs.add_argument("--codes", help="只重算這些代號，逗號分隔（預設全部）")
     rs.set_defaults(func=cmd_restate)
+
+    dl = sub.add_parser(
+        "delist",
+        help="把清單上有、官方名單上沒有的代號標成已下市（補課收尾已經會做）",
+    )
+    dl.add_argument("--data", help="資料目錄")
+    dl.set_defaults(func=cmd_delist)
 
     fd = sub.add_parser(
         "fetch-daily",

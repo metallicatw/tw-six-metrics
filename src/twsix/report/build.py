@@ -196,7 +196,10 @@ def read_build_state(out_dir: Path) -> dict[str, Any] | None:
 
 
 def stock_signature(
-    rows: list[dict[str, str]], sheet_dir: Path, quote: Any = None
+    rows: list[dict[str, str]],
+    sheet_dir: Path,
+    quote: Any = None,
+    delisted: bool = False,
 ) -> str:
     """一檔股票的「內容指紋」——分頁的位元組加上它在評等表裡的那幾列。
 
@@ -207,6 +210,11 @@ def stock_signature(
     全市場 57 MB 算一輪約 0.5 秒，換掉 22 秒的整站重建。
     """
     h = hashlib.sha1(usedforsecurity=False)
+    # 下市與否也算進去。它不在分頁裡、也不在評等表裡（那張表講的是某一期的快照），
+    # 所以少了這一行，一檔剛被標成下市的股票指紋不會變——增量建站會沿用上一次那
+    # 一頁，於是頁面上沒有那條橫幅，而清單上它已經不見了。兩邊說法不一致。
+    if delisted:
+        h.update(b"delisted\x1e")
     # 今天的收盤價也算進去。少了這一行，每日行情排程存下新的價格之後，增量建站
     # 會認為「這一檔沒變」而沿用昨天的頁面——資料是新的、畫面是舊的，而且沒有
     # 任何錯誤訊息。這正是整個階段二要解掉的那件事，卡在最後一格。
@@ -299,9 +307,13 @@ class Row:
     composite_delta: float | None
     value_pick: bool
     composite_value: float | None
+    #: 不在官方名單上了。頁面還在、搜尋還找得到，但「今天的市場」那幾頁不算它。
+    delisted: bool = False
 
 
-def rows_from_store(records: Iterable[dict[str, str]]) -> list[Row]:
+def rows_from_store(
+    records: Iterable[dict[str, str]], delisted: set[str] | None = None
+) -> list[Row]:
     """Take the stored rating table and keep each stock's newest period."""
     newest: dict[str, dict[str, str]] = {}
     for r in records:
@@ -323,6 +335,7 @@ def rows_from_store(records: Iterable[dict[str, str]]) -> list[Row]:
                 composite_delta=_float(r.get("composite_delta", "")),
                 value_pick=r.get("value_pick", "") == "1",
                 composite_value=_float(r.get("composite", "")),
+                delisted=r["stock_id"] in (delisted or set()),
             )
         )
     out.sort(key=lambda x: (-(x.composite_value or -1), x.stock_id))
@@ -484,6 +497,7 @@ def build_site(
     sheets_dir: Path | None = None,
     only: set[str] | None = None,
     incremental: bool = False,
+    delisted: set[str] | None = None,
 ) -> dict[str, int]:
     """*only* 給定時，只重畫那幾檔的個股頁，其餘沿用上一次建站的成果。
 
@@ -498,7 +512,13 @@ def build_site(
     完整建站——少畫一頁的代價是網站上少一頁，那不能用猜的。
     """
     env = _env(assets=True)
-    rows = rows_from_store(records)
+    # `rows` = 這個網站知道的每一檔（搜尋索引與個股頁用它）。
+    # `live` = 今天還在市場上的那些（清單、首頁、統計、表頭的期別用它）。
+    #
+    # 兩者的差別就是已下市的那幾檔：它們的評等沒有錯，錯的是把它們排進「今天的
+    # 市場」——一份排名裡混著一檔三年前下市的股票，讀起來像推薦，不像紀錄。
+    rows = rows_from_store(records, delisted)
+    live = [r for r in rows if not r.delisted]
     valuation_by_stock = {
         r["stock_id"]: _valuation_view(r) for r in (valuations or [])
     }
@@ -510,14 +530,14 @@ def build_site(
     # 而它現在來自一天四個請求的排程，不是「有沒有人按過那一檔的更新」。
     quotes = latest_quotes(sheets_dir.parent) if sheets_dir is not None else {}
 
-    composites = [r.composite_value for r in rows if r.composite_value is not None]
+    composites = [r.composite_value for r in live if r.composite_value is not None]
     # The vintage is a property of the *data*, not of whichever stock happens
     # to sort first — reading rows[0] gave the top-scoring stock's quarter.
-    quarter, month = data_vintage(rows)
+    quarter, month = data_vintage(live)
     ctx = SiteContext(
         site_title=site_title,
         generated_at=stamp(),
-        stock_count=len(rows),
+        stock_count=len(live),
         latest_quarter=quarter,
         build_id=build_id(),
     )
@@ -534,7 +554,7 @@ def build_site(
         engine_version=ctx.engine_version,
     )
 
-    picks = [r for r in rows if r.value_pick]
+    picks = [r for r in live if r.value_pick]
     written: dict[str, int] = {}
 
     # -- per-stock pages --------------------------------------------------
@@ -559,6 +579,7 @@ def build_site(
             # 只有畫得出完整版的那些才看報價——表格版的頁面上沒有市價，把價格算進
             # 它的指紋只會讓 1,500 張不會變的頁面每天重畫一次。
             quotes.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
+            code in (delisted or set()),
         )
         for code, group in grouped.items()
     }
@@ -616,6 +637,7 @@ def build_site(
             full = _full_stock_page(
                 stock_id, sheets_dir, out_dir, base, rules=rules,
                 quote=quotes.get(stock_id),
+                delisted=stock_id in (delisted or set()),
             )
             if full:
                 count += 1
@@ -664,6 +686,7 @@ def build_site(
             detail=detail,
             indicator_order=list(INDICATOR_ORDER),
             valuation=valuation_by_stock.get(stock_id),
+            delisted=stock_id in (delisted or set()),
         ).dump(str(out_dir / "stock" / f"{stock_id}.html"))
         count += 1
     written["stock/*.html"] = count
@@ -687,8 +710,8 @@ def build_site(
     # a record.  The listing is the same data without the ranking, and it is
     # where the search box and the per-stock pages actually lead.
     env.get_template("list.html.j2").stream(
-        **base, page="list", rel="", rows=rows,
-        fresh_count=fresher_than(rows, quarter),
+        **base, page="list", rel="", rows=live,
+        fresh_count=fresher_than(live, quarter),
     ).dump(str(out_dir / "index.html"))
     written["index.html（評等清單）"] = 1
 
@@ -698,7 +721,7 @@ def build_site(
     # 建站的時候我們不知道他標了哪幾檔——也不該知道。這是一份靜態網站，沒有
     # 可以放私人清單的地方。
     env.get_template("watchlist.html.j2").stream(
-        **base, page="watchlist", rel="", rows=rows
+        **base, page="watchlist", rel="", rows=live
     ).dump(str(out_dir / "watchlist.html"))
     written["watchlist.html（觀察清單）"] = 1
 
@@ -714,7 +737,7 @@ def build_site(
         page="picks",
         rel="",
         picks=picks,
-        top=rows[:top_n],
+        top=live[:top_n],
         avg_composite=sum(composites) / len(composites) if composites else 0.0,
         grade_counts={4: sum(1 for c in composites if c >= 3.5)},
     ).dump(str(out_dir / "picks.html"))
@@ -724,14 +747,14 @@ def build_site(
     distribution: list[tuple[str, dict[str, int]]] = []
     for key in INDICATOR_ORDER:
         counter: Counter[str] = Counter()
-        for r in rows:
+        for r in live:
             counter[r.grades.get(key) or "數據不足"] += 1
         distribution.append(
             (INDICATOR_LABELS[key], {k: counter.get(k, 0) for k in GRADE_KEYS})
         )
 
     by_industry: dict[str, list[Row]] = defaultdict(list)
-    for r in rows:
+    for r in live:
         by_industry[r.industry or "未分類"].append(r)
     industries = []
     for name, group in by_industry.items():
@@ -818,7 +841,7 @@ def _write_search_index(
     """``search.json`` — what the header search box matches against.
 
     Arrays, not objects, and in a fixed order: ``[代號, 名稱, 產業, 綜合評分,
-    有無完整頁]``.  With 1,741 stocks the difference between arrays and objects
+    更新日期, 抓取時間戳, 已下市]``.  With 1,741 stocks the difference between arrays and objects
     with five keys each is roughly 70 KB against 190 KB, and this file is
     downloaded by every visitor on every page.  The order is documented here
     and read back in exactly one place (the script in ``base.html.j2``).
@@ -847,6 +870,10 @@ def _write_search_index(
             # 「再按一次有沒有意義」——早上十點抓的和下午六點抓的是兩份不同的
             # 資料。瀏覽器拿它來判斷要不要送出抓取，所以它必須帶到時分。
             (fetched_ts or {}).get(r.stock_id, ""),
+            # 第七欄：已下市。清單上看不到它了，但搜尋還找得到——所以搜尋結果
+            # 必須自己說清楚，否則點進去才發現是一檔下市的股票，會讀成「這個
+            # 網站的資料是錯的」。1 或 0，因為它只有真假。
+            1 if r.delisted else 0,
         ]
         for r in sorted(rows, key=lambda x: x.stock_id)
     ]
@@ -955,6 +982,7 @@ def _full_stock_page(
     *,
     rules: Any = None,
     quote: Any = None,
+    delisted: bool = False,
 ) -> bool:
     """Render the ten-section page for one stock, if its sheets are on disk.
 
@@ -1035,6 +1063,7 @@ def _full_stock_page(
         repo=base.get("repo", ""),
         assets=True,
         build_id=base.get("build_id", ""),
+        delisted=delisted,
     )
     return True
 
@@ -1049,6 +1078,7 @@ def build_stock_page(
     repo: str = "",
     assets: bool = False,
     build_id: str = "",
+    delisted: bool = False,
 ) -> Path:
     """Render 〔評價簡表〕〔六大財務指標評等〕〔EPS預估與估價〕〔殖利率估價〕.
 
@@ -1089,5 +1119,6 @@ def build_stock_page(
         reward_risk_notes=REWARD_RISK_NOTES,
         forecast_basis=FORECAST_BASIS,
         forecast_basis_notes=FORECAST_BASIS_NOTES,
+        delisted=delisted,
     ).dump(str(out_file))
     return out_file
