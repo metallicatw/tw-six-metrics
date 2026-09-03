@@ -1775,7 +1775,6 @@ def cmd_fetch_daily(args: argparse.Namespace) -> int:
         Daily,
         by_date,
     )
-
     from .store.daily import merge_day_rows, read_day_rows  # noqa: PLC0415
 
     http = HttpClient(
