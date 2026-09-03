@@ -194,6 +194,14 @@ footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--rule);
   font-variant-numeric:tabular-nums}
 .grab .stage{margin:0 0 8px;font-size:11.5px;color:var(--muted);max-width:none;
   padding-right:20px}
+/* 「仍要重抓」。刻意不做成主要按鈕的樣子——它是給知道自己在做什麼的人用的
+   出口，不是這一格在建議的動作。 */
+.grab .stage button.again{margin-left:2px;padding:1px 8px;border-radius:3px;
+  font:inherit;font-size:11px;cursor:pointer;
+  border:1px solid var(--rule);background:transparent;color:var(--ink-2)}
+.grab .stage button.again:hover{border-color:var(--accent);color:var(--accent)}
+.grab .stage button.again:focus-visible{outline:2px solid var(--accent-2);
+  outline-offset:1px}
 /* 分段進度條。格數照實測的時間比例分配給四段（送出 1、排隊 3、執行 7、
    CDN 3），所以「走到一半大概還有一半」是真的——一條會騙人的進度條比沒有
    進度條糟。 */

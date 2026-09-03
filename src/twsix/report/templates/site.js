@@ -324,13 +324,30 @@
     paint();
   }
 
-  function endPanel(head, note, ok){
+  /* `action` 是一顆真的按鈕：{label, run}。
+   *
+   * 原本這裡沒有它，「我知道，我就是要重抓」的辦法是**再按一次同一顆按鈕**——
+   * 一個看不見的模式。同一顆按鈕在第一次和第二次做不同的事，而唯一的說明是面板
+   * 上一句要人再按一次的提示；讀者按下去之後也分不清剛才那一次到底算不算數。
+   * 要保留的能力是對的（新增區塊、快取半份、鏡像更正過，都得靠重抓），說法不對
+   * ——所以改成明講：需要它的人看得到一顆寫著「仍要重抓」的按鈕。 */
+  function endPanel(head, note, ok, action){
     clearInterval(ticker); ticker = null;
     if(!grab) return;
     grab.hidden = false;
     grab.querySelector('.head').innerHTML =
       '<b>' + head + '</b><span class="t">' + elapsed() + '</span>';
-    grab.querySelector('.stage').textContent = note || '';
+    var stage = grab.querySelector('.stage');
+    stage.textContent = note || '';
+    if(action){
+      var again = document.createElement('button');
+      again.type = 'button';
+      again.className = 'again';
+      again.textContent = action.label;
+      again.addEventListener('click', action.run);
+      stage.appendChild(document.createTextNode(' '));
+      stage.appendChild(again);
+    }
     grab.querySelector('.bar').innerHTML = bar(true, ok === false);
     if(note) steps.push({ at: elapsed(), since: Date.now(), text: note });
     grab.querySelector('.log').textContent = lines();
@@ -485,8 +502,13 @@
   function prettyStamp(stamp){
     return stamp.slice(0, 10) + ' ' + stamp.slice(11, 16);
   }
-  /* 第一次按告訴他「已經是最新的」，第二次按就照做。那顆按鈕不必多一個選項，
-     而「我知道，我就是要重抓」也不必跑去 Actions 分頁。 */
+  /* 「已經是最新的」那個判斷是**啟發式**的：17:00 那條界線、每個來源各自的上站
+     時間。它會錯——後來新增的區塊（大戶持股、董監持股就是這樣加進來的）只能靠
+     重抓補上，快取存到半份的也是，鏡像站更正過數字的也是。所以「不管怎樣都去抓
+     一次」這個能力必須留著。
+     
+     留法改了：不再是「再按一次」那個看不見的模式，而是面板上一顆寫著「仍要重抓」
+     的按鈕。按過之後就清掉，下一次照樣先問。 */
   var forced = {};
 
   /* ---- 直接跑 workflow ------------------------------------------------ */
@@ -502,14 +524,20 @@
 
   function dispatch(code, stamp){
     if(isFresh(stamp) && !forced[code]){
-      forced[code] = true;
       endPanel(code + ' 已經是最新的',
                '最後抓取 ' + prettyStamp(stamp) + '，之後沒有任何一個來源更新過'
                + '（收盤行情與三大法人下午才上站，界線抓在 17:00）。'
-               + '這次沒有派 runner。真的要重抓的話，再按一次。', true);
+               + '這次沒有派 runner。',
+               true,
+               {label: '仍要重抓', run: function(){
+                 forced[code] = true;
+                 runOnGithub(code);
+               }});
       return;
     }
     var force = !!forced[code] && isFresh(stamp);
+    /* 用掉就清掉：這一次是使用者明講的，下一次要重新問過。 */
+    delete forced[code];
     var was = currentMark(code);
     remember(code, was);
     step('送出 ' + code + ' 給 GitHub Actions…', 'send');
@@ -600,7 +628,12 @@
           forget();
           endPanel(code + ' 已經是最新的',
                    'workflow 判斷這一檔的資料沒有變，所以沒有重抓、也沒有重新發布'
-                   + '——網站上這一份就是最新的。真的要重抓的話，再按一次。', true);
+                   + '——網站上這一份就是最新的。',
+                   true,
+                   {label: '仍要重抓', run: function(){
+                     forced[code] = true;
+                     runOnGithub(code);
+                   }});
           return;
         }
         keepWaiting();
@@ -809,7 +842,6 @@
   var q = document.getElementById('q');
   var onlyWatched = document.getElementById('only-watched');
   var onlyPicks = document.getElementById('only-picks');
-  var onlyFull = document.getElementById('only-full');
   var tally = document.getElementById('tally');
   var watchOnlyPage = table.getAttribute('data-watchlist') === '1';
 
@@ -822,7 +854,6 @@
     var pick = tr.querySelector('td.pick-cell');
     var when = tr.querySelector('td.when-cell');
     if(onlyPicks && onlyPicks.checked && (!pick || pick.getAttribute('data-s') !== '1')) return false;
-    if(onlyFull && onlyFull.checked && (!when || !when.getAttribute('data-s'))) return false;
     var v = q ? q.value.trim().toLowerCase() : '';
     return !v || tr.textContent.toLowerCase().indexOf(v) > -1;
   }
@@ -839,7 +870,7 @@
     tally.textContent = watchOnlyPage || n === rows.length
       ? (n + ' 檔') : (n + ' / ' + rows.length + ' 檔');
   }
-  [q, onlyWatched, onlyPicks, onlyFull].forEach(function(el){
+  [q, onlyWatched, onlyPicks].forEach(function(el){
     if(el) el.addEventListener(el.tagName === 'INPUT' && el.type === 'search' ? 'input' : 'change', apply);
   });
   apply();
