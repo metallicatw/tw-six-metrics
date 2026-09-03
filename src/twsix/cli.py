@@ -1776,11 +1776,17 @@ def cmd_fetch_daily(args: argparse.Namespace) -> int:
         by_date,
     )
 
+    from .store.daily import merge_day_rows, read_day_rows  # noqa: PLC0415
+
     http = HttpClient(
         cache_dir=None,   # 要的是今天的收盤，快取只會給出昨天的
         cache_ttl=0,
         min_interval=settings.ingest.min_interval_seconds,
         retries=settings.ingest.retries,
+        # 上櫃的收盤行情是一份 **4.3 MB** 的 JSON（連權證與 ETF 一萬多筆）。
+        # 預設的 30 秒在 runner 上不夠，而逾時之後那一整個來源就被跳過——症狀是
+        # 檔案裡只有上市、一句話寫在 log 中間、workflow 照樣成功。
+        timeout=90.0,
     )
     store = Store(args.out or settings.data_dir)
     daily = Daily(http)
@@ -1801,9 +1807,22 @@ def cmd_fetch_daily(args: argparse.Namespace) -> int:
             continue
         for day, group in sorted(by_date(rows).items()):
             table = f"market/daily/{folder}/{day}"
+            # 合併，不是覆蓋。三個來源裡任何一個沒拿到，這一次就會寫出一份少了
+            # 半個市場的檔案——而它會蓋掉上一次抓齊的那一份。
+            had = read_day_rows(store.root, folder, day)
+            group = merge_day_rows(had, group)
             n = store.write_gz(table, group, columns, sort_by=("code",))
+            kept = len(group) - len(
+                {r.get("code") for r in group} - {r.get("code") for r in had}
+            )
+            note = f"（其中 {kept} 檔沿用先前抓到的）" if had and kept else ""
             written += 1
-            print(f"  {label:<6} {day}　{n} 檔 -> {store.root / (table + '.csv.gz')}")
+            print(f"  {label:<6} {day}　{n} 檔{note}")
+            # 少了一整個交易所不是「一個來源打嗝」，是半個市場不見了。
+            markets = {r.get("market") for r in group}
+            for want in ("上市", "上櫃"):
+                if want not in markets:
+                    failed.append(f"{label} {day}：完全沒有{want}的資料")
 
     # 個股新聞：同一個排程的第三件事。分類列表一頁 30 篇，抓八頁約 240 篇——
     # 一天跑兩次，這已經蓋過上一次之後的全部，而且留了很寬的餘裕。
@@ -1813,6 +1832,7 @@ def cmd_fetch_daily(args: argparse.Namespace) -> int:
         print(f"  個股新聞   失敗：{exc}", file=sys.stderr)
         failed.append(f"個股新聞：{exc}")
 
+    failed.extend(daily.problems)
     for line in failed:
         print(f"::warning::{line}")
     return EXIT_OK if written or not failed else EXIT_FAIL

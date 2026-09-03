@@ -286,6 +286,10 @@ class Daily:
 
     def __init__(self, http: HttpClient):
         self.http = http
+        #: 這一輪有哪個來源沒拿到。呼叫端要把它變成 `::warning::`——
+        #: 原本只是印一行字，混在幾十行輸出中間，而 workflow 照樣成功、照樣
+        #: commit 一份少了半個市場的檔案。沒有人會去讀那一行。
+        self.problems: list[str] = []
 
     def _json(self, url: str) -> Any:
         raw = self.http.get(url, use_cache=False)
@@ -307,6 +311,7 @@ class Daily:
             try:
                 groups.append(parse(self._json(url)))
             except Exception as exc:  # noqa: BLE001 - 一個來源掛掉不該拖垮其餘
+                self.problems.append(f"{url.split('/')[2]} 沒拿到：{exc}")
                 print(f"    （{url.split('/')[2]} 沒拿到：{exc}）")
         return merge_prices(*groups)
 

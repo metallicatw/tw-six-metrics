@@ -220,3 +220,64 @@ def test_two_sources_for_the_same_day_do_not_double_the_rows():
     assert len(merged) == len(web) + 887
     keys = {(r["date"], r["code"]) for r in merged}
     assert len(keys) == len(merged)
+
+
+def test_one_source_missing_does_not_shrink_a_day_that_was_already_complete():
+    """每日行情原本是整檔覆蓋的，理由是「寫下去就不再改」。
+
+    那句話對**資料**成立，對**抓取**不成立。三個來源裡任何一個沒拿到，那一次就會
+    寫出一份少了半個市場的檔案，而它會蓋掉上一次抓齊的那一份。
+
+    實際發生過，而且沒有人發現：`data/market/daily/prices/` 裡連續三天都只有
+    1,093 檔上市、**0 檔上櫃**（上櫃那個端點回的是 4.3 MB，runner 那邊逾時），
+    於是網站上 6488 環球晶的股價停在 08/31——分頁裡那個快照的日期。抽樣才看到。
+    """
+    from twsix.store.daily import merge_day_rows
+
+    old = [
+        {"code": "2330", "market": "上市", "close": "1000"},
+        {"code": "6488", "market": "上櫃", "close": "927"},
+    ]
+    new = [{"code": "2330", "market": "上市", "close": "1010"}]
+    merged = {r["code"]: r for r in merge_day_rows(old, new)}
+    assert merged["2330"]["close"] == "1010", "新的那一份要贏"
+    assert merged["6488"]["close"] == "927", "這一次沒抓到的，不該被抹掉"
+    # 反過來也要成立：先有半份、後來抓齊，補得回來。
+    assert len(merge_day_rows(new, old)) == 2
+
+
+def test_a_whole_exchange_going_missing_is_a_warning_not_a_log_line():
+    """少了一整個交易所不是「一個來源打嗝」，是半個市場不見了。
+
+    原本那個失敗只是 `print` 一行字，混在幾十行輸出中間，而 workflow 照樣成功、
+    照樣 commit。沒有人會去讀那一行——所以它必須是 `::warning::`，而且要有一道
+    直接檢查覆蓋率的判斷，不能只靠「來源有沒有丟例外」。
+    """
+    cli = (ROOT / "src/twsix/cli.py").read_text("utf-8")
+    assert '完全沒有{want}的資料' in cli
+    assert 'for want in ("上市", "上櫃")' in cli
+    assert "failed.extend(daily.problems)" in cli
+    # 4.3 MB 的回應，預設 30 秒不夠。
+    assert "timeout=90.0" in cli
+
+    src = (ROOT / "src/twsix/ingest/daily.py").read_text("utf-8")
+    assert "self.problems" in src
+
+
+def test_the_committed_price_files_carry_both_exchanges():
+    """對版控裡真實的檔案跑。
+
+    這是那個 bug 唯一會自己說話的地方：一份只有上市的收盤行情，看起來完全正常
+    ——1,093 列、欄位齊全、日期正確，只是上櫃那 887 檔全部不在。
+    """
+    import csv
+    import gzip
+    import io
+
+    folder = ROOT / "data/market/daily/prices"
+    files = sorted(folder.glob("*.csv.gz"))
+    assert files, "repo 裡沒有每日收盤，這條測試沒有意義"
+    newest = files[-1]
+    text = gzip.decompress(newest.read_bytes()).decode("utf-8")
+    markets = {r["market"] for r in csv.DictReader(io.StringIO(text))}
+    assert markets == {"上市", "上櫃"}, f"{newest.name} 少了一整個交易所：{markets}"

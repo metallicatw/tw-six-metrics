@@ -177,3 +177,33 @@ def institutional_history(
                 )
             )
     return out
+
+
+def read_day_rows(data_dir: Path, folder: str, day: str) -> list[dict[str, str]]:
+    """某一天已經存下來的那一份，原樣讀回來。沒有就是空的。
+
+    存在的理由是「一次不完整的抓取不該把完整的那一份蓋掉」——見
+    :func:`twsix.cli.cmd_fetch_daily` 裡的合併。
+    """
+    path = data_dir / "market" / "daily" / folder / f"{day}.csv.gz"
+    return _rows(path) if path.exists() else []
+
+
+def merge_day_rows(
+    old: list[dict[str, str]], new: list[dict[str, str]]
+) -> list[dict[str, str]]:
+    """同一天的兩份合併，以代號為鍵，**新的優先**。
+
+    每日行情原本是整檔覆蓋的，理由是「寫下去就不再改」。那句話對資料成立，對
+    **抓取**不成立：三個來源裡任何一個沒拿到，那一次就會寫出一份少了半個市場的
+    檔案，而它會蓋掉上一次抓齊的那一份。
+
+    實際發生過：`data/market/daily/prices/` 裡三天的檔案都只有 1,093 檔上市、
+    **0 檔上櫃**，因為 runner 那邊的上櫃端點沒拿到（4.3 MB 的回應）。而網站上
+    6488 環球晶的股價因此停在 08/31——分頁裡那個快照的日期。
+
+    合併之後，抓齊過一次的那一天就不會再退回去；同一天跑第二次只會把缺的補上。
+    """
+    merged = {(r.get("code") or ""): r for r in old if r.get("code")}
+    merged.update({(r.get("code") or ""): r for r in new if r.get("code")})
+    return list(merged.values())
