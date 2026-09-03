@@ -148,3 +148,44 @@ def test_the_browser_asks_the_server_before_it_pays_for_a_runner():
     assert "'?v=' + encodeURIComponent(TWSIX.built)" in js
     # 送出之前的那一步要在確認之後才發生。
     assert js.index("function stampFromServer(") < js.index("function dispatch(")
+
+
+def test_the_way_out_of_the_guard_is_a_button_not_a_hidden_second_press():
+    """「已經是最新的」是個**啟發式**判斷，所以一定要留一條「不管怎樣都抓」。
+
+    它會錯：後來新增的區塊（大戶持股、董監持股就是這樣加進來的）只能靠重抓補上，
+    快取存到半份的也是，鏡像站更正過數字的也是。
+
+    原本那條路是**再按一次同一顆按鈕**——一個看不見的模式。同一顆按鈕在第一次和
+    第二次做不同的事，唯一的說明是面板上一句「真的要重抓的話，再按一次」；按下去
+    之後也分不清剛才那一次到底算不算數。要保留的能力是對的，說法不對。
+
+    所以改成明講：面板上一顆寫著「仍要重抓」的按鈕。按過就清掉，下一次照樣先問。
+    """
+    js = (ROOT / "src/twsix/report/templates/site.js").read_text("utf-8")
+    assert "仍要重抓" in js
+    # 面板上那句話沒了。註解裡還留著這段歷史，那是刻意的——會被讀到的是字串。
+    assert "真的要重抓的話" not in js, "面板上還在教人用那個看不見的模式"
+    # 按下去才設 forced，不是第一次被擋下來就設。
+    assert "forced[code] = true;\n                 runOnGithub(code);" in js
+    # 用掉就清掉，否則第二次之後這一檔的守門形同不存在。
+    assert "delete forced[code];" in js
+
+
+def test_the_listing_no_longer_offers_a_filter_that_filters_nothing():
+    """「只看有完整報告」在只有 183 檔抓過報表的時候會把 1,741 列篩到 183 列。
+
+    補課排程跑完之後，清單上**每一列**都有完整報告——那個勾選框篩掉零列。一個
+    永遠不改變畫面的勾選框比沒有更糟：讀者會以為自己勾錯了、或以為篩選壞了。
+
+    它要回答的問題（「這一檔的報表有多新」）已經由〔最後更新日〕那一欄接手，而且
+    答得比「有／沒有」更好——所以是功成身退，不是砍功能。
+    """
+    listing = (ROOT / "src/twsix/report/templates/list.html.j2").read_text("utf-8")
+    assert "only-full" not in listing
+    assert "only-watched" in listing and "only-picks" in listing, "另外兩個還要留著"
+    js = (ROOT / "src/twsix/report/templates/site.js").read_text("utf-8")
+    assert "onlyFull" not in js, "腳本裡還在找一個不存在的元素"
+    # 那一欄本身要留著：它才是現在回答「多新」的地方。
+    macros = (ROOT / "src/twsix/report/templates/_macros.html.j2").read_text("utf-8")
+    assert "when-cell" in macros and "最後<br>更新日" in macros

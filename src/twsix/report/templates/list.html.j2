@@ -33,11 +33,17 @@
   已下市的 {{ delisted_count }} 檔不在這張表上，用上方搜尋仍然找得到。
   {% endif %}
 </p>
+{# 這裡原本還有一個「只看有完整報告」。它在只有 183 檔抓過報表的時候會把清單從
+   1,741 列篩到 183 列，是當時最有用的一個篩選。補課排程跑完之後，1,877 列**全部**
+   都有完整報告——那個勾選框篩掉零列。
+   
+   一個永遠不改變畫面的勾選框比沒有更糟：讀者會以為自己勾錯了、或以為篩選壞了。
+   它要回答的問題（「這一檔的報表有多新」）已經由〔最後更新日〕那一欄接手，而且
+   答得比「有／沒有」更好。 #}
 <div class="filters">
   <input id="q" type="search" placeholder="篩選：代號 / 名稱 / 產業" aria-label="篩選">
   <label><input type="checkbox" id="only-watched"> 只看觀察清單</label>
   <label><input type="checkbox" id="only-picks"> 只看具投資價值</label>
-  <label><input type="checkbox" id="only-full"> 只看有完整報告</label>
 </div>
 <div class="scroll"><table id="t">
 {{ table_head() }}

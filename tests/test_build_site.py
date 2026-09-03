@@ -587,11 +587,15 @@ def test_the_intraday_price_ticks_are_gone_from_the_page(tmp_path=None):
     assert "roundup" not in page
 
 
-def test_the_header_stamp_says_when_and_reminds_to_update(tmp_path=None):
+def test_the_header_stamp_says_only_when_the_site_was_built(tmp_path=None):
     """頁首那一行原本擠了四件事，其中三件在別的地方各自說過一次。
 
     檔數與季別在〔評等清單〕的第一句，落後多久在下面那條 ⚠ 橫幅。留在頁首只是
     把最上面那一行讀成一串參數。
+
+    後來還留著一句「個股資料請記得更新」。它在只有 183 檔抓過報表的時候是實話，
+    現在不是了：全部都抓過，而收盤價、三大法人與個股新聞每天由排程自己更新。
+    一句每一頁都出現、卻已經不成立的提醒，讀起來像網站在推卸責任。
     """
     tmp = tmp_path or _tmp()
     out = tmp / "site"
@@ -600,7 +604,7 @@ def test_the_header_stamp_says_when_and_reminds_to_update(tmp_path=None):
     for name in ("index.html", "stock/5439.html"):
         page = (out / name).read_text(encoding="utf-8")
         assert "網站最後更新：" in page, name
-        assert "個股資料請記得更新" in page, name
+        assert "個股資料請記得更新" not in page, name
         assert "網站產生：" not in page, name
         assert "資料截止：" not in page, name
 
