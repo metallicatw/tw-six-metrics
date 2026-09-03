@@ -10,6 +10,9 @@
 {% block body %}
 <h2>{{ stock.stock_id }}　{{ stock.name }}</h2>
 <p class="muted">{{ stock.market }}　{{ stock.industry }}</p>
+{% if delisted %}
+<p class="stale">已下市——這一檔已不在證交所／櫃買的公司名單上，以下數字停在下市前那一期，不會再更新。</p>
+{% endif %}
 
 {% if valuation and valuation.has_any %}
 <h3>估值

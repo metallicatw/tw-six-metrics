@@ -59,6 +59,14 @@
       var ind=document.createElement('span'); ind.className='ind'; ind.textContent=r[2];
       var sc=document.createElement('span'); sc.className='sc'; sc.textContent=r[3];
       li.appendChild(b); li.appendChild(nm); li.appendChild(ind); li.appendChild(sc);
+      /* 第七欄：已下市。清單上不會有這一列，但搜尋仍然找得到——所以這裡必須先
+         說一聲，否則點進去才發現，會讀成「這個網站的資料是錯的」。 */
+      if(r[6]){
+        var dl=document.createElement('span');
+        dl.className='tag gone'; dl.textContent='已下市';
+        dl.title='已不在證交所／櫃買的公司名單上，評等停在下市前那一期';
+        li.appendChild(dl);
+      }
       /* 第五欄是更新日期（沒有完整頁時是空字串，所以真假值判斷照舊）。
          舊資料可能是數字 1——那時沒有日期可印，退回「完整」。 */
       if(r[4]){

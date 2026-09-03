@@ -155,7 +155,7 @@ def test_the_search_index_lists_every_stock_not_only_the_fetched_ones(tmp_path=N
 
 
 def test_the_index_row_is_the_shape_the_script_reads():
-    """[代號, 名稱, 產業, 綜合評分, 有無完整頁] — the order is a contract.
+    """[代號, 名稱, 產業, 綜合評分, 更新日期, 抓取時間戳, 已下市] — a contract.
 
     It is read back in exactly one place, an inline script in base.html.j2,
     which cannot import anything.  Pinning it here is the only thing standing
@@ -170,7 +170,7 @@ def test_the_index_row_is_the_shape_the_script_reads():
         for r in json.loads((out / "search.json").read_text(encoding="utf-8"))
         if r[0] == "5439"
     )
-    assert len(row) == 6
+    assert len(row) == 7
     assert row[1] == "高技"
     assert row[2] and not row[2][0].isdigit()  # 產業, not a number
     assert row[3].count(".") == 1 and len(row[3].split(".")[1]) == 2  # 兩位小數
@@ -178,6 +178,9 @@ def test_the_index_row_is_the_shape_the_script_reads():
     # 第六欄是抓取時間戳（沒抓過就是空字串）。瀏覽器拿它判斷「還需要抓嗎」，
     # 所以它必須帶到時分——第五欄只有日期，回答不了那個問題。
     assert row[5] == "" or ("T" in row[5] and len(row[5]) >= 19)
+    # 第七欄是「已下市」。清單上看不到它了，但搜尋仍然找得到——所以搜尋結果
+    # 自己要說得出來，否則點進去才發現，會讀成這個網站的資料錯了。
+    assert row[6] == 0
 
 
 def test_the_score_is_rounded_in_the_file_not_in_the_browser():

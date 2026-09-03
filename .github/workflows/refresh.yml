@@ -85,7 +85,9 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/ratings.csv data/sheets
+          # delisted.csv 是補課收尾寫的：清單上有、官方名單上沒有的那幾檔。
+          # 一週改不到一次，但漏掉它的話標記永遠不會生效，而網站上看不出來。
+          git add data/ratings.csv data/sheets data/delisted.csv
           if git diff --cached --quiet; then
             echo "::notice::這一批沒有任何一列改變"
             echo "changed=no" >> "$GITHUB_OUTPUT"
