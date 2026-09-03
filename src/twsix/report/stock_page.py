@@ -486,6 +486,7 @@ def build_page(
     sheets_present: Sequence[str] = (),
     settings: Any = None,
     quote: Any = None,
+    inst_days: Any = None,
 ) -> StockPage:
     """Assemble the four sections from one rating and one valuation.
 
@@ -709,7 +710,9 @@ def build_page(
         quarterly=quarterly_eps(reader),
     )
     inst_grid = reader.grid("三大法人") if hasattr(reader, "grid") else []
-    page.institutional = institutional(inst_grid)
+    # 每日排程抓回來的全市場三大法人買賣超。券商鏡像那張分頁只有按「立即更新」
+    # 才會重抓，而這一份每個交易日收盤後自己就有了——合併規則見 `institutional`。
+    page.institutional = institutional(inst_grid, inst_days)
     page.news = _news(reader)
 
     # Goodinfo 的兩張：有就畫，沒有就在〔尚未建置〕裡說為什麼。匯進來之後那

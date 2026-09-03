@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
-from ..store.daily import latest_quotes
+from ..store.daily import institutional_history, latest_quotes
 
 ENGINE_VERSION = "0.1.0"
 TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -200,6 +200,7 @@ def stock_signature(
     sheet_dir: Path,
     quote: Any = None,
     delisted: bool = False,
+    inst: Any = None,
 ) -> str:
     """一檔股票的「內容指紋」——分頁的位元組加上它在評等表裡的那幾列。
 
@@ -220,6 +221,10 @@ def stock_signature(
     # 任何錯誤訊息。這正是整個階段二要解掉的那件事，卡在最後一格。
     if quote is not None:
         h.update(f"{quote.date}|{quote.close}".encode())
+    # 三大法人也是每天換的，理由同上。只算最新那一天就夠：那一天一變，整段視窗
+    # 就跟著移動；那一天沒變，補進來的也是同一批。
+    if inst:
+        h.update(f"inst|{inst[0].date}|{inst[0].total}".encode())
     for row in rows:
         h.update(("\x1f".join(f"{k}={row.get(k, '')}" for k in sorted(row))).encode())
         h.update(b"\x1e")
@@ -551,6 +556,11 @@ def build_site(
     # 每日全市場行情：一次讀進來，1,742 頁共用。價格是頁面上唯一每天都變的東西，
     # 而它現在來自一天四個請求的排程，不是「有沒有人按過那一檔的更新」。
     quotes = latest_quotes(sheets_dir.parent) if sheets_dir is not None else {}
+    # 每日全市場三大法人買賣超，同樣一次讀進來給所有頁共用。一頁一頁去翻三十個
+    # 壓縮檔會把建站時間翻好幾倍，而讀出來的是同一份東西。
+    inst_history = (
+        institutional_history(sheets_dir.parent) if sheets_dir is not None else {}
+    )
 
     composites = [r.composite_value for r in live if r.composite_value is not None]
     # The vintage is a property of the *data*, not of whichever stock happens
@@ -602,6 +612,7 @@ def build_site(
             # 它的指紋只會讓 1,500 張不會變的頁面每天重畫一次。
             quotes.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
             code in (delisted or set()),
+            inst_history.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
         )
         for code, group in grouped.items()
     }
@@ -660,6 +671,7 @@ def build_site(
                 stock_id, sheets_dir, out_dir, base, rules=rules,
                 quote=quotes.get(stock_id),
                 delisted=stock_id in (delisted or set()),
+                inst_days=inst_history.get(stock_id),
             )
             if full:
                 count += 1
@@ -1012,6 +1024,7 @@ def _full_stock_page(
     rules: Any = None,
     quote: Any = None,
     delisted: bool = False,
+    inst_days: Any = None,
 ) -> bool:
     """Render the ten-section page for one stock, if its sheets are on disk.
 
@@ -1071,6 +1084,7 @@ def _full_stock_page(
             sheets_present=list(grids),
             settings=settings,
             quote=quote,
+            inst_days=inst_days,
         )
     except Exception:  # noqa: BLE001 - a bad cache must not fail the build
         return False

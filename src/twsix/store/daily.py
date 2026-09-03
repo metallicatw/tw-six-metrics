@@ -80,3 +80,76 @@ def latest_quotes(data_dir: Path, *, lookback: int = LOOKBACK) -> dict[str, Quot
                 volume=_num(row.get("volume", "")),
             )
     return out
+
+
+#: 〔外資投信〕那張表畫幾天。和券商鏡像那張分頁的視窗一樣長，所以合併之後
+#: 表格的長度不會因為資料來源不同而忽長忽短。
+INST_DAYS = 20
+
+#: 三大法人買賣超往回讀幾個檔案。要湊滿 20 個交易日，加上兩個交易所不同步與
+#: 連假，30 個檔案是安全的下限。一個檔案 25 KB。
+INST_LOOKBACK = 30
+
+
+@dataclass(frozen=True)
+class InstDay:
+    """一檔股票某一個交易日的三大法人買賣超，單位**張**。
+
+    開放資料給的是「股」（2330 的 -11,986,983），券商鏡像那張分頁給的是「張」
+    （-11,987）。頁面上一直用的是張，所以在這裡就換算完——讓兩個來源在進到畫面
+    之前就已經是同一個單位，比在畫面上判斷「這個數字是哪來的」可靠得多。
+
+    對過帳：5439 在 2026-09-02，開放資料 -492,994／0／-333,404 股，鏡像那張分頁
+    寫的是 -493／0／-333 張。三欄全中。
+    """
+
+    date: str  # 2026-09-02
+    foreign: float | None
+    trust: float | None
+    dealer: float | None
+    total: float | None
+
+    @property
+    def roc_label(self) -> str:
+        """`115/09/02` —— 券商鏡像那張分頁的日期寫法，表格上照它排版。"""
+        y, m, d = self.date.split("-")
+        return f"{int(y) - 1911}/{m}/{d}"
+
+
+def _lots(text: str) -> float | None:
+    """股換張。開放資料的每一欄都是整數股，除以一千之後四捨五入到張。"""
+    value = _num(text)
+    return None if value is None else round(value / 1000)
+
+
+def institutional_history(
+    data_dir: Path, *, lookback: int = INST_LOOKBACK, days: int = INST_DAYS
+) -> dict[str, list[InstDay]]:
+    """`{代號: [最新的在前, ...]}`，最多 *days* 個交易日。
+
+    一次讀進來給 1,769 頁共用：一頁一頁去翻三十個壓縮檔，會把建站時間翻好幾倍，
+    而讀出來的東西是一樣的。
+    """
+    folder = data_dir / "market" / "daily" / "institutional"
+    if not folder.is_dir():
+        return {}
+    out: dict[str, list[InstDay]] = {}
+    for path in sorted(folder.glob("*.csv.gz"), reverse=True)[:lookback]:
+        for row in _rows(path):
+            code = (row.get("code") or "").strip()
+            date = (row.get("date") or "").strip()
+            if not code or not date:
+                continue
+            have = out.setdefault(code, [])
+            if len(have) >= days or any(d.date == date for d in have):
+                continue
+            have.append(
+                InstDay(
+                    date=date,
+                    foreign=_lots(row.get("foreign", "")),
+                    trust=_lots(row.get("trust", "")),
+                    dealer=_lots(row.get("dealer", "")),
+                    total=_lots(row.get("total", "")),
+                )
+            )
+    return out
