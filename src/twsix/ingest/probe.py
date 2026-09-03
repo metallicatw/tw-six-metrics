@@ -39,6 +39,9 @@ class Candidate:
     expect: str
     group: str = "daily"
     headers: dict[str, str] = field(default_factory=dict)
+    #: 表單參數。有的話就用 POST 送出——公開資訊觀測站的彙總報表沒有參數只會回
+    #: 一頁 2.4 KB 的空殼（「請重新查詢」），帶了參數才是 1.3 MB 的真資料。
+    form: dict[str, str] = field(default_factory=dict)
 
 
 #: 階段二（每日全市場股價與三大法人）需要的端點。
@@ -86,19 +89,28 @@ CANDIDATES: tuple[Candidate, ...] = (
     ),
     #: 階段一那兩個官方開放資料拿不到的指標（存貨、現金流量）要走公開資訊觀測站的
     #: 彙總報表。表單 POST 回 HTML，最需要先看真實回應的就是它。
+    #: 已驗證：這是**全市場**的資產負債表彙總，一頁七張表（一般業、金融業、票券、
+    #: 保險……），一般業那張 1,049 家。但它的一般業欄位是「流動資產／非流動資產／
+    #: 資產總計／流動負債……」——和我們已經在抓的官方開放資料同一個彙總層級，
+    #: **沒有存貨**。所以這條路解不掉六大指標缺的那兩個。留著樣本是為了讓「試過
+    #: 了，它不是」有憑據。
     Candidate(
         name="mops_balance_summary",
         url="https://mopsov.twse.com.tw/mops/web/ajax_t163sb05",
-        expect="未驗證：猜是資產負債表彙總（含存貨）。POST 表單，可能要帶參數才有內容",
+        expect="已驗證：全市場資產負債表彙總（七張表，一般業 1,049 家）。**沒有存貨**",
         group="statements",
         headers={"Content-Type": "application/x-www-form-urlencoded"},
+        form={"encodeURIComponent": "1", "step": "1", "firstin": "1", "off": "1",
+              "isQuery": "Y", "TYPEK": "sii", "year": "115", "season": "02"},
     ),
     Candidate(
-        name="mops_cashflow_summary",
-        url="https://mopsov.twse.com.tw/mops/web/ajax_t163sb20",
-        expect="未驗證：猜是現金流量表彙總。同上",
+        name="mops_income_summary",
+        url="https://mopsov.twse.com.tw/mops/web/ajax_t163sb04",
+        expect="已驗證：全市場綜合損益表彙總。同樣是彙總層級",
         group="statements",
         headers={"Content-Type": "application/x-www-form-urlencoded"},
+        form={"encodeURIComponent": "1", "step": "1", "firstin": "1", "off": "1",
+              "isQuery": "Y", "TYPEK": "sii", "year": "115", "season": "02"},
     ),
 )
 

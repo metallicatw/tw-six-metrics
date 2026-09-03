@@ -1740,6 +1740,8 @@ def cmd_probe(args: argparse.Namespace) -> int:
     404、回了一頁「因為安全性考量」的 HTML、或回了跟猜測完全不同的欄位，都不會
     弄壞任何既有的功能——只會多一份存下來的事實。
     """
+    import urllib.parse  # noqa: PLC0415
+
     from .ingest.base import HttpClient  # noqa: PLC0415
     from .ingest.probe import CANDIDATES, groups, head, save, stamp  # noqa: PLC0415
 
@@ -1758,8 +1760,11 @@ def cmd_probe(args: argparse.Namespace) -> int:
     http = HttpClient(
         cache_dir=None,  # 樣本要的是「現在真的回什麼」，快取會給出昨天的答案
         cache_ttl=0,
-        min_interval=settings.ingest.min_interval_seconds,
-        retries=2,
+        min_interval=max(settings.ingest.min_interval_seconds, 2.0),
+        # 公開資訊觀測站對太快的請求回 307（而且不帶 Location），退避重試就過得去。
+        retries=4,
+        backoff=2.5,
+        timeout=60.0,
     )
     ok = 0
     for c in wanted:
@@ -1769,10 +1774,14 @@ def cmd_probe(args: argparse.Namespace) -> int:
             "url": c.url,
             "expect": c.expect,
             "group": c.group,
+            "form": dict(c.form),
             "fetched_at": stamp(),
         }
         try:
-            body = http.get(c.url, headers=c.headers or None, use_cache=False)
+            form = urllib.parse.urlencode(c.form).encode() if c.form else None
+            body = http.get(
+                c.url, headers=c.headers or None, body=form, use_cache=False
+            )
         except Exception as exc:  # noqa: BLE001 - 打不通也是一種事實，要存下來
             meta["error"] = str(exc)
             save(out, c.name, b"", meta)
