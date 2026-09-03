@@ -48,6 +48,10 @@
 {% set when = (fetched_at or {}).get(r.stock_id) %}
 {% set has_full = when or (rich_ids and r.stock_id in rich_ids) %}
 <tr data-code="{{ r.stock_id }}">
+  {# 流水號。內容留空，數字由 CSS 的計數器產生——這樣它數的是**畫面上的位置**：
+     排序之後從 1 重新數，篩選之後跳過被隱藏的列。若改成建站時寫死的數字，排一次
+     序就會變成一欄亂跳的號碼，比沒有還糟。 #}
+  <td class="seq"></td>
   <td class="star-cell">
     {# 加入觀察清單。只存在這台瀏覽器裡（localStorage），不上傳也不進 repo——
        這是一份靜態網站，沒有可以放你私人清單的地方，也不該有。 #}
@@ -68,7 +72,7 @@
   {% endfor %}
   <td class="num" data-s="{{ r.composite|float(default=-999) }}">{{ score(r.composite) }}</td>
   <td class="num" data-s="{{ r.composite_delta if r.composite_delta is not none else -999 }}">{{ delta(r.composite_delta) }}</td>
-  <td data-s="{{ 1 if r.value_pick else 0 }}">{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
+  <td class="pick-cell" data-s="{{ 1 if r.value_pick else 0 }}">{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
 </tr>
 {%- endmacro %}
 
@@ -76,19 +80,21 @@
    有些不能，而且看不出是哪些」比「全部都能點」難用得多。 #}
 {% macro table_head() -%}
 <thead><tr>
-  <th class="star-cell" title="觀察清單"><button type="button" class="sortable" data-col="0" aria-label="依觀察清單排序">★</button></th>
-  <th><button type="button" class="sortable" data-col="1">代號</button></th>
-  <th><button type="button" class="sortable" data-col="2">最後<br>更新日</button></th>
-  <th><button type="button" class="sortable" data-col="3">名稱</button></th>
-  <th><button type="button" class="sortable" data-col="4">產業</button></th>
-  <th><button type="button" class="sortable" data-col="5">營收<br>年增率</button></th>
-  <th><button type="button" class="sortable" data-col="6">營業<br>利益率</button></th>
-  <th><button type="button" class="sortable" data-col="7">稅後淨利<br>年增率</button></th>
-  <th><button type="button" class="sortable" data-col="8">EPS</button></th>
-  <th><button type="button" class="sortable" data-col="9">存貨<br>周轉率</button></th>
-  <th><button type="button" class="sortable" data-col="10">自由<br>現金流</button></th>
-  <th class="num"><button type="button" class="sortable" data-col="11">綜合<br>評分</button></th>
-  <th class="num"><button type="button" class="sortable" data-col="12">評分<br>變化</button></th>
-  <th><button type="button" class="sortable" data-col="13">具投資<br>價值</button></th>
+  {# 流水號那一欄不排序：它就是「現在第幾列」，點它沒有意義。 #}
+  <th class="seq" aria-label="序號"></th>
+  <th class="star-cell" title="觀察清單"><button type="button" class="sortable" data-col="1" aria-label="依觀察清單排序">★</button></th>
+  <th><button type="button" class="sortable" data-col="2">代號</button></th>
+  <th><button type="button" class="sortable" data-col="3">最後<br>更新日</button></th>
+  <th><button type="button" class="sortable" data-col="4">名稱</button></th>
+  <th><button type="button" class="sortable" data-col="5">產業</button></th>
+  <th><button type="button" class="sortable" data-col="6">營收<br>年增率</button></th>
+  <th><button type="button" class="sortable" data-col="7">營業<br>利益率</button></th>
+  <th><button type="button" class="sortable" data-col="8">稅後淨利<br>年增率</button></th>
+  <th><button type="button" class="sortable" data-col="9">EPS</button></th>
+  <th><button type="button" class="sortable" data-col="10">存貨<br>周轉率</button></th>
+  <th><button type="button" class="sortable" data-col="11">自由<br>現金流</button></th>
+  <th class="num"><button type="button" class="sortable" data-col="12">綜合<br>評分</button></th>
+  <th class="num"><button type="button" class="sortable" data-col="13">評分<br>變化</button></th>
+  <th><button type="button" class="sortable" data-col="14">具投資<br>價值</button></th>
 </tr></thead>
 {%- endmacro %}

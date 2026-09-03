@@ -817,8 +817,12 @@
     if(watchOnlyPage || (onlyWatched && onlyWatched.checked)){
       if(!watched[tr.getAttribute('data-code')]) return false;
     }
-    if(onlyPicks && onlyPicks.checked && tr.cells[13].getAttribute('data-s') !== '1') return false;
-    if(onlyFull && onlyFull.checked && !tr.cells[2].getAttribute('data-s')) return false;
+    /* 用 class 找，不數第幾格。這兩個數字原本是 13 和 2，而清單前面加一欄
+       流水號就整排位移——那種錯不會報錯，只會讓「只看具投資價值」開始篩錯欄。 */
+    var pick = tr.querySelector('td.pick-cell');
+    var when = tr.querySelector('td.when-cell');
+    if(onlyPicks && onlyPicks.checked && (!pick || pick.getAttribute('data-s') !== '1')) return false;
+    if(onlyFull && onlyFull.checked && (!when || !when.getAttribute('data-s'))) return false;
     var v = q ? q.value.trim().toLowerCase() : '';
     return !v || tr.textContent.toLowerCase().indexOf(v) > -1;
   }
@@ -839,6 +843,31 @@
     if(el) el.addEventListener(el.tagName === 'INPUT' && el.type === 'search' ? 'input' : 'change', apply);
   });
   apply();
+
+  /* 上一頁回來的時候要再篩一次。
+   *
+   * 實際踩到的症狀：桌機 Chrome 勾了「只看觀察清單」→ 點進個股頁 → 上一頁，
+   * 回來以後**勾勾還在，表格卻是全部 1,769 列**。手機版正常。
+   *
+   * 原因是兩件事撞在一起。瀏覽器自己會還原表單控制項的狀態（那是 session
+   * history 的一部分，不是我們寫的），但它**不會**發 change 事件——而還原的
+   * 時機在腳本跑完之後。所以 apply() 是拿著「還沒還原、全部未勾」的狀態跑的，
+   * 跑完瀏覽器才把 checked 設回 true：畫面於是自相矛盾。手機版之所以正常，是
+   * 因為那一次上一頁走的是 bfcache，整份已經篩好的 DOM 原封不動被搬回來，
+   * 根本沒有重跑。
+   *
+   * 兩個事件都掛：pageshow 收 bfcache 那條路（persisted 為真，此時再篩一次是
+   * 無害的），load 收「重新解析」那條路——它在表單還原之後才發生。另外重讀一次
+   * 觀察清單，因為使用者很可能就是在剛才那一頁按了☆。 */
+  function resync(){
+    var list = {};
+    load().forEach(function(c){ list[c] = 1; });
+    watched = list;
+    [].forEach.call(table.querySelectorAll('button[data-star]'), paintStar);
+    apply();
+  }
+  window.addEventListener('pageshow', resync);
+  window.addEventListener('load', resync);
 
   /* 觀察清單那一頁：一檔都沒加的時候要說話，不要給一張空表讓人以為壞了。 */
   var empty = document.getElementById('watch-empty');

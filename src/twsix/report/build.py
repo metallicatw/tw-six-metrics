@@ -379,6 +379,28 @@ def fresher_than(rows: list[Row], quarter: str) -> int:
     return sum(1 for r in rows if r.fiscal_quarter and r.fiscal_quarter > quarter)
 
 
+def fetch_coverage(
+    rows: list[Row], fetched_at: dict[str, str]
+) -> dict[str, Any]:
+    """「這張表抓到什麼程度了」——列數、抓過的檔數、最舊與最新的抓取日。
+
+    〔評等清單〕上那段說明原本是寫死的一句話（「這張表是混齡的」），前提是「底
+    是一份一年前的活頁簿快照，上面疊著少數幾檔手動更新過的」。那個前提在補課
+    排程上線之後就不成立了，但那句話不會自己知道——於是頁面上長期掛著一句
+    「目前沒有任何一檔按過『立即更新』」，而實際上 1,769 檔都已經重抓過。
+
+    所以改成算出來的：說明裡每一個會過期的數字都從資料本身讀，寫死的只剩下
+    「哪一欄是什麼意思」這種不會變的部分。
+    """
+    stamps = sorted(v for r in rows if (v := fetched_at.get(r.stock_id)))
+    return {
+        "total": len(rows),
+        "fetched": len(stamps),
+        "oldest": stamps[0] if stamps else "",
+        "newest": stamps[-1] if stamps else "",
+    }
+
+
 #: How many months past the newest 營收月份 before the site says so out loud.
 STALE_AFTER_MONTHS = 3
 
@@ -709,9 +731,16 @@ def build_site(
     # shape for stale data, because it reads as a recommendation rather than as
     # a record.  The listing is the same data without the ranking, and it is
     # where the search box and the per-stock pages actually lead.
+    from ..ingest.cadence import next_filing  # noqa: PLC0415
+
+    deadline, next_q = next_filing(date.today())
     env.get_template("list.html.j2").stream(
         **base, page="list", rel="", rows=live,
         fresh_count=fresher_than(live, quarter),
+        coverage=fetch_coverage(live, fetched_at),
+        delisted_count=len(rows) - len(live),
+        next_filing=deadline.isoformat(),
+        next_quarter=next_q,
     ).dump(str(out_dir / "index.html"))
     written["index.html（評等清單）"] = 1
 

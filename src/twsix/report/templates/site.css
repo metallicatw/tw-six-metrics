@@ -453,6 +453,19 @@ th button.sortable:focus-visible{outline:2px solid var(--accent-2);outline-offse
 /* 箭頭用 ::after，不塞進文字裡——塞進去會讓欄寬在每次排序時跳動。 */
 th button.sortable.asc::after{content:" ▲";font-size:9px;color:var(--accent)}
 th button.sortable.desc::after{content:" ▼";font-size:9px;color:var(--accent)}
+/* 流水號。數字由計數器產生，不是建站時寫死的——寫死的話排一次序就會變成一欄
+   亂跳的號碼（第一列寫著 837），比沒有還糟。計數器數的是**畫面上的位置**：
+   排序之後從 1 重新數，篩選之後跳過被隱藏的列。
+
+   計數器歸零掛在 tbody 上而不是 table 上：表頭那一列若也被數進去，整欄會從 2
+   開始。`tr[hidden]` 不重設 counter-increment 是刻意的——`display:none` 的元素
+   本來就不會遞增，所以「只看觀察清單」的時候號碼自然是 1、2、3。 */
+td.seq{width:1%;padding-left:10px;padding-right:2px;text-align:right;
+  color:var(--muted);font-variant-numeric:tabular-nums;font-size:11px}
+th.seq{width:1%}
+table#t tbody{counter-reset:seq}
+table#t tbody tr{counter-increment:seq}
+table#t td.seq::before{content:counter(seq)}
 .star-cell{width:1%;padding-left:8px;padding-right:2px;text-align:center}
 button.star{appearance:none;border:none;background:none;cursor:pointer;padding:2px 4px;
   font-size:15px;line-height:1;color:var(--muted);border-radius:3px}
