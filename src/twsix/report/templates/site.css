@@ -444,7 +444,10 @@ tr.here th{font-weight:700}
 
 /* -- 評等清單：排序、篩選、觀察清單 ------------------------------------- */
 .filters{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:0 0 12px}
-.filters input[type=search]{flex:1 1 240px;min-width:200px;padding:7px 11px;
+/* 篩選框不長大。`flex:1` 會讓它吃掉整列，把兩個勾選框推到最右邊——於是一列裡
+   三樣東西被拉開成兩堆，眼睛要橫跨整個螢幕才讀得完。它要的寬度就是「打得下
+   一個股名」，不是「剩下的全部」。 */
+.filters input[type=search]{flex:0 1 320px;min-width:180px;padding:7px 11px;
   border:1px solid var(--rule);border-radius:5px;background:var(--surface);
   color:var(--ink);font:inherit;font-size:13.5px}
 .filters label{display:inline-flex;align-items:center;gap:6px;font-size:13px;

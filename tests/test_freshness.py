@@ -189,3 +189,13 @@ def test_the_listing_no_longer_offers_a_filter_that_filters_nothing():
     # 那一欄本身要留著：它才是現在回答「多新」的地方。
     macros = (ROOT / "src/twsix/report/templates/_macros.html.j2").read_text("utf-8")
     assert "when-cell" in macros and "最後<br>更新日" in macros
+
+
+def test_the_filter_row_does_not_stretch_across_the_whole_screen():
+    """搜尋框原本是 `flex:1`，於是它吃掉整列、把兩個勾選框推到最右邊。
+
+    一列裡三樣東西被拉開成兩堆，眼睛要橫跨整個螢幕才讀得完——而那個框要的寬度
+    就是「打得下一個股名」，不是「剩下的全部」。
+    """
+    css = (ROOT / "src/twsix/report/templates/site.css").read_text("utf-8")
+    assert ".filters input[type=search]{flex:0 1 320px" in css
