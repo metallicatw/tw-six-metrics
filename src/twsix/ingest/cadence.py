@@ -123,6 +123,21 @@ def expected_quarter(today: date) -> tuple[int, int]:
     return best
 
 
+def next_filing(today: date) -> tuple[date, str]:
+    """下一個季報申報期限，以及它會帶來哪一季。
+
+    〔評等清單〕上那句「整張表下一次什麼時候會變」需要一個具體的日期。六大指標
+    是季報算出來的，所以在下一個期限之前，補課排程再怎麼跑，等第也只會從舊的
+    一季換到**同一季**——真正的換季只發生在這四天之後。
+    """
+    for month, day, quarter, shift in FILINGS:
+        if (today.month, today.day) < (month, day):
+            return date(today.year, month, day), f"{today.year + shift}.{quarter}Q"
+    # 今年的四個都過了：下一個是明年 3/31 的年報。
+    month, day, quarter, shift = FILINGS[0]
+    return date(today.year + 1, month, day), f"{today.year + 1 + shift}.{quarter}Q"
+
+
 def expected_month(today: date) -> tuple[int, int]:
     """今天最新**應該**已經公布的營收月份。
 

@@ -171,3 +171,11 @@ def test_the_refresh_workflow_commits_the_marker_file():
     """
     wf = (ROOT / ".github/workflows/refresh.yml").read_text("utf-8")
     assert "data/delisted.csv" in wf
+
+
+def test_the_listing_says_how_many_are_hidden():
+    """已下市的不在表上——那件事要在表上說一次，否則「怎麼少了一檔」沒有答案。"""
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), delisted={"5439"})
+    assert "已下市的 1 檔不在這張表上" in (out / "index.html").read_text("utf-8")

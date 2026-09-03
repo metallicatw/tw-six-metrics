@@ -757,8 +757,10 @@ def test_every_column_can_be_sorted_and_sorts_by_a_key_not_by_the_printed_text(t
     # 每一欄都可以點——只有幾欄能點，而且看不出是哪幾欄，比全部都能點難用。
     import re
 
+    # 第 0 欄是流水號，它不排序（點「現在第幾列」沒有意義），所以可排序的欄
+    # 從 1 開始。這一串一旦和 `tr.cells[col]` 對不起來，排序會整排錯開一格。
     cols = re.findall(r'class="sortable" data-col="(\d+)"', listing)
-    assert [int(c) for c in cols] == list(range(14))
+    assert [int(c) for c in cols] == list(range(1, 15))
 
     row = listing.split('<tr data-code="5439"')[1].split("</tr>")[0]
     assert re.search(r'class="num" data-s="[-0-9.]+"', row)   # 綜合評分排的是數字
