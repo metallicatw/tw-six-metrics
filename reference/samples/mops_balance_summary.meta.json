@@ -1,0 +1,19 @@
+{
+  "bytes": 1369112,
+  "expect": "已驗證：全市場資產負債表彙總（七張表，一般業 1,049 家）。**沒有存貨**",
+  "fetched_at": "2026-09-03T06:26:08+00:00",
+  "form": {
+    "TYPEK": "sii",
+    "encodeURIComponent": "1",
+    "firstin": "1",
+    "isQuery": "Y",
+    "off": "1",
+    "season": "02",
+    "step": "1",
+    "year": "115"
+  },
+  "group": "statements",
+  "head": "<html> <head> <title>公開資訊觀測站</title> <link href=\"css/css2.css\" rel=\"stylesheet\" type=\"text/css\" Media=\"Screen\"/> <script type=\"text/javascript\" src=\"js/mops2.js\"></script> </head> <body> <div id=\"div01\" > <form action='/mops/web/ajax_t163sb05' method='post' onsubmit='return false;' name='fm'> <table class='noBorder' style='margin-right:0px !important; margin-l",
+  "name": "mops_balance_summary",
+  "url": "https://mopsov.twse.com.tw/mops/web/ajax_t163sb05"
+}

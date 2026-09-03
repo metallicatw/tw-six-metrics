@@ -83,6 +83,43 @@ def test_the_dud_candidate_is_kept_rather_than_quietly_dropped():
     assert "html" in meta.get("head", "").lower()
 
 
+def test_a_candidate_with_form_fields_is_sent_as_a_post():
+    """公開資訊觀測站的彙總報表，GET 回的是一頁 2.4 KB 的空殼。
+
+    使用者跑 `twsix probe --group statements` 拿到的就是那兩份空殼——不是端點壞
+    了，是那個網址只認 POST 表單。表單欄位是從 `t163sb05` 那一頁**讀出來**的，
+    不是猜的。
+    """
+    forms = {c.name: c.form for c in CANDIDATES if c.form}
+    assert forms, "沒有任何候選帶表單，那 POST 這條路等於沒有測到"
+    for name, form in forms.items():
+        assert {"step", "firstin", "isQuery", "TYPEK", "year", "season"} <= set(form), (
+            f"{name} 的表單少了欄位，送出去會回空殼"
+        )
+        meta = json.loads((SAMPLES / f"{name}.meta.json").read_text("utf-8"))
+        assert meta.get("form") == form, f"{name} 的樣本不是用現在這組參數抓的"
+
+
+def test_the_summary_report_does_not_carry_the_two_missing_indicators():
+    """存貨週轉率與自由現金流量，這條路解不掉——而且是量過的，不是推測的。
+
+    帶了表單之後回的是真資料（1.3 MB／1.6 MB，一頁七張表，一般業 1,049 家），
+    所以「抓不到」不是因為沒抓成功。但它的一般業欄位是「流動資產／非流動資產／
+    資產總計／流動負債……」——和我們已經在抓的官方開放資料同一個彙總層級，整份
+    檔案裡「存貨」出現 **0 次**。
+
+    留著這兩份樣本，是為了不要有人半年後再走一次同一條路。下一個候選是個股的
+    完整財報（`t164sb*`），一樣要先有真實回應才准寫解析器。
+    """
+    for name in ("mops_balance_summary", "mops_income_summary"):
+        body = load(SAMPLES, name).decode("utf-8", errors="replace")
+        assert len(body) > 1_000_000, f"{name} 又抓回空殼了"
+        assert body.count("<table") >= 7, f"{name} 的表少了，形狀變了"
+        assert "存貨" not in body, (
+            f"{name} 裡出現了存貨——那就值得重看一次這條路"
+        )
+
+
 def test_there_is_a_way_to_refresh_the_samples_from_a_runner():
     """證交所擋過機房 IP，而 runner 的 IP 是通的——哪一邊通得了本身就是事實之一。"""
     wf = (ROOT / ".github/workflows/probe.yml").read_text("utf-8")
