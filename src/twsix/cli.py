@@ -1804,9 +1804,48 @@ def cmd_fetch_daily(args: argparse.Namespace) -> int:
             n = store.write_gz(table, group, columns, sort_by=("code",))
             written += 1
             print(f"  {label:<6} {day}　{n} 檔 -> {store.root / (table + '.csv.gz')}")
+
+    # 個股新聞：同一個排程的第三件事。分類列表一頁 30 篇，抓八頁約 240 篇——
+    # 一天跑兩次，這已經蓋過上一次之後的全部，而且留了很寬的餘裕。
+    try:
+        written += _fetch_daily_news(http, store)
+    except Exception as exc:  # noqa: BLE001 - 新聞掛掉不該把行情丟掉
+        print(f"  個股新聞   失敗：{exc}", file=sys.stderr)
+        failed.append(f"個股新聞：{exc}")
+
     for line in failed:
         print(f"::warning::{line}")
     return EXIT_OK if written or not failed else EXIT_FAIL
+
+
+def _fetch_daily_news(http: Any, store: Store) -> int:
+    """全市場新聞，一天一個檔案，照**新聞自己的日期**分。
+
+    照抓取日命名會把跨日的那幾則（22:11 抓到的、01:30 才抓的）寫進同一個檔案，
+    而每日行情已經因為同樣的理由改成看資料自己的日期了。
+
+    同一天重跑要合併而不是覆蓋：一天兩次排程，第二次抓到的是第一次之後才發的，
+    覆蓋等於把早上那批丟掉。
+    """
+    from .ingest.news import CATEGORY_PAGES, CATEGORY_URL, HEADERS  # noqa: PLC0415
+    from .ingest.news import parse_category  # noqa: PLC0415
+    from .store import news as news_store  # noqa: PLC0415
+
+    by_day: dict[str, dict[str, list[Any]]] = {}
+    for page in range(1, CATEGORY_PAGES + 1):
+        body = http.get(CATEGORY_URL.format(page=page), headers=HEADERS)
+        for code, items in parse_category(body.decode("utf-8", "replace")).items():
+            for item in items:
+                day = item.date.replace("/", "-")
+                by_day.setdefault(day, {}).setdefault(code, []).append(item)
+    written = 0
+    for day, per_code in sorted(by_day.items()):
+        n = news_store.merge_day(store.root, day, per_code)
+        written += 1
+        print(f"  個股新聞   {day}　{len(per_code)} 檔／{n} 則")
+    if not by_day:
+        print("  個股新聞   沒有資料")
+    return written
 
 
 def cmd_probe(args: argparse.Namespace) -> int:

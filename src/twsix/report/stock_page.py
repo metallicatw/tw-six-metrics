@@ -256,14 +256,26 @@ def _weekly_closes(reader: Any) -> list[tuple[str, float]]:
     return [(d, v) for d, v in series if int(d[:4]) >= start]
 
 
-def _news(reader: Any) -> Any:
-    """〔個股新聞〕, if it was fetched.  See :mod:`twsix.ingest.news`."""
+def _news(reader: Any, extra: Any = None) -> Any:
+    """〔個股新聞〕, if it was fetched.  See :mod:`twsix.ingest.news`.
+
+    *extra* 是每日排程從**全市場分類列表**抓回來的那幾則（一天兩次，一個請求換
+    一整批）。分頁那一份是關鍵字索引抓的，歷史深但只有按「立即更新」才會換；
+    這一份每天新但只涵蓋有上新聞的股票。所以是合併，不是取代——同一篇（同連結）
+    只留一次，新的在前。
+
+    分頁沒抓過但每日資料有的那些股票，也會有這一節：那是真的新聞，沒有理由因為
+    「還沒有人按過那一檔的更新」就不給看。
+    """
     from ..ingest import news as news_mod  # noqa: PLC0415
 
     grid = reader.grid(news_mod.SHEET) if hasattr(reader, "grid") else []
-    if not grid:
+    items = news_mod.from_grid(grid) if grid else []
+    if extra:
+        items = news_mod.merge_items(items, list(extra))
+    if not items:
         return None
-    return news_mod.describe(news_mod.from_grid(grid))
+    return news_mod.describe(items)
 
 
 def _merged_yoy(reader: Any) -> list[tuple[str, Number]]:
@@ -487,6 +499,7 @@ def build_page(
     settings: Any = None,
     quote: Any = None,
     inst_days: Any = None,
+    news_items: Any = None,
 ) -> StockPage:
     """Assemble the four sections from one rating and one valuation.
 
@@ -713,7 +726,7 @@ def build_page(
     # 每日排程抓回來的全市場三大法人買賣超。券商鏡像那張分頁只有按「立即更新」
     # 才會重抓，而這一份每個交易日收盤後自己就有了——合併規則見 `institutional`。
     page.institutional = institutional(inst_grid, inst_days)
-    page.news = _news(reader)
+    page.news = _news(reader, news_items)
 
     # Goodinfo 的兩張：有就畫，沒有就在〔尚未建置〕裡說為什麼。匯進來之後那
     # 一頁的理由就不再適用了，所以清單是算出來的，不是寫死的。

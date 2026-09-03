@@ -195,3 +195,95 @@ def from_grid(grid: list[list[str]]) -> list[Item]:
             )
         )
     return out
+
+
+# =========================================================================
+# 全市場的分類新聞列表
+# =========================================================================
+#
+# 上面那個關鍵字索引是**一檔一個請求**：1,769 檔就是 1,769 個請求，接不上每日
+# 排程，所以〔個股新聞〕一直只有按下「立即更新」才會換。
+#
+# 分類列表是同一個網站的另一條路：一個請求換到一整批，而每一篇帶著它提到的股票
+# 代號（`market[].code`），可以反過來分派到個股。實測（2026-09-03）645 篇、22 頁、
+# 一頁 30 篇（`limit` 被忽略），所以整批是 22 個請求。
+#
+# 它給的是「有上新聞的那些股票」，不是全部 1,769 檔——首頁 30 篇裡就有 12 篇沒有
+# 任何股票代號（大盤評論）。所以這條路是**補**，不是取代：關鍵字索引那份歷史深，
+# 這份每天新。
+
+#: 分類列表。`page` 從 1 開始；`limit` 送了也沒用，一頁固定 30 篇。
+CATEGORY_URL = "https://api.cnyes.com/media/api/v1/newslist/category/tw_stock?page={page}"
+
+#: 一次抓幾頁。實測整個分類 22 頁涵蓋約兩天多；排程一天跑兩次，抓 8 頁（約 240
+#: 篇）就已經蓋過上一次之後的全部，而且留了很寬的餘裕。抓滿 22 頁只是把同樣的
+#: 舊新聞重讀一次。
+CATEGORY_PAGES = 8
+
+#: 只認台股的四位數代號。同一則新聞的 `market` 裡也會出現 `NVDA` 這種美股代號，
+#: 而 `symbol` 的前綴是 `TWS:`（上市）／`TWG:`（上櫃）。
+_CODE = re.compile(r"^\d{4}$")
+
+
+def parse_category(payload: str) -> dict[str, list[Item]]:
+    """分類列表的回應 → `{代號: [新聞, ...]}`。
+
+    這個信封和關鍵字索引**不一樣**：那邊是 `data.items`，這邊是 `items.data`。
+    來源名稱也不同，那邊是 `category` 陣列，這邊是 `categoryName` 字串（`source`
+    實測是 None 或空字串，不能用）。
+
+    一則新聞可能提到好幾檔（「佳世達8月營收年增12% 旗下羅昇……」同時掛 2352 與
+    8374），那就每一檔都算它一則——那正是讀者在任一檔頁面上會想看到的。
+    """
+    try:
+        body = json.loads(payload)
+    except ValueError:
+        return {}
+    rows = ((body.get("items") or {}).get("data")) or []
+    out: dict[str, list[Item]] = {}
+    for raw in rows:
+        stamp = raw.get("publishAt")
+        title = _clean(raw.get("title", ""))
+        if not isinstance(stamp, (int, float)) or not title:
+            continue
+        codes = [
+            code
+            for m in (raw.get("market") or [])
+            if _CODE.match(code := str(m.get("code", "")).strip())
+            and str(m.get("symbol", "")).startswith("TW")
+        ]
+        if not codes:
+            continue          # 大盤評論。分派不到任何一檔，就不要硬塞。
+        when = datetime.fromtimestamp(float(stamp), TAIPEI)
+        summary = _clean(raw.get("summary", ""))[:180]
+        if summary == title or TICKER.search(title):
+            summary = ""
+        item = Item(
+            title=title,
+            summary=summary,
+            source=_clean(raw.get("categoryName", "")) or "鉅亨網",
+            date=when.strftime("%Y/%m/%d"),
+            time=when.strftime("%H:%M"),
+            url=ARTICLE.format(id=raw.get("newsId", "")),
+        )
+        for code in codes:
+            out.setdefault(code, []).append(item)
+    return out
+
+
+def merge_items(old: list[Item], new: list[Item]) -> list[Item]:
+    """兩份新聞合成一份，新的在前，同一篇只留一次。
+
+    比對用**連結**（裡面就是 newsId）而不是標題：同一篇文章的標題會被改，而改過
+    標題的同一篇仍然是同一篇。日期時間相同的兩則不同新聞則是常態。
+    """
+    seen: set[str] = set()
+    out: list[Item] = []
+    for item in sorted(
+        [*new, *old], key=lambda i: (i.date, i.time), reverse=True
+    ):
+        if item.url in seen:
+            continue
+        seen.add(item.url)
+        out.append(item)
+    return out
