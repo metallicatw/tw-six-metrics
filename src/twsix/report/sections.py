@@ -401,6 +401,10 @@ INST_HEADER_ROW = "日期"
 INST_FOOTER = "合計買賣超"
 
 
+#: 表上畫幾天。和 `store.daily.INST_DAYS` 同一個數字，理由寫在那裡。
+INST_DAYS = 20
+
+
 @dataclass
 class Institutional:
     """〔外資投信〕 — the last 20 sessions of 三大法人 activity."""
@@ -409,14 +413,40 @@ class Institutional:
     totals: dict[str, Number]
     latest: dict[str, Any]
     figures: dict[str, str]
+    #: 最新一筆**有持股比重**的那一天。買賣超可能比它新一天（見下面的合併），而
+    #: 「外資持股比重」那張卡片要指的是真的有比重的那一天，不是空的那一天。
+    latest_share: dict[str, Any] | None = None
+    #: 有幾天是每日開放資料補上來的（券商鏡像那張分頁還沒有的）。
+    from_daily: int = 0
 
 
-def institutional(grid: Sequence[Sequence[str]]) -> Institutional | None:
+def institutional(
+    grid: Sequence[Sequence[str]], extra: Sequence[Any] | None = None
+) -> Institutional | None:
     """Read 〔三大法人〕 into the day rows, the period totals and two charts.
 
     The footer row carries the exchange's own 20-day sums, so they are read
     rather than re-added: MoneyDJ rounds each day to whole 張 and a column of
     twenty rounded numbers does not have to add up to its own stated total.
+
+    ## *extra*：每天自己更新的那一半
+
+    券商鏡像那張分頁只有按下「立即更新」才會重抓，所以這一節原本是全站唯一一個
+    「明明每天都有新資料，卻要人手動去要」的地方——而每日排程其實**早就**把全
+    市場的三大法人買賣超抓回來了（`twsix fetch-daily`，一天兩次），只是沒有接上。
+
+    *extra* 就是那份資料（`store.daily.InstDay`，已經換算成張）。合併規則：
+
+    * **同一天兩邊都有，用分頁那一份**——它多了估計持股與持股比重兩組欄位，而
+      買賣超兩邊是一樣的（實測 5439 於 2026-09-02 三欄全中）。
+    * 分頁沒有的日期才從每日資料補，補進來的那幾列**只有買賣超**，持股與比重
+      留空。表格與圖都吃得下空值，而編一個數字填進去才是真的錯。
+    * 分頁也可能**比較新**（剛按過「立即更新」），所以合併是雙向的，不是「新的
+      疊在舊的上面」。
+
+    合計那一列只在真的補進新日期時才重算——視窗一移動，交易所那個「近 20 日」
+    就不再是畫面上這 20 日。沒有補到任何一天的時候，照舊讀分頁的footer，上面
+    那段「不要自己加總」的理由仍然成立。
     """
     from ..ingest.moneydj import _to_number
 
@@ -449,7 +479,39 @@ def institutional(grid: Sequence[Sequence[str]]) -> Institutional | None:
             }
         )
     if not days:
+        # 沒有分頁就是沒有這一節。只有買賣超、沒有持股也沒有比重的一張表，比
+        # 「尚未取得〔三大法人〕」更難讀——後者至少說得出下一步是什麼。
         return None
+
+    added = 0
+    if extra:
+        seen = {d["date"] for d in days}
+        for e in extra:
+            label = e.roc_label
+            if label in seen:
+                continue
+            seen.add(label)
+            days.append(
+                {
+                    "date": label,
+                    "net": {
+                        "外資": e.foreign, "投信": e.trust,
+                        "自營商": e.dealer, "合計": e.total,
+                    },
+                    # 開放資料沒有這兩組——留空，不要編。
+                    "holding": dict.fromkeys(INST_HOLDING),
+                    "share": dict.fromkeys(INST_SHARE),
+                }
+            )
+            added += 1
+        if added:
+            # 新的排前面。`115/09/02` 這種寫法照字串排就是照日期排。
+            days.sort(key=lambda d: d["date"], reverse=True)
+            days = days[:INST_DAYS]
+            totals = {
+                k: sum(v for d in days if (v := d["net"][k]) is not None)
+                for k in INST_NET
+            }
 
     labels = [d["date"][3:] for d in days]  # 「08/28」 — the year is on the page
     figures = {
@@ -474,7 +536,14 @@ def institutional(grid: Sequence[Sequence[str]]) -> Institutional | None:
         ),
     }
     return Institutional(
-        days=days, totals=totals, latest=days[0], figures=figures
+        days=days,
+        totals=totals,
+        latest=days[0],
+        figures=figures,
+        latest_share=next(
+            (d for d in days if d["share"]["外資"] is not None), None
+        ),
+        from_daily=added,
     )
 
 

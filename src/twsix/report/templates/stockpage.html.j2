@@ -631,9 +631,13 @@
     <span>近 20 日外資買賣超（張）</span></div>
   <div class="card"><b>{{ "{:,.0f}".format(i.totals["投信"]) if i.totals["投信"] is not none else "—" }}</b>
     <span>近 20 日投信買賣超（張）</span></div>
-  <div class="card"><b>{{ "%.2f"|format(i.latest.share["外資"] * 100) if i.latest.share["外資"] is not none else "—" }}%</b>
-    <span>外資持股比重（{{ i.latest.date }}）</span></div>
-  <div class="card"><b>{{ "%.2f"|format(i.latest.share["三大法人"] * 100) if i.latest.share["三大法人"] is not none else "—" }}%</b>
+{# 持股比重看的是 `latest_share`，不是 `latest`：買賣超可能比它新一天（最上面
+     那幾列是每日開放資料補的，只有買賣超），而一張寫著「—」的卡片會讓人以為
+     資料掉了，其實只是那一天還沒有比重。 #}
+{% set ls = i.latest_share %}
+  <div class="card"><b>{{ "%.2f"|format(ls.share["外資"] * 100) if ls and ls.share["外資"] is not none else "—" }}%</b>
+    <span>外資持股比重（{{ ls.date if ls else "—" }}）</span></div>
+  <div class="card"><b>{{ "%.2f"|format(ls.share["三大法人"] * 100) if ls and ls.share["三大法人"] is not none else "—" }}%</b>
     <span>三大法人持股比重</span></div>
 </div>
 {{ i.figures.foreign_net|safe }}
@@ -663,6 +667,10 @@
 </div>
 <p class="muted">
   買賣超單位為張。投信與自營商的庫存交易所並未公告，MoneyDJ 的數值為估計值。
+  {% if i.from_daily %}
+  最新的 {{ i.from_daily }} 個交易日由每日排程從證交所／櫃買直接取得，所以不必按
+  「立即更新」也是新的；那幾列只有買賣超，估計持股與持股比重要等下一次重抓報表。
+  {% endif %}
 </p>
 {% else %}
 <p class="stale">尚未取得〔三大法人〕，請執行 <code>twsix fetch-stock {{ p.stock_id }}</code>。</p>
