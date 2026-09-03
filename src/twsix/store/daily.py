@@ -15,6 +15,7 @@ from __future__ import annotations
 import csv
 import gzip
 import io
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -117,9 +118,18 @@ class InstDay:
 
 
 def _lots(text: str) -> float | None:
-    """股換張。開放資料的每一欄都是整數股，除以一千之後四捨五入到張。"""
+    """股換張：除以一千，**逢五進位（往離零的方向）**。
+
+    不能用 Python 的 `round`：它是銀行家捨入（.5 進到偶數），而券商鏡像用的是
+    一般的四捨五入。6423 於 2026-09-03 是 -6,500 股：`round` 給 -6，鏡像寫的是
+    **-7**。全市場對帳 225 筆裡就這一筆不合——一個只在剛好 .5 才出現的差，正是
+    最容易被當成雜訊放過去的那種。
+    """
     value = _num(text)
-    return None if value is None else round(value / 1000)
+    if value is None:
+        return None
+    value /= 1000
+    return float(math.floor(value + 0.5) if value >= 0 else math.ceil(value - 0.5))
 
 
 def institutional_history(
@@ -143,13 +153,27 @@ def institutional_history(
             have = out.setdefault(code, [])
             if len(have) >= days or any(d.date == date for d in have):
                 continue
+            foreign = _lots(row.get("foreign", ""))
+            trust = _lots(row.get("trust", ""))
+            dealer = _lots(row.get("dealer", ""))
+            parts = [v for v in (foreign, trust, dealer) if v is not None]
             have.append(
                 InstDay(
                     date=date,
-                    foreign=_lots(row.get("foreign", "")),
-                    trust=_lots(row.get("trust", "")),
-                    dealer=_lots(row.get("dealer", "")),
-                    total=_lots(row.get("total", "")),
+                    foreign=foreign,
+                    trust=trust,
+                    dealer=dealer,
+                    # 單日合計是**三欄換算之後相加**，不是把原始的合計換算一次。
+                    #
+                    # 兩者不一樣，而且不是罕見狀況：全市場 3,706 列裡有 316 列
+                    # （8.5%）兩種算法給的答案差一張。5439 於 2026-09-03 是
+                    # 93,439 / 0 / -43,646 股 → 93 / 0 / -44 張；原始合計 49,793
+                    # 股換算是 50，但 93 + 0 - 44 = **49**，而鏡像寫的正是 49。
+                    #
+                    # 選相加，理由不只是「對得上鏡像」：畫面上那一列印的是四捨五入
+                    # 過的三欄，讀者自己加得出 49。表格寫 50 的話，一行裡的四個
+                    # 數字彼此矛盾——那種錯不會報錯，只會讓人以為自己算錯了。
+                    total=sum(parts) if len(parts) == 3 else _lots(row.get("total", "")),
                 )
             )
     return out
