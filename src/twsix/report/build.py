@@ -63,9 +63,18 @@ GRADE_KEYS = ["AA", "A", "BB", "B", "C", "不評分", "數據不足"]
 #: 〔市場監控〕。metallicatw/market-monitor 每天台北 06:30 自己產生的一份 924 KB
 #: 自足報告（自己的 CSS 與版面，只連一個 Chart.js CDN），由建站流程原樣複製進來。
 #:
-#: 不套這個網站的殼：兩套 CSS 會打架，而那個檔案每天重新產生一次——今天改對了，
-#: 明天它換個格式就又壞了。導覽列連過去，那一頁保持它原本的樣子。
+#: **兩個檔案，各司其職。**
+#:
+#: 第一版只複製了那份報告，導覽列直接連過去。結果是點下去就出不來了：那一頁是
+#: 另一支程式產生的完整 HTML，沒有這個網站的頁首、沒有導覽列、也沒有搜尋框——
+#: 讀起來像被丟到另一個網站，只能按瀏覽器的上一頁。
+#:
+#: 所以拆成兩個：`monitor-report.html` 是原封不動的那一份，`monitor.html` 是這個
+#: 網站自己的一頁，頁首、導覽列、搜尋框全都在，中間嵌一個同源的 iframe 把報告
+#: 放進來。報告一個位元組都沒有被改到（它每天重新產生，改它遲早會壞），而讀者
+#: 從頭到尾沒有離開過這個網站。
 MONITOR_PAGE = "monitor.html"
+MONITOR_REPORT = "monitor-report.html"
 
 #: The site is about Taiwanese stocks, read in Taiwan, against 民國 quarters
 #: and 月營收 filed to a Taiwanese calendar.  Stamping it in UTC — or in
@@ -591,9 +600,9 @@ def build_site(
         build_id=build_id(),
     )
     # 〔市場監控〕是另一個 repo 每天產生的一份自足報告，由建站流程在跑 `twsix
-    # build` 之前複製成 `site/monitor.html`。導覽列那一項**看檔案在不在**才出現：
-    # 本機建站沒有那個檔案，寫死一個連結就是一個 404。
-    has_monitor = (out_dir / MONITOR_PAGE).exists()
+    # build` 之前複製成 `site/monitor-report.html`。導覽列那一項**看檔案在不在**
+    # 才出現：本機建站沒有那個檔案，寫死一個連結就是一個 404。
+    has_monitor = (out_dir / MONITOR_REPORT).exists()
 
     base = dict(
         hidden_pages=sorted(HIDDEN_PAGES),
@@ -844,6 +853,13 @@ def build_site(
         **base, page="about", rel="", rules=RULE_TEXT, thresholds=_thresholds(rules)
     ).dump(str(out_dir / "about.html"))
     written["about.html"] = 1
+
+    # 外殼那一頁。只有原始報告真的在的時候才畫——沒有報告的空框比沒有那一頁糟。
+    if has_monitor:
+        env.get_template("monitor.html.j2").stream(
+            **base, page="monitor", rel="", report=MONITOR_REPORT
+        ).dump(str(out_dir / MONITOR_PAGE))
+        written["monitor.html（市場監控）"] = 1
 
 
     _write_search_index(out_dir, rows, rich_ids, fetched_at, fetched_ts)

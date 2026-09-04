@@ -911,6 +911,30 @@
 
 
 /* =========================================================================
+ * 〔市場監控〕嵌進來的那一份報告：把它撐到剛好填滿視窗剩下的高度
+ *
+ * 寫死一個 `calc(100vh - 260px)` 會在兩種情況下多出第二條捲軸：頁首在窄螢幕上
+ * 換行，或上面那段說明多一行。兩條捲軸（外層一條、iframe 一條）捲起來像壞掉。
+ *
+ * 量出來就沒有這個問題：iframe 的頂端在哪裡是問得到的，剩下的高度就是視窗高度
+ * 減掉它，再留一點給頁尾。
+ * ========================================================================= */
+(function(){
+  var frame = document.getElementById('monitor-frame');
+  if(!frame) return;
+  function fit(){
+    var top = frame.getBoundingClientRect().top + window.scrollY;
+    var h = window.innerHeight - top - 56;   /* 56 = 頁尾那一行加下緣留白 */
+    frame.style.height = Math.max(h, 420) + 'px';
+  }
+  fit();
+  window.addEventListener('resize', fit);
+  /* 字體晚一點載入會把上面那段說明推高，所以再量一次。 */
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+})();
+
+
+/* =========================================================================
  * 目標價試算盤
  *
  * 一條公式，三個維度：營收成長率 × 淨利率 → 預估 EPS，再乘上每一個預估 PE →

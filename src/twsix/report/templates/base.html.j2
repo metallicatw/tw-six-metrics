@@ -21,7 +21,7 @@
     {# 只有那個檔案真的在 site/ 裡才出現。它由建站流程從另一個 repo 複製進來，
        取不到的時候少一個導覽項，比多一個 404 的連結好。 #}
     {% if monitor_page %}
-    <a href="{{ rel }}{{ monitor_page }}">市場監控</a>
+    <a href="{{ rel }}{{ monitor_page }}"{% if page=='monitor' %} aria-current="page"{% endif %}>市場監控</a>
     {% endif %}
     {% if 'picks' not in hidden_pages %}
     <a href="{{ rel }}picks.html"{% if page=='picks' %} aria-current="page"{% endif %}>具投資價值</a>
