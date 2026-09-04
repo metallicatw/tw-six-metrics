@@ -758,6 +758,80 @@
 
 
 /* =========================================================================
+ * 觀察清單：全站唯一一份
+ *
+ * 兩個地方會動它——〔評等清單〕每一列的☆，以及個股頁標題旁邊那一顆。兩邊各寫
+ * 一份的話，遲早會出現「清單上是亮的、點進去卻是暗的」，而那種不一致沒有任何
+ * 錯誤訊息，只會讓人以為星號沒存到。
+ *
+ * 存在 localStorage，只在這台瀏覽器裡。這是一份靜態網站——沒有伺服器可以放你的
+ * 私人清單，也不該有。換一台機器要重加，那是這個取捨的代價。
+ * ========================================================================= */
+var TWSIXWatch = (function(){
+  var KEY = 'twsix.watchlist';
+  var set = {};
+
+  function reload(){
+    set = {};
+    try{
+      (JSON.parse(localStorage.getItem(KEY) || '[]') || []).forEach(function(c){
+        set[c] = 1;
+      });
+    }catch(e){}
+    return set;
+  }
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify(Object.keys(set))); }catch(e){}
+  }
+  function has(code){ return !!set[code]; }
+  function toggle(code){
+    if(set[code]) delete set[code]; else set[code] = 1;
+    save();
+    return !!set[code];
+  }
+  /* 一顆星要長什麼樣，只有這裡說了算——實心／空心、aria-pressed、以及那一句
+     說明。三個地方各寫一次，改一個就會有兩個沒改到。 */
+  function paint(btn){
+    var on = has(btn.getAttribute('data-star'));
+    btn.textContent = on ? '★' : '☆';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.classList.toggle('on', on);
+    btn.title = on ? '從觀察清單移除' : '加入觀察清單';
+    var code = btn.getAttribute('data-star');
+    btn.setAttribute('aria-label', (on ? '把 ' + code + ' 從觀察清單移除'
+                                       : '把 ' + code + ' 加入觀察清單'));
+    return on;
+  }
+  reload();
+  return {reload: reload, has: has, toggle: toggle, paint: paint,
+          count: function(){ return Object.keys(set).length; },
+          all: function(){ return set; }};
+})();
+
+
+/* =========================================================================
+ * 個股頁標題旁邊那一顆☆
+ *
+ * 清單上加得了、個股頁上加不了，是一個奇怪的不對稱：真正決定「要不要追蹤這一
+ * 檔」的時刻，是讀完它那一頁的時候，不是掃清單的時候。
+ * ========================================================================= */
+(function(){
+  var btn = document.querySelector('.ident button[data-star], h2 button[data-star]');
+  if(!btn) return;
+  TWSIXWatch.paint(btn);
+  btn.addEventListener('click', function(){
+    TWSIXWatch.toggle(btn.getAttribute('data-star'));
+    TWSIXWatch.paint(btn);
+  });
+  /* 上一頁回來、或在別的分頁改過清單，回到這一頁要重畫。 */
+  window.addEventListener('pageshow', function(){
+    TWSIXWatch.reload();
+    TWSIXWatch.paint(btn);
+  });
+})();
+
+
+/* =========================================================================
  * 評等清單：排序、篩選、觀察清單
  *
  * 三件事放在一起，因為它們操作的是同一張表的同一批 <tr>，而且順序有相依：
@@ -771,23 +845,11 @@
   var rows = [].slice.call(body.rows);
 
   /* ---- 觀察清單 --------------------------------------------------------
-   * 存在 localStorage，只在這台瀏覽器裡。這是一份靜態網站——沒有伺服器可以放
-   * 你的私人清單，也不該有。換一台機器要重加，那是這個取捨的代價。 */
-  var KEY = 'twsix.watchlist';
-  function load(){
-    try{ return JSON.parse(localStorage.getItem(KEY) || '[]') || []; }catch(e){ return []; }
-  }
-  function save(list){
-    try{ localStorage.setItem(KEY, JSON.stringify(list)); }catch(e){}
-  }
-  var watched = {};
-  load().forEach(function(c){ watched[c] = 1; });
-
+   * 狀態由 TWSIXWatch 保管（全站唯一一份，個股頁那一顆星也用它）。這裡只多做
+   * 一件表格才需要的事：把亮暗寫進那一格的 data-s，讓「依觀察清單排序」有東西
+   * 可以比大小。 */
   function paintStar(btn){
-    var on = !!watched[btn.getAttribute('data-star')];
-    btn.textContent = on ? '★' : '☆';
-    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    btn.classList.toggle('on', on);
+    var on = TWSIXWatch.paint(btn);
     var cell = btn.closest('td');
     if(cell) cell.setAttribute('data-s', on ? '1' : '0');
   }
@@ -796,9 +858,7 @@
   table.addEventListener('click', function(e){
     var btn = e.target.closest('button[data-star]');
     if(!btn) return;
-    var code = btn.getAttribute('data-star');
-    if(watched[code]) delete watched[code]; else watched[code] = 1;
-    save(Object.keys(watched));
+    TWSIXWatch.toggle(btn.getAttribute('data-star'));
     paintStar(btn);
     apply();
     count();
@@ -847,7 +907,7 @@
 
   function visible(tr){
     if(watchOnlyPage || (onlyWatched && onlyWatched.checked)){
-      if(!watched[tr.getAttribute('data-code')]) return false;
+      if(!TWSIXWatch.has(tr.getAttribute('data-code'))) return false;
     }
     /* 用 class 找，不數第幾格。這兩個數字原本是 13 和 2，而清單前面加一欄
        流水號就整排位移——那種錯不會報錯，只會讓「只看具投資價值」開始篩錯欄。 */
@@ -891,9 +951,7 @@
    * 無害的），load 收「重新解析」那條路——它在表單還原之後才發生。另外重讀一次
    * 觀察清單，因為使用者很可能就是在剛才那一頁按了☆。 */
   function resync(){
-    var list = {};
-    load().forEach(function(c){ list[c] = 1; });
-    watched = list;
+    TWSIXWatch.reload();
     [].forEach.call(table.querySelectorAll('button[data-star]'), paintStar);
     apply();
   }
@@ -903,7 +961,7 @@
   /* 觀察清單那一頁：一檔都沒加的時候要說話，不要給一張空表讓人以為壞了。 */
   var empty = document.getElementById('watch-empty');
   if(empty){
-    var show = function(){ empty.hidden = Object.keys(watched).length > 0; };
+    var show = function(){ empty.hidden = TWSIXWatch.count() > 0; };
     show();
     table.addEventListener('click', show);
   }

@@ -284,3 +284,92 @@ def test_the_page_shows_that_date_next_to_the_price(tmp_path=None):
     assert page.price_date, "個股頁沒有收盤日"
     html = _render(page, tmp_path or Path(tempfile.mkdtemp()))
     assert f'class="asof">{page.price_date} 收盤' in html
+
+
+def test_the_stock_page_has_a_star_that_shares_the_listing_state():
+    """清單上加得了、個股頁上加不了，是一個奇怪的不對稱。
+
+    真正決定「要不要追蹤這一檔」的時刻，是讀完它那一頁的時候，不是掃清單的
+    時候——所以☆要在股名旁邊，而且亮暗就是清單那一欄的亮暗。
+
+    兩邊各寫一份狀態的話，遲早會出現「清單上是亮的、點進去卻是暗的」，而那種
+    不一致沒有任何錯誤訊息，只會讓人以為星號沒存到。所以 localStorage 那一份
+    只有一個主人（`TWSIXWatch`），三個地方都問它。
+    """
+    root = Path(__file__).resolve().parents[1] / "src/twsix/report/templates"
+    for name in ("stockpage.html.j2", "stock.html.j2"):
+        html = (root / name).read_text("utf-8")
+        assert 'class="star" data-star=' in html, name
+        assert "加入觀察清單" in html, name
+
+    js = (root / "site.js").read_text("utf-8")
+    assert "var TWSIXWatch" in js
+    for call in ("TWSIXWatch.has(", "TWSIXWatch.toggle(", "TWSIXWatch.paint(",
+                 "TWSIXWatch.reload()", "TWSIXWatch.count()"):
+        assert call in js, call
+    # 舊的那份區域狀態要真的消失，不能兩份並存。
+    assert "var watched = {}" not in js
+    assert "Object.keys(watched)" not in js
+    # 個股頁那一顆要吃得到 pageshow：在清單上按了☆再上一頁回來，星號要是對的。
+    assert ".ident button[data-star]" in js
+
+
+def test_the_star_says_what_pressing_it_will_do():
+    """一顆按鈕上該寫的是「按下去會發生什麼」，不是它現在的狀態。
+
+    已經在清單上的顯示「從觀察清單移除」，不在的顯示「加入觀察清單」——而且
+    `aria-pressed` 跟著走，讀螢幕的人才聽得出亮暗。
+    """
+    js = (
+        Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.js"
+    ).read_text("utf-8")
+    assert "'從觀察清單移除'" in js and "'加入觀察清單'" in js
+    assert "aria-pressed" in js
+
+
+def test_the_watchlist_really_toggles_and_is_shared(tmp_path=None):
+    """在 Node 裡跑**真正的 site.js**，按一下星號看它會不會亮。
+
+    上面那兩條測試看的是字串——它們只證明那幾個字打對了，不證明行為。這一條
+    真的執行那段程式：按一下、存進 localStorage、另一顆星（清單上那一列）畫出來
+    就是亮的、取消之後兩邊一起暗、上一頁回來 reload 讀得回來、localStorage 壞掉
+    （無痕視窗、被瀏覽器擋）不會把頁面炸掉。
+
+    不需要瀏覽器：site.js 每一段開頭都有「找不到元素就 return」的守門。
+    Node 不在的機器上跳過——這是選用的，不是必要的。
+    """
+    import json
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        from twsix.report.build import MissingOptional
+
+        raise MissingOptional("這一條需要 node")
+
+    root = Path(__file__).resolve().parents[1]
+    got = subprocess.run(
+        [node, str(root / "tests/watchlist_harness.mjs"),
+         str(root / "src/twsix/report/templates/site.js")],
+        capture_output=True, text=True, timeout=60, check=True,
+    )
+    steps = dict(json.loads(got.stdout))
+
+    assert steps["初始"]["mark"] == "☆"
+    assert steps["初始"]["pressed"] == "false"
+    assert steps["初始"]["title"] == "加入觀察清單"
+
+    assert steps["個股頁按一下"]["mark"] == "★"
+    assert steps["個股頁按一下"]["pressed"] == "true"
+    assert steps["個股頁按一下"]["title"] == "從觀察清單移除"
+    assert steps["存起來的"] == '["2330"]'
+
+    # 清單上那一列不必自己記狀態，畫一次就是對的——這就是「同一份」的意思。
+    assert steps["清單同一檔"]["mark"] == "★"
+    assert steps["清單別檔"]["mark"] == "☆"
+    assert steps["count"] == 1
+
+    assert steps["取消之後"]["mark"] == "☆"
+    assert steps["reload 之後"] == ["★", "★", 2]
+    assert steps["壞掉的 JSON"] == 0

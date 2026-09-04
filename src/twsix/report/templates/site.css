@@ -489,6 +489,9 @@ button.star{appearance:none;border:none;background:none;cursor:pointer;padding:2
 button.star:hover{color:var(--g1);background:var(--surface-2)}
 button.star.on{color:var(--g1)}
 button.star:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+/* 個股頁標題旁邊那一顆：跟著標題放大，並且和文字拉開一點——貼著股名會讀成
+   名字的一部分。`vertical-align` 讓它對齊中文字的視覺中線，不是基線。 */
+h2 button.star{font-size:19px;margin-left:10px;vertical-align:2px;padding:2px 5px}
 .when-cell{white-space:nowrap}
 .when-cell .tag.when,.when-cell .tag.full{margin-left:0}
 tbody tr[hidden]{display:none}
