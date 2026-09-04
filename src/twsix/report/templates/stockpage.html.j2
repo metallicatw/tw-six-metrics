@@ -6,7 +6,13 @@
    座標——一個數字是好是壞，要對照它是哪一季、股價多少才知道。捲到第八個分頁還
    要往回捲才能確認季別，等於每次都重讀一次。 #}
 <div class="ident sticky">
-  <h2 id="top">{{ p.stock_id }}　{{ p.name }}</h2>
+{# ☆ 就在股名旁邊。清單上加得了、個股頁上加不了，是一個奇怪的不對稱——真正
+     決定「要不要追蹤這一檔」的時刻，是讀完它那一頁的時候，不是掃清單的時候。
+     亮暗與清單那一欄是同一份狀態（見 site.js 的 TWSIXWatch）。 #}
+  <h2 id="top">{{ p.stock_id }}　{{ p.name }}
+    <button type="button" class="star" data-star="{{ p.stock_id }}"
+          aria-pressed="false" aria-label="把 {{ p.stock_id }} 加入觀察清單"
+          title="加入觀察清單">☆</button></h2>
   <p class="facts">
     <span>財報 <b>{{ p.fiscal_quarter or "—" }}</b></span>
     <span>營收 <b>{{ p.revenue_month or "—" }}</b></span>
