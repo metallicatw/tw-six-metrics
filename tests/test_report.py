@@ -11,8 +11,6 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-
 from twsix.report.build import (
     Row,
     _parse_roc_month,
@@ -22,6 +20,8 @@ from twsix.report.build import (
     rows_from_store,
     vintage_note,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _row(stock_id: str, quarter: str, month: str, composite: float) -> Row:
