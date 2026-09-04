@@ -183,3 +183,74 @@ def _with_previous_quarter() -> Path:
         ]],
     )
     return root
+
+
+def test_a_short_sheet_does_not_throw_the_whole_stock_away():
+    """抓不齊**不代表算不出來**。
+
+    實測 6614 資拓宏宇：十四張抓到十三張，六大指標要的七張全在，只有〔股利〕差
+    一列——它只有九年的配息紀錄，而契約要求至少十列。那是一家年輕的公司，不是
+    版面改版；而〔股利〕餵的是〔殖利率估價〕那一頁，不是六大指標。
+
+    舊的判斷在抓完就把它丟掉，於是它每一批都被重抓一次、每一批都失敗。實跑一輪
+    `twsix refresh --limit 200`：補好 10 檔、**失敗 82 檔**，而絕大多數是這個。
+
+    改成讓評等引擎當裁判：算得出六大指標就寫進清單，算不出來才算失敗。少一頁
+    估值，比少一檔股票好。
+    """
+    cli = (ROOT / "src/twsix/cli.py").read_text("utf-8")
+    # 補課那一段不能再把「抓不齊」記成失敗。（`twsix report` 底下同一句話仍然
+    # 成立：那是產生單檔完整報告，半份資料算出來的估值比沒有估值更糟。）
+    assert '{code}：報表沒抓齊' not in cli, "補課還是把抓不齊當成失敗"
+    assert "先看看六大指標算不算得出來" in cli
+
+
+def test_the_three_industry_spellings_are_all_excluded():
+    """「金融業」是**上櫃**月營收表的寫法，另外兩種是上市的。
+
+    少了它，9 檔券商（5864 致和證、6015 宏遠證、6016 康和證……）會一路排進補課
+    佇列，而它們的六大指標本來就不適用——那一輪 82 檔失敗裡有 7 檔是它們。
+    """
+    from twsix.ingest.market import EXCLUDED_INDUSTRIES
+
+    assert set(EXCLUDED_INDUSTRIES) == {"金融保險業", "金融保險", "金融業"}
+
+
+def test_a_company_with_no_monthly_revenue_still_gets_an_industry():
+    """金控、保險與存託憑證**不在月營收表裡**，所以那裡問不到產業。
+
+    問不到就是空字串，`excluded` 也就是空的，於是補課佇列一直把它們排進去、一直
+    抓不到。退回公司基本資料的產業**代碼**，只認兩個，兩個都是對著真實檔案讀出來
+    的：`17` 金融保險業（2850 新產、2883 凱基金），`91` 存託憑證（9136 巨騰-DR、
+    910322 康師傅-DR）。對照組 2330 台積電是 `24`。
+    """
+    from twsix.ingest.market import MarketData
+
+    md = MarketData.load(ROOT / "data")
+    for code, want in (("2850", "金融保險業"), ("2883", "金融保險業")):
+        assert md.financials(code).industry == want, code
+        assert md.financials(code).excluded, code
+    for code in ("9136", "910322"):
+        got = md.financials(code)
+        assert got.industry == "存託憑證", code
+        assert "存託憑證" in got.excluded, code
+        assert got.name.endswith("-DR"), f"{code} 的名字不是 -DR，這條推論要重看"
+    # 一般公司不受影響。
+    assert md.financials("2330").industry == "半導體業"
+    assert not md.financials("2330").excluded
+
+
+def test_the_queue_no_longer_holds_stocks_that_can_never_be_rated():
+    """佇列裡不該留著「抓一百次也不會成功」的那些。
+
+    每一批重抓一次，一檔要五到十三個請求，一天四批——那是純粹的浪費，而且把
+    真正的失敗淹沒在幾十行警告裡。
+    """
+    from twsix.cli import new_listings
+    from twsix.ingest.market import MarketData
+
+    root = ROOT / "data"
+    md = MarketData.load(root)
+    queue = set(new_listings(root, md))
+    for code in ("2850", "2883", "9136", "910322", "6015", "5864"):
+        assert code not in queue, f"{code} 還在佇列裡"

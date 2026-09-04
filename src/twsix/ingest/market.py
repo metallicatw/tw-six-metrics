@@ -52,6 +52,15 @@ CODE_KEYS = ("公司代號", "SecuritiesCompanyCode")
 NAME_KEYS = ("公司簡稱", "CompanyAbbreviation", "公司名稱", "CompanyName")
 INDUSTRY_KEYS = ("產業別",)
 
+#: 公司基本資料那個「產業別」欄位是**代碼**，不是名稱。只翻譯兩個，理由見
+#: :meth:`MarketData.industry`。
+INDUSTRY_CODES = {"17": "金融保險業", "91": "存託憑證"}
+
+#: 存託憑證（DR）：原股在境外掛牌，台灣這邊沒有月營收也沒有台灣格式的財報，
+#: 所以六大指標一項都算不出來。實測 9136 巨騰-DR 抓了十四張、只差〔營收〕那一張
+#: ——而那一張永遠不會有，於是它每一批都被重抓一次。
+DR_INDUSTRY = "存託憑證"
+
 REVENUE_KEYS = ("營業收入",)
 OPERATING_INCOME_KEYS = ("營業利益（損失）",)
 #: 母公司業主的部分才是「稅後淨利」；沒有非控制權益的公司這一欄可能是空的。
@@ -62,7 +71,14 @@ MONTH_REVENUE_KEYS = ("營業收入-當月營收",)
 MONTH_LAST_YEAR_KEYS = ("營業收入-去年當月營收",)
 MONTH_YOY_KEYS = ("營業收入-去年同月增減(%)",)
 
-EXCLUDED_INDUSTRIES = ("金融保險業", "金融保險")
+#: 不適用六大指標的產業。**三種寫法都要認**：
+#:
+#: * 「金融保險業」——上市月營收表寫的。
+#: * 「金融保險」——舊資料裡出現過的短寫。
+#: * 「金融業」——**上櫃**月營收表寫的。少了這一個，9 檔券商（5864 致和證、
+#:   6015 宏遠證、6016 康和證……）會一路排進補課佇列，而它們的六大指標本來就
+#:   不適用。實測那一輪 82 檔失敗裡有 7 檔是它們。
+EXCLUDED_INDUSTRIES = ("金融保險業", "金融保險", "金融業")
 
 
 def _first(row: Mapping[str, str], keys: Iterable[str]) -> str:
@@ -102,6 +118,9 @@ class MarketData:
     markets: dict[str, str] = field(default_factory=dict)
     #: {代號: 公司簡稱}
     names: dict[str, str] = field(default_factory=dict)
+    #: {代號: 公司基本資料那個「產業別」**代碼**}。月營收表查不到產業的時候
+    #: （金控、保險、存託憑證都不在那張表裡）退回來問這裡。
+    industry_codes: dict[str, str] = field(default_factory=dict)
 
     # -- 讀取 ---------------------------------------------------------------
 
@@ -125,7 +144,12 @@ class MarketData:
                 data.revenue.setdefault(label_month, {}).update(data._rows(path, label))
             companies = data.root / f"{exchange}_companies.csv"
             if companies.exists():
-                data._rows(companies, label)
+                for code, row in data._rows(companies, label).items():
+                    value = _first(row, INDUSTRY_KEYS)
+                    # 這張表的「產業別」是代碼（台積電是 24），月營收表那張是
+                    # 名稱。同一個欄名，兩種內容——所以分開存，不要混在一起。
+                    if value and value.isdigit():
+                        data.industry_codes.setdefault(code, value)
         return data
 
     def _rows(self, path: Path, market: str) -> dict[str, dict[str, str]]:
@@ -163,6 +187,22 @@ class MarketData:
         """月營收表帶的是中文產業別；上市公司基本資料帶的是代碼「01」。
 
         所以產業別問月營收，不問基本資料——同一個欄名，兩種內容。
+
+        **但有一整類公司不在月營收表裡**：金控與保險（沒有「月營收」這種東西）、
+        以及存託憑證。它們在這裡問不到產業，於是產業是空字串、`excluded` 是空的，
+        補課佇列就一直把它們排進去、一直抓不到。
+
+        所以問不到的時候退回基本資料的**代碼**——只認兩個，而且兩個都是對著真實
+        的檔案讀出來的，不是猜的：
+
+        * `17` = 金融保險業。2850 新產（產險）與 2883 凱基金（金控）都是 17。
+        * `91` = 存託憑證。9136 巨騰-DR 與 910322 康師傅-DR 都是 91，而它們的
+          名字結尾也正好是 `-DR`。
+
+        （對照組：2330 台積電是 `24`，所以這確實是一套代碼而不是別的東西。）
+
+        其餘的代碼不翻譯：這裡要回答的只有「這一檔適不適用六大指標」，把整張
+        代碼對照表憑印象寫出來只會多出一堆沒被驗證過的字串。
         """
         for month in self.months:
             row = self.revenue.get(month, {}).get(code)
@@ -170,7 +210,7 @@ class MarketData:
                 value = _first(row, INDUSTRY_KEYS)
                 if value:
                     return value
-        return ""
+        return INDUSTRY_CODES.get(self.industry_codes.get(code, ""), "")
 
     # -- 組裝 ---------------------------------------------------------------
 
@@ -181,7 +221,13 @@ class MarketData:
             name=self.names.get(code, ""),
             market=self.markets.get(code, ""),
             industry=industry,
-            excluded="金融保險業不適用" if industry in EXCLUDED_INDUSTRIES else "",
+            excluded=(
+                "金融保險業不適用"
+                if industry in EXCLUDED_INDUSTRIES
+                else "存託憑證不適用（原股在境外掛牌，沒有台灣格式的財報與月營收）"
+                if industry == DR_INDUSTRY
+                else ""
+            ),
         )
         self._statements(code, data)
         self._revenue(code, data)
