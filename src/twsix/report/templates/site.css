@@ -446,12 +446,23 @@ tr.here th{font-weight:700}
 .filters{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin:0 0 12px}
 /* 篩選框不長大。`flex:1` 會讓它吃掉整列，把兩個勾選框推到最右邊——於是一列裡
    三樣東西被拉開成兩堆，眼睛要橫跨整個螢幕才讀得完。它要的寬度就是「打得下
-   一個股名」，不是「剩下的全部」。 */
-.filters input[type=search]{flex:0 1 320px;min-width:180px;padding:7px 11px;
+   一個股名」，不是「剩下的全部」。
+
+   320 → 260：那一列後來多了一句「具投資價值」的判斷依據。用 Chromium 實際量過
+   整列的高度（一列 37px，換行變 70px）：**820px 以上是一列**，760px 以下才換行，
+   而整列內容右緣落在 776px。桌機與多數平板一列，手機換行——那是對的，那時它會
+   自己接在它說明的那個勾選框後面。 */
+.filters input[type=search]{flex:0 1 260px;min-width:170px;padding:7px 11px;
   border:1px solid var(--rule);border-radius:5px;background:var(--surface);
   color:var(--ink);font:inherit;font-size:13.5px}
 .filters label{display:inline-flex;align-items:center;gap:6px;font-size:13px;
   color:var(--ink-2);white-space:nowrap;cursor:pointer}
+/* 「具投資價值」的判斷依據，就寫在那個勾選框旁邊。
+   比標籤小、比標籤淡：它是註腳，不是第三個可以點的東西。`margin-left:-8px`
+   把它從 gap 拉回勾選框旁邊——隔著 14px 會讀成獨立的一項，而不是那一項的說明。
+   窄螢幕上整列會 wrap，那時它自己換行，仍然接在它說明的那個勾選框後面。 */
+.filters .hint{font-size:11.5px;color:var(--muted);white-space:nowrap;
+  margin-left:-8px;cursor:help;border-bottom:1px dotted var(--rule)}
 /* 可排序的標題：整格都能點，不是只有那幾個字。標題本來就窄，
    讓人瞄準三個中文字是每一次排序都要付一次的成本。 */
 thead th:has(> button.sortable){padding:0}

@@ -198,4 +198,6 @@ def test_the_filter_row_does_not_stretch_across_the_whole_screen():
     就是「打得下一個股名」，不是「剩下的全部」。
     """
     css = (ROOT / "src/twsix/report/templates/site.css").read_text("utf-8")
-    assert ".filters input[type=search]{flex:0 1 320px" in css
+    # 260px：一開始是 320，後來那一列多了一句「具投資價值」的判斷依據，再縮一次
+    # 才擠得進同一行。重點不是這個數字，是 `flex:0`——它不長大。
+    assert ".filters input[type=search]{flex:0 1 260px" in css
