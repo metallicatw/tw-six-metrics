@@ -44,6 +44,13 @@
   <input id="q" type="search" placeholder="篩選：代號 / 名稱 / 產業" aria-label="篩選">
   <label><input type="checkbox" id="only-watched"> 只看觀察清單</label>
   <label><input type="checkbox" id="only-picks"> 只看具投資價值</label>
+  {# 「具投資價值」是活頁簿自己的一條規則，不是這個網站發明的形容詞。它掛在勾選
+     框旁邊而不是藏在〔評分規則〕那一頁，是因為讀者是在**要不要勾它**的那一刻
+     想知道它是什麼——那時候跳去另一頁再回來，多半就不勾了。
+
+     行內只寫得下三句，第四句（上一期要算得出綜合評分）放在 title 裡：它是
+     Excel 的 IFERROR 造成的行為，重要但少見，寫進行內會把這一列擠成兩行。 #}
+  <span class="hint" title="活頁簿的四個條件全部成立才算：（1）六項指標都沒有 C 或 B，最低 BB；（2）綜合評分 ≥ 3；（3）本期綜合評分比上一期下滑不超過 0.3；（4）上一期要算得出綜合評分——上一期缺資料的話不算，這是活頁簿 IFERROR 的行為。">六項皆 BB 以上 · 綜合 ≥ 3 · 未較上期跌逾 0.3</span>
 </div>
 <div class="scroll"><table id="t">
 {{ table_head() }}

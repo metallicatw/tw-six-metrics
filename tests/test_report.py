@@ -9,6 +9,9 @@ sort first rather than off the data.
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
 
 from twsix.report.build import (
     Row,
@@ -169,3 +172,80 @@ def test_rows_from_store_keeps_only_the_newest_period():
     rows = rows_from_store(records)
     assert len(rows) == 1
     assert rows[0].fiscal_quarter == "2026.2Q"
+
+
+def _snap(scores, quarter="2026.2Q"):
+    """一期快照，六項指標依序給分（0=C 1=B 2=BB 3=A 4=AA）。"""
+    from twsix.models import (
+        INDICATOR_LABELS,
+        INDICATOR_ORDER,
+        Grade,
+        IndicatorResult,
+        Snapshot,
+        Status,
+    )
+
+    return Snapshot(
+        stock_id="0000",
+        fiscal_quarter=quarter,
+        revenue_month="115/07",
+        indicators={
+            key: IndicatorResult(
+                key=key,
+                label=INDICATOR_LABELS[key],
+                values=(),
+                status=Status.SCORED,
+                grade=Grade(s),
+            )
+            for key, s in zip(INDICATOR_ORDER, scores, strict=True)
+        },
+    )
+
+
+def test_the_four_conditions_behind_具投資價值():
+    """〔具投資價值〕是活頁簿自己的一條規則，四個條件缺一不可。
+
+    這一條把四個條件各自證明一次，而下面那一條檢查清單上那句註腳講的是同一件
+    事——沒有它，規則改了而畫面上的說明還停在舊版，那是最難發現的一種錯：畫面
+    看起來完全正常，只是在說謊。
+    """
+    six_a = [3] * 6                       # 六項都是 A
+    prev = _snap([3] * 6, "2026.1Q")
+
+    assert _snap(six_a).is_value_pick(prev), "六項 A、綜合 3、沒退步，應該是"
+
+    # (1) 六項裡不能有 C（0 分）或 B（1 分）——即使綜合評分很高。
+    assert not _snap([4, 4, 4, 4, 4, 1]).is_value_pick(prev), "有一項 B 還是算了"
+    assert not _snap([4, 4, 4, 4, 4, 0]).is_value_pick(prev), "有一項 C 還是算了"
+    # BB（2 分）可以。
+    assert _snap([4, 4, 4, 4, 4, 2]).is_value_pick(prev)
+
+    # (2) 綜合評分要 >= 3。六項都 BB 是 2.0，過不了。
+    assert not _snap([2] * 6).is_value_pick(_snap([2] * 6, "2026.1Q"))
+
+    # (3) 比上一期下滑不能超過 0.3。3.0 → 2.7 剛好是 -0.3，不算（要「大於 -0.3」）。
+    high = _snap([4, 4, 4, 4, 4, 3], "2026.1Q")          # 3.833…
+    assert not _snap([3, 3, 3, 3, 3, 3]).is_value_pick(high), "跌了 0.83 還算"
+    tiny = _snap([3, 3, 3, 3, 3, 4], "2026.1Q")          # 3.166…
+    assert _snap(six_a).is_value_pick(tiny), "只跌 0.17，應該還算"
+
+    # (4) 上一期要算得出綜合評分——沒有上一期就不算（活頁簿 IFERROR 的行為）。
+    assert not _snap(six_a).is_value_pick(None)
+
+
+def test_the_listing_explains_具投資價值_next_to_the_checkbox():
+    """判斷依據就寫在勾選框旁邊，不是藏在另一頁。
+
+    讀者是在**要不要勾它**的那一刻想知道它是什麼；那時候跳去〔評分規則〕再回來，
+    多半就不勾了。行內寫得下三個條件，第四個（上一期要算得出來）放在 title。
+    """
+    listing = (
+        ROOT / "src/twsix/report/templates/list.html.j2"
+    ).read_text("utf-8")
+    hint = listing.split('class="hint"')[1].split("</span>")[0]
+    # 行內看得到的三句。
+    assert "BB" in hint and "≥ 3" in hint and "0.3" in hint
+    # 第四句在 title 裡。
+    assert "上一期要算得出綜合評分" in hint
+    # 它要接在「只看具投資價值」後面，不是接在別的勾選框後面。
+    assert listing.index("只看具投資價值") < listing.index('class="hint"')
