@@ -1,0 +1,21 @@
+{% extends "base.html.j2" %}
+{% block title %}市場監控｜{{ site_title }}{% endblock %}
+{% block body %}
+{# 報告本身是另一支程式每天重新產生的一整份 HTML——自己的 CSS、自己的版面。
+   把它**嵌**進來而不是複製一份改掉：
+
+   * 頁首、導覽列、搜尋框全都在，讀者從頭到尾沒有離開這個網站，回得去。
+   * 報告一個位元組都沒有被動到。它每天重新產生，改它遲早會壞。
+
+   同源（就在這個網站的 /monitor-report.html），所以沒有 X-Frame-Options 或
+   CORS 的問題，也不必請對方配合任何事。 #}
+<h2>市場監控</h2>
+<p class="muted">
+  台股加權、VIX、日經 225、密大消費者信心、村田 B/B Ratio 與一組日本焦點個股。
+  由 <a href="https://github.com/metallicatw/market-monitor" rel="noopener">market-monitor</a>
+  每天台北 06:30 產生，這裡嵌的是同一份。
+  <a href="{{ rel }}{{ report }}" target="_blank" rel="noopener">單獨開啟這份報告 ↗</a>
+</p>
+<iframe id="monitor-frame" class="embed" src="{{ rel }}{{ report }}"
+        title="每日全球市場與總經個股監控報告"></iframe>
+{% endblock %}

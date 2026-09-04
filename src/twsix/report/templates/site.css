@@ -477,6 +477,12 @@ th.seq{width:1%}
 table#t tbody{counter-reset:seq}
 table#t tbody tr{counter-increment:seq}
 table#t td.seq::before{content:counter(seq)}
+/* 〔市場監控〕嵌進來的那一份報告。
+   高度由腳本量出來（見 site.js）：算式寫死一個數字的話，頁首在窄螢幕上換行、
+   或說明文字多一行，就會多出第二條捲軸——外層一條、iframe 一條，捲起來像壞掉。
+   腳本沒跑的時候退回這個高度，仍然是可讀的一頁。 */
+iframe.embed{display:block;width:100%;height:78vh;min-height:480px;border:1px solid
+  var(--rule);border-radius:5px;background:var(--surface);margin-bottom:14px}
 .star-cell{width:1%;padding-left:8px;padding-right:2px;text-align:center}
 button.star{appearance:none;border:none;background:none;cursor:pointer;padding:2px 4px;
   font-size:15px;line-height:1;color:var(--muted);border-radius:3px}

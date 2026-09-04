@@ -1092,7 +1092,7 @@ def test_the_monitor_tab_appears_only_when_the_page_is_really_there(tmp_path=Non
     那一項是看檔案在不在才出現的——本機建站沒有那個檔案，寫死一個連結就是一個
     404；而 CI 那邊 clone 失敗時少一項，也比多一個連到空氣的連結好。
     """
-    from twsix.report.build import MONITOR_PAGE
+    from twsix.report.build import MONITOR_PAGE, MONITOR_REPORT
 
     tmp = tmp_path or _tmp()
     out = tmp / "site"
@@ -1100,14 +1100,48 @@ def test_the_monitor_tab_appears_only_when_the_page_is_really_there(tmp_path=Non
 
     build_site(_records(), out, sheets_dir=sheets)
     assert "市場監控" not in (out / "index.html").read_text("utf-8")
+    assert not (out / MONITOR_PAGE).exists(), "沒有報告就不該畫一個空的框"
 
     out.mkdir(parents=True, exist_ok=True)
-    (out / MONITOR_PAGE).write_text("<html>報告</html>", encoding="utf-8")
+    (out / MONITOR_REPORT).write_text("<html>報告</html>", encoding="utf-8")
     build_site(_records(), out, sheets_dir=sheets)
     listing = (out / "index.html").read_text("utf-8")
-    assert '<a href="monitor.html">市場監控</a>' in listing
+    assert '>市場監控</a>' in listing and "monitor.html" in listing
     # 個股頁在子目錄裡，連結要帶 ../。
     assert '"../monitor.html"' in (out / "stock" / "5439.html").read_text("utf-8")
+
+
+def test_the_report_is_embedded_so_the_reader_can_get_back(tmp_path=None):
+    """第一版是導覽列直接連到那份報告，結果**點下去就出不來了**。
+
+    那一頁是另一支程式產生的完整 HTML：沒有這個網站的頁首、沒有導覽列、也沒有
+    搜尋框，讀起來像被丟到另一個網站，只能按瀏覽器的上一頁。
+
+    所以拆成兩個檔案：`monitor-report.html` 是原封不動的那一份（它每天重新產生，
+    改它遲早會壞），`monitor.html` 是這個網站自己的一頁，中間嵌一個同源的 iframe。
+    頁首、導覽列、搜尋框全都在，讀者從頭到尾沒有離開過。
+    """
+    from twsix.report.build import MONITOR_PAGE, MONITOR_REPORT
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / MONITOR_REPORT).write_text("<html>報告</html>", encoding="utf-8")
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    page = (out / MONITOR_PAGE).read_text("utf-8")
+    assert 'src="monitor-report.html"' in page, "沒有把報告嵌進來"
+    assert "評等清單" in page and 'id="find"' in page, "頁首與搜尋框不在，等於還是出不來"
+    assert 'aria-current="page"' in page
+    # 想全螢幕看的人要有一條路，但那是額外的一個連結，不是唯一的入口。
+    assert 'target="_blank"' in page
+
+    # 報告本身一個位元組都沒有被動到。
+    assert (out / MONITOR_REPORT).read_text("utf-8") == "<html>報告</html>"
+
+    # 高度用量的，不是寫死的：算式寫死一個數字，頁首一換行就會多出第二條捲軸。
+    js = (ROOT.parent / "src/twsix/report/templates/site.js").read_text("utf-8")
+    assert "monitor-frame" in js and "getBoundingClientRect" in js
 
 
 def test_the_report_is_copied_in_before_the_build_and_a_failure_is_not_fatal():
@@ -1119,6 +1153,7 @@ def test_the_report_is_copied_in_before_the_build_and_a_failure_is_not_fatal():
     repo = ROOT.parent
     action = (repo / ".github/actions/build-site/action.yml").read_text("utf-8")
     assert "market-monitor" in action
+    assert "site/monitor-report.html" in action, "複製成外殼那一頁的檔名會被建站蓋掉"
     assert action.index("帶進〔市場監控〕") < action.index("建立網站")
     assert "::warning::" in action
 

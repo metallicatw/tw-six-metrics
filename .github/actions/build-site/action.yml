@@ -79,8 +79,13 @@ runs:
     # 不該把它塞進這個網站的殼裡（兩套 CSS 會打架，而且那個檔案每天重新產生一次，
     # 今天改對了明天格式一變又壞了）。
     #
-    # 放在 `twsix build` **之前**：建站會看 `site/monitor.html` 在不在，決定導覽列
-    # 要不要出現那一項。取不到就沒有那一項，而不是一個 404 的連結。
+    # 放在 `twsix build` **之前**：建站會看 `site/monitor-report.html` 在不在，
+    # 決定要不要畫外殼那一頁、導覽列要不要出現那一項。取不到就都沒有，而不是一個
+    # 404 的連結或一個空的框。
+    #
+    # 複製成 `monitor-report.html` 而不是 `monitor.html`：後者是這個網站自己畫的
+    # 一頁（頁首、導覽列、搜尋框都在），中間用 iframe 把這一份嵌進去。第一版直接
+    # 連過去，結果是點下去就出不來了。
     #
     # clone 失敗只是警告：那一頁不見不該讓整個網站發不出去。增量建站的快取裡若
     # 還留著上一次那一份，它會繼續在。
@@ -91,8 +96,8 @@ runs:
         if git clone --depth 1 --quiet \
              https://github.com/metallicatw/market-monitor.git /tmp/market-monitor \
            && [ -s /tmp/market-monitor/index.html ]; then
-          cp /tmp/market-monitor/index.html site/monitor.html
-          echo "〔市場監控〕$(wc -c < site/monitor.html) 位元組"
+          cp /tmp/market-monitor/index.html site/monitor-report.html
+          echo "〔市場監控〕$(wc -c < site/monitor-report.html) 位元組"
         else
           echo "::warning::market-monitor 取不到，這次沒有更新〔市場監控〕那一頁"
         fi
