@@ -103,6 +103,30 @@ runs:
         fi
       shell: bash
 
+    # 〔趨勢選股〕：metallicatw/tw-trend-filter 每個交易日台北 15:10 掃過全市場
+    # 約 1,900 檔，產生一份自足的互動技術線圖報告（自己的 CSS、自己的版面，
+    # plotly.js 走 CDN，約 1～2 MB）。
+    #
+    # 和上面〔市場監控〕同一套機制、同樣的理由，包括「clone 失敗只是警告」：
+    # 那一頁不見不該讓整個網站發不出去。
+    #
+    # 它和〔市場監控〕有一個差別：那份報告裡每一檔都有一個連結指回**這個網站**
+    # 的個股頁（tw-trend-filter 跑的時候用 --link-base 帶進去的）。所以兩邊互相
+    # 指，而這一步只負責把檔案搬過來。
+    - name: 帶進〔趨勢選股〕
+      run: |
+        mkdir -p site
+        rm -rf /tmp/tw-trend-filter
+        if git clone --depth 1 --quiet \
+             https://github.com/metallicatw/tw-trend-filter.git /tmp/tw-trend-filter \
+           && [ -s /tmp/tw-trend-filter/index.html ]; then
+          cp /tmp/tw-trend-filter/index.html site/trend-report.html
+          echo "〔趨勢選股〕$(wc -c < site/trend-report.html) 位元組"
+        else
+          echo "::warning::tw-trend-filter 取不到，這次沒有更新〔趨勢選股〕那一頁"
+        fi
+      shell: bash
+
     - name: 建立網站
       run: |
         if [ "${{ inputs.incremental }}" = "true" ]; then

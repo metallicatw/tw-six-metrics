@@ -255,7 +255,7 @@ def test_the_three_stale_pages_are_unlinked_but_still_built():
 
     nav = re.search(r"<nav>(.*?)</nav>", (out / "index.html").read_text("utf-8"), re.S)
     labels = re.findall(r">([^<>]+)</a>", nav.group(1))
-    assert labels == ["評等清單", "觀察清單"]
+    assert labels == ["台股評等清單", "台股觀察清單"]
     for name in ("picks.html", "stats.html", "about.html"):
         assert (out / name).is_file(), f"{name} 不該被刪掉，只是不連過去"
     # 評等清單 is the front door now; the old URL still resolves.
@@ -1099,14 +1099,14 @@ def test_the_monitor_tab_appears_only_when_the_page_is_really_there(tmp_path=Non
     sheets = _sheets(tmp)
 
     build_site(_records(), out, sheets_dir=sheets)
-    assert "市場監控" not in (out / "index.html").read_text("utf-8")
+    assert "全球市場監控" not in (out / "index.html").read_text("utf-8")
     assert not (out / MONITOR_PAGE).exists(), "沒有報告就不該畫一個空的框"
 
     out.mkdir(parents=True, exist_ok=True)
     (out / MONITOR_REPORT).write_text("<html>報告</html>", encoding="utf-8")
     build_site(_records(), out, sheets_dir=sheets)
     listing = (out / "index.html").read_text("utf-8")
-    assert '>市場監控</a>' in listing and "monitor.html" in listing
+    assert '>全球市場監控＋日股觀察</a>' in listing and "monitor.html" in listing
     # 個股頁在子目錄裡，連結要帶 ../。
     assert '"../monitor.html"' in (out / "stock" / "5439.html").read_text("utf-8")
 
@@ -1131,7 +1131,7 @@ def test_the_report_is_embedded_so_the_reader_can_get_back(tmp_path=None):
 
     page = (out / MONITOR_PAGE).read_text("utf-8")
     assert 'src="monitor-report.html"' in page, "沒有把報告嵌進來"
-    assert "評等清單" in page and 'id="find"' in page, "頁首與搜尋框不在，等於還是出不來"
+    assert "台股評等清單" in page and 'id="find"' in page, "頁首與搜尋框不在，等於還是出不來"
     assert 'aria-current="page"' in page
     # 想全螢幕看的人要有一條路，但那是額外的一個連結，不是唯一的入口。
     assert 'target="_blank"' in page
@@ -1140,8 +1140,12 @@ def test_the_report_is_embedded_so_the_reader_can_get_back(tmp_path=None):
     assert (out / MONITOR_REPORT).read_text("utf-8") == "<html>報告</html>"
 
     # 高度用量的，不是寫死的：算式寫死一個數字，頁首一換行就會多出第二條捲軸。
+    #
+    # 而且是一次處理所有 .embed，不是照 id 一個一個列——〔趨勢選股〕加進來的
+    # 時候，照 id 列的那個版本會漏掉新的那一頁，症狀是「那一頁的圖只有 78vh
+    # 高，而且多一條捲軸」，不會有人回報。
     js = (ROOT.parent / "src/twsix/report/templates/site.js").read_text("utf-8")
-    assert "monitor-frame" in js and "getBoundingClientRect" in js
+    assert "iframe.embed" in js and "getBoundingClientRect" in js
 
 
 def test_the_report_is_copied_in_before_the_build_and_a_failure_is_not_fatal():
@@ -1161,3 +1165,138 @@ def test_the_report_is_copied_in_before_the_build_and_a_failure_is_not_fatal():
     # 因為別的理由重建才會換，最差落後一整天。
     pages = (repo / ".github/workflows/pages.yml").read_text("utf-8")
     assert 'cron: "10 23 * * 0-4"' in pages
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 〔趨勢選股〕：和〔市場監控〕同一套機制，所以測的是同樣那幾件事——
+# 檔案不在就整項不出現、報告要嵌不要跳走、複製要排在建站之前。
+# 多測一件〔市場監控〕沒有的：導覽列的順序。
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_the_trend_tab_appears_only_when_the_report_is_really_there(tmp_path=None):
+    """沒有報告就不該有那一項。和〔市場監控〕同一個理由：clone 失敗時少一項，
+    比多一個連到空氣的連結好。"""
+    from twsix.report.build import TREND_PAGE, TREND_REPORT
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    sheets = _sheets(tmp)
+
+    build_site(_records(), out, sheets_dir=sheets)
+    assert "台股趨勢選股" not in (out / "index.html").read_text("utf-8")
+    assert not (out / TREND_PAGE).exists(), "沒有報告就不該畫一個空的框"
+
+    out.mkdir(parents=True, exist_ok=True)
+    (out / TREND_REPORT).write_text("<html>線圖</html>", encoding="utf-8")
+    build_site(_records(), out, sheets_dir=sheets)
+    listing = (out / "index.html").read_text("utf-8")
+    assert ">台股趨勢選股</a>" in listing and "trend.html" in listing
+    # 個股頁在子目錄裡，連結要帶 ../。這一項本來漏掉過一次：完整版的個股頁
+    # 自己組 context，不是 `**base`，所以導覽列多一項就要記得從那裡帶進去。
+    assert '"../trend.html"' in (out / "stock" / "5439.html").read_text("utf-8")
+
+
+def test_the_trend_report_is_embedded_not_linked(tmp_path=None):
+    """直接連過去就是「點下去出不來」——那份報告沒有這個網站的頁首與導覽列。"""
+    from twsix.report.build import TREND_PAGE, TREND_REPORT
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / TREND_REPORT).write_text("<html>線圖</html>", encoding="utf-8")
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    page = (out / TREND_PAGE).read_text("utf-8")
+    assert 'src="trend-report.html"' in page, "沒有把報告嵌進來"
+    assert "台股評等清單" in page and 'id="find"' in page, "頁首與搜尋框不在，等於還是出不來"
+    assert 'target="_blank"' in page, "想全螢幕看的人要有一條路"
+    # 報告本身一個位元組都沒有被動到。
+    assert (out / TREND_REPORT).read_text("utf-8") == "<html>線圖</html>"
+
+
+#: 導覽列該有的樣子：順序、名字、顏色類別。
+#:
+#: 順序是由近而遠——前兩項講「這些公司是什麼」（全市場的體質，以及你挑出來的
+#: 那幾檔），後兩項講「現在在發生什麼」（今天技術面在動的，以及這一切之外的
+#: 大盤與海外）。
+#:
+#: 名字帶著範圍，因為前三項全是台股、第四項根本不是，而原本那四個兩字詞
+#: （評等／觀察／趨勢／監控）看不出這件事。
+NAV_EXPECTED = [
+    ("nav-list",  "台股評等清單"),
+    ("nav-watch", "台股觀察清單"),
+    ("nav-trend", "台股趨勢選股"),
+    ("nav-mon",   "全球市場監控＋日股觀察"),
+]
+
+
+def test_the_nav_is_ordered_named_and_coloured(tmp_path=None):
+    """順序、名字、顏色三件事，寫在樣板與 CSS 裡，肉眼看不出來有沒有被改掉。
+
+    尤其是後來又加第五個分頁的時候：最省事的做法永遠是往清單尾巴補一個，而
+    那正好會把「由近而遠」這件事破壞掉。
+    """
+    from twsix.report.build import MONITOR_REPORT, TREND_REPORT
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / TREND_REPORT).write_text("<html>線圖</html>", encoding="utf-8")
+    (out / MONITOR_REPORT).write_text("<html>報告</html>", encoding="utf-8")
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    import re
+
+    html = (out / "index.html").read_text("utf-8")
+    nav = html[html.index("<nav>"):html.index("</nav>")]
+    got = re.findall(r'<a class="(nav-[a-z]+)"[^>]*>([^<>]+)</a>', nav)
+    assert got == NAV_EXPECTED, got
+
+    # 四個 class 在 CSS 裡各自要有一個顏色，而且四個必須不一樣——四項同色
+    # 等於沒有顏色，但那樣的樣式表照樣是合法的，不會有任何東西報錯。
+    css = (ROOT.parent / "src/twsix/report/templates/site.css").read_text("utf-8")
+    colours = {}
+    for cls, _label in NAV_EXPECTED:
+        m = re.search(rf"nav a\.{cls}\s*{{--nav-c:(#[0-9a-fA-F]{{3,8}})}}", css)
+        assert m, f"{cls} 在 site.css 裡沒有顏色"
+        colours[cls] = m.group(1).lower()
+    assert len(set(colours.values())) == len(colours), colours
+
+    # 深色底要另外一組：淺色底那四個深色放到深底上會全部沉下去。
+    for cls, _label in NAV_EXPECTED:
+        assert f"[data-theme=dark] nav a.{cls}" in css, f"{cls} 少了深色底的顏色"
+
+    # 字要比原本大。13px 的導覽列在 24px 的標題底下像註腳。
+    assert re.search(r"^nav{[^}]*font-size:1[6-9]px", css, re.M), "導覽列字級沒有加大"
+    assert re.search(r"header\.top h1{[^}]*font-size:2[0-9]px", css), "大標題沒有加大"
+
+
+def test_the_trend_report_is_copied_in_before_the_build():
+    """複製要排在建站之前，否則導覽列判斷「檔案在不在」的時候它還不在。"""
+    repo = ROOT.parent
+    action = (repo / ".github/actions/build-site/action.yml").read_text("utf-8")
+    assert "tw-trend-filter" in action
+    assert "site/trend-report.html" in action, "複製成外殼那一頁的檔名會被建站蓋掉"
+    assert action.index("帶進〔趨勢選股〕") < action.index("建立網站")
+    assert "::warning::" in action
+
+    # 上游 07:10 UTC 產完，這邊五十分鐘後帶進來。只排週一到週五：週末沒有
+    # 收盤價，上游本來就不跑。
+    pages = (repo / ".github/workflows/pages.yml").read_text("utf-8")
+    assert 'cron: "0 8 * * 1-5"' in pages
+
+
+def test_the_trend_report_links_back_to_this_site():
+    """那份報告裡每一檔都要能跳回這個網站的個股頁。
+
+    這件事發生在**上游**：tw-trend-filter 跑的時候用 `--link-base` 把網址帶進去。
+    這裡守的是那個參數還在——它一旦掉了，報告照樣產得出來、照樣嵌得進來，只是
+    每一檔都少一個出口，而沒有人會回報「我以為本來就沒有」。
+    """
+    repo = ROOT.parent
+    action = (repo / ".github/actions/build-site/action.yml").read_text("utf-8")
+    # 上游用的是這個網址，所以個股頁的路徑不能改名。
+    assert (repo / "src/twsix/report/build.py").read_text("utf-8").count(
+        'out_dir / "stock" / f"{stock_id}.html"'
+    ) >= 1, "個股頁的路徑變了，上游的 --link-base 會全部指到 404"
+    assert "tw-trend-filter" in action

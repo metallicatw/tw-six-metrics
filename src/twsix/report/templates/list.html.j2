@@ -1,8 +1,8 @@
 {% extends "base.html.j2" %}
 {% from "_macros.html.j2" import row, table_head %}
-{% block title %}評等清單 — {{ site_title }}{% endblock %}
+{% block title %}台股評等清單 — {{ site_title }}{% endblock %}
 {% block body %}
-<h2>評等清單</h2>
+<h2>台股評等清單</h2>
 <p class="muted">
   本期（{{ latest_quarter }}）全市場評等，共 <span id="tally">{{ rows|length }} 檔</span>。
   點欄位標題可排序，☆ 加入觀察清單。

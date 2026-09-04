@@ -45,7 +45,7 @@ class IngestSettings:
 @dataclass
 class ReportSettings:
     site_dir: str = "site"
-    title: str = "台股六大財務指標評等"
+    title: str = "台股與全球市場觀測站"
     subtitle: str = "由公開資料自動產生"
     #: ``owner/name`` of the GitHub repository this site is published from.
     #:

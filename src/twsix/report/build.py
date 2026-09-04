@@ -76,6 +76,20 @@ GRADE_KEYS = ["AA", "A", "BB", "B", "C", "不評分", "數據不足"]
 MONITOR_PAGE = "monitor.html"
 MONITOR_REPORT = "monitor-report.html"
 
+#: 〔趨勢選股〕。metallicatw/tw-trend-filter 每個交易日台北 15:10 掃過全市場
+#: 約 1,900 檔，產生一份自足的互動技術線圖報告，由建站流程原樣複製進來。
+#:
+#: 和〔市場監控〕同一套機制，同樣的理由：兩個檔案，一份是別人產生的完整報告，
+#: 一份是這個網站自己的外殼。差別只有一個——那一份報告裡的每一檔，都有一個連結
+#: 指回**這個網站**的個股頁：
+#:
+#:     tw-trend-filter --link-base https://metallicatw.github.io/tw-six-metrics/stock
+#:
+#: 技術面挑出來的標的，讀者的下一個問題一定是「這家公司體質怎麼樣」，而那個
+#: 答案就在這裡。兩個網站互相指，中間不必經過任何人的記憶。
+TREND_PAGE = "trend.html"
+TREND_REPORT = "trend-report.html"
+
 #: The site is about Taiwanese stocks, read in Taiwan, against 民國 quarters
 #: and 月營收 filed to a Taiwanese calendar.  Stamping it in UTC — or in
 #: whatever zone the build machine happens to sit in, which for GitHub Actions
@@ -538,7 +552,7 @@ def build_site(
     records: list[dict[str, str]],
     out_dir: Path,
     *,
-    site_title: str = "台股六大財務指標評等",
+    site_title: str = "台股與全球市場觀測站",
     rules: Any = None,
     repo: str = "",
     top_n: int = 50,
@@ -603,10 +617,13 @@ def build_site(
     # build` 之前複製成 `site/monitor-report.html`。導覽列那一項**看檔案在不在**
     # 才出現：本機建站沒有那個檔案，寫死一個連結就是一個 404。
     has_monitor = (out_dir / MONITOR_REPORT).exists()
+    # 〔趨勢選股〕同理：檔案在才畫那一頁、導覽列才出現那一項。
+    has_trend = (out_dir / TREND_REPORT).exists()
 
     base = dict(
         hidden_pages=sorted(HIDDEN_PAGES),
         monitor_page=MONITOR_PAGE if has_monitor else "",
+        trend_page=TREND_PAGE if has_trend else "",
         repo=repo,
         site_title=ctx.site_title,
         generated_at=ctx.generated_at,
@@ -855,6 +872,12 @@ def build_site(
     written["about.html"] = 1
 
     # 外殼那一頁。只有原始報告真的在的時候才畫——沒有報告的空框比沒有那一頁糟。
+    if has_trend:
+        env.get_template("trend.html.j2").stream(
+            **base, page="trend", rel="", report=TREND_REPORT
+        ).dump(str(out_dir / TREND_PAGE))
+        written["trend.html（趨勢選股）"] = 1
+
     if has_monitor:
         env.get_template("monitor.html.j2").stream(
             **base, page="monitor", rel="", report=MONITOR_REPORT
@@ -1151,6 +1174,7 @@ def _full_stock_page(
         build_id=base.get("build_id", ""),
         delisted=delisted,
         monitor_page=base.get("monitor_page", ""),
+        trend_page=base.get("trend_page", ""),
     )
     return True
 
@@ -1159,7 +1183,7 @@ def build_stock_page(
     page: Any,
     out_file: Path,
     *,
-    site_title: str = "台股六大財務指標評等",
+    site_title: str = "台股與全球市場觀測站",
     generated_at: str = "",
     rel: str = "",
     repo: str = "",
@@ -1167,6 +1191,7 @@ def build_stock_page(
     build_id: str = "",
     delisted: bool = False,
     monitor_page: str = "",
+    trend_page: str = "",
 ) -> Path:
     """Render 〔評價簡表〕〔六大財務指標評等〕〔EPS預估與估價〕〔殖利率估價〕.
 
@@ -1188,6 +1213,7 @@ def build_stock_page(
         # 完整版是自己組 context 的（不是 `**base`），所以導覽列多一項就要記得
         # 從這裡帶進去——漏掉的話那 1,769 頁的導覽列會比別的頁面少一項。
         monitor_page=monitor_page,
+        trend_page=trend_page,
         repo=repo,
         page="stock",
         # 完整版也給頁首那顆按鈕一個對象，字改成「重新抓取」：資料會過期，而且

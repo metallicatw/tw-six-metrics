@@ -1,8 +1,8 @@
 {% extends "base.html.j2" %}
 {% from "_macros.html.j2" import row, table_head %}
-{% block title %}觀察清單 — {{ site_title }}{% endblock %}
+{% block title %}台股觀察清單 — {{ site_title }}{% endblock %}
 {% block body %}
-<h2>觀察清單</h2>
+<h2>台股觀察清單</h2>
 {# 這一頁和〔評等清單〕是同一張表，只是預設只顯示加過星的那幾列。
    為什麼不在建站時就只放那幾列：清單存在讀者自己的瀏覽器裡，建站的時候我們
    不知道、也不該知道他標了哪幾檔。所以整張表都送過去，由瀏覽器自己篩。 #}

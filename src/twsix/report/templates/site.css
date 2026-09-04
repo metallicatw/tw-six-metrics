@@ -98,7 +98,21 @@
   --t1:#85b1e2; --t1-bg:#16334f; --t1-line:#2e5f92;
   --t2:#6ad0aa; --t2-bg:#133a2d; --t2-line:#2a6b53;
   --t3:#eba759; --t3-bg:#3c2a12; --t3-line:#7a5520;
-}}
+}
+/* 導覽列那四個顏色，深色底的版本。淺色底挑的是「印在白紙上讀得清楚」的深色，
+   那四個直接放到深底上會全部沉下去；這一組是同樣四個色相調亮、降飽和之後的
+   結果，彼此的明度仍然一致。 */
+:root:not([data-theme=light]) nav a.nav-list {--nav-c:#4fd6c4}
+:root:not([data-theme=light]) nav a.nav-watch{--nav-c:#f0a72a}
+:root:not([data-theme=light]) nav a.nav-trend{--nav-c:#f07ab0}
+:root:not([data-theme=light]) nav a.nav-mon  {--nav-c:#6fb0f5}
+:root:not([data-theme=light]) nav a.nav-more {--nav-c:#98a6b4}
+}
+:root[data-theme=dark] nav a.nav-list {--nav-c:#4fd6c4}
+:root[data-theme=dark] nav a.nav-watch{--nav-c:#f0a72a}
+:root[data-theme=dark] nav a.nav-trend{--nav-c:#f07ab0}
+:root[data-theme=dark] nav a.nav-mon  {--nav-c:#6fb0f5}
+:root[data-theme=dark] nav a.nav-more {--nav-c:#98a6b4}
 *{box-sizing:border-box}
 body{margin:0;background:var(--ground);color:var(--ink);
   font:15px/1.55 "Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
@@ -111,11 +125,33 @@ a:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
 .wrap{--pad:20px;max-width:1240px;margin:0 auto;padding:0 var(--pad) 44px}
 header.top{background:var(--surface);border-bottom:1px solid var(--rule);margin-bottom:14px}
 header.top .in{max-width:1240px;margin:0 auto;padding:12px 20px 10px}
-header.top h1{margin:0;font-size:17px;letter-spacing:-.01em}
+header.top h1{margin:0;font-size:24px;letter-spacing:-.01em;font-weight:700}
 header.top h1 a{color:inherit;text-decoration:none}
-nav{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:13px}
-nav a{color:var(--ink-2);text-decoration:none}
-nav a[aria-current=page]{color:var(--accent-2);font-weight:600}
+
+/* 導覽列：四個分頁，四個顏色。
+
+   顏色在這裡不是裝飾，是位置感。四個分頁的名字現在都以「台股」或「全球」開頭，
+   前兩個字長得一樣，眼睛掃過去要讀到第三個字才分得出來；顏色讓「我在哪一頁」
+   在讀完字之前就成立。
+
+   選了四個色相夠開、明度相近的顏色——明度相近才不會有某一項看起來比其他項
+   重要。深色底下換一組（見下面的 @media），因為同一組顏色在深色底上會全部
+   糊成一片。
+
+   未選到的分頁用同一個顏色但淡一些（不是灰的），這樣「這四項是同一組東西」
+   還看得出來，而「現在在哪一項」也還是最強的那個訊號。 */
+nav{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:16px;
+  font-weight:600}
+nav a{color:var(--nav-c,var(--ink-2));text-decoration:none;padding:3px 0;
+  border-bottom:2.5px solid transparent;opacity:.72;transition:opacity .12s}
+nav a:hover{opacity:1}
+nav a[aria-current=page]{opacity:1;font-weight:700;
+  border-bottom-color:var(--nav-c,var(--accent-2))}
+nav a.nav-list {--nav-c:#0e7c6f}   /* 台股評等清單 —— 綠 */
+nav a.nav-watch{--nav-c:#b25a00}   /* 台股觀察清單 —— 橘 */
+nav a.nav-trend{--nav-c:#a3306b}   /* 台股趨勢選股 —— 洋紅 */
+nav a.nav-mon  {--nav-c:#1c62b8}   /* 全球市場監控 —— 藍 */
+nav a.nav-more {--nav-c:#5f6b78}   /* 那三個預設隱藏的 */
 .stamp{font-size:11.5px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
 .stamp:empty{display:none}
 .linkish{appearance:none;border:none;background:none;padding:0;font:inherit;

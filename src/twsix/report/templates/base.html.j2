@@ -15,22 +15,34 @@
   {# 三個分頁暫時不連：它們讀的是一年前的全市場快照，而排名和分布用舊資料算出來
      不只是過時，是理直氣壯地過時。個股頁不同，那是現抓的。頁面照樣產生，直接
      開網址還是看得到，只是導覽不指過去。#}
+  {# 順序是由近而遠：〔評等清單〕是全市場的體質，〔觀察清單〕是你從裡面挑出來
+     的那幾檔，〔趨勢選股〕是今天技術面在動的那幾檔，〔市場監控〕是這一切之外
+     的大盤與海外。前兩項講「這些公司是什麼」，後兩項講「現在在發生什麼」。 #}
+  {# 名字裡帶著範圍。原本四項叫〔評等清單〕〔觀察清單〕〔趨勢選股〕〔市場監控〕，
+     四個字一組、長得一樣，看不出前三項全是台股、第四項根本不是。
+
+     顏色（見 site.css 的 .nav-*）補的是另一半：現在四個名字都以「台股」或「全球」
+     開頭，前兩個字相同，眼睛要讀到第三個字才分得出來——顏色讓「我在哪一頁」在
+     讀完字之前就成立。 #}
   <nav>
-    <a href="{{ rel }}index.html"{% if page=='list' %} aria-current="page"{% endif %}>評等清單</a>
-    <a href="{{ rel }}watchlist.html"{% if page=='watchlist' %} aria-current="page"{% endif %}>觀察清單</a>
-    {# 只有那個檔案真的在 site/ 裡才出現。它由建站流程從另一個 repo 複製進來，
-       取不到的時候少一個導覽項，比多一個 404 的連結好。 #}
+    <a class="nav-list" href="{{ rel }}index.html"{% if page=='list' %} aria-current="page"{% endif %}>台股評等清單</a>
+    <a class="nav-watch" href="{{ rel }}watchlist.html"{% if page=='watchlist' %} aria-current="page"{% endif %}>台股觀察清單</a>
+    {# 這兩項只有那個檔案真的在 site/ 裡才出現。它們由建站流程從另外兩個 repo
+       複製進來，取不到的時候少一個導覽項，比多一個 404 的連結好。 #}
+    {% if trend_page %}
+    <a class="nav-trend" href="{{ rel }}{{ trend_page }}"{% if page=='trend' %} aria-current="page"{% endif %}>台股趨勢選股</a>
+    {% endif %}
     {% if monitor_page %}
-    <a href="{{ rel }}{{ monitor_page }}"{% if page=='monitor' %} aria-current="page"{% endif %}>市場監控</a>
+    <a class="nav-mon" href="{{ rel }}{{ monitor_page }}"{% if page=='monitor' %} aria-current="page"{% endif %}>全球市場監控＋日股觀察</a>
     {% endif %}
     {% if 'picks' not in hidden_pages %}
-    <a href="{{ rel }}picks.html"{% if page=='picks' %} aria-current="page"{% endif %}>具投資價值</a>
+    <a class="nav-more" href="{{ rel }}picks.html"{% if page=='picks' %} aria-current="page"{% endif %}>具投資價值</a>
     {% endif %}
     {% if 'stats' not in hidden_pages %}
-    <a href="{{ rel }}stats.html"{% if page=='stats' %} aria-current="page"{% endif %}>評等統計</a>
+    <a class="nav-more" href="{{ rel }}stats.html"{% if page=='stats' %} aria-current="page"{% endif %}>評等統計</a>
     {% endif %}
     {% if 'about' not in hidden_pages %}
-    <a href="{{ rel }}about.html"{% if page=='about' %} aria-current="page"{% endif %}>評分規則</a>
+    <a class="nav-more" href="{{ rel }}about.html"{% if page=='about' %} aria-current="page"{% endif %}>評分規則</a>
     {% endif %}
   </nav>
   <form class="find" role="search" action="{{ rel }}index.html" method="get">
