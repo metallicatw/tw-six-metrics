@@ -1251,3 +1251,66 @@ var TWSIXWatch = (function(){
     });
   }
 })();
+
+
+/* =========================================================================
+ * 附註的燈泡
+ *
+ * 一次只開一個。兩塊說明同時攤在畫面上，讀者要自己判斷哪一塊是剛剛按的那一顆
+ * 的——而它們長得一模一樣。
+ *
+ * 關掉的三種方式，缺一個都會讓人覺得卡住：點說明以外的地方、按 Esc、再按一次
+ * 同一顆燈泡。點在說明**裡面**不關，因為裡面有連結，也因為有人會想選取文字。
+ * ========================================================================= */
+(function(){
+  /* 先宣告「這一頁有 JavaScript」。沒有這一行，CSS 那邊會把每一塊說明直接攤開
+     ——那是沒有 JS 時該有的樣子，但有 JS 的時候會在燈泡還沒接上前閃一下。 */
+  document.documentElement.classList.add('js');
+
+  var open = null;
+
+  function close(){
+    if(!open) return;
+    open.classList.remove('open','flip');
+    var b = open.querySelector('button.bulb');
+    if(b) b.setAttribute('aria-expanded','false');
+    open = null;
+  }
+
+  function show(tip){
+    close();
+    tip.classList.add('open');
+    var b = tip.querySelector('button.bulb');
+    if(b) b.setAttribute('aria-expanded','true');
+    open = tip;
+    /* 靠右邊界的那幾顆要往左展開。量出來再決定，不能照 class 猜：同一顆燈泡
+       在桌機上離右邊很遠，在手機上就貼著邊。 */
+    var box = tip.querySelector('.tipbox');
+    if(box && box.getBoundingClientRect().right > window.innerWidth - 8){
+      tip.classList.add('flip');
+    }
+  }
+
+  document.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('button.bulb') : null;
+    if(b){
+      var tip = b.parentNode;
+      if(tip === open) close(); else show(tip);
+      e.preventDefault();
+      return;
+    }
+    /* 點在說明裡面不關——裡面有連結，也有人會想選字。 */
+    if(open && e.target.closest && e.target.closest('.tipbox')) return;
+    close();
+  });
+
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && open){
+      var b = open.querySelector('button.bulb');
+      close();
+      /* 焦點送回剛剛那顆燈泡。用鍵盤關掉之後焦點如果留在原地，下一次 Tab 會
+         從頁面開頭重新走一遍。 */
+      if(b) b.focus();
+    }
+  });
+})();

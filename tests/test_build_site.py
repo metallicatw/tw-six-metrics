@@ -1300,3 +1300,209 @@ def test_the_trend_report_links_back_to_this_site():
         'out_dir / "stock" / f"{stock_id}.html"'
     ) >= 1, "個股頁的路徑變了，上游的 --link-base 會全部指到 404"
     assert "tw-trend-filter" in action
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 附註的燈泡
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_附註收在燈泡裡而不是攤在頁面上(tmp_path=None):
+    """那幾段講「這個數字怎麼算出來的」，第一次讀的人需要，第二次的人已經知道。
+
+    攤開的版本讓每一次回來都要先捲過同樣的說明才看得到資料。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    listing = (out / "index.html").read_text("utf-8")
+
+    assert 'class="tipbox"' in listing, "附註沒有被收進燈泡"
+    assert 'class="bulb"' in listing
+    # 內容還在——收起來不等於刪掉。
+    assert "上一期要算得出綜合評分" in listing
+    # 收起來的預設狀態要寫在標記上，螢幕閱讀器才知道它是摺疊的。
+    assert 'aria-expanded="false"' in listing
+
+
+def test_燈泡是按鈕不是可點的_span():
+    """鍵盤要 Tab 得到、Enter 按得下、螢幕閱讀器要念得出「按鈕，摺疊」。"""
+    macros = (
+        ROOT.parent / "src/twsix/report/templates/_macros.html.j2"
+    ).read_text("utf-8")
+    tip = macros[macros.index("{% macro tip()"):]
+    assert "<button" in tip and 'type="button"' in tip
+    assert "aria-expanded" in tip
+    # 圖示對螢幕閱讀器沒有意義，旁邊要有一個念得出來的名字。
+    assert 'aria-hidden="true"' in tip and 'class="sr"' in tip
+
+
+def test_沒有_javascript_的時候說明直接攤開():
+    """看不到的說明比擠在頁面上的說明糟。
+
+    site.js 會在 <html> 上加一個 `js`；CSS 用它區分兩種狀態，所以腳本沒跑（擋掉、
+    載入失敗、還在載入）的時候，讀者拿到的是原本那個什麼都看得到的頁面。
+    """
+    css = (
+        ROOT.parent / "src/twsix/report/templates/site.css"
+    ).read_text("utf-8")
+    assert "html:not(.js) .tipbox{display:block" in css
+    assert "html:not(.js) button.bulb{display:none}" in css
+    js = (ROOT.parent / "src/twsix/report/templates/site.js").read_text("utf-8")
+    assert "documentElement.classList.add('js')" in js
+
+
+def test_燈泡的三種關法都在():
+    """點外面、按 Esc、再按一次同一顆。少任何一個都會有人覺得關不掉。"""
+    js = (ROOT.parent / "src/twsix/report/templates/site.js").read_text("utf-8")
+    seg = js[js.index("附註的燈泡"):]
+    assert "Escape" in seg, "按 Esc 關不掉"
+    assert "if(tip === open) close();" in seg, "再按一次同一顆關不掉"
+    # 點在說明「裡面」不該關掉——裡面有連結，也有人會想選字。
+    assert "closest('.tipbox')" in seg
+    # 一次只開一個：開新的之前先關掉舊的。
+    assert "function show(tip){\n    close();" in seg
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 股價那一格
+# ─────────────────────────────────────────────────────────────────────────
+
+def test_股價和籌碼畫在同一張圖上_用右邊那條軸():
+    """一張圖，兩條軸。
+
+    分開上下兩格畫過一版：形狀對得起來，但要看「外資連買的那幾天股價在不在漲」
+    得在兩格之間來回對垂直位置，而那正是這張圖要回答的唯一問題。
+
+    代價寫在 charts.PRICE_RIGHT 上面那段：兩條線的**交叉點沒有意義**，它是兩個
+    刻度湊出來的巧合。這裡守的是讓讀者看得出「有兩條軸」的那三個線索。
+    """
+    from twsix.report import charts
+
+    labels = ["09/01", "09/02", "09/03", "09/04"]
+    plain = charts.bars(labels, [10, -20, 30, -5], title="外資買賣超",
+                        unit=" 張", digits=0, newest_first=False)
+    with_px = charts.bars(labels, [10, -20, 30, -5], title="外資買賣超",
+                          unit=" 張", digits=0, newest_first=False,
+                          price=[100.0, 101.5, 99.0, 103.0])
+
+    import re
+    h_plain = float(re.search(r'viewBox="0 0 \d+ ([\d.]+)"', plain).group(1))
+    h_price = float(re.search(r'viewBox="0 0 \d+ ([\d.]+)"', with_px).group(1))
+    assert h_price == h_plain, "疊在同一張圖上，高度不該變"
+
+    # 三個線索，缺一個讀者就得用猜的哪條線看哪條軸。
+    assert "收盤價" in with_px, "右上角沒有標出那條軸是誰的"
+    assert with_px.count(f'fill="{charts.PRICE_COLOUR}"') >= 2, "右軸刻度沒有跟著同色"
+    assert f'stroke="{charts.PRICE_COLOUR}"' in with_px, "股價線沒畫"
+
+    # 右邊要空出刻度的寬度，不然數字會畫到畫布外面。
+    assert 'x="1154' in with_px or 'x="1146' in with_px or "1200" in with_px
+
+    # 數值表要多一欄，而且股價印兩位小數、買賣超印整數。
+    assert "<th>收盤價</th>" in with_px
+    assert "101.50" in with_px, "股價的小數位被買賣超那一欄的 0 位蓋掉了"
+
+
+def test_股價畫在主序列之前_才不會蓋住資料():
+    """股價是背景，回答的是「那時候股價在哪」——它不該壓在長條或主線上面。"""
+    from twsix.report import charts
+
+    labels = ["09/01", "09/02", "09/03", "09/04"]
+    svg = charts.bars(labels, [10, -20, 30, -5], title="外資買賣超", unit=" 張",
+                      digits=0, newest_first=False,
+                      price=[100.0, 101.5, 99.0, 103.0])
+    line_at = svg.index(f'stroke="{charts.PRICE_COLOUR}" stroke-width="1.6"')
+    bar_at = svg.index("<rect x=")
+    assert line_at < bar_at, "股價線畫在長條後面，會蓋住資料"
+
+
+def test_時間軸只畫一次():
+    """兩格各畫一次的話，中間會多出一排和下面一模一樣的日期。"""
+    from twsix.report import charts
+
+    labels = ["09/01", "09/02", "09/03", "09/04"]
+    svg = charts.line(labels, [1.0, 2.0, 3.0, 4.0], title="外資持股比重",
+                      unit="%", digits=2, label_every=1, newest_first=False,
+                      price=[100.0, 101.5, 99.0, 103.0])
+    # 只數 SVG 裡面的——`>09/02<` 在下面那張數值表的列標題也有一份，那是應該的。
+    chart = svg[svg.index("<svg"):svg.index("</svg>")]
+    assert chart.count(">09/02<") == 1, "日期標籤畫了兩排"
+
+
+def test_股價缺哪一天就斷在哪一天():
+    """跨過洞連一條直線，是資料沒有講過的話。"""
+    from twsix.report import charts
+
+    labels = ["09/01", "09/02", "09/03", "09/04"]
+    svg = charts.line(labels, [1.0, 2.0, 3.0, 4.0], title="外資持股比重",
+                      unit="%", digits=2, newest_first=False,
+                      price=[100.0, None, None, 103.0])
+    # 兩段各只有一個點，連不成線——所以一條 polyline 都不該有。
+    body = svg[svg.index("收盤價") - 4000:] if "收盤價" in svg else svg
+    assert body.count('stroke="var(--g2)"') == 0
+
+
+def test_一個點畫不出趨勢就整格不畫():
+    from twsix.report import charts
+
+    labels = ["09/01", "09/02"]
+    svg = charts.line(labels, [1.0, 2.0], title="外資持股比重", unit="%",
+                      newest_first=False, price=[None, 103.0])
+    assert "收盤價" not in svg
+
+
+def test_民國日期對得上西元的每日快照():
+    """分頁上的日期是民國，每日快照存的是西元。兩邊要用同一把鑰匙。"""
+    from twsix.report.sections import _ad
+
+    assert _ad("115/09/02") == "2026-09-02"
+    assert _ad("115/9/2") == "2026-09-02", "個位數的月日要補零"
+    # 看不懂的回原樣——對不上就是對不上，不要猜成別的日期。
+    assert _ad("2026-09-02") == "2026-09-02"
+    assert _ad("") == ""
+
+
+def test_大戶持股的週收盤來自股價週分頁而不是那張表本身():
+    """〔大戶持股〕那張表**沒有**股價欄。
+
+    原本的程式碼讀的是〔當週股價-收盤〕——實際抓回來的分頁裡沒有這一欄，所以它
+    一直是 None。而 None 在表格上就是一格空白、在圖上就是整格不畫，兩種都不會
+    報錯，所以沒有人會發現。
+    """
+    from twsix.report.sections import holders
+
+    grid = [
+        ["週別", "統計日期", "各持股等級股東之持有比例(%)-≦10張",
+         "各持股等級股東之持有比例(%)-＞400張≦800張"],
+        ["26W35", "08/28", "12.5", "30.1"],
+        ["26W34", "08/21", "12.7", "29.8"],
+        ["26W33", "08/14", "12.9", "29.4"],
+    ]
+    # 兩張表的「一週」不是同一天：集保的統計日期是週五，股價(週)的日期是週一。
+    weekly = [("2026/08/10", 24.25), ("2026/08/17", 24.85), ("2026/08/24", 24.30)]
+
+    plain = holders(grid)
+    assert [w["close"] for w in plain.weeks] == [None, None, None]
+    assert "收盤價" not in plain.figures["big"], "沒有價就不該畫那一格"
+
+    with_px = holders(grid, weekly)
+    # 08/28（五）要對到 08/24（一）那一列，不是對不到。
+    assert [w["close"] for w in with_px.weeks] == [24.30, 24.85, 24.25]
+    assert "收盤價" in with_px.figures["big"]
+    assert "收盤價" in with_px.figures["small"]
+
+
+def test_週別的前兩碼決定年份():
+    """統計日期只有 `08/28`，沒有年。跨年的那兩週光看月日分不出是哪一年。"""
+    from twsix.report.sections import _week_year, _weekly_close_at
+
+    assert _week_year("26W35") == 2026
+    assert _week_year("25W52") == 2025
+    assert _week_year("") == 0
+
+    weekly = [("2025/12/29", 10.0), ("2026/01/05", 11.0)]
+    # 26W01 的 01/02 在 2026 年——不能對到 2025/12/29 之後那一筆之外的東西。
+    assert _weekly_close_at(weekly, 2026, "01/02") == 10.0
+    assert _weekly_close_at(weekly, 2026, "01/09") == 11.0
+    # 比整段還早的日期沒有對應，回 None 而不是抓最近的一筆。
+    assert _weekly_close_at(weekly, 2025, "01/02") is None

@@ -1,4 +1,5 @@
 {% extends "base.html.j2" %}
+{% from "_macros.html.j2" import tip %}
 {% block title %}{{ p.stock_id }} {{ p.name }}｜{{ site_title }}{% endblock %}
 {% block body %}
 
@@ -31,7 +32,6 @@
   <button type="button" role="tab" id="tab-river" class="tab" aria-controls="panel-river" aria-selected="false" tabindex="-1">河流圖</button>
   <button type="button" role="tab" id="tab-season" class="tab" aria-controls="panel-season" aria-selected="false" tabindex="-1">季節性</button>
   <button type="button" role="tab" id="tab-inst" class="tab" aria-controls="panel-inst" aria-selected="false" tabindex="-1">外資投信</button>
-  <button type="button" role="tab" id="tab-news" class="tab" aria-controls="panel-news" aria-selected="false" tabindex="-1">個股新聞</button>
   {# 這兩張只有匯入過才有分頁——沒有資料的分頁點開是一句道歉，不是一頁。 #}
   {% if p.holders %}
   <button type="button" role="tab" id="tab-holders" class="tab" aria-controls="panel-holders" aria-selected="false" tabindex="-1">大戶持股</button>
@@ -39,6 +39,11 @@
   {% if p.directors %}
   <button type="button" role="tab" id="tab-directors" class="tab" aria-controls="panel-directors" aria-selected="false" tabindex="-1">董監持股</button>
   {% endif %}
+  {# 〔個股新聞〕排在內容分頁的最後。它是唯一一個**每天都在變**的分頁，
+     而前面那些是季報、週資料、月資料——讀者從左往右讀，是從「這家公司
+     長什麼樣」讀到「最近發生什麼」。新聞插在〔外資投信〕和〔大戶持股〕
+     中間的時候，等於把兩張講籌碼的表拆開了。 #}
+  <button type="button" role="tab" id="tab-news" class="tab" aria-controls="panel-news" aria-selected="false" tabindex="-1">個股新聞</button>
   {% if p.unbuilt %}
   <button type="button" role="tab" id="tab-unbuilt" class="tab" aria-controls="panel-unbuilt" aria-selected="false" tabindex="-1">尚未建置</button>
   {% endif %}
@@ -534,12 +539,12 @@
 <h3 id="river">河流圖（本益比）</h3>
 {% if p.river %}
 {% if p.river.figure %}
-<p class="note">
+{% call tip() %}
   本益比倍數取自<b>年度</b>資料——每年的收盤均價除以當年 EPS，2.5%～97.5%
   信任區間切成六區。分區<b>會彎</b>，因為它們是那組固定倍數乘上<b>當時</b>的
   近四季 EPS，而 EPS 每季會變；季報要等公布才算數（Q1 五月中、Q2 八月中、
   Q3 十一月中、年報隔年三月底），所以邊界是階梯而不是平滑曲線。
-</p>
+{% endcall %}
 {{ p.river.figure }}
 {% else %}
 <p class="stale">
@@ -690,10 +695,10 @@
 {% if p.news %}
 {% set n = p.news %}
 {% if n.items %}
-<p class="note">
+{% call tip() %}
   鉅亨網，近 {{ n.days }} 天共 <b>{{ n.items|length }}</b> 則，最新 {{ n.latest }}。
   {%- if n.dropped %}　更早的 {{ n.dropped }} 則未列出。{% endif %}
-</p>
+{% endcall %}
 <ol class="news">
   {% for it in n.items %}
   <li>

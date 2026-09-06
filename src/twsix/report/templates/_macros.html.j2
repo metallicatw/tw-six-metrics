@@ -98,3 +98,26 @@
   <th><button type="button" class="sortable" data-col="14">具投資<br>價值</button></th>
 </tr></thead>
 {%- endmacro %}
+
+{# ── 附註：一顆燈泡，按了才展開 ────────────────────────────────────────
+
+   這些段落講的是「這個數字是怎麼算出來的」「什麼時候會變」——第一次讀的人需要
+   它，讀第二次的人已經知道了，而它們每一段都比它要解釋的那張表還長。整段攤在
+   頁面上，等於每次回來都要先捲過一次同樣的說明才看得到資料。
+
+   收進燈泡裡，兩種讀者都照顧得到：要看的按一下，不看的它只佔一個字的寬度。
+
+   為什麼是 `<button>` 而不是 `<span onclick>`：鍵盤 Tab 走得到、Enter 和空白鍵
+   按得下、螢幕閱讀器會念出「說明，按鈕，摺疊」。`aria-expanded` 由 site.js 跟著
+   狀態改；沒有 JavaScript 的時候整塊直接展開（見 site.css 的 :not(.js) 規則），
+   因為看不到的說明比擠在頁面上的說明糟。
+
+   用法：
+
+       {% call tip() %}<b>什麼時候會換。</b>……{% endcall %}
+#}
+{% macro tip() -%}
+<span class="tip"><button type="button" class="bulb" aria-expanded="false"
+  title="說明"><span aria-hidden="true">💡</span><span class="sr">說明</span></button
+  ><span class="tipbox" role="note">{{ caller() }}</span></span>
+{%- endmacro %}

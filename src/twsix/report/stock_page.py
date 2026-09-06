@@ -499,6 +499,9 @@ def build_page(
     settings: Any = None,
     quote: Any = None,
     inst_days: Any = None,
+    #: 這一檔最近 20 個交易日的收盤（`store.daily.close_history` 的一段）。
+    #: 〔外資投信〕那兩張圖下面接的股價走勢用它；沒有就不畫那一格。
+    closes: Any = None,
     news_items: Any = None,
 ) -> StockPage:
     """Assemble the four sections from one rating and one valuation.
@@ -725,13 +728,17 @@ def build_page(
     inst_grid = reader.grid("三大法人") if hasattr(reader, "grid") else []
     # 每日排程抓回來的全市場三大法人買賣超。券商鏡像那張分頁只有按「立即更新」
     # 才會重抓，而這一份每個交易日收盤後自己就有了——合併規則見 `institutional`。
-    page.institutional = institutional(inst_grid, inst_days)
+    page.institutional = institutional(inst_grid, inst_days, closes)
     page.news = _news(reader, news_items)
 
     # Goodinfo 的兩張：有就畫，沒有就在〔尚未建置〕裡說為什麼。匯進來之後那
     # 一頁的理由就不再適用了，所以清單是算出來的，不是寫死的。
     grid = reader.grid if hasattr(reader, "grid") else (lambda _n: [])
-    page.holders = holders(grid(HOLDERS))
+    # 〔大戶持股〕圖下面那一格股價走勢的資料在**另一張分頁**（股價(週)）——
+    # 大戶持股那張表只有持股比例，沒有價。
+    from ..ingest import weekly_prices  # noqa: PLC0415
+
+    page.holders = holders(grid(HOLDERS), weekly_prices.closes(grid(weekly_prices.SHEET)))
     page.directors = directors(grid(DIRECTORS))
     have = {HOLDERS: page.holders, DIRECTORS: page.directors}
     page.unbuilt = [

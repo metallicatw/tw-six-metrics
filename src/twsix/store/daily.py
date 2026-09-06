@@ -92,6 +92,39 @@ INST_DAYS = 20
 INST_LOOKBACK = 30
 
 
+def close_history(
+    data_dir: Path, *, lookback: int = INST_LOOKBACK, days: int = INST_DAYS
+) -> dict[str, list[Quote]]:
+    """`{代號: [最新的在前, ...]}` 的收盤價，最多 *days* 個交易日。
+
+    和 `latest_quotes` 讀同一批檔案，差別只在它留下整段而不是只留最新一筆——
+    〔外資投信〕那兩張圖下面要接一格股價走勢，而「那幾天股價在哪」需要的是
+    整段，不是一個點。
+
+    一次讀進來給 1,769 頁共用，理由和 `institutional_history` 一樣。
+
+    **這一段會自己長齊。** 每日快照是這個排程上線之後才開始累積的，所以剛開始
+    只有幾天，圖上就是一小段線；每過一個交易日多一天，滿 20 天之後就一直是滿的。
+    缺的那幾天畫成斷線而不是補一條直線——見 `_price_panel`。
+    """
+    folder = data_dir / "market" / "daily" / "prices"
+    if not folder.is_dir():
+        return {}
+    out: dict[str, list[Quote]] = {}
+    for path in sorted(folder.glob("*.csv.gz"), reverse=True)[:lookback]:
+        for row in _rows(path):
+            code = (row.get("code") or "").strip()
+            close = _num(row.get("close", ""))
+            if not code or close is None:
+                continue
+            have = out.setdefault(code, [])
+            date = (row.get("date") or path.stem).strip()
+            if len(have) >= days or any(q.date == date for q in have):
+                continue
+            have.append(Quote(date=date, close=close))
+    return out
+
+
 @dataclass(frozen=True)
 class InstDay:
     """一檔股票某一個交易日的三大法人買賣超，單位**張**。

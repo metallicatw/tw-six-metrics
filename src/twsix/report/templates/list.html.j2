@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% from "_macros.html.j2" import row, table_head %}
+{% from "_macros.html.j2" import row, table_head, tip %}
 {% block title %}台股評等清單 — {{ site_title }}{% endblock %}
 {% block body %}
 <h2>台股評等清單</h2>
@@ -14,7 +14,7 @@
 
    所以現在每一個會過期的數字都是算出來的，寫死的只剩「哪一欄是什麼意思」和
    「什麼東西多久換一次」這種真的不會變的部分。 #}
-<p class="note">
+{% call tip() %}
   <b>什麼時候會換。</b>
   六大指標由<b>季報</b>算出，所以在下一個申報期限（<b>{{ next_filing }}</b>，屆時換成
   {{ next_quarter }}）之前，等第不會因為多抓幾次而改變。
@@ -32,7 +32,7 @@
   {% if delisted_count %}
   已下市的 {{ delisted_count }} 檔不在這張表上，用上方搜尋仍然找得到。
   {% endif %}
-</p>
+{% endcall %}
 {# 這裡原本還有一個「只看有完整報告」。它在只有 183 檔抓過報表的時候會把清單從
    1,741 列篩到 183 列，是當時最有用的一個篩選。補課排程跑完之後，1,877 列**全部**
    都有完整報告——那個勾選框篩掉零列。
@@ -50,7 +50,11 @@
 
      行內只寫得下三句，第四句（上一期要算得出綜合評分）放在 title 裡：它是
      Excel 的 IFERROR 造成的行為，重要但少見，寫進行內會把這一列擠成兩行。 #}
-  <span class="hint" title="活頁簿的四個條件全部成立才算：（1）六項指標都沒有 C 或 B，最低 BB；（2）綜合評分 ≥ 3；（3）本期綜合評分比上一期下滑不超過 0.3；（4）上一期要算得出綜合評分——上一期缺資料的話不算，這是活頁簿 IFERROR 的行為。">六項皆 BB 以上 · 綜合 ≥ 3 · 未較上期跌逾 0.3</span>
+  <span class="hint">六項皆 BB 以上 · 綜合 ≥ 3 · 未較上期跌逾 0.3</span>{% call tip() %}
+  活頁簿的四個條件<b>全部</b>成立才算：（1）六項指標都沒有 C 或 B，最低 BB；
+  （2）綜合評分 ≥ 3；（3）本期綜合評分比上一期下滑不超過 0.3；
+  （4）上一期要算得出綜合評分——上一期缺資料的話不算，這是活頁簿 IFERROR 的行為。
+  {% endcall %}
 </div>
 <div class="scroll"><table id="t">
 {{ table_head() }}

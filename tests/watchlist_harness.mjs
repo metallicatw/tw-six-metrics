@@ -14,6 +14,10 @@ const doc = {
   getElementById: () => null, querySelector: () => null,
   querySelectorAll: () => [], addEventListener: () => {},
   body: { getAttribute: () => null },
+  /* 燈泡那一段開頭會 `documentElement.classList.add('js')`——那是「這一頁有
+     JavaScript」的宣告，不是它自己的功能。stub 少了這一個屬性，整份 site.js
+     會在載入時就丟例外，於是下面要驗的 TWSIXWatch 一行都跑不到。 */
+  documentElement: { classList: { add: () => {}, remove: () => {} } },
 };
 const localStorage = {
   getItem: k => (store.has(k) ? store.get(k) : null),

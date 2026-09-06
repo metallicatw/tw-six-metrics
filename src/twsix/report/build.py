@@ -20,7 +20,7 @@ from typing import Any
 
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
 from ..store import news as news_store
-from ..store.daily import institutional_history, latest_quotes
+from ..store.daily import close_history, institutional_history, latest_quotes
 
 ENGINE_VERSION = "0.1.0"
 TEMPLATE_DIR = Path(__file__).parent / "templates"
@@ -233,6 +233,7 @@ def stock_signature(
     delisted: bool = False,
     inst: Any = None,
     news: Any = None,
+    closes: Any = None,
 ) -> str:
     """一檔股票的「內容指紋」——分頁的位元組加上它在評等表裡的那幾列。
 
@@ -261,6 +262,11 @@ def stock_signature(
     # 進來，兩者至少變一個。
     if news:
         h.update(f"news|{len(news)}|{news[0].url}".encode())
+    # 股價那一格畫的是整段，不是最新那一筆——所以上面 `quote` 那一行不夠：
+    # 補進一天舊資料的時候（快照剛開始累積時每天都在發生）最新一筆沒變，但圖上
+    # 多了一天。長度加上最舊那一天，兩者至少會變一個。
+    if closes:
+        h.update(f"px|{len(closes)}|{closes[-1].date}".encode())
     for row in rows:
         h.update(("\x1f".join(f"{k}={row.get(k, '')}" for k in sorted(row))).encode())
         h.update(b"\x1e")
@@ -597,6 +603,12 @@ def build_site(
     inst_history = (
         institutional_history(sheets_dir.parent) if sheets_dir is not None else {}
     )
+    # 每日收盤的**整段**（不是只有最新一筆）。〔外資投信〕那兩張圖下面接的
+    # 股價走勢用它。和上面兩個一樣：一次讀進來給 1,769 頁共用，一頁一頁去翻
+    # 三十個壓縮檔會把建站時間翻好幾倍。
+    close_hist = (
+        close_history(sheets_dir.parent) if sheets_dir is not None else {}
+    )
     # 全市場新聞，同樣一次讀進來。六十幾個壓縮檔翻一遍給 1,769 頁共用。
     news_history = (
         news_store.history(sheets_dir.parent) if sheets_dir is not None else {}
@@ -663,6 +675,7 @@ def build_site(
             code in (delisted or set()),
             inst_history.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
             news_history.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
+            close_hist.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
         )
         for code, group in grouped.items()
     }
@@ -722,6 +735,7 @@ def build_site(
                 quote=quotes.get(stock_id),
                 delisted=stock_id in (delisted or set()),
                 inst_days=inst_history.get(stock_id),
+                closes=close_hist.get(stock_id),
                 news_items=news_history.get(stock_id),
             )
             if full:
@@ -1089,6 +1103,7 @@ def _full_stock_page(
     quote: Any = None,
     delisted: bool = False,
     inst_days: Any = None,
+    closes: Any = None,
     news_items: Any = None,
 ) -> bool:
     """Render the ten-section page for one stock, if its sheets are on disk.
@@ -1150,6 +1165,7 @@ def _full_stock_page(
             settings=settings,
             quote=quote,
             inst_days=inst_days,
+            closes=closes,
             news_items=news_items,
         )
     except Exception:  # noqa: BLE001 - a bad cache must not fail the build

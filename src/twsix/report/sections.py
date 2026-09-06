@@ -420,8 +420,22 @@ class Institutional:
     from_daily: int = 0
 
 
+def _ad(roc: str) -> str:
+    """`115/09/02` → `2026-09-02`。
+
+    分頁上的日期是民國，每日快照存的是西元；兩邊要用同一把鑰匙才對得起來。
+    看不懂的字串回原樣——對不上就是對不上，不要猜成別的日期。
+    """
+    parts = roc.split("/")
+    if len(parts) != 3 or not parts[0].isdigit():
+        return roc
+    return f"{int(parts[0]) + 1911}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
+
+
 def institutional(
-    grid: Sequence[Sequence[str]], extra: Sequence[Any] | None = None
+    grid: Sequence[Sequence[str]],
+    extra: Sequence[Any] | None = None,
+    prices: Sequence[Any] | None = None,
 ) -> Institutional | None:
     """Read 〔三大法人〕 into the day rows, the period totals and two charts.
 
@@ -514,6 +528,18 @@ def institutional(
             }
 
     labels = [d["date"][3:] for d in days]  # 「08/28」 — the year is on the page
+
+    # 每一天的收盤，對齊上面那 20 列。
+    #
+    # 這兩張圖問的是「外資在買還是在賣」，而讀者接著一定會問「那時候股價在哪」。
+    # 那個答案原本要跳到另一個分頁、再自己把日期對起來——而它就是一條線的事。
+    #
+    # 對不上的日期留 None（例如那一天的快照還沒抓到），圖上就是斷的。
+    by_date = {q.date: q.close for q in (prices or [])}
+    price_line = [by_date.get(_ad(d["date"])) for d in days]
+    if not any(v is not None for v in price_line):
+        price_line = None
+
     figures = {
         "foreign_net": charts.bars(
             labels,
@@ -522,6 +548,7 @@ def institutional(
             unit=" 張",
             digits=0,
             label_every=3,
+            price=price_line,
         ),
         "foreign_share": charts.line(
             labels,
@@ -533,6 +560,7 @@ def institutional(
             unit="%",
             digits=2,
             label_every=3,
+            price=price_line,
         ),
     }
     return Institutional(
@@ -617,8 +645,53 @@ def _num(row: Sequence[str], at: int | None) -> Number:
     return _to_number(text)
 
 
-def holders(grid: Sequence[Sequence[str]]) -> Holders | None:
-    """把〔大戶持股〕的格線讀成週列、兩條線與一張表。"""
+def _week_year(week: str) -> int:
+    """`26W35` → 2026。
+
+    統計日期那一欄只有 `08/28`，沒有年——跨年那幾週（`26W01` 的 01/02 與
+    `25W52` 的 12/26）光看月日分不出是哪一年，而週別的前兩碼分得出來。
+    """
+    head = week.split("W")[0].strip()
+    return 2000 + int(head) if head.isdigit() and len(head) == 2 else 0
+
+
+def _weekly_close_at(
+    weekly: Sequence[tuple[str, float]], year: int, md: str
+) -> float | None:
+    """那一週的收盤價。
+
+    兩張表的「一週」不是同一天：〔大戶持股〕的統計日期是**週五**（集保結算），
+    〔股價(週)〕的日期是**週一**（那一週的第一個交易日）。所以不能直接對日期，
+    要取「不晚於統計日期的最近一筆」——26W35 的統計日期 08/28（五）對到的是
+    08/24（一）那一列。
+
+    直接對日期的版本不會報錯，只會一筆都對不上，然後整格靜靜地不見。
+    """
+    if not md or "/" not in md:
+        return None
+    try:
+        mm, dd = (int(x) for x in md.split("/")[:2])
+    except ValueError:
+        return None
+    key = f"{year:04d}/{mm:02d}/{dd:02d}"
+    best: float | None = None
+    for date, close in weekly:
+        # 字串比大小就是比日期——`YYYY/MM/DD` 補零之後字典序等於時間序。
+        if date <= key:
+            best = close
+        else:
+            break
+    return best
+
+
+def holders(
+    grid: Sequence[Sequence[str]],
+    weekly: Sequence[tuple[str, float]] | None = None,
+) -> Holders | None:
+    """把〔大戶持股〕的格線讀成週列、兩條線與一張表。
+
+    *weekly* 是〔股價(週)〕的 (日期, 收盤)，用來畫圖下面那一格股價走勢。
+    """
     cols, rows = _named(grid)
     if not rows:
         return None
@@ -639,7 +712,15 @@ def holders(grid: Sequence[Sequence[str]]) -> Holders | None:
             {
                 "week": label,
                 "date": str(row[cols["統計日期"]]).strip() if "統計日期" in cols else "",
-                "close": _num(row, cols.get("當週股價-收盤")),
+                # Goodinfo 這張表**沒有**股價欄——原本這一行讀的
+                # 〔當週股價-收盤〕在實際抓回來的分頁裡不存在，所以它一直是
+                # None，而沒有人會發現，因為 None 在表格上就是一格空白。
+                # 真正的週收盤在〔股價(週)〕那張分頁，下面用統計日期去對。
+                "close": _weekly_close_at(
+                    weekly or (),
+                    _week_year(label),
+                    str(row[cols["統計日期"]]).strip() if "統計日期" in cols else "",
+                ),
                 "custody": _num(row, cols.get("集保庫存(萬張)")),
                 "share": share,
                 # 合計在這裡算，不在模板裡：模板算數字就沒有人能測它。
@@ -657,6 +738,16 @@ def holders(grid: Sequence[Sequence[str]]) -> Holders | None:
 
     window = weeks[:HOLDER_WEEKS]
     labels = [w["week"] for w in window]
+
+    # 當週收盤，Goodinfo 那張表自己就帶著（〔當週股價-收盤〕欄），所以這一格
+    # 不必去別的地方取資料，也不會有對不齊的問題——它和持股比例是同一列讀出來的。
+    #
+    # 「大戶持股在下降但股價在漲」是這個分頁最常被問的一句話，而它原本要靠讀者
+    # 記著另一個分頁的線長什麼樣。
+    price_line = [w["close"] for w in window]
+    if not any(v is not None for v in price_line):
+        price_line = None
+
     figures = {
         "big": charts.line(
             labels,
@@ -665,6 +756,7 @@ def holders(grid: Sequence[Sequence[str]]) -> Holders | None:
             unit="%",
             digits=1,
             label_every=13,
+            price=price_line,
         ),
         "small": charts.line(
             labels,
@@ -673,6 +765,7 @@ def holders(grid: Sequence[Sequence[str]]) -> Holders | None:
             unit="%",
             digits=1,
             label_every=13,
+            price=price_line,
         ),
     }
     return Holders(weeks=weeks, tiers=tiers, latest=latest, figures=figures)

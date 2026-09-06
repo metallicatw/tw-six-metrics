@@ -29,7 +29,7 @@ than usual, since the whole point of the workbook is the numbers.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from html import escape
 
 Number = float | None
@@ -72,6 +72,24 @@ LINE_WIDTH = 2.0
 #: 每一點仍然查得到值——見 _hover_slots()。
 MARKER_LIMIT = 30
 MARKER_R = 4.5  # 9px across
+
+#: 股價疊在同一張圖上時，右邊要留多寬給它自己的刻度。
+#:
+#: 這一段推翻了本模組開頭那條「No dual axis」——那條規則的理由現在仍然成立，
+#: 而且要寫在這裡，因為它是這張圖唯一需要讀者小心的地方：
+#:
+#:   兩條線的**交叉點沒有意義**。它是兩個刻度湊出來的巧合，不是資料裡的事件。
+#:
+#: 會這樣畫是因為分開上下兩格之後，要看「外資連買的那幾天股價在不在漲」得在
+#: 兩格之間來回對垂直位置，而那正是這張圖要回答的唯一問題。疊在一起，形狀的
+#: 對應一眼就看得到。
+#:
+#: 為了讓「兩個刻度」這件事不必用猜的：右軸的刻度、線本身、右上角那個「收盤價」
+#: 標籤三個都是同一個顏色，而左軸維持主序列的顏色。
+PRICE_RIGHT = 54.0
+#: 中性的板岩灰。股價在這裡是**背景**——它回答的是「那時候股價在哪」，不是這張
+#: 圖的主角，所以不給它一個會跟主序列搶眼的色相。
+PRICE_COLOUR = "var(--g2)"
 
 
 @dataclass(frozen=True)
@@ -261,6 +279,82 @@ def _x_labels(frame: Frame, labels: Sequence[str], every: int) -> list[str]:
     return out
 
 
+def _price_overlay(
+    f: Frame,
+    labels: Sequence[str],
+    prices: Sequence[Number],
+    *,
+    unit: str = " 元",
+    digits: int = 2,
+) -> list[str]:
+    """股價，疊在同一張圖上，用**右邊**那條軸。
+
+    畫在主序列**之前**，所以它在下面——股價是背景，回答的是「那時候股價在哪」。
+
+    刻度、線、右上角那個標籤三個同色，左軸維持主序列的色；這是讀者判斷「哪條線
+    看哪條軸」唯一的線索，所以三個都不能少。
+
+    缺的那幾期畫成斷線，不跨過去連一條直線——那是資料沒有講過的話。
+
+    ⚠️ 兩條線的交叉點沒有意義（見 PRICE_RIGHT 上面那段）。
+    """
+    present = [float(v) for v in prices if v is not None]
+    if len(present) < 2:
+        # 一個點畫不出趨勢，零個點更不用說。不畫，比畫一條看不出方向的線誠實。
+        return []
+    lo, hi = _nice_bounds(present, include_zero=False)
+    slot = f.plot_w / len(prices)
+    right = f.width - f.right
+    out: list[str] = []
+
+    def y_of(value: float) -> float:
+        return f.top + f.plot_h * (1 - (value - lo) / (hi - lo))
+
+    # 右軸的刻度，和左軸同高——兩邊的橫線是同一條，只是各自標各自的數字。
+    for i in range(4):
+        value = lo + (hi - lo) * i / 3
+        out.append(
+            f'<text x="{right + 8:.1f}" y="{y_of(value) + 3.5:.1f}" '
+            f'text-anchor="start" font-size="11" fill="{PRICE_COLOUR}">'
+            f"{escape(_axis_label(value, digits))}</text>"
+        )
+
+    run: list[str] = []
+
+    def flush() -> None:
+        if len(run) > 1:
+            out.append(
+                f'<polyline points="{" ".join(run)}" fill="none" '
+                f'stroke="{PRICE_COLOUR}" stroke-width="1.6" stroke-opacity=".85" '
+                f'stroke-linejoin="round" stroke-linecap="round" />'
+            )
+        run.clear()
+
+    for i, raw in enumerate(prices):
+        if raw is None:
+            flush()
+            continue
+        run.append(f"{f.left + slot * (i + 0.5):.1f},{y_of(float(raw)):.1f}")
+    flush()
+
+    # 右上角的標籤，說清楚右邊那條軸是誰的。放在繪圖區外面（右軸上方），
+    # 不會壓到任何一條線。
+    out.append(
+        f'<text x="{right + 8:.1f}" y="{f.top - 6:.1f}" font-size="11" '
+        f'fill="{PRICE_COLOUR}" font-weight="600">收盤價</text>'
+    )
+    newest = max((i for i, v in enumerate(prices) if v is not None), default=None)
+    if newest is not None:
+        out.append(
+            f'<circle cx="{min(f.left + slot * (newest + 0.5), right):.1f}" '
+            f'cy="{y_of(float(prices[newest])):.1f}" r="3.5" fill="{PRICE_COLOUR}" '
+            f'stroke="var(--surface)" stroke-width="1.5">'
+            f"<title>收盤價　{escape(_fmt(float(prices[newest]), digits))}"
+            f"{escape(unit)}</title></circle>"
+        )
+    return out
+
+
 def _open(frame: Frame, title: str, desc: str) -> list[str]:
     return [
         f'<svg viewBox="0 0 {frame.width:.0f} {frame.height:.0f}" '
@@ -294,16 +388,21 @@ def _figure(
 
 
 def _table(labels: Sequence[str], series: Sequence[tuple[str, Sequence[Number]]],
-           digits: int) -> str:
-    """The numbers behind the picture — never only a picture."""
+           digits: int | Sequence[int]) -> str:
+    """The numbers behind the picture — never only a picture.
+
+    *digits* 可以給一個數字（所有欄同一個小數位），也可以一欄給一個——買賣超是
+    整數張，股價是兩位小數，兩欄同一個位數就得有一欄被印錯。
+    """
+    per = digits if isinstance(digits, Sequence) else [digits] * len(series)
     head = "".join(f"<th>{escape(name)}</th>" for name, _ in series)
     rows = []
     for i, label in enumerate(labels):
         cells = "".join(
             f'<td class="num">'
-            f"{'' if i >= len(values) or values[i] is None else _fmt(float(values[i]), digits)}"
+            f"{'' if i >= len(values) or values[i] is None else _fmt(float(values[i]), per[c])}"
             f"</td>"
-            for _, values in series
+            for c, (_, values) in enumerate(series)
         )
         rows.append(f"<tr><th scope=\"row\">{escape(label)}</th>{cells}</tr>")
     return (
@@ -329,24 +428,41 @@ def bars(
     frame: Frame | None = None,
     newest_first: bool = True,
     colour: str = "var(--accent)",
+    price: Sequence[Number] | None = None,
+    price_unit: str = " 元",
+    price_digits: int = 2,
     robust: bool = False,
 ) -> str:
     """Magnitude over an ordered axis, oldest on the left.
 
     One series, baseline at zero.
 
+    *price* 給了的話，同一張圖上多一條股價走勢，用右邊那條軸（見 _price_overlay）。
+
     Each bar carries its own ``<title>``, which is the browser's native
     tooltip — a hover layer that costs no JavaScript and works when scripting
     is off.
     """
     labels, values = _chronological(labels, values, newest_first)
+    if price is not None:
+        _, price = _chronological(labels, price, newest_first)
     present = [float(v) for v in values if v is not None]
     if not present:
         return f'<p class="muted">{escape(title)}：無資料</p>'
     f = frame or Frame()
+    # 右邊要空出一條軸的寬度給股價的刻度，不然它會畫在畫布外面。
+    if price:
+        f = replace(f, right=max(f.right, PRICE_RIGHT))
     lo, hi = _robust_bounds(present) if robust else _nice_bounds(present)
-    parts = _open(f, title, f"{len(present)} 期{unit}，{_fmt(min(present), digits)} 至 {_fmt(max(present), digits)}")
+    parts = _open(
+        f, title,
+        f"{len(present)} 期{unit}，{_fmt(min(present), digits)} 至 {_fmt(max(present), digits)}",
+    )
     parts += _grid(f, lo, hi, digits)
+    # 股價畫在長條**之前**——它是背景，不該蓋在資料上面。
+    over = _price_overlay(f, labels, price, unit=price_unit,
+                          digits=price_digits) if price else []
+    parts += over
 
     slot = f.plot_w / len(values)
     # 期數少的時候不要把長條撐滿整格。九季畫在 1122 寬的圖上，一根就是 122px
@@ -403,8 +519,13 @@ def bars(
             )
     parts += _x_labels(f, labels, label_every)
     parts.append("</svg>")
+    series = [(title, values)]
+    digs: list[int] = [digits]
+    if over:
+        series.append(("收盤價", price))
+        digs.append(price_digits)
     return _figure(
-        title, unit, "".join(parts), _table(labels, [(title, values)], digits),
+        title, unit, "".join(parts), _table(labels, series, digs),
         colour=colour,
     )
 
@@ -420,19 +541,28 @@ def line(
     frame: Frame | None = None,
     newest_first: bool = True,
     colour: str = "var(--accent)",
+    price: Sequence[Number] | None = None,
+    price_unit: str = " 元",
+    price_digits: int = 2,
 ) -> str:
     """A rate over an ordered axis, oldest on the left.
 
     Sign is read against the zero rule.
 
+    *price* 給了的話，同一張圖上多一條股價走勢，用右邊那條軸（見 _price_overlay）。
+
     Gaps are gaps: a missing month breaks the path rather than being bridged,
     because a straight line across a hole is a claim the data does not make.
     """
     labels, values = _chronological(labels, values, newest_first)
+    if price is not None:
+        _, price = _chronological(labels, price, newest_first)
     present = [float(v) for v in values if v is not None]
     if not present:
         return f'<p class="muted">{escape(title)}：無資料</p>'
     f = frame or Frame(height=240.0)
+    if price:
+        f = replace(f, right=max(f.right, PRICE_RIGHT))
     # 折線圖不從零起算。
     #
     # 長條圖必須從零——長條的長度就是量值，截掉底部等於騙人。折線不是：它畫的是
@@ -444,6 +574,10 @@ def line(
     lo, hi = _nice_bounds(present, include_zero=False)
     parts = _open(f, title, f"{len(present)} 期{unit}")
     parts += _grid(f, lo, hi, digits)
+    # 股價畫在主線**之前**——它是背景，不該蓋在資料上面。
+    over = _price_overlay(f, labels, price, unit=price_unit,
+                          digits=price_digits) if price else []
+    parts += over
 
     slot = f.plot_w / len(values)
 
@@ -520,8 +654,13 @@ def line(
             )
     parts += _x_labels(f, labels, label_every)
     parts.append("</svg>")
+    series = [(title, values)]
+    digs: list[int] = [digits]
+    if over:
+        series.append(("收盤價", price))
+        digs.append(price_digits)
     return _figure(
-        title, unit, "".join(parts), _table(labels, [(title, values)], digits),
+        title, unit, "".join(parts), _table(labels, series, digs),
         colour=colour,
     )
 

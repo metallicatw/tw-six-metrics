@@ -320,6 +320,33 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
   color:var(--ink-2);max-width:none;margin-bottom:12px}
 .stale{border-left:3px solid var(--g1)}
 .note{border-left:3px solid var(--accent)}
+
+/* ── 附註的燈泡 ───────────────────────────────────────────────────────
+   收起來的時候只佔一個字；按下去在原地長出一塊說明。
+
+   沒有 JavaScript 的時候整塊直接攤開（下面 html:not(.js) 那一段）：看不到的
+   說明比擠在頁面上的說明糟，而這個網站的其他部分沒有 JS 也讀得完。 */
+.tip{position:relative;display:inline-block;vertical-align:middle;margin:2px 0 10px}
+button.bulb{appearance:none;border:1px solid var(--rule);background:var(--surface);
+  border-radius:999px;cursor:pointer;font:inherit;font-size:14px;line-height:1;
+  padding:4px 9px;color:var(--ink-2)}
+button.bulb:hover{border-color:var(--accent);background:var(--surface-2)}
+button.bulb[aria-expanded=true]{border-color:var(--accent);background:var(--surface-2)}
+button.bulb:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+/* 說明本體。絕對定位，所以它不會把下面的內容推開——按一下說明跳出來、
+   版面整個位移，讀者會失去他原本在看的那一行。 */
+.tipbox{position:absolute;left:0;top:calc(100% + 6px);z-index:40;display:none;
+  width:min(560px,86vw);background:var(--surface-2);border:1px solid var(--rule);
+  border-left:3px solid var(--accent);border-radius:5px;
+  box-shadow:0 6px 20px rgba(0,0,0,.18);padding:10px 13px;
+  font-size:13px;line-height:1.65;color:var(--ink-2);text-align:left;
+  white-space:normal}
+.tip.open .tipbox{display:block}
+/* 靠右邊界的那幾顆，往左展開，不然說明會被切掉。由 site.js 量出來後加上。 */
+.tip.flip .tipbox{left:auto;right:0}
+html:not(.js) .tipbox{display:block;position:static;width:auto;
+  box-shadow:none;margin-top:6px}
+html:not(.js) button.bulb{display:none}
 .tag.full,.tag.when{display:inline-block;padding:0 6px;margin-left:5px;border-radius:3px;
   font-size:10.5px;line-height:1.6;vertical-align:1px;
   border:1px solid var(--accent);color:var(--accent);background:transparent}

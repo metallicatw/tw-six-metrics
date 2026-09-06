@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% from "_macros.html.j2" import grade, score %}
+{% from "_macros.html.j2" import grade, score, tip %}
 {% macro n(v, digits=2, suffix='') -%}
 {%- if v is none %}<span class="gap">—</span>{% else %}{{ ('%.' ~ digits ~ 'f')|format(v) }}{{ suffix }}{% endif -%}
 {%- endmacro %}
@@ -167,12 +167,12 @@
 {# 這一頁是評分表；完整版還有十個區塊。與其讓讀者以為本站只有這些，不如把
    差別和取得方式講清楚——尤其是搜尋框會把每一檔都帶到這裡來。 #}
 <h3 id="more">這一檔還沒有完整報告</h3>
-<p class="note">
+{% call tip() %}
   上面是<b>評分表</b>，由全市場評等資料產生，每一檔都有。<b>完整報告</b>還多十個
   區塊——EPS預估與估價、殖利率估價、本益比河流圖（週線）、財報圖表、營收與獲利
   季節性、外資投信、個股新聞——那些需要逐檔向券商鏡像站抓資料，一檔約 20 秒，
   所以只有抓過的股票才有（清單頁上標「完整」的那些）。
-</p>
+{% endcall %}
 {# 抓取的按鈕在頁首搜尋框旁邊（base.html.j2），這一頁的 data-grab 已經讓它預設
    指向這一檔。頁面底部那顆是重複的第二個入口，而且離「要抓哪一檔」最遠。 #}
 <p class="muted" id="grab-how">要讓 {{ stock.stock_id }} 也有：按頁首搜尋框旁邊的
