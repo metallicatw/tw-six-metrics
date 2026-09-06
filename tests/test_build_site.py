@@ -1279,6 +1279,10 @@ def test_the_trend_report_is_copied_in_before_the_build():
     assert "site/trend-report.html" in action, "複製成外殼那一頁的檔名會被建站蓋掉"
     assert action.index("帶進〔趨勢選股〕") < action.index("建立網站")
     assert "::warning::" in action
+    # 報告住在上游的 `report` 分支（那邊把程式碼和每天的產出分開了）。先試
+    # report、取不到再退回 main：上游改版前的舊狀態、以及 report 還沒被排程
+    # 建出來的那段空窗，都還取得到東西。
+    assert "for ref in report main" in action
 
     # 上游 07:10 UTC 產完，這邊五十分鐘後帶進來。只排週一到週五：週末沒有
     # 收盤價，上游本來就不跑。

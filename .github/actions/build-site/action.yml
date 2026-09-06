@@ -116,12 +116,25 @@ runs:
     - name: 帶進〔趨勢選股〕
       run: |
         mkdir -p site
-        rm -rf /tmp/tw-trend-filter
-        if git clone --depth 1 --quiet \
-             https://github.com/metallicatw/tw-trend-filter.git /tmp/tw-trend-filter \
-           && [ -s /tmp/tw-trend-filter/index.html ]; then
-          cp /tmp/tw-trend-filter/index.html site/trend-report.html
-          echo "〔趨勢選股〕$(wc -c < site/trend-report.html) 位元組"
+        # 報告住在上游的 `report` 分支上，不在 main——那邊把「程式碼」和「每天
+        # 產生的東西」分開了，否則兩者搶同一個 index.html，每次改程式都撞車。
+        #
+        # 先試 report，取不到再退回 main：上游改版之前的舊狀態、以及 report
+        # 分支還沒被排程建出來的那一段空窗，都還取得到東西。兩條都失敗才是警告
+        # ——那一頁不見不該讓整個網站發不出去。
+        got=""
+        for ref in report main; do
+          rm -rf /tmp/tw-trend-filter
+          if git clone --depth 1 --branch "$ref" --quiet \
+               https://github.com/metallicatw/tw-trend-filter.git /tmp/tw-trend-filter \
+             && [ -s /tmp/tw-trend-filter/index.html ]; then
+            cp /tmp/tw-trend-filter/index.html site/trend-report.html
+            got="$ref"
+            break
+          fi
+        done
+        if [ -n "$got" ]; then
+          echo "〔趨勢選股〕取自 $got 分支，$(wc -c < site/trend-report.html) 位元組"
         else
           echo "::warning::tw-trend-filter 取不到，這次沒有更新〔趨勢選股〕那一頁"
         fi
