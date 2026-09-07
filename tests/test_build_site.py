@@ -603,7 +603,14 @@ def test_the_header_stamp_says_only_when_the_site_was_built(tmp_path=None):
 
     for name in ("index.html", "stock/5439.html"):
         page = (out / name).read_text(encoding="utf-8")
-        assert "網站最後更新：" in page, name
+        # 建站時間跟在站名後面（`.built`），不再自己佔一整行。
+        #
+        # 它是「只有懷疑資料舊了的時候才會去看」的一件事，卻拿到了和導覽列
+        # 同一等級的垂直空間。「更新 」那個前綴由 CSS 的 ::before 給——
+        # 時間本身是資料，標籤是排版。
+        assert 'class="built"' in page, name
+        head = page[page.index("<header"):page.index("</header>")]
+        assert 'class="built"' in head, f"{name}：建站時間不在頁首"
         assert "個股資料請記得更新" not in page, name
         assert "網站產生：" not in page, name
         assert "資料截止：" not in page, name
@@ -1528,3 +1535,54 @@ def test_同一頁多張圖的漸層_id_不能撞():
     assert ida != idb, (ida, idb)
     # 而且面積要指到自己那一個，不是指到別人的。
     assert f'url(#{ida})' in a and f'url(#{idb})' in b
+
+
+def test_頁首那兩件事各自貼著它有關的東西(tmp_path=None):
+    """建站時間貼著站名，權杖設定貼著抓取按鈕。
+
+    兩個原本都在頁首下方各自佔一行小字。那個位置的問題不是醜，是**離它要修飾
+    的東西太遠**：權杖只有在「按了抓取、發現要權杖」那一刻才會被想到，而它在
+    三十幾個像素外的另一行。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "index.html").read_text(encoding="utf-8")
+
+    h1 = page[page.index("<h1"):page.index("</h1>")]
+    assert 'class="built"' in h1, "建站時間沒有跟在站名那一行"
+
+    row = page[page.index('class="findrow"'):]
+    row = row[: row.index("</div>")]
+    assert 'id="grabnow"' in row and 'id="tokenlink"' in row, "權杖沒有跟抓取按鈕同一列"
+    assert row.index("grabnow") < row.index("tokenlink"), "權杖要在抓取後面"
+
+
+def test_評等清單的燈泡接在那句話後面(tmp_path=None):
+    """燈泡解釋的就是那一句話裡的欄位，所以它要在那句話的尾巴，不是下一段。"""
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "index.html").read_text(encoding="utf-8")
+
+    para = page[page.index("全市場評等，共"):]
+    para = para[: para.index("</p>")]
+    assert 'class="bulb"' in para, "燈泡跑到那一段外面了"
+
+
+def test_市場監控的說明也收進燈泡(tmp_path=None):
+    from twsix.report.build import MONITOR_PAGE, MONITOR_REPORT
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / MONITOR_REPORT).write_text("<html>報告</html>", encoding="utf-8")
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    page = (out / MONITOR_PAGE).read_text(encoding="utf-8")
+    h2 = page[page.index("<h2>"):page.index("</h2>")]
+    assert 'class="bulb"' in h2, "燈泡不在標題那一行"
+    assert "村田" in page, "說明內容不見了"
+    # 標題和 iframe 之間不該再有一整段說明文字。
+    between = page[page.index("</h2>"):page.index("<iframe")]
+    assert "台股加權" not in between

@@ -28,10 +28,19 @@ def test_the_two_exchanges_disagree_about_everything_but_still_parse():
         _sample("tpex_daily_openapi")
     )
     by_code = {r["code"]: r for r in prices}
-    assert by_code["2330"]["market"] == "上市" and by_code["2330"]["close"] == 2440.0
-    assert by_code["5439"]["market"] == "上櫃" and by_code["5439"]["close"] == 269.5
-    # 上櫃那份回應有 10,813 筆，其中只有 887 筆是四位數的股票代號；其餘是 ETF、
-    # 權證、債券。多存十倍的權證只是讓每天的檔案大十倍。
+    # 兩份形狀完全不同的回應，落進同一個 schema——這才是這條測試在守的事。
+    #
+    # 這裡**不寫死收盤價**：樣本由 probe 排程定期重抓，寫死價格等於每抓一次
+    # 就紅一次，而紅的原因不是程式壞了，是股價動了。一個每隔幾天就紅一次的
+    # 測試，很快就會被當成雜訊——而那正是真的壞掉時沒有人會注意到的原因。
+    assert by_code["2330"]["market"] == "上市"
+    assert by_code["5439"]["market"] == "上櫃"
+    for code in ("2330", "5439"):
+        row = by_code[code]
+        assert row["close"] and row["close"] > 0, f"{code} 沒有收盤價"
+        assert set(row) == set(daily.PRICE_COLUMNS), f"{code} 的欄位和寫檔的 schema 不一致"
+    # 上櫃那份回應有一萬多筆，其中只有 900 筆上下是四位數的股票代號；其餘是
+    # ETF、權證、債券。多存十倍的權證只是讓每天的檔案大十倍。
     assert 1900 < len(prices) < 2100, f"母體看起來不對：{len(prices)}"
 
 
@@ -40,12 +49,26 @@ def test_the_date_comes_from_the_row_because_the_two_feeds_are_not_in_step():
 
     照抓取日命名，會把兩天的資料寫進同一個檔案——而且不會有任何錯誤訊息。
     """
-    grouped = daily.by_date(
+    rows = (
         daily.parse_twse_prices(_sample("twse_daily_all"))
         + daily.parse_tpex_prices(_sample("tpex_daily_openapi"))
     )
-    assert len(grouped) == 2, "樣本裡兩個市場正好差一天，這是這條規則的由來"
-    assert sorted(grouped) == ["2026-09-01", "2026-09-02"]
+    grouped = daily.by_date(rows)
+    # 規則是「每一列照**它自己**的日期歸檔」，而不是「樣本裡剛好有兩天」。
+    #
+    # 兩個來源同不同步是那一天的偶然：抓樣本的時候差一天，今天可能一樣。把偶然
+    # 寫進斷言，測試就會在「一切正常」的日子紅掉。
+    assert grouped, "一天都沒有"
+    for day, group in grouped.items():
+        assert {r["date"] for r in group} == {day}, f"{day} 這一組混進了別天的列"
+    assert sum(len(g) for g in grouped.values()) == len(rows), "有列被歸檔時弄丟了"
+
+    # 而「兩個來源可能不同步」這件事本身，用兩列造出來驗——不靠樣本剛好如此。
+    two = daily.by_date([
+        {"date": "2026-09-01", "code": "1101"},
+        {"date": "2026-09-02", "code": "2330"},
+    ])
+    assert sorted(two) == ["2026-09-01", "2026-09-02"]
 
 
 def test_roc_and_gregorian_dates_both_land_on_the_same_shape():
@@ -187,9 +210,16 @@ def test_the_exchanges_own_website_is_a_day_ahead_of_its_open_data():
     """
     web = daily.parse_twse_mi_index(_sample("twse_mi_index"))
     api = daily.parse_twse_prices(_sample("twse_daily_all"))
-    assert {r["date"] for r in web} == {"2026-09-02"}
-    assert {r["date"] for r in api} == {"2026-09-01"}
-    assert len(web) == 1093 and len(api) == 1093
+    # 兩份都要**自己是一致的**（各自只有一天），而且兩邊的母體一樣大——同一個
+    # 交易所的同一批股票，只是兩條路。
+    #
+    # 不斷言「網站比 openapi 早一天」：那是抓樣本那天的狀況，不是承諾。它們**可能**
+    # 不同步，所以程式照每一列自己的日期歸檔（見上一條），而那條規則不需要
+    # 今天剛好不同步才成立。
+    assert len({r["date"] for r in web}) == 1
+    assert len({r["date"] for r in api}) == 1
+    assert len(web) == len(api), f"同一個交易所兩條路的母體不一樣大：{len(web)} vs {len(api)}"
+    assert 1000 < len(web) < 1300, f"上市檔數看起來不對：{len(web)}"
 
 
 def test_the_change_column_is_html_not_a_number():
@@ -198,10 +228,41 @@ def test_the_change_column_is_html_not_a_number():
     直接把那一欄當數字讀會全部變成 None（漲跌不見了）；只讀數字那一欄則會把跌
     讀成漲——後者更糟，因為看起來完全正常。
     """
-    rows = {r["code"]: r for r in daily.parse_twse_mi_index(_sample("twse_mi_index"))}
-    assert rows["2330"]["close"] == 2385.0
-    assert rows["2330"]["change"] == -55.0, "綠色的 - 代表跌"
-    assert rows["2611"]["change"] == -0.15
+    # 方向由那段 HTML 決定，所以用兩列造出來驗——一漲一跌，一次看清楚。
+    made = daily.parse_twse_mi_index({
+        "date": "20260902",
+        "tables": [{
+            "title": "每日收盤行情",
+            "fields": ["證券代號", "收盤價", "漲跌(+/-)", "漲跌價差"],
+            "data": [
+                ["1101", "50.00", "<p style= color:green>-</p>", "0.15"],
+                ["2330", "2385.00", "<p style= color:red>+</p>", "55.00"],
+            ],
+        }],
+    })
+    by_code = {r["code"]: r for r in made}
+    assert by_code["1101"]["change"] == -0.15, "綠色的 - 代表跌"
+    assert by_code["2330"]["change"] == 55.0, "紅色的 + 代表漲"
+
+    # 再拿真實樣本掃一遍：只驗**方向和那段標記一致**，不寫死任何一檔的數字。
+    payload = _sample("twse_mi_index")
+    table = next(t for t in payload["tables"] if "每日收盤行情" in t["title"])
+    idx = {daily._key(f): i for i, f in enumerate(table["fields"])}
+    signs = {}
+    for row in table["data"]:
+        code = str(row[idx[daily._key("證券代號")]]).strip()
+        signs[code] = daily._tag_text(row[idx[daily._key("漲跌(+/-)")]])
+    checked = 0
+    for r in daily.parse_twse_mi_index(payload):
+        tag, change = signs.get(r["code"], ""), r["change"]
+        if change is None or not tag:
+            continue
+        checked += 1
+        if "-" in tag:
+            assert change <= 0, f"{r['code']} 標記是跌，數字卻是 {change}"
+        elif "+" in tag:
+            assert change >= 0, f"{r['code']} 標記是漲，數字卻是 {change}"
+    assert checked > 500, f"只驗到 {checked} 列，樣本看起來不對"
 
 
 def test_the_quotes_table_is_found_by_title_not_by_index():

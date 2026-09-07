@@ -19,7 +19,12 @@
      欄位；在桌機上反過來，有人想預覽窄版長什麼樣。兩邊各有一個理由，所以給
      一顆按鈕而不是替他決定。選擇存在這台瀏覽器裡。 #}
   <button type="button" id="viewmode" class="viewmode" aria-pressed="false">切換手機版</button>
-  <h1><a href="{{ rel }}index.html">{{ site_title }}</a></h1>
+  {# 建站時間跟在站名後面，同一行。
+     它原本自己佔一整行放在頁首最下面——那一行的內容是「這份網站什麼時候建的」，
+     一件**只有懷疑資料舊了的時候才會去看**的事，卻拿到了和導覽列同一等級的
+     垂直空間。跟在站名後面、字級降到 11px，要找的時候找得到，不找的時候不佔
+     一行。 #}
+  <h1><a href="{{ rel }}index.html">{{ site_title }}</a><span class="built">{{ generated_at }}</span></h1>
   {# 三個分頁暫時不連：它們讀的是一年前的全市場快照，而排名和分布用舊資料算出來
      不只是過時，是理直氣壯地過時。個股頁不同，那是現抓的。頁面照樣產生，直接
      開網址還是看得到，只是導覽不指過去。#}
@@ -66,6 +71,10 @@
       {# 只有在「這一檔還沒有完整報告，而且抓得到」的時候才出現。沒東西可抓時
          留一顆按不動的按鈕，比沒有按鈕更難懂。 #}
       <button type="button" id="grabnow" class="btn-grab" hidden>抓取</button>
+      {# 權杖的設定就在「抓取」旁邊，因為那是它唯一會被想到的時刻——按下抓取、
+         發現要權杖。它原本在頁首另一行，離那顆按鈕三十幾個像素遠，而且那一行
+         平常是空的。 #}
+      <button type="button" id="tokenlink" class="linkish tokenlink" hidden>設定抓取權杖</button>
     </div>
     <ul id="find-list" role="listbox" aria-label="搜尋結果" hidden></ul>
     {# 進度面板要跟搜尋框對齊，所以必須待在 .find 裡面——它是 position:relative
@@ -91,11 +100,6 @@
       </details>
     </div>
   </form>
-  {# 動作，不是頁面，所以放在 nav 外面。只有線上版才需要——本機服務在跑的
-     時候不必給權杖。 #}
-  <p class="stamp">
-    <button type="button" id="tokenlink" class="linkish" hidden>設定抓取權杖</button>
-  </p>
   {# 這一行原本擠了四件事：產生時間、檔數、財報季別、營收月份。後面三件在別的
      地方各自說過一次了——檔數與季別在〔評等清單〕的第一句，落後多久在下面那條
      ⚠ 橫幅——所以留在這裡只是把最上面那一行讀成一串參數。
@@ -106,9 +110,6 @@
      現在不是了：全部 1,877 檔都抓過，收盤價、三大法人與個股新聞每天由排程自己
      更新，而每一列的日期就寫在清單上。一句每一頁都出現、卻已經不成立的提醒，
      讀起來像網站在推卸責任。 #}
-  <p class="stamp">
-    網站最後更新：{{ generated_at }}
-  </p>
 </div></header>
 <div class="wrap">
 {% if data_age_note %}

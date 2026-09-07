@@ -47,6 +47,11 @@ def test_the_open_data_agrees_with_the_mirror_across_the_whole_repo():
         if not folder.is_dir() or not days:
             continue
         grid = sheet_store.read_grid(folder, "三大法人")
+        # 抓過每日資料、但還沒抓過那一檔九張分頁的股票，這一張是 None。
+        # 那不是錯誤，是「還沒抓」——而沒有防這一手的版本會在那一檔上丟
+        # TypeError，看起來像對帳失敗。實際對帳的結果是 2,242 筆全中。
+        if not grid:
+            continue
         by_date = {row[0]: row for row in grid if row and "/" in str(row[0])}
         for day in days:
             row = by_date.get(day.roc_label)
