@@ -11,6 +11,14 @@
    報告的也給（字改成「重新抓取」）：資料會過期，而且新增的區塊只能靠重抓補上。 #}
 <body{% if grab_code %} data-grab="{{ grab_code }}"{% endif %}{% if grab_full %} data-full="1"{% endif %}>
 <header class="top"><div class="in">
+  {# 檢視模式的切換放在頁首右上角。它是這一頁最上面的一個動作，而它原本夾在
+     頁尾那行小字裡——那裡是「這份網站什麼時候建的」，一個資訊的位置，不是一個
+     按鈕該待的地方。
+
+     手機上這個站預設就是窄版，但表格很寬，有時候讀者寧可縮小字捲著看完整的
+     欄位；在桌機上反過來，有人想預覽窄版長什麼樣。兩邊各有一個理由，所以給
+     一顆按鈕而不是替他決定。選擇存在這台瀏覽器裡。 #}
+  <button type="button" id="viewmode" class="viewmode" aria-pressed="false">切換手機版</button>
   <h1><a href="{{ rel }}index.html">{{ site_title }}</a></h1>
   {# 三個分頁暫時不連：它們讀的是一年前的全市場快照，而排名和分布用舊資料算出來
      不只是過時，是理直氣壯地過時。個股頁不同，那是現抓的。頁面照樣產生，直接
@@ -87,10 +95,6 @@
      時候不必給權杖。 #}
   <p class="stamp">
     <button type="button" id="tokenlink" class="linkish" hidden>設定抓取權杖</button>
-    {# 手機上這個站預設就是窄版，但表格很寬，有時候讀者寧可縮小字捲著看完整的
-       欄位；在桌機上反過來，有人想預覽窄版長什麼樣。兩邊各有一個理由，所以給
-       一顆按鈕而不是替他決定。選擇存在這台瀏覽器裡。 #}
-    <button type="button" id="viewmode" class="linkish" aria-pressed="false">切換手機版</button>
   </p>
   {# 這一行原本擠了四件事：產生時間、檔數、財報季別、營收月份。後面三件在別的
      地方各自說過一次了——檔數與季別在〔評等清單〕的第一句，落後多久在下面那條

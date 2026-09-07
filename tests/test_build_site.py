@@ -1394,13 +1394,15 @@ def test_股價和籌碼畫在同一張圖上_用右邊那條軸():
     h_price = float(re.search(r'viewBox="0 0 \d+ ([\d.]+)"', with_px).group(1))
     assert h_price == h_plain, "疊在同一張圖上，高度不該變"
 
-    # 三個線索，缺一個讀者就得用猜的哪條線看哪條軸。
-    assert "收盤價" in with_px, "右上角沒有標出那條軸是誰的"
-    assert with_px.count(f'fill="{charts.PRICE_COLOUR}"') >= 2, "右軸刻度沒有跟著同色"
-    assert f'stroke="{charts.PRICE_COLOUR}"' in with_px, "股價線沒畫"
+    # 三個同色的線索，缺一個讀者就得用猜的哪條線看哪條軸。
+    assert 'class="chart-legend"' in with_px, "沒有圖例"
+    assert "收盤價（右軸 元）" in with_px, "圖例沒說那是右軸"
+    assert with_px.count('fill="var(--price)"') >= 2, "右軸刻度沒有跟著同色"
+    assert 'stroke="var(--price)"' in with_px, "股價線沒畫"
 
-    # 右邊要空出刻度的寬度，不然數字會畫到畫布外面。
-    assert 'x="1154' in with_px or 'x="1146' in with_px or "1200" in with_px
+    # 面積，不是一條線——「那時候股價在哪個水位」，線只有位置，面積有厚度。
+    assert 'fill="url(#pg' in with_px, "沒有畫成面積"
+    assert "<linearGradient" in with_px, "面積沒有由上往下淡出"
 
     # 數值表要多一欄，而且股價印兩位小數、買賣超印整數。
     assert "<th>收盤價</th>" in with_px
@@ -1415,9 +1417,9 @@ def test_股價畫在主序列之前_才不會蓋住資料():
     svg = charts.bars(labels, [10, -20, 30, -5], title="外資買賣超", unit=" 張",
                       digits=0, newest_first=False,
                       price=[100.0, 101.5, 99.0, 103.0])
-    line_at = svg.index(f'stroke="{charts.PRICE_COLOUR}" stroke-width="1.6"')
+    area_at = svg.index('fill="url(#pg')
     bar_at = svg.index("<rect x=")
-    assert line_at < bar_at, "股價線畫在長條後面，會蓋住資料"
+    assert area_at < bar_at, "股價面積畫在長條後面，會蓋住資料"
 
 
 def test_時間軸只畫一次():
@@ -1441,9 +1443,8 @@ def test_股價缺哪一天就斷在哪一天():
     svg = charts.line(labels, [1.0, 2.0, 3.0, 4.0], title="外資持股比重",
                       unit="%", digits=2, newest_first=False,
                       price=[100.0, None, None, 103.0])
-    # 兩段各只有一個點，連不成線——所以一條 polyline 都不該有。
-    body = svg[svg.index("收盤價") - 4000:] if "收盤價" in svg else svg
-    assert body.count('stroke="var(--g2)"') == 0
+    # 兩段各只有一個點，連不成線——所以一塊面積都不該有。
+    assert 'fill="url(#pg' not in svg
 
 
 def test_一個點畫不出趨勢就整格不畫():
@@ -1510,3 +1511,20 @@ def test_週別的前兩碼決定年份():
     assert _weekly_close_at(weekly, 2026, "01/09") == 11.0
     # 比整段還早的日期沒有對應，回 None 而不是抓最近的一筆。
     assert _weekly_close_at(weekly, 2025, "01/02") is None
+
+
+def test_同一頁多張圖的漸層_id_不能撞():
+    """同一頁上有四張圖。四個 `<defs>` 用同一個 id 的話，瀏覽器只認第一個——
+    後面三張的填色會靜靜地變成第一張的，而那看起來只是「顏色有點怪」。"""
+    from twsix.report import charts
+
+    labels = ["09/01", "09/02", "09/03"]
+    px = [100.0, 101.0, 102.0]
+    a = charts.line(labels, [1.0, 2.0, 3.0], title="甲", newest_first=False, price=px)
+    b = charts.line(labels, [1.0, 2.0, 3.0], title="乙", newest_first=False, price=px)
+    import re
+    ida = re.search(r'id="(pg\d+)"', a).group(1)
+    idb = re.search(r'id="(pg\d+)"', b).group(1)
+    assert ida != idb, (ida, idb)
+    # 而且面積要指到自己那一個，不是指到別人的。
+    assert f'url(#{ida})' in a and f'url(#{idb})' in b

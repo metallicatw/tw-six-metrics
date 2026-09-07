@@ -13,6 +13,11 @@
      只好把顏色壓暗——那正是原本那組看起來悶的原因。反過來用深字，同樣鮮豔的
      填色可以到 5.2~9.2，而且同一組填色在淺色和深色主題上都成立。 */
   --g4:#10b981; --g3:#22c1a8; --g2:#7c8ea8; --g1:#f0a72a; --g0:#f0533f;
+  /* 疊在籌碼圖上那條收盤價專用的色。
+     不用紅或綠——那兩個在股票的頁面上已經是漲跌的意思，拿來當第二個序列的
+     身分，兩件事會在同一個通道上打架。也不用主色（那是主序列的），
+     所以挑一個色相離得夠遠、明度又壓得住的紫。 */
+  --price:#7a6cc4; --price-soft:rgba(122,108,196,.16); --price-edge:rgba(122,108,196,.42);
   --badge-ink:#0b1220;
   /* 六大指標各一個色相。這是「識別」，不是裝飾：同一個指標在站上任何地方都是
      同一個顏色，而顏色從不單獨承載意義——每張圖都有自己的標題與座標軸，正負由
@@ -67,6 +72,8 @@
   /* 等第的填色兩個主題共用——它們本來就夠亮，深字在深底上一樣讀得到（5.0~8.5）。
      一組顏色兩邊通用，「AA 是什麼顏色」就不必記兩次。 */
   --g4:#10b981; --g3:#22c1a8; --g2:#7c8ea8; --g1:#f0a72a; --g0:#f0533f;
+  /* 收盤價：同色相調亮、降飽和，在深底上才不會沉下去。 */
+  --price:#a99cf0; --price-soft:rgba(169,156,240,.22); --price-edge:rgba(169,156,240,.48);
   --badge-ink:#0b1220;
   /* 深色不是把淺色自動翻過來，是在深底上重新選一組步階再驗一次——五項也全過。 */
   --m0:#16a99c; --m1:#c08a20; --m2:#9a66e8;
@@ -124,7 +131,19 @@ a:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
    橫向捲動——而那幾像素在桌機上永遠看不到。 */
 .wrap{--pad:20px;max-width:1240px;margin:0 auto;padding:0 var(--pad) 44px}
 header.top{background:var(--surface);border-bottom:1px solid var(--rule);margin-bottom:14px}
-header.top .in{max-width:1240px;margin:0 auto;padding:12px 20px 10px}
+header.top .in{max-width:1240px;margin:0 auto;padding:12px 20px 10px;position:relative}
+/* 檢視模式切換：頁首右上角。用 absolute 而不是 flex，因為 .in 裡面已經有標題、
+   導覽列、搜尋框三塊各自排版的東西，加一層 flex 會把它們全部重排。 */
+button.viewmode{position:absolute;top:10px;right:20px;z-index:5;
+  appearance:none;font:inherit;font-size:12px;line-height:1;cursor:pointer;
+  padding:6px 12px;border-radius:999px;
+  border:1px solid var(--rule);background:var(--surface-2);color:var(--ink-2)}
+button.viewmode:hover{border-color:var(--accent);color:var(--accent)}
+button.viewmode[aria-pressed=true]{border-color:var(--accent);color:var(--accent);
+  background:var(--surface)}
+button.viewmode:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
+/* 標題要讓開那顆按鈕的寬度，不然長標題會鑽到它下面。 */
+header.top h1{padding-right:104px}
 header.top h1{margin:0;font-size:24px;letter-spacing:-.01em;font-weight:700}
 header.top h1 a{color:inherit;text-decoration:none}
 
@@ -321,12 +340,27 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
 .stale{border-left:3px solid var(--g1)}
 .note{border-left:3px solid var(--accent)}
 
+/* ── 圖例：雙軸圖上「哪條線看哪條軸」 ────────────────────────────────
+   只有疊了收盤價的那幾張圖才有。單序列的圖不需要圖例——標題就是圖例。 */
+.chart-legend{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 6px;
+  font-size:12px;color:var(--muted)}
+.chart-legend .k{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.chart-legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
+/* 收盤價那一格畫成一小塊面積，和圖上的樣子一致——圖例和圖不一樣的話，
+   它就變成第二個要對照的東西，而不是答案。 */
+.chart-legend i.area{height:10px;width:16px;border-radius:2px;
+  background:linear-gradient(180deg,var(--price-edge),transparent);
+  border-top:2px solid var(--price)}
+
 /* ── 附註的燈泡 ───────────────────────────────────────────────────────
    收起來的時候只佔一個字；按下去在原地長出一塊說明。
 
    沒有 JavaScript 的時候整塊直接攤開（下面 html:not(.js) 那一段）：看不到的
    說明比擠在頁面上的說明糟，而這個網站的其他部分沒有 JS 也讀得完。 */
 .tip{position:relative;display:inline-block;vertical-align:middle;margin:2px 0 10px}
+/* 標題裡的那一顆不要跟著標題放大，也不要撐開標題的行高。 */
+h2 .tip,h3 .tip{margin:0;vertical-align:middle}
+h2 .tipbox,h3 .tipbox{font-weight:400}
 button.bulb{appearance:none;border:1px solid var(--rule);background:var(--surface);
   border-radius:999px;cursor:pointer;font:inherit;font-size:14px;line-height:1;
   padding:4px 9px;color:var(--ink-2)}

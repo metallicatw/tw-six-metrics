@@ -42,6 +42,24 @@ TWSE_PRICES_WEB = (
     "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?type=ALLBUT0999&response=json"
 )
 TPEX_PRICES = "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
+
+#: 回補用：同樣兩個交易所，但指定某一個過去的交易日。
+#:
+#: 每日快照只有排程上線之後的那幾天，而〔外資投信〕圖上的股價要蓋滿 20 個交易
+#: 日的視窗——不回補的話那條線要等四個星期才會長齊。
+#:
+#: 上市那個就是 `TWSE_PRICES_WEB` 加一個 `date`，回應結構一模一樣，所以
+#: `parse_twse_mi_index` 原封不動就能用（樣本：twse_mi_index_dated）。
+#: 上櫃的不是 openapi 那份（它只給今天），是網站自己用的那支，結構不同——
+#: 見 `parse_tpex_rwd`（樣本：tpex_daily_rwd_dated）。
+TWSE_PRICES_DATED = (
+    "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
+    "?date={ymd}&type=ALLBUT0999&response=json"
+)
+TPEX_PRICES_DATED = (
+    "https://www.tpex.org.tw/www/zh-tw/afterTrading/otc"
+    "?date={y}/{m}/{d}&type=EW&response=json"
+)
 #: `openapi.twse.com.tw/v1/fund/T86` 回的是一頁 1 KB 的 HTML，不是資料
 #: （`reference/samples/twse_t86_openapi` 就是那一頁）。真的在這裡。
 TWSE_INSTITUTIONAL = "https://www.twse.com.tw/rwd/zh/fund/T86?selectType=ALL&response=json"
@@ -184,6 +202,57 @@ def parse_twse_mi_index(payload: Any) -> list[dict[str, Any]]:
     return out
 
 
+def parse_tpex_rwd(payload: Any) -> list[dict[str, Any]]:
+    """櫃買網站自己用的每日收盤行情（帶日期那一支）。
+
+    和上市那份的形狀**不一樣**，所以不能共用 parser：
+
+    * 只有一張表，但仍然照標題找而不是照索引取——索引是今天的排列，不是承諾。
+    * 欄名帶著空白與 HTML（`'收盤 '`、`'最後買量<br>(張數)'`），所以用 `_key`
+      正規化之後再對，不能直接字串相等。
+    * 漲跌是一欄合起來的（`'+0.08'`），不像上市那份把方向放在另一欄的 HTML 裡。
+
+    日期取**頂層**那個 `date`（`20260901`）而不是表內那個（`115/09/01`）：兩者
+    指同一天，但前者已經是西元，和其他來源寫進檔案的格式一致。
+
+    樣本：`reference/samples/tpex_daily_rwd_dated`（1,014 列，其中 888 檔是四碼
+    上櫃股票，其餘是 ETF 與受益證券，由 `_CODE` 擋掉）。
+    """
+    tables = (payload or {}).get("tables") or ()
+    table = next(
+        (t for t in tables if "每日收盤行情" in str(t.get("title", ""))), None
+    )
+    if not table:
+        return []
+    fields = [_key(f) for f in table.get("fields") or ()]
+    index = {name: i for i, name in enumerate(fields)}
+
+    def at(row: list[Any], name: str) -> Any:
+        i = index.get(_key(name))
+        return row[i] if i is not None and i < len(row) else None
+
+    day = _date((payload or {}).get("date"))
+    out: list[dict[str, Any]] = []
+    for row in table.get("data") or ():
+        code = str(at(row, "代號") or "").strip()
+        if not _CODE.match(code):
+            continue
+        out.append(
+            {
+                "date": day,
+                "code": code,
+                "market": "上櫃",
+                "close": _num(at(row, "收盤")),
+                "open": _num(at(row, "開盤")),
+                "high": _num(at(row, "最高")),
+                "low": _num(at(row, "最低")),
+                "change": _num(at(row, "漲跌")),
+                "volume": _num(at(row, "成交股數")),
+            }
+        )
+    return out
+
+
 def _tag_text(value: Any) -> str:
     """`<p style= color:green>-</p>` -> `-`。"""
     return re.sub(r"<[^>]*>", "", str(value or "")).strip()
@@ -314,6 +383,27 @@ class Daily:
                 self.problems.append(f"{url.split('/')[2]} 沒拿到：{exc}")
                 print(f"    （{url.split('/')[2]} 沒拿到：{exc}）")
         return merge_prices(*groups)
+
+    def prices_on(self, day: str) -> list[dict[str, Any]]:
+        """某一個過去交易日的全市場收盤。*day* 是 `YYYY-MM-DD`。
+
+        兩個交易所各一個請求。非交易日兩邊都回空表（不是錯誤），所以呼叫端拿到
+        空 list 的意思是「那天沒有開市」，不需要另外判斷行事曆。
+
+        一邊掛掉不把另一邊丟掉——理由和 `prices()` 一樣，只是這裡連 `problems`
+        都不記：回補是補歷史，少一天下次再補就好，不該讓整批停下來。
+        """
+        y, m, d = day.split("-")
+        out: list[dict[str, Any]] = []
+        for url, parse in (
+            (TWSE_PRICES_DATED.format(ymd=f"{y}{m}{d}"), parse_twse_mi_index),
+            (TPEX_PRICES_DATED.format(y=y, m=m, d=d), parse_tpex_rwd),
+        ):
+            try:
+                out += parse(self._json(url))
+            except Exception as exc:  # noqa: BLE001
+                print(f"    （{url.split('/')[2]} {day} 沒拿到：{exc}）")
+        return out
 
     def institutional(self) -> list[dict[str, Any]]:
         return parse_twse_institutional(

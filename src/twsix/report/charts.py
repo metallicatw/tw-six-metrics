@@ -28,6 +28,7 @@ than usual, since the whole point of the workbook is the numbers.
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from html import escape
@@ -279,6 +280,11 @@ def _x_labels(frame: Frame, labels: Sequence[str], every: int) -> list[str]:
     return out
 
 
+#: 給漸層一個唯一的 id。同一頁上有四張圖，四個 `<defs>` 用同一個 id 的話，
+#: 瀏覽器只認第一個——後面三張的填色會靜靜地變成第一張的。
+_GRAD_SEQ = itertools.count()
+
+
 def _price_overlay(
     f: Frame,
     labels: Sequence[str],
@@ -287,25 +293,32 @@ def _price_overlay(
     unit: str = " 元",
     digits: int = 2,
 ) -> list[str]:
-    """股價，疊在同一張圖上，用**右邊**那條軸。
+    """收盤價，疊在同一張圖上、用**右邊**那條軸，畫成面積。
 
-    畫在主序列**之前**，所以它在下面——股價是背景，回答的是「那時候股價在哪」。
+    面積而不是一條線：這一格要回答的是「那時候股價在哪個水位」，而填色把「水位」
+    這件事講得比一條細線清楚——線只有位置，面積有厚度。填色由上往下淡出，所以
+    它不會把下面的格線和主序列蓋掉。
 
-    刻度、線、右上角那個標籤三個同色，左軸維持主序列的色；這是讀者判斷「哪條線
-    看哪條軸」唯一的線索，所以三個都不能少。
+    畫在主序列**之前**，所以主序列永遠在上面。
 
-    缺的那幾期畫成斷線，不跨過去連一條直線——那是資料沒有講過的話。
-
-    ⚠️ 兩條線的交叉點沒有意義（見 PRICE_RIGHT 上面那段）。
+    ⚠️ 兩條線的交叉點沒有意義（見 PRICE_RIGHT 上面那段）。三個同色的線索
+    （右軸刻度、面積、圖例）是讀者判斷「哪條線看哪條軸」的唯一依據。
     """
     present = [float(v) for v in prices if v is not None]
     if len(present) < 2:
-        # 一個點畫不出趨勢，零個點更不用說。不畫，比畫一條看不出方向的線誠實。
+        # 一個點畫不出趨勢，零個點更不用說。
         return []
     lo, hi = _nice_bounds(present, include_zero=False)
     slot = f.plot_w / len(prices)
     right = f.width - f.right
-    out: list[str] = []
+    floor = f.top + f.plot_h
+    gid = f"pg{next(_GRAD_SEQ)}"
+    out: list[str] = [
+        f'<defs><linearGradient id="{gid}" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0" stop-color="var(--price-edge)" />'
+        f'<stop offset="1" stop-color="var(--price-soft)" stop-opacity="0" />'
+        f"</linearGradient></defs>"
+    ]
 
     def y_of(value: float) -> float:
         return f.top + f.plot_h * (1 - (value - lo) / (hi - lo))
@@ -315,18 +328,26 @@ def _price_overlay(
         value = lo + (hi - lo) * i / 3
         out.append(
             f'<text x="{right + 8:.1f}" y="{y_of(value) + 3.5:.1f}" '
-            f'text-anchor="start" font-size="11" fill="{PRICE_COLOUR}">'
+            f'text-anchor="start" font-size="11" fill="var(--price)">'
             f"{escape(_axis_label(value, digits))}</text>"
         )
 
-    run: list[str] = []
+    # 連續的那幾段各自畫一塊面積。缺的那幾期是真的斷開，不跨過去連一條直線
+    # ——那是資料沒有講過的話，而填色會讓那條假線看起來更理直氣壯。
+    run: list[tuple[float, float]] = []
 
     def flush() -> None:
         if len(run) > 1:
+            pts = " ".join(f"{x:.1f},{y:.1f}" for x, y in run)
+            # 面積是「從底線上去、沿著資料走、再回到底線」的一個封閉路徑。
+            steps = " ".join(f"L{x:.1f},{y:.1f}" for x, y in run)
             out.append(
-                f'<polyline points="{" ".join(run)}" fill="none" '
-                f'stroke="{PRICE_COLOUR}" stroke-width="1.6" stroke-opacity=".85" '
-                f'stroke-linejoin="round" stroke-linecap="round" />'
+                f'<path d="M{run[0][0]:.1f},{floor:.1f} {steps} '
+                f'L{run[-1][0]:.1f},{floor:.1f} Z" fill="url(#{gid})" stroke="none" />'
+            )
+            out.append(
+                f'<polyline points="{pts}" fill="none" stroke="var(--price)" '
+                f'stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" />'
             )
         run.clear()
 
@@ -334,20 +355,14 @@ def _price_overlay(
         if raw is None:
             flush()
             continue
-        run.append(f"{f.left + slot * (i + 0.5):.1f},{y_of(float(raw)):.1f}")
+        run.append((f.left + slot * (i + 0.5), y_of(float(raw))))
     flush()
 
-    # 右上角的標籤，說清楚右邊那條軸是誰的。放在繪圖區外面（右軸上方），
-    # 不會壓到任何一條線。
-    out.append(
-        f'<text x="{right + 8:.1f}" y="{f.top - 6:.1f}" font-size="11" '
-        f'fill="{PRICE_COLOUR}" font-weight="600">收盤價</text>'
-    )
     newest = max((i for i, v in enumerate(prices) if v is not None), default=None)
     if newest is not None:
         out.append(
             f'<circle cx="{min(f.left + slot * (newest + 0.5), right):.1f}" '
-            f'cy="{y_of(float(prices[newest])):.1f}" r="3.5" fill="{PRICE_COLOUR}" '
+            f'cy="{y_of(float(prices[newest])):.1f}" r="3.5" fill="var(--price)" '
             f'stroke="var(--surface)" stroke-width="1.5">'
             f"<title>收盤價　{escape(_fmt(float(prices[newest]), digits))}"
             f"{escape(unit)}</title></circle>"
@@ -365,6 +380,22 @@ def _open(frame: Frame, title: str, desc: str) -> list[str]:
     ]
 
 
+def _legend(title: str, unit: str, colour: str, price_unit: str) -> str:
+    """兩個序列、兩條軸，各自是什麼——寫出來，不要讓人從顏色去猜。
+
+    「哪條線看哪條軸」在雙軸圖上是讀者的第一個問題，而右軸刻度的顏色只有在
+    他已經想到要去比對的時候才有用。圖例把答案直接放在圖的上面。
+    """
+    left = f"{title}（左軸{' ' + unit.strip() if unit.strip() else ''}）"
+    right = f"收盤價（右軸{' ' + price_unit.strip() if price_unit.strip() else ''}）"
+    return (
+        '<p class="chart-legend">'
+        f'<span class="k"><i style="background:{colour}"></i>{escape(left)}</span>'
+        '<span class="k"><i class="area"></i>' + escape(right) + "</span>"
+        "</p>"
+    )
+
+
 def _figure(
     title: str,
     unit: str,
@@ -372,6 +403,7 @@ def _figure(
     table: str,
     extra: str = "",
     colour: str = "var(--accent)",
+    legend: str = "",
 ) -> str:
     """標題帶著這張圖自己的色相。
 
@@ -383,7 +415,7 @@ def _figure(
     return (
         f'<figure class="chart-fig {extra}" style="--fig:{colour}">'
         f"<figcaption>{escape(title)}{suffix}</figcaption>"
-        f"{body}{table}</figure>"
+        f"{legend}{body}{table}</figure>"
     )
 
 
@@ -527,6 +559,7 @@ def bars(
     return _figure(
         title, unit, "".join(parts), _table(labels, series, digs),
         colour=colour,
+        legend=_legend(title, unit, colour, price_unit) if over else "",
     )
 
 
@@ -662,6 +695,7 @@ def line(
     return _figure(
         title, unit, "".join(parts), _table(labels, series, digs),
         colour=colour,
+        legend=_legend(title, unit, colour, price_unit) if over else "",
     )
 
 

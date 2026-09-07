@@ -1,0 +1,10 @@
+{
+  "bytes": 246408,
+  "expect": "未驗證：MI_INDEX 帶 date 參數，用來回補過去交易日的收盤。回應結構和不帶日期那份相同",
+  "fetched_at": "2026-09-07T00:40:38+00:00",
+  "form": {},
+  "group": "daily",
+  "head": "{\"tables\":[{\"title\":\"115年09月01日 價格指數(臺灣證券交易所)\",\"fields\":[\"指數\",\"收盤指數\",\"漲跌(+/-)\",\"漲跌點數\",\"漲跌百分比(%)\",\"特殊處理註記\"],\"data\":[[\"寶島股價指數\",\"52,101.13\",\"<p style ='color:red'>+<\\u002fp>\",\"926.72\",\"1.81\",\"\"],[\"發行量加權股價指數\",\"46,948.72\",\"<p style ='color:red'>+<\\u002fp>\",\"820.25\",\"1.78\",\"\"],[\"臺灣公司治理100�",
+  "name": "twse_mi_index_dated",
+  "url": "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date=20260901&type=ALLBUT0999&response=json"
+}
