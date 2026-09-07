@@ -1,9 +1,10 @@
 {
-  "bytes": 4229706,
+  "bytes": 4280096,
   "expect": "未驗證：猜是上櫃當日收盤行情",
-  "fetched_at": "2026-09-02T16:01:34+00:00",
+  "fetched_at": "2026-09-07T03:05:44+00:00",
+  "form": {},
   "group": "daily",
-  "head": "[ {\"Date\":\"1150902\",\"SecuritiesCompanyCode\":\"00411A\",\"CompanyName\":\"主動統一前沿科技\",\"Close\":\"9.50\",\"Change\":\"-0.19 \",\"Open\":\"9.61\",\"High\":\"9.61\",\"Low\":\"9.50\",\"Average\":\"9.52\",\"TradingShares\":\"20006803\",\"TransactionAmount\":\"190428634\",\"TransactionNumber\":\"4828\",\"LatestBidPrice\":\"9.49\",\"LatesAskPrice\":\"9.50\",\"Capitals\":\"660076000\",\"NextReferencePrice\":\"9.50\",\"NextLimitUp\":\"9999.95\",\"NextLi",
+  "head": "[ {\"Date\":\"1150904\",\"SecuritiesCompanyCode\":\"00411A\",\"CompanyName\":\"主動統一前沿科技\",\"Close\":\"9.81\",\"Change\":\"+0.33\",\"Open\":\"9.68\",\"High\":\"9.81\",\"Low\":\"9.66\",\"Average\":\"9.73\",\"TradingShares\":\"21603993\",\"TransactionAmount\":\"210112547\",\"TransactionNumber\":\"2083\",\"LatestBidPrice\":\"9.80\",\"LatesAskPrice\":\"9.81\",\"Capitals\":\"649076000\",\"NextReferencePrice\":\"9.81\",\"NextLimitUp\":\"9999.95\",\"NextLim",
   "name": "tpex_daily_openapi",
   "url": "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes"
 }
