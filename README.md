@@ -217,6 +217,7 @@ Goodinfo 的服務條款禁止自動化抓取。`ingest/moneydj.py` 預設停用
 - [DATASOURCES.md](DATASOURCES.md) — 每個端點的網址、參數與遷移對照
 - [CHANGELOG.md](CHANGELOG.md) — 十項與 v6.62 的刻意差異及理由
 - [DEPLOY.md](DEPLOY.md) — 推上 GitHub、開啟 Pages 與排程的步驟
+- [OPERATIONS.md](OPERATIONS.md) — 三個 repo 的時序、誰會建站、手動更新要按哪個按鈕
 
 ---
 
