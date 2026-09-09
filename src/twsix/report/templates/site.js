@@ -969,31 +969,64 @@ var TWSIXWatch = (function(){
 
 
 /* =========================================================================
- * 〔市場監控〕與〔趨勢選股〕嵌進來的那兩份報告：撐到剛好填滿視窗剩下的高度
+ * 〔市場監控〕與〔趨勢選股〕嵌進來的那兩份報告：iframe 長到跟內容一樣高
  *
- * 寫死一個 `calc(100vh - 260px)` 會在兩種情況下多出第二條捲軸：頁首在窄螢幕上
- * 換行，或上面那段說明多一行。兩條捲軸（外層一條、iframe 一條）捲起來像壞掉。
+ * 之前是「撐到剛好填滿視窗剩下的高度」。那樣只有一條捲軸沒錯，但捲的是
+ * **iframe 自己**——於是外層頁面幾乎不動，右下角那顆「回到最上方」永遠不出現
+ * （它看的是 window 的捲動量），而且滑鼠移出 iframe 之後滾輪就不再捲報告。
  *
- * 量出來就沒有這個問題：iframe 的頂端在哪裡是問得到的，剩下的高度就是視窗高度
- * 減掉它，再留一點給頁尾。
+ * 改成量內容、把 iframe 拉到那麼高：內層不再有捲軸，捲的是整個頁面，回到最上方
+ * 那顆按鈕也就跟站上其他頁一樣可用。
  *
- * 一次處理所有 .embed，而不是照 id 一個一個列——第二個分頁加進來的時候，這段
- * 忘了改的話症狀是「那一頁的圖只有 78vh 高，而且多一條捲軸」，不會有人回報。
+ * 兩件事情要小心：
+ *
+ * 1. **量的是 body 不是 documentElement。** `documentElement.scrollHeight` 會取
+ *    「內容」與「視窗」的較大值——iframe 已經被我們拉高之後，它回的是 iframe 的
+ *    高度，於是只會越量越高、收合卡片之後留下一大片空白。body 是一般的區塊盒，
+ *    高度就是內容高度，收合之後會跟著縮回來。
+ *
+ * 2. **報告的內容高度會變。** 那份報告是可以展開／收合的，所以不能只在載入時量
+ *    一次。用 ResizeObserver 盯著它的 body，展一張卡片就重量一次。
+ *
+ * 同源（就在這個網站上），所以直接讀得到 contentDocument，不需要 postMessage。
+ * 讀不到就退回 CSS 裡那個固定高度——那時候會有內層捲軸，但至少讀得到。
  * ========================================================================= */
 (function(){
   var frames = document.querySelectorAll('iframe.embed');
   if(!frames.length) return;
-  function fit(){
-    frames.forEach(function(frame){
-      var top = frame.getBoundingClientRect().top + window.scrollY;
-      var h = window.innerHeight - top - 56;   /* 56 = 頁尾那一行加下緣留白 */
-      frame.style.height = Math.max(h, 420) + 'px';
-    });
+
+  function contentHeight(doc){
+    var body = doc && doc.body;
+    if(!body) return 0;
+    var cs = doc.defaultView.getComputedStyle(body);
+    return body.getBoundingClientRect().height +
+           parseFloat(cs.marginTop || 0) + parseFloat(cs.marginBottom || 0);
   }
-  fit();
-  window.addEventListener('resize', fit);
-  /* 字體晚一點載入會把上面那段說明推高，所以再量一次。 */
-  if(document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+
+  function fit(frame){
+    var doc;
+    try{ doc = frame.contentDocument; }catch(e){ return; }   /* 跨來源就放棄 */
+    var h = contentHeight(doc);
+    if(h > 0) frame.style.height = Math.ceil(h) + 2 + 'px';  /* +2 擋四捨五入 */
+  }
+
+  frames.forEach(function(frame){
+    var observed = false;
+    function attach(){
+      fit(frame);
+      if(observed || typeof ResizeObserver === 'undefined') return;
+      var doc;
+      try{ doc = frame.contentDocument; }catch(e){ return; }
+      if(!doc || !doc.body) return;
+      new ResizeObserver(function(){ fit(frame); }).observe(doc.body);
+      observed = true;
+    }
+    frame.addEventListener('load', attach);
+    attach();                                   /* 已經載好的情況 */
+    window.addEventListener('resize', function(){ fit(frame); });
+    /* 字體晚一點載入會改變內容高度，所以再量一次。 */
+    if(document.fonts && document.fonts.ready) document.fonts.ready.then(attach);
+  });
 })();
 
 
