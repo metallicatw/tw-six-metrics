@@ -164,6 +164,24 @@ def reward_risk_band(ratio: Number) -> tuple[str, str]:
     return ("靜待", REWARD_RISK_RULES[1][2])
 
 
+def _change_pct(quote: Any) -> float | None:
+    """漲跌幅（%）。分母是前一個交易日的收盤，也就是 `close - change`。
+
+    拿當日收盤當分母是這一類計算最常見的錯：漲得越多、錯得越多，而且永遠是
+    低估。漲停板（+10%）用錯分母會算成 9.09%，看起來只是「差一點」。
+    """
+    if quote is None:
+        return None
+    close = getattr(quote, "close", None)
+    change = getattr(quote, "change", None)
+    if close is None or change is None:
+        return None
+    prev = close - change
+    if not prev:
+        return None
+    return round(change / prev * 100, 2)
+
+
 @dataclass
 class Section:
     """One of the four, with its own id so the nav can link to it."""
@@ -185,6 +203,11 @@ class StockPage:
     #: 整頁的估值都掛在這個數字上，而一個標錯日期的股價會讓人以為它們比實際新
     #: ——所以寧可不標。判斷方式見 ingest.valuation_source.market_close。
     price_date: str = ""
+    #: 那一天的漲跌點數與漲跌幅（%）。來源和 `price_date` 一樣是每日全市場行情，
+    #: 不是活頁簿——活頁簿只有一個價格，說不出它比前一天高還是低。
+    #: 兩個都可能是 None（沒有每日行情、或那一檔當天沒成交），那時候不顯示。
+    price_change: Number = None
+    price_change_pct: Number = None
     fiscal_quarter: str = ""
     revenue_month: str = ""
     excluded: str = ""
@@ -525,6 +548,10 @@ def build_page(
         market_price=valuation.market_price,
         # 有每日全市場行情就用它的日期；沒有才退回從分頁推出來的那一個。
         price_date=quote.label if quote is not None else market_close(reader)[1],
+        price_change=getattr(quote, "change", None) if quote is not None else None,
+        # 漲跌幅要用「前一天的收盤」當分母，也就是 close - change。
+        # 拿 close 當分母是常見的錯，漲得越多錯得越多。
+        price_change_pct=_change_pct(quote),
         excluded=getattr(rating, "excluded", "") or "",
         gaps=dict(valuation.gaps or {}),
     )

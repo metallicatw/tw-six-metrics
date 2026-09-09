@@ -70,8 +70,16 @@
   </div>
   {# 市價要帶日期。整頁的估值——目標價、下檔價、報酬風險比——都是拿這個數字算的，
      而一個沒有日期的股價，在一張存起來三個月後再打開的網頁上，看起來永遠像今天的。 #}
+  {%- set chg = p.price_change %}
+  {%- set dir = ('up' if chg > 0 else ('down' if chg < 0 else '')) if chg is not none else '' %}
   <div class="card">
-    <b>{{ "%.2f"|format(p.market_price) if p.market_price else "—" }}</b>
+    <b class="{{ dir }}">{{ "%.2f"|format(p.market_price) if p.market_price else "—" }}</b>
+    {%- if chg is not none %}
+    {# 數字不帶正負號——方向由三角形表示。台股慣例：漲紅、跌綠。 #}
+    <span class="chg {{ dir }}">{{ '▲' if chg > 0 else ('▼' if chg < 0 else '') }}
+      {{- ' ' if chg != 0 }}{{ "%.2f"|format(chg|abs) }}
+      {%- if p.price_change_pct is not none %} ({{ "%.2f"|format(p.price_change_pct|abs) }}%){% endif %}</span>
+    {%- endif %}
     <span>市價{% if p.price_date %}　<i class="asof">{{ p.price_date }} 收盤</i>{% endif %}</span>
   </div>
   <div class="card">
