@@ -396,11 +396,65 @@ def test_backfill_can_reach_today():
     assert "datetime.now(_TAIPEI).date() + timedelta(days=1)" in code
 
 
+#: 一天的收盤要算「齊」，兩個交易所都要在。
+BOTH_EXCHANGES = {"上市", "上櫃"}
+
+
+def settled_days_missing_an_exchange(markets_by_day: dict[str, set[str]]) -> list[str]:
+    """哪幾天是**已經定稿卻仍然少半個市場**的。最新那一天不算。
+
+    為什麼要放過最新那一天：這兩種半份檔案的性質完全不同。
+
+    今天的半份是暫時的——排程一天跑兩次，第二次的 merge 就會把另一半補進來，
+    而且上櫃現在還有備援來源。為一個會自己好的狀態讓整站停止部署，代價完全不成
+    比例：停掉的不只是行情，是評等、新聞、還有嵌進來的那份市場監控報告。
+
+    昨天以前的半份就不是打嗝了。它已經活過至少兩次排程、活過一次 merge 的機會
+    還是沒補齊，那代表有東西一直在失敗而沒有人發現——那個值得讓 build 紅。
+
+    「允許剛好一天在途」這條線不需要日期、不需要設定、也不需要「容忍 N 天」這種
+    遲早要調的參數：它就是「下一次排程有沒有把它補上」的自然界線。
+
+    **不在這條規則的守備範圍內**：整批停止更新。如果連一天新的都寫不出來，那份
+    半天的檔案會一直是「最新」，這裡就一直放過它。那是資料新鮮度的問題，要由別
+    的守門來管，不要讓這條規則假裝它有蓋到。
+    """
+    if len(markets_by_day) <= 1:
+        return []
+    settled = sorted(markets_by_day)[:-1]   # 去掉最新那一天
+    return [day for day in settled if markets_by_day[day] != BOTH_EXCHANGES]
+
+
+def test_a_half_day_only_gets_a_pass_while_it_is_still_the_newest():
+    """這條規則的整個重點就在那個 `[:-1]`，所以直接把它釘住。
+
+    差一格的後果是兩種相反的災難：切太多，昨天壞掉沒人知道；切太少，今天早上
+    的一次打嗝就讓整站停止部署。（`backfill-prices` 就是差這一格，才會永遠碰不
+    到最需要修的那一天。）
+    """
+    both, half = BOTH_EXCHANGES, {"上市"}
+    # 只有今天半份 → 放行
+    assert settled_days_missing_an_exchange({"2026-09-08": both, "2026-09-09": half}) == []
+    # 昨天半份、今天齊了 → 昨天要被抓出來
+    assert settled_days_missing_an_exchange(
+        {"2026-09-08": half, "2026-09-09": both}
+    ) == ["2026-09-08"]
+    # 連兩天半份 → 舊的那天算數，最新的仍在途
+    assert settled_days_missing_an_exchange(
+        {"2026-09-08": half, "2026-09-09": half}
+    ) == ["2026-09-08"]
+    # 只有一天，還沒有「之前」可言
+    assert settled_days_missing_an_exchange({"2026-09-09": half}) == []
+
+
 def test_the_committed_price_files_carry_both_exchanges():
     """對版控裡真實的檔案跑。
 
     這是那個 bug 唯一會自己說話的地方：一份只有上市的收盤行情，看起來完全正常
     ——1,093 列、欄位齊全、日期正確，只是上櫃那 887 檔全部不在。
+
+    最新那一天允許還在途（印成 `::warning::`），之前的每一天都必須齊；
+    理由見 `settled_days_missing_an_exchange`。
     """
     import csv
     import gzip
@@ -409,7 +463,24 @@ def test_the_committed_price_files_carry_both_exchanges():
     folder = ROOT / "data/market/daily/prices"
     files = sorted(folder.glob("*.csv.gz"))
     assert files, "repo 裡沒有每日收盤，這條測試沒有意義"
-    newest = files[-1]
-    text = gzip.decompress(newest.read_bytes()).decode("utf-8")
-    markets = {r["market"] for r in csv.DictReader(io.StringIO(text))}
-    assert markets == {"上市", "上櫃"}, f"{newest.name} 少了一整個交易所：{markets}"
+
+    markets_by_day = {}
+    for path in files:
+        text = gzip.decompress(path.read_bytes()).decode("utf-8")
+        markets_by_day[path.stem.removesuffix(".csv")] = {
+            r["market"] for r in csv.DictReader(io.StringIO(text))
+        }
+
+    broken = settled_days_missing_an_exchange(markets_by_day)
+    assert not broken, (
+        "這幾天已經定稿卻少了一整個交易所（不是暫時的，排程沒有把它補上）："
+        + "、".join(f"{d} 只有 {sorted(markets_by_day[d])}" for d in broken)
+    )
+
+    newest = sorted(markets_by_day)[-1]
+    if markets_by_day[newest] != BOTH_EXCHANGES:
+        # 不擋部署，但要在 Actions 上留下一條看得見的註記。
+        print(
+            f"::warning::{newest} 目前只有 {sorted(markets_by_day[newest])}，"
+            "等下一次排程 merge 補齊；若明天還在，這條測試就會擋下來。"
+        )
