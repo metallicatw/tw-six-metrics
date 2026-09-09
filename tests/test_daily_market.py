@@ -325,6 +325,77 @@ def test_a_whole_exchange_going_missing_is_a_warning_not_a_log_line():
     assert "self.problems" in src
 
 
+def test_the_otc_falls_back_to_the_other_endpoint_when_the_big_one_dies():
+    """上櫃只有一個來源，所以它掛掉就是半個市場不見——必須有第二條路。
+
+    那支 openapi 的回應是 **4.3 MB**（一萬多筆，絕大多數是權證與 ETF），實測會
+    **傳到一半被切斷**，而且每次斷在不同的位元組數。那不是逾時，所以把 timeout
+    調高沒有用；要換來源。備援是交易所網站自己那支：146 KB、只含上櫃股票、
+    指定日期，parser 是回補本來就在用的 `parse_tpex_rwd`。
+    """
+
+    class _OnlyTwseWorks:
+        """上市兩支正常，上櫃 openapi 那支炸掉——正是實際發生的那一天。"""
+
+        def __init__(self):
+            self.asked: list[str] = []
+
+        def get(self, url, **_kw):
+            self.asked.append(url)
+            if url == daily.TPEX_PRICES:
+                raise OSError("transfer closed with 3851657 bytes remaining to read")
+            if url.startswith("https://www.tpex.org.tw/www/"):
+                return json.dumps(_sample("tpex_daily_rwd_dated")).encode()
+            name = "twse_daily_all" if url == daily.TWSE_PRICES else "twse_mi_index"
+            return json.dumps(_sample(name)).encode()
+
+    http = _OnlyTwseWorks()
+    rows = daily.Daily(http).prices(day="2026-09-09")
+    markets = {r["market"] for r in rows}
+    assert markets == {"上市", "上櫃"}, f"備援沒有接上，只拿到 {markets}"
+    # 備援必須是**另一個**端點，不是把同一支再打一次。
+    assert any(u.startswith("https://www.tpex.org.tw/www/") for u in http.asked)
+
+
+def test_the_fallback_only_runs_when_the_otc_is_actually_missing():
+    """備援是保險不是常態。上櫃本來就抓到的時候不該多打一次。"""
+
+    class _EverythingWorks:
+        def __init__(self):
+            self.asked: list[str] = []
+
+        def get(self, url, **_kw):
+            self.asked.append(url)
+            name = {
+                daily.TWSE_PRICES: "twse_daily_all",
+                daily.TWSE_PRICES_WEB: "twse_mi_index",
+                daily.TPEX_PRICES: "tpex_daily_openapi",
+            }[url]
+            return json.dumps(_sample(name)).encode()
+
+    http = _EverythingWorks()
+    daily.Daily(http).prices(day="2026-09-09")
+    assert not any(u.startswith("https://www.tpex.org.tw/www/") for u in http.asked)
+
+
+def test_backfill_can_reach_today():
+    """那支「專門修補半個市場」的工具，原本永遠碰不到今天。
+
+    `day = date.today()` 之後迴圈第一件事就是減一天，所以它從昨天開始——而最可能
+    需要修的，正是今天早上剛抓失敗的那一份（2026-09-09 只有上市 1,095 列）。
+    另外日期要用台北時間：runner 跑在 UTC，台北 23:30 那班排程會跨日。
+    """
+    cli = (ROOT / "src/twsix/cli.py").read_text("utf-8")
+    start = cli.split("def cmd_backfill_prices")[1].split("for _ in range")[0]
+    # 只看程式碼。註解裡會提到 `date.today()`（那是在解釋為什麼不能用它），
+    # 連註解一起比對的話，寫下這段說明本身就會讓測試紅。
+    code = "\n".join(
+        line for line in start.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "date.today()" not in code, "又回到 UTC 的今天了"
+    assert "datetime.now(_TAIPEI).date() + timedelta(days=1)" in code
+
+
 def test_the_committed_price_files_carry_both_exchanges():
     """對版控裡真實的檔案跑。
 

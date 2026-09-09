@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .base import HttpClient
@@ -64,6 +65,10 @@ TPEX_PRICES_DATED = (
 #: （`reference/samples/twse_t86_openapi` 就是那一頁）。真的在這裡。
 TWSE_INSTITUTIONAL = "https://www.twse.com.tw/rwd/zh/fund/T86?selectType=ALL&response=json"
 TPEX_INSTITUTIONAL = "https://www.tpex.org.tw/openapi/v1/tpex_3insti_daily_trading"
+
+#: 交易日以台北時間為準。排程跑在 UTC 的 runner 上，直接用 `date.today()`
+#: 會在台北時間深夜跨日時指到前一天。
+TAIPEI = timezone(timedelta(hours=8))
 
 PRICE_COLUMNS: tuple[str, ...] = (
     "date", "code", "market", "close", "open", "high", "low", "change", "volume",
@@ -364,12 +369,15 @@ class Daily:
         raw = self.http.get(url, use_cache=False)
         return json.loads(raw.decode("utf-8-sig", errors="replace"))
 
-    def prices(self) -> list[dict[str, Any]]:
-        """三個來源：上市兩個（開放資料與網站）、上櫃一個。
+    def prices(self, day: str | None = None) -> list[dict[str, Any]]:
+        """三個來源：上市兩個（開放資料與網站）、上櫃一個，上櫃再加一個備援。
 
         上市抓兩份不是保險，是因為**它們不同步**：開放資料那份實測會落後一個交
         易日。哪一份先有今天的資料，今天的價格就從哪一份來。任何一份掛掉，其餘
         照樣存——一個端點失敗不該把另外兩個抓好的資料丟掉。
+
+        上櫃只有一個來源，所以它掛掉就是**半個市場不見**。備援見
+        `_tpex_by_date()`。
         """
         groups: list[list[dict[str, Any]]] = []
         for url, parse in (
@@ -382,7 +390,45 @@ class Daily:
             except Exception as exc:  # noqa: BLE001 - 一個來源掛掉不該拖垮其餘
                 self.problems.append(f"{url.split('/')[2]} 沒拿到：{exc}")
                 print(f"    （{url.split('/')[2]} 沒拿到：{exc}）")
-        return merge_prices(*groups)
+
+        rows = merge_prices(*groups)
+        if not any(r.get("market") == "上櫃" for r in rows):
+            iso = day or datetime.now(TAIPEI).date().isoformat()
+            extra = self._tpex_by_date(iso)
+            if extra:
+                rows = merge_prices(rows, extra)
+        return rows
+
+    def _tpex_by_date(self, iso: str) -> list[dict[str, Any]]:
+        """上櫃收盤的備援來源：交易所網站自己用的那支，指定日期。
+
+        為什麼需要備援：`TPEX_PRICES`（openapi 那支）的回應是 **4.3 MB**，裡面
+        一萬多筆絕大多數是權證與 ETF，真正要的上櫃股票只有八百多檔。實測它會
+        **傳到一半被切斷**（`transfer closed with N bytes remaining`），而且每次
+        斷在不同的位元組數——這不是逾時，所以調高 timeout 沒有用。
+
+        這一支是同一個交易所的另一個端點，回應 146 KB、只含上櫃股票，實測連打
+        三次都完整。程式與 parser 都是回補（`prices_on`）本來就在用的，
+        這裡只是把它接到當日這條路上。
+
+        拿不到就記進 `problems` 讓呼叫端變成 `::warning::`，不丟例外——備援失敗
+        不該把已經抓好的上市資料一起拖掉。
+        """
+        y, m, d = iso.split("-")
+        url = TPEX_PRICES_DATED.format(y=y, m=m, d=d)
+        try:
+            rows = parse_tpex_rwd(self._json(url))
+        except Exception as exc:  # noqa: BLE001 - 備援失敗不該拖垮已經抓好的
+            self.problems.append(f"上櫃備援（{iso}）也沒拿到：{exc}")
+            print(f"    （上櫃備援 {iso} 也沒拿到：{exc}）")
+            return []
+        if not rows:
+            # 非交易日兩邊都回空表，這不是錯誤。真的是交易日卻空的話，
+            # 呼叫端那道「完全沒有上櫃的資料」的檢查會接住。
+            print(f"    （上櫃備援 {iso} 回空表，可能是非交易日）")
+            return []
+        print(f"    （上櫃改用備援來源 {iso}，取得 {len(rows)} 檔）")
+        return rows
 
     def prices_on(self, day: str) -> list[dict[str, Any]]:
         """某一個過去交易日的全市場收盤。*day* 是 `YYYY-MM-DD`。

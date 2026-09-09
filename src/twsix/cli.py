@@ -1774,7 +1774,7 @@ def cmd_backfill_prices(args: argparse.Namespace) -> int:
     不需要另外一份行事曆——而行事曆正是那種每年要維護一次、忘了維護就默默出錯
     的東西。
     """
-    from datetime import date, timedelta  # noqa: PLC0415
+    from datetime import timedelta  # noqa: PLC0415
 
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient  # noqa: PLC0415
@@ -1792,7 +1792,14 @@ def cmd_backfill_prices(args: argparse.Namespace) -> int:
     folder = "prices"
 
     want = args.days
-    day = date.today()
+    # 從**今天**開始，不是昨天。原本這裡是 `date.today()`，而迴圈第一件事就是
+    # 減一天——於是這支「專門修補半個市場」的工具，永遠碰不到最可能壞掉的那一
+    # 天：今天早上剛抓失敗的那一份。實際發生過（2026-09-09 只有上市 1,095 列），
+    # 而註解裡列的 09-01／09-02 兩個例子也都是隔天才補到的。
+    #
+    # 日期以台北時間為準：runner 跑在 UTC，台北深夜跨日時 `date.today()` 會指到
+    # 前一天，那正好是每天第二次排程（台北 23:30）的時段。
+    day = datetime.now(_TAIPEI).date() + timedelta(days=1)
     filled = skipped = holidays = 0
     # 往回走日曆日，但只數**成功補到的交易日**。乘 2 是給週末與連假的餘裕；
     # 走到底還沒補滿就停，不要無限往回翻。
