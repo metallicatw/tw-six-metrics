@@ -484,3 +484,70 @@ def test_the_committed_price_files_carry_both_exchanges():
             f"::warning::{newest} 目前只有 {sorted(markets_by_day[newest])}，"
             "等下一次排程 merge 補齊；若明天還在，這條測試就會擋下來。"
         )
+
+
+# ---------------------------------------------------------------------------
+# 〔年度交易資訊〕：一邊失敗的時候不可以把另一邊當成完整答案
+# ---------------------------------------------------------------------------
+
+def test_yearly_trading_refuses_to_write_half_the_history():
+    """轉板的股票，一邊掛掉就會寫出一份停在十年前的「正常」資料。
+
+    1558 伸興從上櫃轉上市。回補時證交所那半邊 307 失敗、櫃買回了民國 96–103
+    共 8 年，於是「至少 5 年」的檢查過關，檔案就寫出去了——一份停在 103 年、
+    看起來完全正常的半份歷史。本益比河流圖會拿它去算，而且不會有任何錯誤訊息。
+
+    現在只要有一邊真的失敗就整筆拒收。`NotListedHere`（這檔在另一個交易所）
+    不算失敗，那是正常情況，下面第二條守的就是這件事。
+    """
+    from twsix.ingest.yearly_trading import FetchError, YearlyTrading
+
+    yt = YearlyTrading(http=None)
+    raw = {
+        "twse": {"error": "HTTP Error 307: Temporary Redirect"},
+        "tpex": {
+            "tables": [{
+                "title": "年度交易資訊",
+                "fields": ["年度", "成交股數", "成交金額", "成交筆數",
+                                "最高價", "日期", "最低價", "日期", "收盤平均價"],
+                "data": [
+                    [str(y), "1", "1", "1", "180.0", "1", "142.0", "1", "160.8"]
+                    for y in range(103, 95, -1)
+                ],
+            }],
+        },
+    }
+    try:
+        yt.fetch("1558", raw)
+    except FetchError as exc:
+        assert "只拿到一半" in str(exc), f"拒收了，但理由不對：{exc}"
+    else:
+        raise AssertionError("一邊失敗卻還是回了資料——那份會被當成完整歷史寫進去")
+
+
+def test_yearly_trading_still_accepts_a_stock_listed_on_only_one_exchange():
+    """上市的股票在櫃買那邊本來就查無資料，那不是失敗。
+
+    這是上一條的邊界：如果把「查無此檔」也當成錯誤，那每一檔都會被拒收。
+    """
+    from twsix.ingest.yearly_trading import YearlyTrading
+
+    yt = YearlyTrading(http=None)
+    raw = {
+        "twse": {
+            "tables": [{
+                "title": "年度交易資訊",
+                "fields": ["年度", "成交股數", "成交金額", "成交筆數",
+                                "最高價", "日期", "最低價", "日期", "收盤平均價"],
+                "data": [
+                    [str(y), "1", "1", "1", "77.3", "1", "49.5", "1", "64.48"]
+                    for y in range(114, 89, -1)
+                ],
+            }],
+        },
+        "tpex": {"tables": [], "stat": "查無該筆資料,請重新查詢!!"},
+    }
+    grid, sources = yt.fetch("2882", raw)
+    years = [row[0] for row in grid if row and row[0]]
+    assert len(years) == 25, f"只解出 {len(years)} 年"
+    assert sources == ["twse"], sources

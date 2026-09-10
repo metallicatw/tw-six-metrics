@@ -59,6 +59,7 @@ jobs:
           twsix probe $args
 
       - name: Commit
+        id: commit
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -67,12 +68,18 @@ jobs:
             # 端點沒改版的時候，同一天重跑會拿到同一份回應——gzip 固定 mtime=0，
             # 所以位元組一樣就是真的沒有差異。
             echo "::notice::樣本沒有變化"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git commit -m "端點樣本：$(date -u +%Y-%m-%d)" \
                      -m "由「存一份真實回應」workflow 抓取。只存原始回應，不解析。"
-          git pull --rebase origin main
-          git push origin HEAD:main
+
+      # 推送單獨拆成一步，用共用的重試 action。這條排程原本是裸的
+      # `git pull --rebase; git push`，撞上另一條 workflow 就整趟的抓取結果一起
+      # 丟掉——見 .github/actions/push-with-retry 的說明。
+      - name: 推送
+        if: steps.commit.outputs.changed != 'no'
+        uses: ./.github/actions/push-with-retry
 
       # 讀樣本是人的工作，但至少把「每一份長什麼樣」印在 summary 上，不必下載
       # 才知道這一輪拿到了什麼。

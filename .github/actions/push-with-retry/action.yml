@@ -1,0 +1,63 @@
+name: 推送到 main（帶重試）
+description: >
+  git pull --rebase 之後 push，撞車就重試。給那些「已經 commit 好、只差推上去」
+  的排程用。
+
+# 為什麼需要這個東西
+#
+# 這個 repo 有六條 workflow 會寫 main：每日全市場、全市場官方資料、股權資料、
+# 股權排乾、探測、評等補課。它們用六個不同的 concurrency group，也就是完全不
+# 互斥——refresh 00:10 UTC 起跑而且 timeout 給到 120 分鐘，market 01:20、
+# ownership 01:30，重疊是常態。
+#
+# 重疊本身沒問題，rebase 會處理。問題是**輸的那一邊直接死掉**：五條裡只有
+# refresh 有重試，其餘四條是裸的 `git pull --rebase; git push`，被
+# non-fast-forward 擋下來就整趟的抓取結果一起丟掉。而那些資料是「今天沒存下來
+# 就永遠沒有」的那一種。
+#
+# 為什麼不乾脆讓它們共用一個 concurrency group：那會排隊，而 GitHub 的佇列
+# 每個 group 只留一個等待中的 run——第三個進來會把等待中的那個**取消掉**。
+# 於是一次兩小時的 refresh 就可能讓當天的每日排程整個消失。比撞車更糟。
+#
+# 所以是重試，不是互斥。
+
+inputs:
+  retries:
+    description: 最多試幾次
+    required: false
+    default: "4"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        RETRIES: ${{ inputs.retries }}
+      run: |
+        set -uo pipefail
+        for attempt in $(seq 1 "$RETRIES"); do
+          if ! git pull --rebase origin main; then
+            conflicted="$(git diff --name-only --diff-filter=U)"
+            if [ -n "$conflicted" ]; then
+              # 真的內容衝突不在這個 action 的守備範圍——它需要知道哪一邊該贏，
+              # 而那是每一條 workflow 自己的事（refresh.yml 就有一份專屬的處理）。
+              # 這裡收乾淨、講清楚、失敗，不要留下一個 rebase 進行中的工作目錄。
+              echo "::error::rebase 遇到內容衝突，這個 action 不處理："
+              printf '%s\n' "$conflicted" | sed 's/^/  /'
+              git rebase --abort || true
+              exit 1
+            fi
+            git rebase --abort || true
+            echo "::notice::pull 失敗但沒有衝突檔案（多半是網路），第 $attempt 次重試"
+            sleep $((attempt * 5))
+            continue
+          fi
+          if git push origin HEAD:main; then
+            [ "$attempt" -gt 1 ] && echo "::notice::第 $attempt 次推送成功"
+            exit 0
+          fi
+          echo "::notice::推不上去（多半是剛剛又有人推了），第 $attempt 次重試"
+          sleep $((attempt * 5))
+        done
+        echo "::error::試了 $RETRIES 次都推不上去，這一趟抓到的資料沒有進版控"
+        exit 1

@@ -250,6 +250,20 @@ class YearlyTrading:
             raise FetchError(
                 "年度交易資訊抓取失敗：\n  " + "\n  ".join(errors or ["兩個交易所都沒有這檔"])
             )
+        # 一邊真的失敗了，就不要把另一邊當成完整答案。
+        #
+        # `NotListedHere` 不會進 errors（那只是「這檔在另一個交易所」，是正常的），
+        # 所以 errors 非空代表真的有一次抓取掛掉。而這裡最貴的情況是**轉板的股票**：
+        # 1558 伸興從上櫃轉上市，證交所那半邊 307 失敗、櫃買回了 96–103 共 8 年，
+        # 於是 check() 過關（≥5 年）、檔案就這樣寫出去——一份停在民國 103 年、
+        # 看起來完全正常的半份資料。本益比河流圖會拿它去算，而且不會有任何錯誤訊息。
+        #
+        # 少補一次可以下次再補，寫錯不會有人發現。所以寧可這次不寫。
+        if errors:
+            raise FetchError(
+                "年度交易資訊只拿到一半（另一邊失敗，不寫檔以免存下不完整的歷史）：\n  "
+                + "\n  ".join(errors)
+            )
         check(years)
         sources = [n for n, ys in parsed.items() if ys]
         return to_grid(years), sources

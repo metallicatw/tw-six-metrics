@@ -92,8 +92,13 @@ jobs:
             git diff --name-only | sed 's/^/  /'
             exit 1
           fi
-          git pull --rebase origin main
-          git push origin HEAD:main
+
+      # 推送單獨拆成一步，用共用的重試 action。這條排程原本是裸的
+      # `git pull --rebase; git push`，撞上另一條 workflow 就整趟的抓取結果一起
+      # 丟掉——見 .github/actions/push-with-retry 的說明。
+      - name: 推送
+        if: steps.commit.outputs.changed == 'yes'
+        uses: ./.github/actions/push-with-retry
 
       # 價格進了 repo，網頁還沒換。這兩步讓今天的收盤當天就出現在個股頁上。
       - name: 建站

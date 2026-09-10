@@ -83,6 +83,7 @@ jobs:
         run: twsix backfill-ownership --limit 40 || true
 
       - name: Commit
+        id: commit
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -92,12 +93,18 @@ jobs:
             # 不是失敗。快照的位元組是穩定的（gzip mtime=0），所以內容一樣就
             # 真的沒有差異。
             echo "::notice::這一週沒有新的股權資料"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git commit -m "股權快照：$(date -u +%Y-%m-%d)" \
                      -m "集保股權分散（週）與董監持股（月），全市場。"
-          git pull --rebase origin main
-          git push origin HEAD:main
+
+      # 推送單獨拆成一步，用共用的重試 action。這條排程原本是裸的
+      # `git pull --rebase; git push`，撞上另一條 workflow 就整趟的抓取結果一起
+      # 丟掉——見 .github/actions/push-with-retry 的說明。
+      - name: 推送
+        if: steps.commit.outputs.changed != 'no'
+        uses: ./.github/actions/push-with-retry
 
       # 和「加一檔個股」一樣：建站就在這個 job 裡做，不叫醒第二台 runner。
       - name: 建站

@@ -2609,6 +2609,11 @@ def cmd_fetch_ownership(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+#: `cmd_fetch_yearly` 最近一次的失敗訊息。批次模式靠它分辨「這次沒抓到」
+#: （下次可重試）與「這檔上市未滿 5 年」（重跑一百次也一樣）。
+_LAST_YEARLY_ERROR = [""]
+
+
 def cmd_fetch_yearly(args: argparse.Namespace) -> int:
     """年度交易資訊：從證交所、櫃買中心抓歷年最高／最低／收盤平均價.
 
@@ -2664,6 +2669,9 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
     try:
         grid, sources = yt.fetch(args.stock, raw)
     except Exception as exc:  # noqa: BLE001 - report and stop
+        # 批次模式要分得出「這次沒抓到」與「這檔上市還不夠久」，而這兩種都是從
+        # 同一個例外出來的，差別只在訊息。留一份給呼叫端看。
+        _LAST_YEARLY_ERROR[0] = str(exc)
         print(f"年度交易資訊抓取失敗：{exc}", file=sys.stderr)
         if args.save_raw:
             print(
@@ -2672,6 +2680,7 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
             )
         return EXIT_FAIL
 
+    _LAST_YEARLY_ERROR[0] = ""
     out_dir = Path(args.out or settings.data_dir) / "sheets" / args.stock
     out_dir.mkdir(parents=True, exist_ok=True)
     target = sheet_store.write_grid(out_dir, SHEET, grid)
@@ -2681,6 +2690,98 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
         f"  年度交易資訊 {len(years)} 年（{years[-1]}–{years[0]}）"
         f"　來源：{where} -> {target}"
     )
+    return EXIT_OK
+
+
+def _yearly_missing(data_dir: Path) -> list[str]:
+    """還沒有〔年度交易資訊〕那一張的股票，代號排序。"""
+    from .ingest.yearly_trading import SHEET  # noqa: PLC0415
+
+    sheets = data_dir / "sheets"
+    if not sheets.is_dir():
+        return []
+    out = []
+    for d in sorted(p.name for p in sheets.glob("*") if p.is_dir()):
+        if not any((sheets / d).glob(f"{SHEET}.json*")):
+            out.append(d)
+    return out
+
+
+def cmd_backfill_yearly(args: argparse.Namespace) -> int:
+    """把還沒有〔年度交易資訊〕的股票一次補完。
+
+    量到的是 267 檔（全市場 1,957 檔裡）。這一張是券商鏡像唯一不給的一頁，而
+    本益比河流圖（自行計算）與整個殖利率模型都要它——所以那 267 檔點進去會少
+    兩塊，而且不會有任何錯誤訊息。
+
+    為什麼一直沒補：`fetch-yearly` 一次只吃一檔，而且沒有任何排程呼叫它。
+    267 次手動不是一個人會做的事，所以它就一直沒被做。
+
+    **這支 parser 是全專案唯一沒有對照過真實回應的一支**（`yearly_trading` 的
+    docstring 自己寫著）。所以這裡有一道剎車：前幾檔如果一張都沒抓成，就停下來
+    ——不要讓一支沒驗過的 parser 安靜地寫出 267 份空的分頁。真的要看回應長什麼
+    樣，用單檔模式加 `--save-raw`。
+    """
+    settings = Settings.load(args.config)
+    data_dir = Path(args.out or settings.data_dir)
+    codes = _yearly_missing(data_dir)
+    if not codes:
+        print("每一檔都有年度交易資訊了，沒有要補的。")
+        return EXIT_OK
+
+    limit = getattr(args, "limit", 0) or 0
+    print(f"缺〔年度交易資訊〕的股票：{len(codes):,} 檔"
+          + (f"（這一輪最多補 {limit} 檔）" if limit else ""))
+
+    ok = 0
+    retryable: list[str] = []
+    too_young: list[str] = []
+    for i, code in enumerate(codes, 1):
+        if limit and ok >= limit:
+            print(f"\n這一輪補了 {ok} 檔（--limit {limit}），其餘下次再補")
+            break
+        ns = argparse.Namespace(
+            config=args.config, stock=code, out=args.out, save_raw=None, fresh=True,
+        )
+        _LAST_YEARLY_ERROR[0] = ""
+        try:
+            rc = cmd_fetch_yearly(ns)
+        except Exception as exc:  # noqa: BLE001 - 一檔失敗不該停下整批
+            print(f"  {code}：{exc}", file=sys.stderr)
+            _LAST_YEARLY_ERROR[0] = str(exc)
+            rc = EXIT_FAIL
+        if rc == EXIT_OK:
+            ok += 1
+        elif "至少需要" in _LAST_YEARLY_ERROR[0]:
+            # 「只取得 2 年」不是抓取失敗，是這檔上市還不夠久。重跑一百次也是
+            # 同一個結果，所以要跟「這次沒抓到」分開算——否則每一輪都會拿兩個
+            # 請求去問同一批永遠不會成功的股票。
+            too_young.append(code)
+        else:
+            retryable.append(code)
+        # 剎車：頭 8 檔既沒有成功、也沒有一檔是「年份不足」，那就是 parser 或
+        # 端點有問題，不是這幾檔特別。
+        #
+        # 「年份不足」要算在健康那一邊：能數出「只有 2 年」代表回應解得開、年份
+        # 也讀出來了，只是這檔上市還不夠久。把它算成失敗的話，連續遇到幾檔新上市
+        # 就會誤觸剎車——實測就這樣停過一次。
+        if i >= 8 and ok == 0 and not too_young:
+            print(
+                f"::error::前 {i} 檔全部失敗，停止。這支 parser 尚未對照過真實回應，"
+                "先用 `twsix fetch-yearly <代號> --save-raw <目錄>` 看一次回應長什麼樣。",
+                file=sys.stderr,
+            )
+            return EXIT_FAIL
+
+    print(
+        f"\n年度交易資訊回補：成功 {ok} 檔"
+        f"｜上市未滿 5 年（重跑也不會變）{len(too_young)} 檔"
+        f"｜這次沒抓到（下次可重試）{len(retryable)} 檔"
+        f"｜還沒輪到 {max(0, len(codes) - ok - len(too_young) - len(retryable))} 檔"
+    )
+    if too_young:
+        print(f"  年份不足：{', '.join(too_young[:20])}"
+              + (" …" if len(too_young) > 20 else ""))
     return EXIT_OK
 
 
@@ -2987,6 +3088,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fy.add_argument("--out", help="資料目錄")
     fy.set_defaults(func=cmd_fetch_yearly)
+
+    by = sub.add_parser(
+        "backfill-yearly",
+        help="把還沒有〔年度交易資訊〕的股票一次補完（本益比河流圖與殖利率模型要用）",
+    )
+    by.add_argument("--limit", type=int, default=0,
+                    help="這一輪最多補幾檔（預設 0 = 不限）")
+    by.add_argument("--out", help="資料目錄")
+    by.set_defaults(func=cmd_backfill_yearly)
 
     g = sub.add_parser("extract-golden", help="把活頁簿凍結成測試樣本")
     g.add_argument("workbook")
