@@ -90,14 +90,35 @@ def test_a_candidate_with_form_fields_is_sent_as_a_post():
     了，是那個網址只認 POST 表單。表單欄位是從 `t163sb05` 那一頁**讀出來**的，
     不是猜的。
     """
-    forms = {c.name: c.form for c in CANDIDATES if c.form}
-    assert forms, "沒有任何候選帶表單，那 POST 這條路等於沒有測到"
-    for name, form in forms.items():
-        assert {"step", "firstin", "isQuery", "TYPEK", "year", "season"} <= set(form), (
-            f"{name} 的表單少了欄位，送出去會回空殼"
+    withform = [c for c in CANDIDATES if c.form]
+    assert withform, "沒有任何候選帶表單，那 POST 這條路等於沒有測到"
+    for c in withform:
+        assert {"step", "firstin", "isQuery", "TYPEK", "year", "season"} <= set(c.form), (
+            f"{c.name} 的表單少了欄位，送出去會回空殼"
         )
-        meta = json.loads((SAMPLES / f"{name}.meta.json").read_text("utf-8"))
-        assert meta.get("form") == form, f"{name} 的樣本不是用現在這組參數抓的"
+        if c.sample_pending:
+            # 只能從 runner 抓的那些。放行，但理由要寫出來——見 Candidate 的
+            # sample_pending。下一條測試會確認那個理由不是敷衍的空字串。
+            continue
+        meta = json.loads((SAMPLES / f"{c.name}.meta.json").read_text("utf-8"))
+        assert meta.get("form") == c.form, f"{c.name} 的樣本不是用現在這組參數抓的"
+
+
+def test_a_pending_sample_says_why_and_stops_being_pending_once_it_is_there():
+    """「還沒抓樣本」要是一句寫出來的話，不是一個沒人發現的缺檔。
+
+    `sample_pending` 是這個專案唯一允許「候選存在但樣本不在版控裡」的出口，
+    而它有兩道閘門：理由不能是空的，以及**樣本一旦真的存進來就要把旗標拿掉**。
+    後者是為了不讓旗標爛在那裡——probe.yml 補完之後這條會紅，而紅的內容就是
+    「可以把 sample_pending 刪掉了」。
+    """
+    for c in CANDIDATES:
+        if not c.sample_pending:
+            continue
+        assert len(c.sample_pending) > 20, f"{c.name} 的 sample_pending 沒寫清楚理由"
+        assert not (SAMPLES / f"{c.name}.raw.gz").exists(), (
+            f"{c.name} 的樣本已經在版控裡了，請把 sample_pending 這一行刪掉"
+        )
 
 
 def test_the_summary_report_does_not_carry_the_two_missing_indicators():

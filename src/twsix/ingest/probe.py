@@ -42,6 +42,17 @@ class Candidate:
     #: 表單參數。有的話就用 POST 送出——公開資訊觀測站的彙總報表沒有參數只會回
     #: 一頁 2.4 KB 的空殼（「請重新查詢」），帶了參數才是 1.3 MB 的真資料。
     form: dict[str, str] = field(default_factory=dict)
+    #: 還沒把樣本存進 `reference/samples/` 的原因。空字串 = 已經有樣本了。
+    #:
+    #: 這個欄位只有一種正當用法：**這個端點只能從 runner 抓**。公開資訊觀測站
+    #: 會按來源 IP 節流，而且被標記之後是連續好幾個小時的 307——所以在一台已經
+    #: 被擋住的機器上，樣本抓不到，不是「懶得抓」。填了理由的候選會被
+    #: `tests/test_probe.py` 放行，但它同時要求理由不能是空的：讓「還沒抓」變成
+    #: 一句寫出來的話，而不是一個沒有人注意到的缺檔。
+    #:
+    #: 補樣本的方法：跑 `.github/workflows/probe.yml`（填 name），它會用
+    #: runner 的 IP 抓一份存進版控。存好之後把這一行拿掉。
+    sample_pending: str = ""
 
 
 #: 階段二（每日全市場股價與三大法人）需要的端點。
@@ -89,11 +100,15 @@ CANDIDATES: tuple[Candidate, ...] = (
     ),
     #: 階段一那兩個官方開放資料拿不到的指標（存貨、現金流量）要走公開資訊觀測站的
     #: 彙總報表。表單 POST 回 HTML，最需要先看真實回應的就是它。
-    #: 已驗證：這是**全市場**的資產負債表彙總，一頁七張表（一般業、金融業、票券、
-    #: 保險……），一般業那張 1,049 家。但它的一般業欄位是「流動資產／非流動資產／
-    #: 資產總計／流動負債……」——和我們已經在抓的官方開放資料同一個彙總層級，
-    #: **沒有存貨**。所以這條路解不掉六大指標缺的那兩個。留著樣本是為了讓「試過
-    #: 了，它不是」有憑據。
+    #: 已驗證：`t163sb05` 是**全市場**的資產負債表彙總，一頁七張表（一般業、金融業、
+    #: 票券、保險……），一般業那張 1,049 家。但它的一般業欄位是「流動資產／非流動
+    #: 資產／資產總計／流動負債……」——和我們已經在抓的官方開放資料同一個彙總層級，
+    #: **沒有存貨**。留著樣本是為了讓「試過了，它不是」有憑據。
+    #:
+    #: 現金流量則有：`t163sb20` 現金流量表彙總，同樣的表單、同樣一個請求換一整季的
+    #: 全市場，欄位直接給營業／投資／籌資活動之淨現金流入。所以兩個缺口解掉一個。
+    #: 整個彙總家族都掃過（sb06 營益分析只有四個比率、sb07 毛利率回空頁、
+    #: t51sb02_q1 財務分析要兩段式送出且只有年頻），沒有任何一張帶存貨。
     #: 〔個股新聞〕現在是逐檔抓的（鉅亨網的關鍵字索引，`q=<代號>`），所以只有按下
     #: 「立即更新」才會換。全市場的分類新聞列表是另一條路：**一個請求換到一整批**，
     #: 而且每一篇帶著它提到的股票代號（`market[].code`），所以可以反過來分派到個股。
@@ -118,6 +133,20 @@ CANDIDATES: tuple[Candidate, ...] = (
         name="mops_balance_summary",
         url="https://mopsov.twse.com.tw/mops/web/ajax_t163sb05",
         expect="已驗證：全市場資產負債表彙總（七張表，一般業 1,049 家）。**沒有存貨**",
+        group="statements",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        form={"encodeURIComponent": "1", "step": "1", "firstin": "1", "off": "1",
+              "isQuery": "Y", "TYPEK": "sii", "year": "115", "season": "02"},
+    ),
+    Candidate(
+        name="mops_cashflow_summary",
+        url="https://mopsov.twse.com.tw/mops/web/ajax_t163sb20",
+        expect="已驗證：全市場現金流量表彙總（六張表，欄位一致）。上櫃 890 家，"
+               "比損益表那張多 8 家。自由現金流量就是靠這一張",
+        sample_pending="MOPS 依來源 IP 節流，發現這個端點的那台機器當下正被擋"
+                       "（連續 307），樣本要從 runner 抓：跑 probe.yml 填上這個"
+                       "名字。解析器本身沒有新寫——和 sb04／sb05 共用 parse_summary，"
+                       "那兩份樣本已經在版控裡。",
         group="statements",
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         form={"encodeURIComponent": "1", "step": "1", "firstin": "1", "off": "1",

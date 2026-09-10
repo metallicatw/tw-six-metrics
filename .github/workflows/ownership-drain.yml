@@ -1,6 +1,6 @@
 name: 歷史回補（一次性排乾）
 
-# 這條是**臨時**的，把 1,516 檔還沒補過集保歷史的股票排乾之後就該關掉。
+# 這條是**臨時**的，把還沒補過集保歷史的股票排乾之後就該關掉。
 #
 # 為什麼需要它：集保的股權分散查詢頁只保留 51 週。一檔沒補過的股票，今天去問
 # 立刻拿到一整年；下個月才問，最舊的那四週已經永遠掉出去了。而常態排程
@@ -10,7 +10,33 @@ name: 歷史回補（一次性排乾）
 # 往前看不需要這條：全市場快照每週存一份，跑久了每一檔都會自己長出歷史。
 # 這條買的是**過去那 51 週**，就這一次。
 #
-# 排乾之後怎麼確認：手動跑一次，看第一行印的
+# ── 為什麼是分片跑 ────────────────────────────────────────────
+#
+# 上一版是一個 job 序列跑 90 檔、三小時，1,516 檔要十七天——而那十七天裡，
+# 排在最後面的那批每天都在掉歷史。這一版改兩件事：
+#
+#   1. **只補集保**（--what holders）。董監持股在公開資訊觀測站是逐月查詢，
+#      舊月份不會過期，明年再補跟今天補拿到的是同一份資料。它佔掉每一檔約
+#      三分之二的時間卻沒有任何時效性，所以從這條路上拿掉，交還給常態的
+#      ownership.yml 慢慢補。一檔的成本從約三分鐘掉到約兩分鐘。
+#
+#   2. **切成八份同時跑**。每一檔寫的檔案彼此不相干（ownership/stock/<code>、
+#      ownership/director_stock/<code>、sheets/<code>/），所以八份可以同時跑，
+#      最後把各自的 diff 疊起來——不是「大概不會衝突」，是真的碰不到同一個檔。
+#
+# 合起來是 17 天 → **兩個晚上**。實測（2321，間隔 1.5 秒）：49 週 113 秒，
+# 一檔約兩分鐘。八份 × 280 分鐘 ÷ 2 分鐘 ≈ 1,100 檔／輪，而還沒補的是 1,476 檔。
+# 排程是每天跑，所以按下去之後不必再管它，第二個晚上會自己把尾巴收掉。
+#
+# 分片不是免費的：八條連線同時問同一個公共查詢頁，總速率會變成八倍。所以
+# TWSIX_TDCC_INTERVAL 把單片的間隔從 0.8 秒放寬到 1.5 秒，總和落在 5 req/s
+# 上下——跟以前單片跑的時候同一個量級，只是攤在八條線上。
+#
+# 要更快就得再提高總速率，而請求總量是固定的（1,476 檔 × 49 週 ≈ 72,000 個
+# 請求，怎麼排都一樣多），提速只是把同樣的量壓進更短的時間。一次性的回補
+# 用兩個晚上換「不被擋」，比擠成一個晚上然後賠掉三天划算。
+#
+# 排乾之後怎麼確認：任何一份的第一行都會印
 #   「股權歷史覆蓋：N 檔已補齊、0 檔部分、0 檔還沒補過」
 # 到 0 就把這個檔刪掉。
 
@@ -22,17 +48,21 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: "股權：這一輪補幾檔（預設 90；一檔約兩分鐘，90 檔約三小時）"
+        description: "每一份最多補幾檔（預設 250；真正的煞車是 minutes，這個是保險）"
         required: false
-        default: "90"
+        default: "250"
+      minutes:
+        description: "每一份最多跑幾分鐘（預設 280；要比 job 的 timeout 少一截）"
+        required: false
+        default: "280"
       yearly_limit:
         description: "年度交易資訊：這一輪補幾檔（預設 60；一檔兩個請求，很快）"
         required: false
         default: "60"
       quarters:
-        description: "季財報：從最新一期往回補幾季（預設 8，也就是兩年）"
+        description: "季財報：從最新一期往回補幾季（預設 12，也就是三年）"
         required: false
-        default: "8"
+        default: "12"
 
 permissions:
   contents: write
@@ -44,11 +74,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  drain:
+  # ──────────────────────────────────────────────────────────────
+  # 第一段：八份同時去集保拿週歷史。**都不 commit**——各自產一份 patch。
+  # ──────────────────────────────────────────────────────────────
+  holders:
     runs-on: ubuntu-latest
-    # 一檔約兩分鐘，90 檔約三小時。留到 300 分鐘讓它有餘裕，但**不要**用預設的
-    # 360——撞上上限的話是硬砍，砍在寫入中途。
-    timeout-minutes: 300
+    # --minutes 280 會讓指令自己在兩檔之間收工，所以正常情況根本碰不到這個
+    # 上限。留 340 是給收工之後產 patch 與上傳用的餘裕。**不要**用預設的
+    # 360——撞上上限是硬砍，砍在寫入中途，而且那一份的成果全部不見。
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false        # 一份被擋不該讓另外七份的成果一起丟掉
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
 
@@ -59,23 +97,99 @@ jobs:
 
       - run: pip install -e ".[report]"
 
-      # 這條刻意**不跑測試、不建站**。它只做一件事：把歷史抓回來存進 repo。
-      # 建站有另外四條路會做，而測試在 pages 那條把關——這裡多跑一次只是多花
-      # 三分鐘，並且多一個讓整批白跑的理由。
+      # 這一步刻意**不跑測試、不建站**。它只做一件事：把歷史抓回來。
       #
-      # 佇列由 _ownership_queue 排序：沒補過的排最前面。所以 --limit 花掉的
-      # 每一檔都是真的在買歷史，不會浪費在已經補齊的那些上面。
-      - name: 回補股權歷史
-        id: backfill
+      # 佇列由 _ownership_queue 排序（沒補過的排最前面），再由 --shard 隔位取，
+      # 所以每一份拿到的「沒補過」比例都一樣——不會有一份跑三秒就結束、另一份
+      # 扛下全部的工作。
+      #
+      # `|| true`：抓到一半失敗也要把已經拿到的那些做成 patch 傳上去。
+      - name: 回補集保週歷史（第 ${{ matrix.shard }} 份）
         env:
-          LIMIT: ${{ github.event.inputs.limit || '90' }}
-        run: twsix backfill-ownership --limit "$LIMIT"
+          LIMIT: ${{ github.event.inputs.limit || '250' }}
+          MINUTES: ${{ github.event.inputs.minutes || '280' }}
+          # 八條線同時問，單片就要放慢，總和才維持在個位數 req/s。
+          TWSIX_TDCC_INTERVAL: "1.5"
+        run: |
+          twsix backfill-ownership \
+            --what holders \
+            --shard "${{ matrix.shard }}/8" \
+            --limit "$LIMIT" \
+            --minutes "$MINUTES" || true
+
+      # 為什麼傳 patch 而不是傳整個 data/：patch 只帶「這一份真的動到的檔」。
+      # 傳目錄的話，八份各自帶著一整棵 checkout 出來的樹回來，合併的時候先到
+      # 的那份會被後到的那份用**舊內容**蓋掉——那正是分片最容易踩的坑。
+      #
+      # --binary 是必要的：存下來的是 .csv.gz。
+      - name: 做成 patch
+        id: patch
+        run: |
+          set -euo pipefail
+          git add -A data/ownership data/sheets
+          if git diff --cached --quiet; then
+            echo "::notice::第 ${{ matrix.shard }} 份沒有補到新的歷史"
+            echo "has=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --cached --binary > "shard-${{ matrix.shard }}.patch"
+          echo "has=yes" >> "$GITHUB_OUTPUT"
+          echo "第 ${{ matrix.shard }} 份：$(git diff --cached --name-only | wc -l) 個檔"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.patch.outputs.has == 'yes'
+        with:
+          name: drain-shard-${{ matrix.shard }}
+          path: shard-${{ matrix.shard }}.patch
+          retention-days: 3
+
+  # ──────────────────────────────────────────────────────────────
+  # 第二段：把八份疊回來，順手補完年度與季財報，一次 commit。
+  # ──────────────────────────────────────────────────────────────
+  collect:
+    needs: holders
+    # `always()`：就算有幾份失敗，成功的那幾份也要進版控。集保的歷史錯過就
+    # 沒有了，沒有理由因為第 5 份被擋就把另外七份丟掉。
+    if: always()
+    runs-on: ubuntu-latest
+    # 第一輪要補 250 天的行情與法人（各約 20 分鐘）＋ 年度 ＋ 季財報；
+    # 之後那些日期都已經有了，這個 job 會縮到幾分鐘。
+    timeout-minutes: 200
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[report]"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: drain-shard-*
+          path: patches
+          merge-multiple: true
+
+      # 八份改的是不相交的檔案，所以照順序套下去不會衝突。真的衝突就讓它停在
+      # 這裡——那代表「檔案彼此不相干」這個前提被打破了，需要有人去看，不是靠
+      # --3way 猜一個結果出來。
+      - name: 疊回八份的成果
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          found=0
+          for p in patches/*.patch; do
+            echo "套用 $p"
+            git apply --index "$p"
+            found=$((found + 1))
+          done
+          echo "共套用 $found 份"
 
       # 〔年度交易資訊〕：267 檔缺這一張，而它是券商鏡像唯一不給的一頁，
       # 本益比河流圖（自行計算）與整個殖利率模型都要它。缺的那幾檔點進去會少
       # 兩塊，而且不會有任何錯誤訊息。
       #
-      # 一檔兩個請求，比股權那邊便宜得多（股權是 51+36），所以 limit 給大一點。
       # 它會自己把「上市未滿 5 年」和「這次沒抓到」分開報——前者重跑一百次也
       # 是同一個結果，不是失敗。
       #
@@ -85,21 +199,28 @@ jobs:
           YEARLY_LIMIT: ${{ github.event.inputs.yearly_limit || '60' }}
         run: twsix backfill-yearly --limit "$YEARLY_LIMIT" || true
 
+      # 〔每日行情〕與〔三大法人〕：每日快照是排程上線之後才開始累積的，
+      # 所以往前只有一個月。回補是**合併不覆蓋**，而且已經有的日期完全不連網
+      # ——所以第一輪之後這兩步幾乎不花時間，放在每天跑的排程裡沒有負擔。
+      #
+      # 這兩步一定要在 runner 上跑，不能在本機那種家用 IP 上跑：證交所的
+      # MI_INDEX 對它認不得的來源回 307（那是 WAF，不是重導向），結果是那一天
+      # 只拿到櫃買的 889 列——「補到了」但只有半個市場。
+      - name: 回補每日行情
+        run: twsix backfill-prices --days 250 || true
+
+      - name: 回補三大法人
+        run: twsix backfill-institutional --days 250 || true
+
       # 季財報：MOPS 彙總報表，一個請求換一整季的全市場。
       #
-      # 這一步放在 GitHub 上跑而不是本機，理由不只是省事：`data_dir` 是相對
-      # 路徑，在本機從錯的目錄執行會安靜地寫進一個幽靈 repo——指令回報「寫入
-      # 32 份」、退出碼 0、一個警告都沒有，而真正的 repo 一個檔都沒多。
-      # （那個坑本身已經修掉了，見 config._resolve_data_dir；但排程跑就完全
-      #  不會遇到。）
-      #
       # 只補「還沒有的期別」，所以排乾之後這一步幾乎不花時間。MOPS 節流得兇，
-      # 一個請求平均要重試三到五次，所以 30 個請求抓完大約十幾到三十分鐘。
+      # 一個請求平均要重試三到五次，所以幾十個請求大約十幾到三十分鐘。
       #
       # `|| true`：這一步失敗不該讓上面已經補好的股權與年度資訊不進版控。
       - name: 回補季財報
         env:
-          QUARTERS: ${{ github.event.inputs.quarters || '8' }}
+          QUARTERS: ${{ github.event.inputs.quarters || '12' }}
         run: twsix backfill-statements --quarters "$QUARTERS" || true
 
       - name: Commit
@@ -115,7 +236,7 @@ jobs:
             exit 0
           fi
           git commit -q -m "歷史回補：$(date -u +%Y-%m-%d)" \
-                        -m "集保 51 週逐檔回補 ＋ 年度交易資訊 ＋ 季財報（一次性排乾）。"
+                        -m "集保 51 週分片回補 ＋ 年度交易資訊 ＋ 季財報（一次性排乾）。"
           echo "changed=yes" >> "$GITHUB_OUTPUT"
 
       - name: 推送
