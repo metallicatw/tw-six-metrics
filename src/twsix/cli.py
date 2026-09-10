@@ -1428,6 +1428,41 @@ def _fold_ownership(args: argparse.Namespace, stock: str) -> None:
         sheet_store.write_grid(base, sheet, merge(existing, fresh))
 
 
+def _ownership_queue(data_dir: Path, codes: list[str]) -> list[str]:
+    """把佇列排成「最缺的排最前面」，並印出目前的覆蓋率。
+
+    為什麼這件事有時效性：集保的查詢頁**只保留 51 週**。今天去問一檔沒有歷史的
+    股票，立刻拿到一整年；下個月才問，最舊的那四週已經永遠掉出去了。所以在
+    `--limit` 有限的前提下，預算應該先花在「一週都沒有」的那些，而不是照代號
+    順序從 1101 開始——後者會讓 8xxx 開頭的那批等上好幾個月。
+
+    往前看則不需要這個指令：全市場快照每週存一份，跑久了每一檔都會自己長出
+    歷史。這個指令買的是**過去那 51 週**，就這一次。
+    """
+    from .store import ownership as own  # noqa: PLC0415
+
+    root = data_dir / "ownership"
+    # 數的是**逐檔回補**來的週數（`ownership/stock/<code>.csv.gz`），不是
+    # `weeks()`。`weeks()` 會把全市場快照也算進去，而快照對每一檔的貢獻是一樣
+    # 的——它讓每一檔都「有兩週」，於是完全分不出誰真的補過。這裡要問的是
+    # 「這一檔的 51 週歷史拿回來了沒有」，那就只有逐檔那份算數。
+    have = {code: len(own.stock_history(root, code)) for code in codes}
+    empty = sorted(c for c in codes if have[c] == 0)
+    partial = sorted(c for c in codes if 0 < have[c] < 40)
+    full = sorted(c for c in codes if have[c] >= 40)
+    print(
+        f"股權歷史覆蓋：{len(full):,} 檔已補齊、{len(partial):,} 檔部分、"
+        f"{len(empty):,} 檔還沒補過（共 {len(codes):,} 檔）"
+    )
+    if empty:
+        print(
+            f"  ⚠️ 集保查詢頁只保留 51 週。那 {len(empty):,} 檔每過一週，"
+            "能拿回來的歷史就少一週，而且再也拿不回來。"
+        )
+    # 沒補過的排最前，部分的次之，已補齊的墊底（會被 _backfill_* 判定為無事可做）。
+    return empty + partial + full
+
+
 def cmd_backfill(args: argparse.Namespace) -> int:
     """把一檔（或每一檔）的集保週歷史補到 51 週。
 
@@ -1441,6 +1476,7 @@ def cmd_backfill(args: argparse.Namespace) -> int:
     else:
         sheets = data_dir / "sheets"
         codes = sorted(p.name for p in sheets.glob("*") if p.is_dir()) if sheets.is_dir() else []
+        codes = _ownership_queue(data_dir, codes)
     if not codes:
         print("沒有要補的股票", file=sys.stderr)
         return EXIT_FAIL

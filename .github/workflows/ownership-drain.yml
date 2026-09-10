@@ -1,0 +1,89 @@
+name: 股權歷史回補（一次性排乾）
+
+# 這條是**臨時**的，把 1,516 檔還沒補過集保歷史的股票排乾之後就該關掉。
+#
+# 為什麼需要它：集保的股權分散查詢頁只保留 51 週。一檔沒補過的股票，今天去問
+# 立刻拿到一整年；下個月才問，最舊的那四週已經永遠掉出去了。而常態排程
+# （ownership.yml）是每週兩次、每次 --limit 40，一週 80 檔——1,516 檔要排到
+# 十九週之後，那時候排在後面的那批已經少掉四個月的歷史。
+#
+# 往前看不需要這條：全市場快照每週存一份，跑久了每一檔都會自己長出歷史。
+# 這條買的是**過去那 51 週**，就這一次。
+#
+# 排乾之後怎麼確認：手動跑一次，看第一行印的
+#   「股權歷史覆蓋：N 檔已補齊、0 檔部分、0 檔還沒補過」
+# 到 0 就把這個檔刪掉。
+
+on:
+  schedule:
+    # 每天台北 04:30（20:30 UTC）。挑這個時間是因為它跟其他每一條排程都隔得
+    # 最遠——refresh 00:10、market 01:20、ownership 01:30、daily 09:10 UTC。
+    - cron: "30 20 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "這一輪補幾檔（預設 90；一檔約兩分鐘，90 檔約三小時）"
+        required: false
+        default: "90"
+
+permissions:
+  contents: write
+
+# 跟常態的股權排程共用同一把鎖：兩邊都會寫 data/ownership 與 data/sheets，
+# 同時跑就是兩份 rebase 互相踩。
+concurrency:
+  group: ownership
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    # 一檔約兩分鐘，90 檔約三小時。留到 300 分鐘讓它有餘裕，但**不要**用預設的
+    # 360——撞上上限的話是硬砍，砍在寫入中途。
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[report]"
+
+      # 這條刻意**不跑測試、不建站**。它只做一件事：把歷史抓回來存進 repo。
+      # 建站有另外四條路會做，而測試在 pages 那條把關——這裡多跑一次只是多花
+      # 三分鐘，並且多一個讓整批白跑的理由。
+      #
+      # 佇列由 _ownership_queue 排序：沒補過的排最前面。所以 --limit 花掉的
+      # 每一檔都是真的在買歷史，不會浪費在已經補齊的那些上面。
+      - name: 回補
+        id: backfill
+        env:
+          LIMIT: ${{ github.event.inputs.limit || '90' }}
+        run: twsix backfill-ownership --limit "$LIMIT"
+
+      # 推送要重試。這個 repo 有五條排程會寫 main，撞在一起的時候先 push 的贏，
+      # 後到的會被 non-fast-forward 擋下來——沒有重試的話，這三個小時就白跑了。
+      - name: Commit
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ownership data/sheets
+          if git diff --cached --quiet; then
+            echo "::notice::這一輪沒有補到新的股權歷史（可能已經排乾了）"
+            exit 0
+          fi
+          git commit -q -m "股權歷史回補：$(date -u +%Y-%m-%d)" \
+                        -m "集保 51 週逐檔回補（一次性排乾）。"
+          for attempt in 1 2 3; do
+            if git pull --rebase --quiet origin main && git push --quiet origin HEAD:main; then
+              echo "推送成功（第 $attempt 次）"
+              exit 0
+            fi
+            echo "::warning::推送碰撞，第 $attempt 次重試"
+            sleep $((attempt * 20))
+          done
+          echo "::error::三次都推不上去，這一輪的回補沒有存進 repo"
+          exit 1

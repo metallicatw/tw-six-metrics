@@ -47,7 +47,20 @@ _DIRECTOR_STOCK_FIELDS = ("month", "held", "pledged", "independent", "independen
 
 
 def _write(path: Path, header: tuple[str, ...], rows: list[list[str]]) -> int:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    # 原本這裡是全 repo 唯一直接開檔寫的地方，而且同時踩到兩件事：
+    #
+    # 1. `fileobj=path.open("wb")` 傳進去的那個 handle，`GzipFile.close()`
+    #    **不會關**——它只關自己那一層。真正的 flush 因此落在 GC 上，而 GC
+    #    什麼時候跑不是我們說了算。
+    # 2. 沒有暫存檔。`path.open("wb")` 一開啟就先把原檔清成 0 位元組，然後才
+    #    一段一段寫。runner 被砍在中間（股權那條排程的註解自己就寫著它會被
+    #    中斷），留在 repo 裡的就是一個截斷的 .csv.gz。
+    #
+    # `snapshots.atomic_write` 的 docstring 講的正是這件事，只是 ownership
+    # 一直沒有用它。先在記憶體裡壓完整份 gzip，再一次換上去——中途炸掉的話，
+    # 磁碟上仍然是完整的舊檔。
+    from .snapshots import atomic_write
+
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(header)
@@ -55,8 +68,10 @@ def _write(path: Path, header: tuple[str, ...], rows: list[list[str]]) -> int:
     payload = buf.getvalue().encode("utf-8")
     # mtime=0：同樣的內容要壓出同樣的位元組，否則每週的 commit 都會顯示成
     # 「整個檔案都變了」，即使資料一樣。
-    with gzip.GzipFile(filename="", mode="wb", fileobj=path.open("wb"), mtime=0) as fh:
+    packed = io.BytesIO()
+    with gzip.GzipFile(filename="", mode="wb", fileobj=packed, mtime=0) as fh:
         fh.write(payload)
+    atomic_write(path, packed.getvalue())
     return len(rows)
 
 
