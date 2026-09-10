@@ -121,15 +121,15 @@ def test_a_pending_sample_says_why_and_stops_being_pending_once_it_is_there():
         )
 
 
-def test_the_summary_report_does_not_carry_the_two_missing_indicators():
-    """存貨週轉率與自由現金流量，這條路解不掉——而且是量過的，不是推測的。
+def test_no_summary_report_carries_inventory():
+    """存貨這條路解不掉——而且是量過的，不是推測的。
 
     帶了表單之後回的是真資料（1.3 MB／1.6 MB，一頁七張表，一般業 1,049 家），
     所以「抓不到」不是因為沒抓成功。但它的一般業欄位是「流動資產／非流動資產／
     資產總計／流動負債……」——和我們已經在抓的官方開放資料同一個彙總層級，整份
     檔案裡「存貨」出現 **0 次**。
 
-    留著這兩份樣本，是為了不要有人半年後再走一次同一條路。下一個候選是個股的
+    留著這幾份樣本，是為了不要有人半年後再走一次同一條路。剩下的那條路是個股的
     完整財報（`t164sb*`），一樣要先有真實回應才准寫解析器。
     """
     for name in ("mops_balance_summary", "mops_income_summary"):
@@ -139,6 +139,27 @@ def test_the_summary_report_does_not_carry_the_two_missing_indicators():
         assert "存貨" not in body, (
             f"{name} 裡出現了存貨——那就值得重看一次這條路"
         )
+    # 現金流量表彙總也一樣沒有存貨（它本來就不該有），但它有另外兩個欄位——
+    # 下一條測試就是在確認那兩個。
+    assert "存貨" not in load(SAMPLES, "mops_cashflow_summary").decode(
+        "utf-8", errors="replace"
+    )
+
+
+def test_the_cash_flow_summary_really_carries_the_two_columns_we_derive_fcf_from():
+    """自由現金流量那一半解掉了，而憑據是這份存下來的回應本身。
+
+    `market.py` 用欄名去取「營業活動之淨現金流入（流出）」與「投資活動之淨現金
+    流入（流出）」。欄名一改，取值會安靜地變成空的——整個指標消失卻不會有任何
+    錯誤訊息。所以這裡對著真實回應釘住它們。
+
+    順便釘住形狀：現金流量表不分行業，六張表的欄位一模一樣（損益表與資產負債表
+    是七張、而且每張不同）。這是為什麼同一支 `parse_summary` 兩邊都能用。
+    """
+    body = load(SAMPLES, "mops_cashflow_summary").decode("utf-8", errors="replace")
+    assert len(body) > 400_000, "現金流量表彙總又抓回空殼了"
+    for column in ("營業活動之淨現金流入", "投資活動之淨現金流入"):
+        assert column in body, f"現金流量表彙總裡找不到「{column}」，欄名可能改了"
 
 
 def test_there_is_a_way_to_refresh_the_samples_from_a_runner():

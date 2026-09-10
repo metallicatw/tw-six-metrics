@@ -151,6 +151,51 @@ def test_every_row_carries_the_period_it_came_from():
     assert all(r["市場"] == "上櫃" for r in rows)
 
 
+def test_the_cash_flow_summary_adds_up_within_itself():
+    """現金流量表的四個小計要自己對得起來——這是抓欄位錯位最便宜的辦法。
+
+    每一列都滿足兩條恆等式：
+
+        營業 ＋ 投資 ＋ 籌資 ＋ 匯率影響 ＝ 本期增減
+        期初 ＋ 本期增減 ＝ 期末
+
+    欄名讀錯不會丟例外，只會安靜地把別的數字寫進去——而只要錯一欄，這兩條就
+    立刻不成立。台積電 115Q2 為例：1,482,341,242 − 849,664,174 − 304,563,833
+    ＋ 38,248,576 ＝ 366,361,811，而 2,767,856,402 ＋ 366,361,811 ＝
+    3,134,218,213，兩條都中。
+
+    容差取 1 仟元：MOPS 自己就是整數，留一格給四捨五入。
+    """
+    rows = parse_summary(_sample("mops_cashflow_summary"), market="sii", year=115, season=2)
+    assert len(rows) > 1000, f"只讀到 {len(rows)} 家，表可能漏了"
+
+    def num(row: dict[str, str], key: str) -> float | None:
+        text = row.get(key, "")
+        try:
+            return float(text)
+        except ValueError:
+            return None
+
+    checked = 0
+    for row in rows:
+        parts = [num(row, k) for k in (
+            "營業活動之淨現金流入（流出）",
+            "投資活動之淨現金流入（流出）",
+            "籌資活動之淨現金流入（流出）",
+            "匯率變動對現金及約當現金之影響",
+        )]
+        net = num(row, "本期現金及約當現金增加（減少）數")
+        opening = num(row, "期初現金及約當現金餘額")
+        closing = num(row, "期末現金及約當現金餘額")
+        if any(v is None for v in parts) or net is None:
+            continue          # `--` 是「這一格不適用」，不是 0
+        assert abs(sum(parts) - net) <= 1, f"{row['公司代號']} 四項加總對不上本期增減"
+        if opening is not None and closing is not None:
+            assert abs(opening + net - closing) <= 1, f"{row['公司代號']} 期初＋增減≠期末"
+        checked += 1
+    assert checked > 900, f"只有 {checked} 家能檢查，恆等式等於沒測到"
+
+
 def test_the_form_and_url_are_what_the_probe_actually_used():
     """網址與表單內容要跟 fixture 的 meta.json 一致，否則 fixture 就不是證據。"""
     import json

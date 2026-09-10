@@ -143,10 +143,6 @@ CANDIDATES: tuple[Candidate, ...] = (
         url="https://mopsov.twse.com.tw/mops/web/ajax_t163sb20",
         expect="已驗證：全市場現金流量表彙總（六張表，欄位一致）。上櫃 890 家，"
                "比損益表那張多 8 家。自由現金流量就是靠這一張",
-        sample_pending="MOPS 依來源 IP 節流，發現這個端點的那台機器當下正被擋"
-                       "（連續 307），樣本要從 runner 抓：跑 probe.yml 填上這個"
-                       "名字。解析器本身沒有新寫——和 sb04／sb05 共用 parse_summary，"
-                       "那兩份樣本已經在版控裡。",
         group="statements",
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         form={"encodeURIComponent": "1", "step": "1", "firstin": "1", "off": "1",
