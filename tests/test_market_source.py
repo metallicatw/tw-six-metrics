@@ -64,15 +64,27 @@ def test_two_quarters_of_official_data_reproduce_the_mirrors_single_quarter():
 
 
 def test_one_lonely_quarter_does_not_get_turned_into_a_single_quarter_figure():
-    """只有 115Q2 的時候，寧可什麼都不給，也不能把累計當單季。
+    """只有一期的時候，寧可什麼都不給，也不能把累計當單季。
 
-    repo 現在正好處在這個狀態（階段 0 才剛開始累積），所以這條線直接對真實資料
-    跑：一期在手，季度數字全空。
+    這條原本直接對 repo 跑，而且斷言「repo 裡只有 115Q2 這一期」——那是在測
+    **當下的資料狀態**，不是在測行為。`twsix backfill-statements` 一跑，repo 就
+    會有第二期，這條就紅了；但紅的理由是「歷史補上了」，那是好事不是回歸。
+
+    所以改成拿一份只有一期的暫存資料集來測。行為的定義沒有變：累計不能當單季。
     """
+    root = _with_only_one_quarter()
+    try:
+        market = MarketData.load(root)
+        assert market.quarters == [Quarter(2026, 2)]
+        data = market.financials("5439")
+        assert data.operating_margin == {} and data.eps == {} and data.net_income == {}
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_monthly_revenue_yoy_survives_having_only_one_quarter():
+    """月營收不受季報期數影響：年增率是官方直接給的，不必相減。"""
     data = MarketData.load(DATA).financials("5439")
-    assert MarketData.load(DATA).quarters == [Quarter(2026, 2)]
-    assert data.operating_margin == {} and data.eps == {} and data.net_income == {}
-    # 月營收不受影響：年增率是官方直接給的，不必相減。
     assert data.revenue_yoy["115/07"] > 0
 
 
@@ -159,6 +171,25 @@ def _write(path: Path, columns: list[str], rows: list[list[str]]) -> None:
         writer = csv.writer(fh, lineterminator="\n")
         writer.writerow(columns)
         writer.writerows(rows)
+
+
+def _with_only_one_quarter() -> Path:
+    """只複製 115Q2 那一份，其餘什麼都沒有。
+
+    月營收那一份也一起帶過來——`MarketData.load` 少了它會走另一條路，而這條測試
+    要問的是季報，不是「檔案不全會怎樣」。
+    """
+    root = Path(tempfile.mkdtemp())
+    for table in ("tpex_income", "tpex_balance", "tpex_revenue"):
+        src_dir = DATA / "market" / table
+        if not src_dir.is_dir():
+            continue
+        (root / "market" / table).mkdir(parents=True, exist_ok=True)
+        for name in ("115Q2.csv", "11507.csv"):
+            src = src_dir / name
+            if src.exists():
+                shutil.copy(src, root / "market" / table / name)
+    return root
 
 
 def _with_previous_quarter() -> Path:

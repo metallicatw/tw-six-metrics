@@ -133,12 +133,24 @@ class HttpClient:
     timeout: float = 30.0
     retries: int = 4
     backoff: float = 2.0
+    #: 單次重試最多等幾秒。見 `_retry` 裡的說明。
+    max_backoff: float = 30.0
     user_agent: str = DEFAULT_UA
     default_headers: Mapping[str, str] = field(default_factory=dict)
     #: Keep cookies across requests.  Some sites hand out a session cookie on
     #: the landing page and 403 anything that arrives without one, so a fetch
     #: that visits the front door first only works if the cookie survives.
     cookies: bool = False
+    #: 307 要不要重試。同一個狀態碼在兩個站台是相反的意思：
+    #:
+    #:   www.twse.com.tw   307 是 WAF 的擋人回應（一頁「因為安全性考量」的
+    #:                     HTML），重試沒有用，只會把一次失敗變成 15 秒的失敗。
+    #:   mopsov.twse.com.tw 307 是節流，重試**有用**——實測連續五次 307 之後
+    #:                     第六次就成功了。
+    #:
+    #: 所以這件事不能寫死在 `_retry` 裡，要由呼叫端說。預設 False（照 TWSE 的
+    #: 行為），打 MOPS 的地方自己打開。
+    retry_307: bool = False
     _last_call: dict[str, float] = field(default_factory=dict, init=False)
     _opener: object | None = field(default=None, init=False, repr=False)
     #: 這個 client 會被多執行緒共用（十三張表分散到八個鏡像站同時抓），所以
@@ -270,7 +282,10 @@ class HttpClient:
             ) as exc:
                 last_error = exc
                 status = getattr(exc, "code", None)
-                if status in (400, 401, 403, 404, 307):
+                fatal = {400, 401, 403, 404}
+                if not self.retry_307:
+                    fatal.add(307)
+                if status in fatal:
                     # Not transient.  Retrying just gets us blocked faster.
                     #
                     # 307 是後來加的，而且它是這一串裡最不像「不可重試」的一個
@@ -283,7 +298,10 @@ class HttpClient:
                     # 失敗。逐日回補一次要走幾十天，那是好幾分鐘的純浪費，而且
                     # log 會被四行一模一樣的警告塞滿，真正的訊息反而看不到。
                     break
-                delay = self.backoff**attempt
+                # 指數退避要有上限。2**attempt 到第十次是 512 秒——十次重試加起來
+                # 超過十七分鐘，而其中十六分鐘是在等最後三次。對「節流」這種
+                # 每隔幾十秒就會放行一次的情況，那個尾巴買不到任何東西。
+                delay = min(self.backoff**attempt, self.max_backoff)
                 log.warning(
                     "fetch failed (%s), retry %d/%d in %.1fs: %s",
                     status or type(exc).__name__,
