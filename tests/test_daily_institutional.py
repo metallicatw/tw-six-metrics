@@ -206,3 +206,82 @@ def test_the_newest_institutional_day_is_part_of_the_content_signature():
     assert stock_signature(rows, base, None, False, one) == (
         stock_signature(rows, base, None, False, list(one))
     )
+
+
+# ---------------------------------------------------------------------------
+# 逐日回補（`twsix backfill-institutional`）
+#
+# 每日排程用的兩個端點都只給「今天」——上櫃那支還是 openapi，連日期參數都沒有。
+# 所以在找到網頁版的 insti/dailyTrade 之前，昨天以前的三大法人錯過就是沒有，
+# 資料庫裡只有六個交易日。下面三條守的是那支新 parser。
+# ---------------------------------------------------------------------------
+
+SAMPLES = ROOT / "reference/samples"
+
+
+def _raw_sample(name: str):
+    import gzip
+    import json as _json
+
+    with gzip.open(SAMPLES / f"{name}.raw.gz", "rb") as fh:
+        return _json.loads(fh.read().decode("utf-8-sig"))
+
+
+def test_the_dated_endpoints_give_both_exchanges_for_one_past_day():
+    """一天要湊得出兩個市場，而且是**同一天**。"""
+    from twsix.ingest.daily import (
+        parse_tpex_institutional_dated,
+        parse_twse_institutional,
+    )
+
+    listed = parse_twse_institutional(_raw_sample("twse_t86_rwd_dated"))
+    otc = parse_tpex_institutional_dated(_raw_sample("tpex_insti_rwd_dated"))
+    assert listed and otc, "有一邊解不出資料"
+    assert {r["market"] for r in listed} == {"上市"}
+    assert {r["market"] for r in otc} == {"上櫃"}
+    days = {r["date"] for r in listed} | {r["date"] for r in otc}
+    assert days == {"2026-09-01"}, f"兩邊的日期兜不起來：{days}"
+    assert len(listed) + len(otc) > 1_500, \
+        f"兩市合計只有 {len(listed) + len(otc)} 列，正常一天約 1,900 列"
+
+
+def test_the_otc_columns_are_checked_against_the_tables_own_identity():
+    """上櫃那份的欄名全是重複的，只能靠位置——所以位置要驗算。
+
+    這張表自己的恆等式是「三大法人合計 = 外資合計 + 投信 + 自營商合計」。
+    欄序哪天變了，靠位置取出來的會是別欄的數字，而且完全不會報錯。
+    """
+    from twsix.ingest.daily import parse_tpex_institutional_dated
+
+    rows = parse_tpex_institutional_dated(_raw_sample("tpex_insti_rwd_dated"))
+    bad = [
+        r for r in rows
+        if r["total"] != (r["foreign"] or 0) + (r["trust"] or 0) + (r["dealer"] or 0)
+    ]
+    assert not bad, f"{len(bad)} 列對不上恆等式，例：{bad[:2]}"
+
+
+def test_a_shuffled_otc_payload_is_refused_rather_than_silently_wrong():
+    """把欄序打亂，parser 必須整批拒收，不能默默回一組錯的數字。
+
+    這是上一條的反向測試。恆等式的價值不在「現在對得上」，而在「哪天對不上的
+    時候會怎麼樣」——答案必須是回空的 list，讓呼叫端當作那天沒抓到。
+    """
+    from twsix.ingest.daily import parse_tpex_institutional_dated
+
+    payload = _raw_sample("tpex_insti_rwd_dated")
+    table = payload["tables"][0]
+    # 把「自營商合計」那一格換成一個明顯不對的數字，模擬欄序位移。
+    for row in table["data"]:
+        if len(row) > 22:
+            row[22] = "999999999"
+    assert parse_tpex_institutional_dated(payload) == [], \
+        "欄序看起來位移了，parser 卻還是回了資料"
+
+
+def test_a_non_trading_day_is_empty_not_an_error():
+    """非交易日回空表。呼叫端拿到空 list 的意思是「那天沒開市」，不是失敗。"""
+    from twsix.ingest.daily import parse_tpex_institutional_dated
+
+    assert parse_tpex_institutional_dated({"tables": [{"date": "115/08/15", "data": []}]}) == []
+    assert parse_tpex_institutional_dated({}) == []

@@ -58,6 +58,18 @@ jobs:
       - name: 抓取
         run: twsix fetch-daily
 
+      # 補上前幾天沒抓齊的。
+      #
+      # 兩個交易所各自可能掛掉，掛掉的那天留下的是一份**只有半個市場**的檔案
+      # ——一千多列，看起來很正常。這兩支都只補「還沒有兩市俱全的日期」，
+      # 已經齊的那些一次都不連網，所以穩定狀態下這一步幾乎不花時間。
+      #
+      # `|| true`：補歷史失敗不該擋住今天的資料進版控。
+      - name: 補齊最近幾天
+        run: |
+          twsix backfill-prices --days 5 || true
+          twsix backfill-institutional --days 5 || true
+
       - name: Commit
         id: commit
         run: |

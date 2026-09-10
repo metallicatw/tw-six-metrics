@@ -1876,6 +1876,75 @@ def cmd_backfill_prices(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backfill_institutional(args: argparse.Namespace) -> int:
+    """回補過去 N 個交易日的全市場三大法人買賣超。
+
+    為什麼一直沒有這支：每日排程用的兩個端點都只給「今天」——上櫃那支還是
+    openapi，連日期參數都沒有。所以在找到網頁版的
+    `insti/dailyTrade?date=YYYY/MM/DD` 之前，昨天以前的三大法人**錯過就是沒有**。
+    實際的後果是資料庫裡只有六個交易日（2026-09-02 起），而〔外資投信〕那張圖
+    的視窗是 20 個交易日。
+
+    形狀跟 `backfill-prices` 一模一樣，刻意的：只補還沒有的日期、合併不覆蓋、
+    「拿到零列」就當那天沒開市。兩支的行為一致，出事的時候不必分別記兩套規則。
+
+    ⚠️ 上市那支打太密會回 307——那是 WAF 不是限流，重試沒有用。所以這裡的
+    min_interval 拉到至少 3 秒，比每日排程慢，但這是一次性的補課。
+    """
+    from datetime import timedelta  # noqa: PLC0415
+
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient  # noqa: PLC0415
+    from .ingest.daily import INSTITUTIONAL_COLUMNS, Daily, by_date  # noqa: PLC0415
+    from .store.daily import merge_day_rows, read_day_rows  # noqa: PLC0415
+
+    http = HttpClient(
+        cache_dir=None, cache_ttl=0,
+        min_interval=max(3.0, settings.ingest.min_interval_seconds),
+        retries=settings.ingest.retries,
+        timeout=90.0,
+    )
+    store = Store(args.out or settings.data_dir)
+    daily = Daily(http)
+    folder = "institutional"
+
+    want = args.days
+    day = datetime.now(_TAIPEI).date() + timedelta(days=1)
+    filled = skipped = holidays = 0
+    for _ in range(want * 2 + 20):
+        if filled + skipped >= want:
+            break
+        day -= timedelta(days=1)
+        if day.weekday() >= 5:
+            continue
+        iso = day.isoformat()
+        had = read_day_rows(store.root, folder, iso)
+        # 跟收盤行情一樣：「有檔案」不等於「抓齊了」。一次抓取只拿到上市的話，
+        # 存下來的是一份少了半個市場的檔案，而它看起來很正常。
+        markets = {str(r.get("market") or "") for r in had}
+        if had and {"上市", "上櫃"} <= markets:
+            skipped += 1
+            print(f"  {iso} 已經有 {len(had)} 列（兩市都在），跳過")
+            continue
+        if had:
+            print(f"  {iso} 只有 {sorted(markets)}（{len(had)} 列），補另一半")
+        rows = daily.institutional_on(iso)
+        if not rows:
+            holidays += 1
+            print(f"  {iso} 沒有資料（非交易日）")
+            continue
+        for d2, group in sorted(by_date(rows).items()):
+            group = merge_day_rows(read_day_rows(store.root, folder, d2), group)
+            store.write_gz(
+                f"market/daily/{folder}/{d2}", group, INSTITUTIONAL_COLUMNS,
+                sort_by=("code",),
+            )
+            print(f"  {d2} 補進 {len(group)} 列")
+        filled += 1
+    print(f"\n回補完成：新增 {filled} 天，原本就有 {skipped} 天，非交易日 {holidays} 天")
+    return EXIT_OK
+
+
 def cmd_fetch_daily(args: argparse.Namespace) -> int:
     """每日全市場：收盤行情與三大法人買賣超。**四個請求，換到整個市場。**
 
@@ -2833,6 +2902,15 @@ def build_parser() -> argparse.ArgumentParser:
                     help="要補幾個交易日（預設 25，蓋得住 20 日的視窗）")
     bp.add_argument("--out", help="資料目錄")
     bp.set_defaults(func=cmd_backfill_prices)
+
+    bi = sub.add_parser(
+        "backfill-institutional",
+        help="回補過去 N 個交易日的全市場三大法人買賣超（只補還沒有的日期）",
+    )
+    bi.add_argument("--days", type=int, default=25,
+                    help="要補幾個交易日（預設 25，蓋得住 20 日的視窗）")
+    bi.add_argument("--out", help="資料目錄")
+    bi.set_defaults(func=cmd_backfill_institutional)
 
     pb = sub.add_parser(
         "probe",

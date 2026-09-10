@@ -270,8 +270,18 @@ class HttpClient:
             ) as exc:
                 last_error = exc
                 status = getattr(exc, "code", None)
-                if status in (400, 401, 403, 404):
+                if status in (400, 401, 403, 404, 307):
                     # Not transient.  Retrying just gets us blocked faster.
+                    #
+                    # 307 是後來加的，而且它是這一串裡最不像「不可重試」的一個
+                    # ——307 Temporary Redirect 照字面看就是「等一下再來」。但
+                    # www.twse.com.tw 拿它當 WAF 的擋人回應：回的是一頁「因為
+                    # 安全性考量」的 HTML，不是重導向。實測連打四次、指數退避
+                    # 到 8 秒，四次全部 307。
+                    #
+                    # 所以重試在這裡買不到任何東西，只是把一次失敗變成 15 秒的
+                    # 失敗。逐日回補一次要走幾十天，那是好幾分鐘的純浪費，而且
+                    # log 會被四行一模一樣的警告塞滿，真正的訊息反而看不到。
                     break
                 delay = self.backoff**attempt
                 log.warning(
