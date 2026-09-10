@@ -88,13 +88,13 @@ def test_monthly_revenue_yoy_survives_having_only_one_quarter():
     assert data.revenue_yoy["115/07"] > 0
 
 
-def test_the_open_data_balance_sheet_has_no_inventory_and_no_cash_flow_at_all():
-    """六大指標裡有兩個，這條路拿不到——不是還沒寫，是來源裡沒有。
+def test_no_balance_sheet_on_this_path_carries_inventory():
+    """存貨這條路拿不到——不是還沒寫，是來源裡沒有。
 
-    官方開放資料的資產負債表只到流動資產／流動負債／資產總計這種彙總層級，
-    沒有存貨；現金流量表則完全不在開放資料裡。所以存貨週轉率與自由現金流量
-    只能繼續走券商鏡像，或之後從公開資訊觀測站的完整報表取（而那要先存一份
-    真實回應才能寫解析器）。
+    官方開放資料與公開資訊觀測站的**彙總**報表，資產負債表都只到流動資產／
+    流動負債／資產總計這個層級。整個彙總家族都掃過了（sb05 資產負債表、sb06
+    營益分析、sb07 毛利率、t51sb02_q1 財務分析），沒有一張帶存貨。所以存貨
+    周轉率仍然只能逐檔問，或沿用券商鏡像。
 
     把這件事寫成測試，是為了不要有人日後看到 `inventory_turnover` 是空的，
     以為是解析漏了而去「修好它」。
@@ -102,9 +102,38 @@ def test_the_open_data_balance_sheet_has_no_inventory_and_no_cash_flow_at_all():
     for table in ("twse_balance", "tpex_balance"):
         header = _header(table, "115Q2")
         assert not [c for c in header if "存貨" in c], f"{table} 竟然有存貨欄了"
-        assert not [c for c in header if "現金流" in c]
-    data = MarketData.load(DATA).financials("5439")
-    assert data.inventory_turnover == {} and data.free_cash_flow == {}
+
+
+def test_free_cash_flow_comes_out_of_the_cash_flow_summary():
+    """自由現金流量＝營業活動＋投資活動，累計相減成單季，仟元換成百萬。
+
+    數字不是編的，是兩個互不相干的來源對過的：公開資訊觀測站的現金流量表彙總
+    （`ajax_t163sb20`）給 5439 的 115Q1 累計 759,354／−456,772 仟元、115Q2 累計
+    829,383／−590,977 仟元；相減得單季 70.029／−134.205 百萬，而券商鏡像那一頁
+    的〔CFQ〕2026.2Q 正好是 70 與 −134（那張表自己標著「單位：百萬」）。
+
+    這條測試同時釘住三件會安靜出錯的事：累計要相減、單位要除以 1000、
+    以及 FCF 的口徑是 CFO ＋ CFI 全額而不是 CFO − CapEx。
+    """
+    root = _with_cash_flow()
+    try:
+        data = MarketData.load(root).financials("5439")
+        q2 = Quarter(2026, 2)
+        assert abs(data.free_cash_flow[q2] - (70.029 - 134.205)) < 0.01
+        # Q1 的累計就是單季，所以它也該有值——而且是鏡像站的 759 − 457。
+        assert abs(data.free_cash_flow[Quarter(2026, 1)] - (759.354 - 456.772)) < 0.01
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def test_a_lonely_cash_flow_quarter_is_not_passed_off_as_a_single_quarter():
+    """只有 Q2 的累計、沒有 Q1，就什麼都不給——累計當單季會安靜地錯一倍。"""
+    root = _with_cash_flow(include_q1=False)
+    try:
+        data = MarketData.load(root).financials("5439")
+        assert data.free_cash_flow == {}
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
 
 
 def test_both_exchanges_are_read_even_though_they_disagree_about_column_names():
@@ -171,6 +200,26 @@ def _write(path: Path, columns: list[str], rows: list[list[str]]) -> None:
         writer = csv.writer(fh, lineterminator="\n")
         writer.writerow(columns)
         writer.writerows(rows)
+
+
+def _with_cash_flow(*, include_q1: bool = True) -> Path:
+    """兩期現金流量表彙總，數字照抄 MOPS `ajax_t163sb20` 的真實回應（仟元）。"""
+    root = Path(tempfile.mkdtemp())
+    columns = [
+        "公司代號", "公司名稱", "市場", "年度", "季別",
+        "營業活動之淨現金流入（流出）", "投資活動之淨現金流入（流出）",
+        "籌資活動之淨現金流入（流出）",
+    ]
+    if include_q1:
+        _write(
+            root / "market/tpex_cashflow/115Q1.csv", columns,
+            [["5439", "高技", "上櫃", "115", "1", "759354", "-456772", "-121000"]],
+        )
+    _write(
+        root / "market/tpex_cashflow/115Q2.csv", columns,
+        [["5439", "高技", "上櫃", "115", "2", "829383", "-590977", "-160000"]],
+    )
+    return root
 
 
 def _with_only_one_quarter() -> Path:

@@ -20,14 +20,19 @@
    名稱去找，不假設一種版面。
 
 3. **官方開放資料的資產負債表沒有「存貨」，也完全沒有現金流量表。** 欄位只到
-   流動資產／流動負債／資產總計這種彙總層級。也就是說六大指標裡的**存貨週轉率
-   與自由現金流量，這條路拿不到**——不是還沒寫，是來源裡沒有。它們要嘛繼續走
-   券商鏡像，要嘛之後從公開資訊觀測站的完整報表取（那是表單 POST 回 HTML，
-   **必須先存一份真實回應**才能寫解析器）。
+   流動資產／流動負債／資產總計這種彙總層級。
 
-   所以這個來源現在能供應四個指標：營收年增率、營業利益率、稅後淨利年增率、
-   每股盈餘。剩下兩個留空，而 `Snapshot.composite` 遇到缺項會整格作廢——這是
-   對的行為，不要為了讓表格好看而繞過它。
+   現金流量後來解掉了：公開資訊觀測站的**現金流量表彙總**（`t163sb20`）一個
+   請求給一整季的全市場，`twsix backfill-statements` 會把它存成
+   `data/market/{twse,tpex}_cashflow/<期別>.csv`，這裡讀回來組成自由現金流量。
+   對過帳的細節見 :mod:`twsix.ingest.mops_summary`。
+
+   存貨還是沒有。整個彙總報表家族逐一看過都不帶它，所以**存貨週轉率**仍然只能
+   逐檔問（`mops.py`）或沿用券商鏡像。
+
+   所以這個來源現在能供應五個指標：營收年增率、營業利益率、稅後淨利年增率、
+   每股盈餘、自由現金流量。存貨週轉率留空，而 `Snapshot.composite` 遇到缺項會
+   整格作廢——這是對的行為，不要為了讓表格好看而繞過它。
 """
 
 from __future__ import annotations
@@ -66,6 +71,16 @@ OPERATING_INCOME_KEYS = ("營業利益（損失）",)
 #: 母公司業主的部分才是「稅後淨利」；沒有非控制權益的公司這一欄可能是空的。
 NET_INCOME_KEYS = ("淨利（淨損）歸屬於母公司業主", "本期淨利（淨損）")
 EPS_KEYS = ("基本每股盈餘（元）",)
+
+#: 現金流量表彙總（MOPS t163sb20）。六張表的欄名一致，但還是照名字取。
+CF_OPERATING_KEYS = ("營業活動之淨現金流入（流出）",)
+CF_INVESTING_KEYS = ("投資活動之淨現金流入（流出）",)
+
+#: 彙總報表的金額單位是**仟元**，而〔CFQ〕那條路（券商鏡像）與個股頁上的
+#: 「自由現金流量（單季）」都是**百萬**。對過帳：5439 的 115Q2 累計減 115Q1
+#: 累計＝營業活動 70,029 仟元、投資活動 −134,205 仟元，鏡像那一頁的 2026.2Q
+#: 是 70 與 −134。所以這裡除以 1000，兩條路才畫在同一張圖上。
+THOUSANDS_PER_MILLION = 1000
 
 MONTH_REVENUE_KEYS = ("營業收入-當月營收",)
 MONTH_LAST_YEAR_KEYS = ("營業收入-去年當月營收",)
@@ -112,6 +127,7 @@ class MarketData:
     #: {期別: {代號: 那一列}}
     income: dict[Quarter, dict[str, dict[str, str]]] = field(default_factory=dict)
     balance: dict[Quarter, dict[str, dict[str, str]]] = field(default_factory=dict)
+    cashflow: dict[Quarter, dict[str, dict[str, str]]] = field(default_factory=dict)
     #: {「115/07」: {代號: 那一列}}
     revenue: dict[str, dict[str, dict[str, str]]] = field(default_factory=dict)
     #: {代號: 上市／上櫃}
@@ -129,7 +145,8 @@ class MarketData:
         data = cls(root=Path(root))
         market = data.root / "market"
         for exchange, label in (("twse", "上市"), ("tpex", "上櫃")):
-            for kind, target in (("income", data.income), ("balance", data.balance)):
+            for kind, target in (("income", data.income), ("balance", data.balance),
+                                 ("cashflow", data.cashflow)):
                 for path in sorted(market.glob(f"{exchange}_{kind}/*.csv")):
                     m = _QUARTER_FILE.match(path.stem)
                     if not m:
@@ -260,6 +277,35 @@ class MarketData:
             if eps is not None:
                 # 累計 EPS 是兩位小數，相減之後的尾數沒有意義。
                 data.eps[quarter] = round(eps, 2)
+        self._cash_flow(code, data)
+
+    def _cash_flow(self, code: str, data: FinancialData) -> None:
+        """自由現金流量（單季）＝ 營業活動 ＋ 投資活動，兩個都要有才算。
+
+        跟損益表同一套規則：彙總報表是**累計**，所以 Q2 之後要減掉上一季；上一季
+        沒抓到就留空，不拿累計充當單季。
+
+        為什麼不是「營業活動 − 資本支出」：CHANGELOG #4 已經決定沿用活頁簿的口徑
+        （CFO ＋ CFI 全額），而彙總報表剛好也只給這兩個總額，對得上。
+        """
+        for quarter in sorted(self.cashflow, reverse=True):
+            row = self.cashflow.get(quarter, {}).get(code)
+            if not row:
+                continue
+            previous = (
+                None
+                if quarter.q == 1
+                else self.cashflow.get(quarter.shift(-1), {}).get(code)
+            )
+            if quarter.q != 1 and previous is None:
+                continue
+            operating = _single(row, previous, CF_OPERATING_KEYS, quarter)
+            investing = _single(row, previous, CF_INVESTING_KEYS, quarter)
+            if operating is None or investing is None:
+                continue
+            data.free_cash_flow[quarter] = round(
+                (operating + investing) / THOUSANDS_PER_MILLION, 2
+            )
 
     def _revenue(self, code: str, data: FinancialData) -> None:
         raw: dict[str, tuple[float | None, float | None, float | None]] = {}

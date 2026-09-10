@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import time
 import urllib.parse
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
@@ -1201,6 +1202,25 @@ def _latest_custody_friday(today: date) -> date:
     return today - timedelta(days=(today.weekday() - 4) % 7)
 
 
+def _tdcc_interval() -> float:
+    """兩次查詢頁請求之間至少隔多久，秒。預設 0.8。
+
+    可以用 ``TWSIX_TDCC_INTERVAL`` 調，是因為分片回補會同時開 N 條連線去問同一
+    個站。單獨跑一份的時候 0.8 秒（1.25 req/s）沒有問題，八份同時跑就變成 10
+    req/s——那個量級對一個公共查詢頁不合適，而且被擋的話賠掉的是整批。所以分片
+    的排程會把這個值調大，讓**總和**的速率維持在個位數。
+
+    設成不合法的值就用預設，不要因為一個環境變數打錯字讓整批回補停擺。
+    """
+    import os  # noqa: PLC0415
+
+    try:
+        value = float(os.environ.get("TWSIX_TDCC_INTERVAL", "") or 0.8)
+    except ValueError:
+        return 0.8
+    return value if value > 0 else 0.8
+
+
 def _backfill_holders(args: argparse.Namespace, stock: str) -> bool:
     """把這一檔缺的集保週資料補齊——一年 51 週。
 
@@ -1224,7 +1244,7 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> bool:
     http = HttpClient(
         cache_dir=None,       # token 每次都不同，快取只會佔空間
         cache_ttl=0,
-        min_interval=0.8,
+        min_interval=_tdcc_interval(),
         timeout=60.0,
         retries=2,
         cookies=True,         # 查詢頁認 session，少了 cookie token 永遠對不上
@@ -1255,7 +1275,12 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> bool:
         print(f"  集保週資料已是最新（{len(have)} 週）")
         return False
 
-    print(f"  補集保週資料：缺 {len(missing)} 週，約 {len(missing) * 1.6:.0f} 秒")
+    # 一次請求的實測是「間隔 + 約 0.8 秒的來回」，所以估時要跟著間隔走——
+    # 分片時把間隔調大，這個數字也要跟著大，否則排程會照一個假的預算切工作量。
+    print(
+        f"  補集保週資料：缺 {len(missing)} 週，"
+        f"約 {len(missing) * (_tdcc_interval() + 0.8):.0f} 秒"
+    )
 
     def sweep(days: list[Any], label: str) -> tuple[list[Any], list[Any]]:
         """跑一輪。回傳（拿到的、沒拿到的）。
@@ -1478,12 +1503,18 @@ def cmd_backfill(args: argparse.Namespace) -> int:
         sheets = data_dir / "sheets"
         codes = sorted(p.name for p in sheets.glob("*") if p.is_dir()) if sheets.is_dir() else []
         codes = _ownership_queue(data_dir, codes)
+        codes = _shard(codes, getattr(args, "shard", ""))
     if not codes:
         print("沒有要補的股票", file=sys.stderr)
         return EXIT_FAIL
     limit = getattr(args, "limit", 0) or 0
+    minutes = getattr(args, "minutes", 0) or 0
+    started = time.monotonic()
     worked = 0
     for code in codes:
+        if minutes and (time.monotonic() - started) > minutes * 60:
+            print(f"\n跑滿 {minutes} 分鐘（--minutes），這一輪補了 {worked} 檔，其餘下次再補")
+            break
         print(f"{code}：")
         ns = argparse.Namespace(config=args.config, data=args.data)
         did = False
@@ -1498,6 +1529,32 @@ def cmd_backfill(args: argparse.Namespace) -> int:
                 print(f"\n這一輪補了 {worked} 檔（--limit {limit}），其餘下次再補")
                 break
     return EXIT_OK
+
+
+def _shard(codes: list[str], spec: str) -> list[str]:
+    """``"3/8"`` -> 佇列的第 3 份（共 8 份）。空字串 = 整份。
+
+    切法刻意是 ``codes[i - 1 :: n]`` 而不是切成連續的 n 段。因為進來的佇列已經
+    被 :func:`_ownership_queue` 排過——沒補過的在最前面、已補齊的墊底——切成
+    連續段的話，最後那幾份會整份都是「已補齊」，跑三秒就結束，而第一份要扛下
+    全部真正的工作。隔位取則讓每一份都拿到同樣比例的「沒補過」。
+
+    可以這樣切，是因為每一檔寫的檔案彼此不相干（``ownership/stock/<code>.csv.gz``、
+    ``ownership/director_stock/<code>.csv.gz``、``sheets/<code>/``），所以 n 份可以
+    同時跑，最後把各自的 diff 疊起來就是完整的結果，不會互相蓋掉。
+    """
+    if not spec:
+        return codes
+    try:
+        i_txt, n_txt = spec.split("/", 1)
+        i, n = int(i_txt), int(n_txt)
+    except ValueError:
+        raise SystemExit(f"--shard 要寫成 I/N（例如 3/8），收到 {spec!r}") from None
+    if n < 1 or not 1 <= i <= n:
+        raise SystemExit(f"--shard 的 I 要在 1..N 之間，收到 {spec!r}")
+    picked = codes[i - 1 :: n]
+    print(f"  這是第 {i}/{n} 份：{len(picked):,} 檔（全部 {len(codes):,} 檔）")
+    return picked
 
 
 # =========================================================================
@@ -2709,12 +2766,21 @@ def cmd_backfill_statements(args: argparse.Namespace) -> int:
     882 家 × 5 個欄位，全部相符，一筆不差。而且 MOPS 還多 35 家上市、8 家上櫃
     （開放資料那份漏掉的）。所以這不是「另一個來源」，是同一份資料的完整版。
 
+    第三張表是**現金流量表彙總**（`t163sb20`），開放資料完全沒有這一張，而
+    六大指標的自由現金流量要它。同樣對過帳：5439 的 115Q2 累計減 115Q1 累計＝
+    營業活動 70.029 百萬、投資活動 −134.205 百萬，券商鏡像那一頁的 2026.2Q 是
+    70 與 −134。上櫃的現金流量表還比損益表多涵蓋 8 家（890 vs 882）。
+
+    存貨仍然沒有：整個彙總報表家族都不帶它，見 :mod:`twsix.ingest.mops_summary`
+    的 docstring。存貨周轉率那一項還是只能逐檔問。
+
     ⚠️ MOPS 會回 307 —— 那是節流不是重導向，而且**重試有用**（實測連續五次
     307 之後第六次成功）。跟 TWSE 的 WAF 不一樣，別把它當永久失敗。
     """
     from .ingest.base import HttpClient  # noqa: PLC0415
     from .ingest.mops_summary import (  # noqa: PLC0415
         MARKETS,
+        SUMMARY_ENDPOINTS,
         parse_summary,
         summary_form,
         summary_url,
@@ -2749,7 +2815,7 @@ def cmd_backfill_statements(args: argparse.Namespace) -> int:
     for year, season in periods:
         period = f"{year}Q{season}"
         for market in MARKETS:
-            for kind in ("income", "balance"):
+            for kind in SUMMARY_ENDPOINTS:
                 table = market_path(f"{prefix[market]}_{kind}", period)
                 existing = store.read(table)
                 if existing and not args.force:
@@ -2799,7 +2865,8 @@ def _latest_statement_period(store: Store) -> tuple[int, int]:
     季別，然後每一輪都拿四個請求去問一個不存在的期別。
     """
     best: tuple[int, int] | None = None
-    for name in ("twse_income", "tpex_income", "twse_balance", "tpex_balance"):
+    for name in ("twse_income", "tpex_income", "twse_balance", "tpex_balance",
+                 "twse_cashflow", "tpex_cashflow"):
         folder = store.root / "market" / name
         if not folder.is_dir():
             continue
@@ -3067,6 +3134,18 @@ def build_parser() -> argparse.ArgumentParser:
              "清單補課會讓 data/sheets 從 184 檔長到 1,700 檔，而一檔新股票的"
              "股權歷史要 51 次 + 36 次請求、約兩分鐘——不設上限的話，兩週一次的"
              "股權排程會撞上 runner 的六小時上限而整批失敗。",
+    )
+    bf.add_argument(
+        "--shard", metavar="I/N", default="",
+        help="把佇列切成 N 份、只做第 I 份（I 從 1 起算）。切法是 queue[I-1::N]，"
+             "所以「沒補過的排最前面」那個排序會平均攤到每一份上，不會有一份全是"
+             "已經補齊的。每一檔的檔案各自獨立，所以 N 份可以同時跑、最後再合。",
+    )
+    bf.add_argument(
+        "--minutes", type=int, default=0,
+        help="這一輪最多跑幾分鐘（預設 0 = 不限）。到時間就在**兩檔之間**收工，"
+             "不是被砍在寫入中途。給排程用：設得比 job 的 timeout 少一截，"
+             "已經補到的東西才進得了版控。",
     )
     bf.set_defaults(func=cmd_backfill)
 
