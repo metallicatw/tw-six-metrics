@@ -66,6 +66,20 @@ TPEX_PRICES_DATED = (
 TWSE_INSTITUTIONAL = "https://www.twse.com.tw/rwd/zh/fund/T86?selectType=ALL&response=json"
 TPEX_INSTITUTIONAL = "https://www.tpex.org.tw/openapi/v1/tpex_3insti_daily_trading"
 
+#: 帶日期的版本。上市就是 T86 加一個 `date=YYYYMMDD`，回應結構一模一樣，
+#: `parse_twse_institutional` 原封不動就能用（樣本：twse_t86_rwd_dated）。
+#: ⚠️ 打太密會回 307 —— 那是 WAF 不是限流，重試沒有用，要拉開間隔。
+#:
+#: 上櫃不是 openapi 那份（它只給今天、沒有日期參數），是網站自己用的那支，
+#: 回的是位置陣列而且欄名重複，所以另有一支 parser
+#: （`parse_tpex_institutional_dated`，樣本：tpex_insti_rwd_dated）。
+TWSE_INSTITUTIONAL_DATED = (
+    "https://www.twse.com.tw/rwd/zh/fund/T86?date={ymd}&selectType=ALL&response=json"
+)
+TPEX_INSTITUTIONAL_DATED = (
+    "https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade?type=Daily&sect=EW&date={y}/{m}/{d}"
+)
+
 #: 交易日以台北時間為準。排程跑在 UTC 的 runner 上，直接用 `date.today()`
 #: 會在台北時間深夜跨日時指到前一天。
 TAIPEI = timezone(timedelta(hours=8))
@@ -345,6 +359,71 @@ def parse_tpex_institutional(payload: Any) -> list[dict[str, Any]]:
     return out
 
 
+#: 上櫃逐日三大法人：`tables[0].fields` 裡的欄名是重複的（買進股數／賣出股數／
+#: 買賣超股數 各出現八次），所以只能靠位置。位置從實際回應數出來，不是從文件抄的：
+#:
+#:   2~4   外資及陸資（不含外資自營商）
+#:   5~7   外資自營商
+#:   8~10  外資及陸資合計          ← foreign
+#:   11~13 投信                    ← trust
+#:   14~16 自營商（自行買賣）
+#:   17~19 自營商（避險）
+#:   20~22 自營商合計              ← dealer
+#:   23    三大法人買賣超股數合計   ← total
+_TPEX_INSTI_COLS = {"foreign": 10, "trust": 13, "dealer": 22, "total": 23}
+_TPEX_INSTI_MIN_COLS = 24
+
+
+def parse_tpex_institutional_dated(payload: Any) -> list[dict[str, Any]]:
+    """上櫃某一個過去交易日的三大法人買賣超。
+
+    openapi 那支（`parse_tpex_institutional`）只給「今天」，沒有日期參數，所以
+    歷史補不回來。這一支打的是網頁版的
+    `insti/dailyTrade?type=Daily&sect=EW&date=YYYY/MM/DD`，實測 date 是真的有效
+    （不同日期回不同的列數與數字，非交易日回空的 data）。
+
+    **位置對應要自己驗算，不能只相信位置。** 欄名全是重複的，所以萬一哪天欄序
+    變了，靠位置取出來的數字會是別欄的值——而且完全不會報錯，只會在報告上出現
+    一組看起來很正常的錯誤數字。這裡的守門是這張表自己的恆等式：
+
+        三大法人合計 = 外資合計 + 投信 + 自營商合計
+
+    逐列驗算，對不上的比例超過一成就整批拒收，回空的 list。呼叫端看到空的會
+    當作「這天沒抓到」，既有資料不動——比默默寫進錯誤數字好得多。
+    """
+    tables = (payload or {}).get("tables") or []
+    table = tables[0] if tables else {}
+    rows = table.get("data") or []
+    if not rows:
+        return []
+    day = _date(str(table.get("date") or (payload or {}).get("date") or ""))
+
+    out: list[dict[str, Any]] = []
+    checked = bad = 0
+    for row in rows:
+        if len(row) < _TPEX_INSTI_MIN_COLS:
+            continue
+        code = str(row[0] or "").strip()
+        if not _CODE.match(code):
+            continue
+        vals = {k: _num(row[i]) for k, i in _TPEX_INSTI_COLS.items()}
+        # 恆等式驗算。三個分項都有值才算得動；有 None 就不列入判斷（不是錯誤）。
+        parts = (vals["foreign"], vals["trust"], vals["dealer"])
+        if vals["total"] is not None and all(v is not None for v in parts):
+            checked += 1
+            if sum(parts) != vals["total"]:
+                bad += 1
+        out.append({"date": day, "code": code, "market": "上櫃", **vals})
+
+    if checked and bad / checked > 0.10:
+        print(
+            f"    ⚠️ 上櫃三大法人 {day}：{bad}/{checked} 列的"
+            "「合計 = 外資 + 投信 + 自營商」對不上，欄序可能變了，整批不採用。"
+        )
+        return []
+    return out
+
+
 def by_date(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     """依每一列自己帶的日期分堆。上市與上櫃不一定同一天更新。"""
     out: dict[str, list[dict[str, Any]]] = {}
@@ -455,3 +534,25 @@ class Daily:
         return parse_twse_institutional(
             self._json(TWSE_INSTITUTIONAL)
         ) + parse_tpex_institutional(self._json(TPEX_INSTITUTIONAL))
+
+    def institutional_on(self, day: str) -> list[dict[str, Any]]:
+        """某一個過去交易日的全市場三大法人買賣超。*day* 是 `YYYY-MM-DD`。
+
+        跟 `prices_on` 同一個形狀：兩個交易所各一個請求，非交易日兩邊都回空表
+        （不是錯誤），一邊掛掉不把另一邊丟掉。
+
+        存在的理由：每日排程用的那兩個端點都只給「今天」。上櫃那支是 openapi，
+        連日期參數都沒有——所以在找到這一支網頁版之前，昨天以前的三大法人是
+        「錯過就沒有了」。
+        """
+        y, m, d = day.split("-")
+        out: list[dict[str, Any]] = []
+        for url, parse in (
+            (TWSE_INSTITUTIONAL_DATED.format(ymd=f"{y}{m}{d}"), parse_twse_institutional),
+            (TPEX_INSTITUTIONAL_DATED.format(y=y, m=m, d=d), parse_tpex_institutional_dated),
+        ):
+            try:
+                out += parse(self._json(url))
+            except Exception as exc:  # noqa: BLE001
+                print(f"    （{url.split('/')[2]} {day} 沒拿到：{exc}）")
+        return out
