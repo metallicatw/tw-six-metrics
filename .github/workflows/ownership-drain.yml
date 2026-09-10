@@ -29,6 +29,10 @@ on:
         description: "年度交易資訊：這一輪補幾檔（預設 60；一檔兩個請求，很快）"
         required: false
         default: "60"
+      quarters:
+        description: "季財報：從最新一期往回補幾季（預設 8，也就是兩年）"
+        required: false
+        default: "8"
 
 permissions:
   contents: write
@@ -81,20 +85,37 @@ jobs:
           YEARLY_LIMIT: ${{ github.event.inputs.yearly_limit || '60' }}
         run: twsix backfill-yearly --limit "$YEARLY_LIMIT" || true
 
+      # 季財報：MOPS 彙總報表，一個請求換一整季的全市場。
+      #
+      # 這一步放在 GitHub 上跑而不是本機，理由不只是省事：`data_dir` 是相對
+      # 路徑，在本機從錯的目錄執行會安靜地寫進一個幽靈 repo——指令回報「寫入
+      # 32 份」、退出碼 0、一個警告都沒有，而真正的 repo 一個檔都沒多。
+      # （那個坑本身已經修掉了，見 config._resolve_data_dir；但排程跑就完全
+      #  不會遇到。）
+      #
+      # 只補「還沒有的期別」，所以排乾之後這一步幾乎不花時間。MOPS 節流得兇，
+      # 一個請求平均要重試三到五次，所以 30 個請求抓完大約十幾到三十分鐘。
+      #
+      # `|| true`：這一步失敗不該讓上面已經補好的股權與年度資訊不進版控。
+      - name: 回補季財報
+        env:
+          QUARTERS: ${{ github.event.inputs.quarters || '8' }}
+        run: twsix backfill-statements --quarters "$QUARTERS" || true
+
       - name: Commit
         id: commit
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/ownership data/sheets
+          git add data/ownership data/sheets data/market
           if git diff --cached --quiet; then
             echo "::notice::這一輪沒有補到新的歷史（可能已經排乾了）"
             echo "changed=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git commit -q -m "歷史回補：$(date -u +%Y-%m-%d)" \
-                        -m "集保 51 週逐檔回補 ＋ 年度交易資訊（一次性排乾）。"
+                        -m "集保 51 週逐檔回補 ＋ 年度交易資訊 ＋ 季財報（一次性排乾）。"
           echo "changed=yes" >> "$GITHUB_OUTPUT"
 
       - name: 推送

@@ -93,9 +93,35 @@ class Settings:
             ingest=_build(IngestSettings, settings.get("ingest", {})),
             report=_build(ReportSettings, settings.get("report", {})),
             universe=_build(UniverseSettings, universe_raw.get("universe", {})),
-            data_dir=settings.get("data_dir", "data"),
+            data_dir=_resolve_data_dir(settings.get("data_dir", "data")),
             periods=int(settings.get("periods", 9)),
         )
+
+
+def _resolve_data_dir(raw: str) -> str:
+    """相對路徑相對 **repo 根目錄** 解析，不是相對現在的工作目錄。
+
+    `settings.toml` 裡寫的是 `data_dir = "data"`，而 `Store(Path("data"))` 會
+    跟著 cwd 走。於是在別的目錄下跑任何一支寫資料的指令，都會安靜地寫進一個
+    幽靈 repo：
+
+        PS C:\\Users\\metal> twsix backfill-statements --quarters 8
+        季財報回補：寫入 32 份、跳過 0 份、沒抓到 0 份     ← 完全成功的樣子
+
+        PS D:\\...\\tw-six-metrics> git status --short data/market
+        （什麼都沒有）                                    ← 32 個檔在 C:\\Users\\metal\\data
+
+    指令回報成功、退出碼 0、一個警告都沒有，而真正的 repo 一個檔都沒多。實際
+    發生過一次，32 份季財報寫到了家目錄底下。
+
+    `REPO_ROOT` 是從這個檔案的位置往上兩層算出來的，editable 安裝（`pip install
+    -e .`，CI 與本機都是）指的就是真正的 repo。所以相對路徑改成相對它——不管
+    從哪裡執行，寫進去的都是同一個地方。
+
+    絕對路徑與 `--out` 完全不受影響：想寫到別處的人是明講的，那就照他說的做。
+    """
+    path = Path(raw).expanduser()
+    return str(path if path.is_absolute() else (REPO_ROOT / path))
 
 
 def _read(path: Path) -> dict[str, Any]:

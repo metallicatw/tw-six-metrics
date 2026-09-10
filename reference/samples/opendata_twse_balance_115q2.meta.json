@@ -1,0 +1,12 @@
+{
+  "bytes": 201101,
+  "expect": "凍結的第二意見：上市 twse_balance 115Q2，來自證交所／櫃買 openapi（`twsix fetch --statements` 那條路）。MOPS 彙總報表的解析拿它對帳。\n為什麼要凍：這份資料在 data/market/ 裡會被 backfill-statements 用 MOPS 版覆蓋（MOPS 是超集，值一樣但公司多），覆蓋之後就不再是獨立的第二意見了。對帳要有意義，兩邊都必須是不會動的。",
+  "fetched_at": "2026-09-10T12:38:35+00:00",
+  "form": {},
+  "group": "statements",
+  "head": "保留盈餘,公司代號,公司名稱,共同控制下前手權益,其他權益,出表日期,合併前非屬共同控制股權,季別,年度,庫藏股票,待註銷股本股數,權益─具證券性質之虛擬通貨,權益總計,歸屬於母公司業主之權益合計,母公司暨子公司所持有�",
+  "name": "opendata_twse_balance_115q2",
+  "rows": 1048,
+  "sha256": "f9521ba66023a645dec76719034bec7f3e5e0a9d16c75304c6cc032cf99f4627",
+  "url": "https://openapi.twse.com.tw/ (t163sb04 之外的另一條路，見 cmd_fetch)"
+}

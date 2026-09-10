@@ -21,7 +21,6 @@ from twsix.ingest.mops_summary import parse_summary, summary_form, summary_url
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLES = ROOT / "reference/samples"
-DATA = ROOT / "data"
 
 
 def _sample(name: str) -> str:
@@ -29,14 +28,25 @@ def _sample(name: str) -> str:
         return fh.read().decode("utf-8", "replace")
 
 
-def _official(table: str, period: str) -> dict[str, dict[str, str]]:
-    path = DATA / "market" / table / f"{period}.csv"
+def _official(table: str, period: str = "115q2") -> dict[str, dict[str, str]]:
+    """開放資料版的同一期，**從 fixture 讀，不是從 data/ 讀**。
+
+    第一版讀的是 `data/market/<table>/115Q2.csv`，而那個檔案是會動的：
+    `twsix backfill-statements` 會用 MOPS 版覆蓋它（MOPS 是超集——值一模一樣，
+    但多 35 家上市、8 家上櫃）。覆蓋之後，這裡的「對帳」就變成拿 MOPS 跟
+    MOPS 自己比，什麼都證明不了；`len(mops) > len(official)` 那條也就直接紅了。
+    CI 上真的紅過一次。
+
+    對帳要有意義，兩邊都必須是**不會動的**。所以開放資料那一版凍成
+    reference/samples/opendata_*，跟 MOPS 那四份放在一起。
+    """
+    with gzip.open(SAMPLES / f"opendata_{table}_{period}.raw.gz", "rb") as fh:
+        text = fh.read().decode("utf-8")
     out: dict[str, dict[str, str]] = {}
-    with path.open(encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
-            code = (row.get("公司代號") or row.get("SecuritiesCompanyCode") or "").strip()
-            if code:
-                out[code] = row
+    for row in csv.DictReader(text.splitlines()):
+        code = (row.get("公司代號") or row.get("SecuritiesCompanyCode") or "").strip()
+        if code:
+            out[code] = row
     return out
 
 
@@ -77,7 +87,7 @@ def test_the_income_summary_agrees_with_the_open_data_line_by_line():
     ):
         rows = parse_summary(_sample(sample), market=market, year=115, season=2)
         mops = {r["公司代號"]: r for r in rows}
-        official = _official(table, "115Q2")
+        official = _official(table)
         checked, bad = _agrees(mops, official, fields)
         assert checked > 3_000, f"{table} 只比到 {checked} 格，對帳沒有真的跑起來"
         assert not bad, f"{table} 有 {len(bad)} 格對不上：{bad[:3]}"
@@ -91,7 +101,7 @@ def test_the_balance_summary_agrees_with_the_open_data_line_by_line():
     ):
         rows = parse_summary(_sample(sample), market=market, year=115, season=2)
         mops = {r["公司代號"]: r for r in rows}
-        official = _official(table, "115Q2")
+        official = _official(table)
         checked, bad = _agrees(mops, official, fields)
         assert checked > 2_000, f"{table} 只比到 {checked} 格"
         assert not bad, f"{table} 有 {len(bad)} 格對不上：{bad[:3]}"
@@ -105,7 +115,7 @@ def test_mops_covers_more_companies_than_the_open_data_feed():
     """
     rows = parse_summary(_sample("mops_t163sb04_sii_115q2"), market="sii", year=115, season=2)
     mops = {r["公司代號"] for r in rows}
-    official = set(_official("twse_income", "115Q2"))
+    official = set(_official("twse_income"))
     assert official <= mops, f"開放資料有而 MOPS 沒有的：{sorted(official - mops)[:5]}"
     assert len(mops) > len(official)
 
