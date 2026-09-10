@@ -147,3 +147,37 @@ def test_the_whole_market_news_feed_carries_stock_codes():
     one = coded[0]["market"][0]
     assert one["code"].strip() and one["name"].strip()
     assert coded[0]["publishAt"] > 1_700_000_000, "publishAt 不是 epoch 秒了"
+
+
+def test_no_test_file_depends_on_pytest():
+    """測試不可以 import pytest。
+
+    這個 repo 的測試是 `scripts/run_tests.py` 跑的——它自己走訪每一個 test_*
+    函式，不是 pytest。CI 的第一步（ci.yml 的「先跑一次」）刻意在 pip install
+    **之前**執行，用意是證明引擎本身零相依，所以那時候機器上沒有 pytest。
+
+    後果很不直覺：`import pytest` 在本機一定過（開發環境裝了），到 CI 才炸，
+    而且錯誤訊息是 `ModuleNotFoundError: No module named 'pytest'`——看起來像
+    環境壞了，不像測試寫錯了。實際發生過一次（test_mops_summary 用了
+    pytest.raises）。
+
+    要斷言「這個呼叫應該爆炸」，用 try/except 加 `raise AssertionError`，
+    這個 repo 裡到處都是這個寫法。
+    """
+    import re
+    from pathlib import Path
+
+    tests_dir = Path(__file__).resolve().parent
+    pattern = re.compile(r"^\s*(?:import\s+pytest|from\s+pytest\b)", re.M)
+    offenders = []
+    for path in sorted(tests_dir.glob("test_*.py")):
+        text = path.read_text(encoding="utf-8")
+        # 只看真正的 import，不看註解或說明文字裡提到的 pytest。
+        for m in pattern.finditer(text):
+            line = text[: m.start()].count("\n") + 1
+            offenders.append(f"{path.name}:{line}")
+    assert not offenders, (
+        "這些測試 import 了 pytest，但 CI 上沒有裝："
+        + "、".join(offenders)
+        + "。要斷言例外請用 try/except + raise AssertionError。"
+    )

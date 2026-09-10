@@ -151,12 +151,17 @@ def test_the_form_and_url_are_what_the_probe_actually_used():
 
 
 def test_a_bad_market_or_season_is_refused_up_front():
-    """打錯參數要當場失敗，不要送出去換一頁「查無資料」再猜哪裡錯了。"""
-    import pytest
+    """打錯參數要當場失敗，不要送出去換一頁「查無資料」再猜哪裡錯了。
 
-    with pytest.raises(ValueError):
-        summary_form("twse", 115, 2)      # TYPEK 是 sii／otc，不是 twse
-    with pytest.raises(ValueError):
-        summary_form("sii", 115, 0)
-    with pytest.raises(ValueError):
-        summary_form("sii", 115, 5)
+    這個 repo 的測試是 `scripts/run_tests.py` 跑的，**不是 pytest**——CI 上也
+    沒有裝 pytest。所以這裡用 try/except 自己斷言，不能用 pytest.raises。
+    （我第一版就是這樣紅在 CI 上的：本機有 pytest，CI 沒有。）
+    """
+    for args in (("twse", 115, 2),   # TYPEK 是 sii／otc，不是 twse
+                 ("sii", 115, 0),    # 季別從 1 開始
+                 ("sii", 115, 5)):   # 到 4 為止
+        try:
+            summary_form(*args)
+        except ValueError:
+            continue
+        raise AssertionError(f"summary_form{args} 應該被擋下來，但它回了值")
