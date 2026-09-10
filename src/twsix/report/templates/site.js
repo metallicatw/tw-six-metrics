@@ -969,7 +969,7 @@ var TWSIXWatch = (function(){
 
 
 /* =========================================================================
- * 〔市場監控〕與〔趨勢選股〕嵌進來的那兩份報告：iframe 長到跟內容一樣高
+ * 〔市場監控〕的報告：iframe 長到跟內容一樣高
  *
  * 之前是「撐到剛好填滿視窗剩下的高度」。那樣只有一條捲軸沒錯，但捲的是
  * **iframe 自己**——於是外層頁面幾乎不動，右下角那顆「回到最上方」永遠不出現
@@ -978,7 +978,17 @@ var TWSIXWatch = (function(){
  * 改成量內容、把 iframe 拉到那麼高：內層不再有捲軸，捲的是整個頁面，回到最上方
  * 那顆按鈕也就跟站上其他頁一樣可用。
  *
- * 兩件事情要小心：
+ * **只對 .embed.fit 生效，不是所有的 iframe.embed。** 這一條是後來補的，代價很大：
+ * 兩份報告的版面模型根本不同。市場監控那份是一份會流動的文件（body 只有 padding，
+ * 高度由內容決定），量它的 body 再去設 iframe 高度是單向的，會收斂。趨勢選股那份
+ * 是一個釘死在視窗裡的應用程式——`html,body{height:100%;overflow:hidden}`、
+ * `#main{height:calc(100vh - …)}`、`.plot{flex:1 1 auto}`——它的高度**來自 iframe
+ * 的高度**。對它做同一件事就變成一個環：A 決定 B、B 又決定 A，中間任何一次進位
+ * （手機的小數 device pixel、Plotly resize 之後自己寫回去的整數高度）都會讓它每
+ * 一輪長一點點，畫面上就是那份報告被無止盡地往下拉長。所以這種頁面本來就該維持
+ * CSS 裡的固定高度，用它自己的內部捲動。
+ *
+ * 另外兩件事情要小心：
  *
  * 1. **量的是 body 不是 documentElement。** `documentElement.scrollHeight` 會取
  *    「內容」與「視窗」的較大值——iframe 已經被我們拉高之後，它回的是 iframe 的
@@ -992,7 +1002,7 @@ var TWSIXWatch = (function(){
  * 讀不到就退回 CSS 裡那個固定高度——那時候會有內層捲軸，但至少讀得到。
  * ========================================================================= */
 (function(){
-  var frames = document.querySelectorAll('iframe.embed');
+  var frames = document.querySelectorAll('iframe.embed.fit');
   if(!frames.length) return;
 
   function contentHeight(doc){
@@ -1015,36 +1025,63 @@ var TWSIXWatch = (function(){
     return doc;
   }
 
-  function fit(frame){
+  /* 每一格 iframe 自己的「有沒有在失控地長高」計數。就算版面模型看起來安全，
+     還是留一個煞車：連續 40 次都只增不減，就認定它是一個環，放手讓 CSS 的固定
+     高度接管。壞掉的樣子是有一條內層捲軸，不是一份被拉到幾萬像素的報告。 */
+  var GROW_LIMIT = 40;
+
+  function fit(frame, state){
     var doc = realDoc(frame);
     if(!doc) return;
+    if(state.bailed) return;
     var h = contentHeight(doc);
-    if(h > 0) frame.style.height = Math.ceil(h) + 2 + 'px';  /* +2 擋四捨五入 */
+    if(!(h > 0)) return;
+    var target = Math.ceil(h) + 2;                 /* +2 擋四捨五入 */
+    var now = parseFloat(frame.style.height) || 0;
+    /* 差不到 4px 就不寫。手機的 device pixel 是小數，量出來的值會在整數之間
+       抖動；每抖一次就寫一次，等於自己餵自己一次進位。 */
+    if(Math.abs(target - now) <= 4) { state.grow = 0; return; }
+    if(target > now){
+      if(++state.grow > GROW_LIMIT){
+        state.bailed = true;
+        if(state.ro) state.ro.disconnect();
+        frame.style.height = '';                   /* 退回 CSS 的固定高度 */
+        return;
+      }
+    } else {
+      state.grow = 0;
+    }
+    frame.style.height = target + 'px';
   }
 
   frames.forEach(function(frame){
+    var state = { grow: 0, bailed: false, ro: null };
     /* 記的是「現在盯著哪一個 body」而不是一個 observed 旗標。
        原本用旗標，於是報告載得比 site.js 慢的時候（1 MB 的 HTML，冷啟動很常
        發生），第一次 attach 綁到 about:blank 的 body 就把旗標鎖住了：之後高度
        只在載入當下量對一次，展開任何一張卡片都不會再重量——內層捲軸就是這樣
        跑出來的，而且因為外層頁面不長，右下角那顆「回到最上方」也一起消失。 */
-    var watching = null, ro = null;
+    var watching = null;
 
     function attach(){
       var doc = realDoc(frame);
-      if(!doc) return;
-      fit(frame);
+      if(!doc || state.bailed) return;
+      /* 換了文件就重新開始算，舊文件的成長次數跟新的沒有關係。 */
+      if(watching && watching !== doc.body) state.grow = 0;
+      fit(frame, state);
       if(typeof ResizeObserver === 'undefined') return;
       if(watching === doc.body) return;           /* 已經在盯同一個了 */
-      if(ro) ro.disconnect();                     /* 換文件了，舊的丟掉 */
-      ro = new ResizeObserver(function(){ fit(frame); });
-      ro.observe(doc.body);
+      if(state.ro) state.ro.disconnect();         /* 換文件了，舊的丟掉 */
+      state.ro = new ResizeObserver(function(){ fit(frame, state); });
+      state.ro.observe(doc.body);
       watching = doc.body;
     }
 
     frame.addEventListener('load', attach);
     attach();                                   /* 已經載好的情況 */
-    window.addEventListener('resize', function(){ fit(frame); });
+    /* 視窗變寬變窄會改變報告的排版，所以要重量；但這是使用者的動作，不是那個
+       環，所以順便把成長計數歸零。 */
+    window.addEventListener('resize', function(){ state.grow = 0; fit(frame, state); });
     /* 字體晚一點載入會改變內容高度，所以再量一次。 */
     if(document.fonts && document.fonts.ready) document.fonts.ready.then(attach);
     /* 最後一道保險：報告載入的時機不受我們控制（快取、網速、瀏覽器怎麼排
@@ -1268,11 +1305,11 @@ var TWSIXWatch = (function(){
 (function(){
   var top = document.getElementById('totop');
   if(top){
-    /* 嵌報告的那兩頁（市場監控、趨勢選股），「最上方」指的是報告的開頭那一列
+    /* 市場監控那一頁（唯一會把 iframe 拉到跟內容一樣高的），「最上方」指的是報告的開頭那一列
        ——也就是 iframe 上面那個 <h2> 的位置，不是整個網站的頁首。捲了一萬多
        像素之後想回去的是報告的頭，不是導覽列；真的要導覽列，再往上滑一下就到。
-       其他頁面沒有 iframe.embed，target() 回 0，行為跟原本一樣。 */
-    var embed = document.querySelector('iframe.embed');
+       趨勢選股與其他頁面沒有 .embed.fit，target() 回 0，行為跟原本一樣。 */
+    var embed = document.querySelector('iframe.embed.fit');
     var anchor = null;
     if(embed){
       anchor = embed.previousElementSibling;

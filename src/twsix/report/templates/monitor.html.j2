@@ -17,6 +17,9 @@
   每天台北 06:30 產生，這裡嵌的是同一份。
   <a href="{{ rel }}{{ report }}" target="_blank" rel="noopener">單獨開啟這份報告 ↗</a>
 {% endcall %}</h2>
-<iframe id="monitor-frame" class="embed" src="{{ rel }}{{ report }}"
+{# `fit` 是「把 iframe 拉到跟內容一樣高」的開關（見 site.js）。只有這一份報告
+   可以這樣做：它是一份會流動的文件，高度由內容決定。趨勢選股那份是釘在視窗裡的
+   應用程式，高度反過來由 iframe 決定，套同一招會變成無限往下長。 #}
+<iframe id="monitor-frame" class="embed fit" src="{{ rel }}{{ report }}"
         title="每日全球市場與總經個股監控報告"></iframe>
 {% endblock %}

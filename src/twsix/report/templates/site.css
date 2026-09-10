@@ -601,10 +601,12 @@ th.seq{width:1%}
 table#t tbody{counter-reset:seq}
 table#t tbody tr{counter-increment:seq}
 table#t td.seq::before{content:counter(seq)}
-/* 〔市場監控〕嵌進來的那一份報告。
-   高度由腳本量出來（見 site.js）：iframe 長到跟報告內容一樣高，所以內層不會有
-   自己的捲軸，捲的是整個頁面——右下角那顆「回到最上方」才會跟著能用。
-   腳本沒跑的時候退回下面這個固定高度，那時候會有內層捲軸，但仍然讀得到。 */
+/* 嵌進來的那兩份報告。這個固定高度是〔趨勢選股〕的最終樣子——它是一個釘在視窗裡
+   的應用程式（自己的側邊清單、自己會捲的圖表區、一張填滿剩餘空間的 Plotly 圖），
+   本來就該用它自己的內部捲動。
+   〔市場監控〕那一份多帶一個 .fit，高度改由腳本量出來（見 site.js）：iframe 長到
+   跟報告內容一樣高，內層就沒有自己的捲軸，捲的是整個頁面——右下角那顆「回到最上
+   方」才會跟著能用。腳本沒跑的時候它也退回這個固定高度，仍然讀得到。 */
 iframe.embed{display:block;width:100%;height:78vh;min-height:480px;border:1px solid
   var(--rule);border-radius:5px;background:var(--surface);margin-bottom:14px}
 .star-cell{width:1%;padding-left:8px;padding-right:2px;text-align:center}
