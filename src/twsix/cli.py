@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import urllib.parse
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -2693,6 +2694,127 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_backfill_statements(args: argparse.Namespace) -> int:
+    """回補全市場的季財報歷史（綜合損益表、資產負債表）。
+
+    現有的 `twsix fetch --statements` 走證交所／櫃買的開放資料，而那條路**只給
+    最新一期、沒有日期參數**——`cmd_fetch` 的 docstring 就是在講這件事：今天沒
+    存下來的那一期，不是明天再抓就好，是永遠拿不到。實際的結果是 data/market/
+    每一種只有一個檔（115Q2、11507）。
+
+    MOPS 的**彙總報表**把這件事整個翻過來：一個請求回一整季的全市場。
+    上市＋上櫃 × 兩張表 × N 季，補兩年也只要 32 個請求。
+
+    對帳：115Q2 那一期兩邊都有，逐檔逐欄比過——1,048 家 × 5 個欄位、
+    882 家 × 5 個欄位，全部相符，一筆不差。而且 MOPS 還多 35 家上市、8 家上櫃
+    （開放資料那份漏掉的）。所以這不是「另一個來源」，是同一份資料的完整版。
+
+    ⚠️ MOPS 會回 307 —— 那是節流不是重導向，而且**重試有用**（實測連續五次
+    307 之後第六次成功）。跟 TWSE 的 WAF 不一樣，別把它當永久失敗。
+    """
+    from .ingest.base import HttpClient  # noqa: PLC0415
+    from .ingest.mops_summary import (  # noqa: PLC0415
+        MARKETS,
+        parse_summary,
+        summary_form,
+        summary_url,
+    )
+
+    settings = Settings.load(args.config)
+    store = Store(args.out or settings.data_dir)
+
+    # 期別由「最新一期往回數」決定。最新一期是資料自己說了算——手上已經有
+    # 115Q2，就從那裡往回，不要用時鐘去猜哪一季已經公告了。
+    latest_year, latest_season = _latest_statement_period(store)
+    periods: list[tuple[int, int]] = []
+    y, q = latest_year, latest_season
+    for _ in range(args.quarters):
+        periods.append((y, q))
+        q -= 1
+        if q == 0:
+            q, y = 4, y - 1
+    print(f"要補的期別（新到舊）：{'、'.join(f'{a}Q{b}' for a, b in periods)}")
+
+    http = HttpClient(
+        cache_dir=None, cache_ttl=0,
+        # MOPS 節流得很兇，而且一個請求就換一整季的全市場——慢一點完全划得來。
+        min_interval=max(6.0, settings.ingest.min_interval_seconds),
+        retries=10,
+        timeout=180.0,
+        # MOPS 的 307 是節流不是 WAF，重試會成功——見 HttpClient.retry_307。
+        retry_307=True,
+    )
+    prefix = {"sii": "twse", "otc": "tpex"}
+    wrote = skipped = failed = 0
+    for year, season in periods:
+        period = f"{year}Q{season}"
+        for market in MARKETS:
+            for kind in ("income", "balance"):
+                table = market_path(f"{prefix[market]}_{kind}", period)
+                existing = store.read(table)
+                if existing and not args.force:
+                    skipped += 1
+                    print(f"  {period} {MARKETS[market]} {kind}：已經有 {len(existing)} 列，跳過")
+                    continue
+                body = urllib.parse.urlencode(
+                    summary_form(market, year, season)
+                ).encode()
+                try:
+                    raw = http.get(
+                        summary_url(kind),
+                        body=body,
+                        headers={
+                            "Content-Type": "application/x-www-form-urlencoded",
+                            # MOPS 對沒有 Referer 的請求更容易回 307。
+                            "Referer": summary_url(kind).replace("/ajax_", "/"),
+                        },
+                        use_cache=False,
+                    )
+                except Exception as exc:  # noqa: BLE001 - 一期失敗不該停下整批
+                    failed += 1
+                    print(f"  {period} {MARKETS[market]} {kind}：抓取失敗 {exc}", file=sys.stderr)
+                    continue
+                rows = parse_summary(
+                    raw.decode("utf-8", "replace"),
+                    market=market, year=year, season=season,
+                )
+                if not rows:
+                    # 還沒公告的期別會回一頁「查無資料」，那不是失敗。
+                    failed += 1
+                    print(f"  {period} {MARKETS[market]} {kind}：沒有資料（可能還沒公告）")
+                    continue
+                columns = sorted({k for r in rows for k in r})
+                n = store.write(table, rows, columns, sort_by=("公司代號",))
+                wrote += 1
+                print(f"  {period} {MARKETS[market]} {kind}：{n} 家 -> {store.path(table)}")
+
+    print(f"\n季財報回補：寫入 {wrote} 份、跳過 {skipped} 份、沒抓到 {failed} 份")
+    return EXIT_OK
+
+
+def _latest_statement_period(store: Store) -> tuple[int, int]:
+    """手上最新的那一期（民國年, 季）。一份都沒有就用今天往回推一季。
+
+    用資料自己說了算，不是用時鐘：財報公告有落差，時鐘會指到一個還沒公告的
+    季別，然後每一輪都拿四個請求去問一個不存在的期別。
+    """
+    best: tuple[int, int] | None = None
+    for name in ("twse_income", "tpex_income", "twse_balance", "tpex_balance"):
+        folder = store.root / "market" / name
+        if not folder.is_dir():
+            continue
+        for f in folder.glob("*.csv"):
+            m = re.fullmatch(r"(\d{3})Q([1-4])", f.stem)
+            if m:
+                cand = (int(m.group(1)), int(m.group(2)))
+                if best is None or cand > best:
+                    best = cand
+    if best:
+        return best
+    today = datetime.now(_TAIPEI).date()
+    return today.year - 1911, max(1, (today.month - 1) // 3)
+
+
 def _yearly_missing(data_dir: Path) -> list[str]:
     """還沒有〔年度交易資訊〕那一張的股票，代號排序。"""
     from .ingest.yearly_trading import SHEET  # noqa: PLC0415
@@ -3088,6 +3210,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fy.add_argument("--out", help="資料目錄")
     fy.set_defaults(func=cmd_fetch_yearly)
+
+    bs = sub.add_parser(
+        "backfill-statements",
+        help="回補全市場季財報歷史（MOPS 彙總報表，一個請求一整季）",
+    )
+    bs.add_argument("--quarters", type=int, default=8,
+                    help="從手上最新的一期往回補幾季（預設 8，也就是兩年）")
+    bs.add_argument("--force", action="store_true",
+                    help="已經有的期別也重抓（預設跳過）")
+    bs.add_argument("--out", help="資料目錄")
+    bs.set_defaults(func=cmd_backfill_statements)
 
     by = sub.add_parser(
         "backfill-yearly",
