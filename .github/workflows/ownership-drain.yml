@@ -1,4 +1,4 @@
-name: 股權歷史回補（一次性排乾）
+name: 歷史回補（一次性排乾）
 
 # 這條是**臨時**的，把 1,516 檔還沒補過集保歷史的股票排乾之後就該關掉。
 #
@@ -22,9 +22,13 @@ on:
   workflow_dispatch:
     inputs:
       limit:
-        description: "這一輪補幾檔（預設 90；一檔約兩分鐘，90 檔約三小時）"
+        description: "股權：這一輪補幾檔（預設 90；一檔約兩分鐘，90 檔約三小時）"
         required: false
         default: "90"
+      yearly_limit:
+        description: "年度交易資訊：這一輪補幾檔（預設 60；一檔兩個請求，很快）"
+        required: false
+        default: "60"
 
 permissions:
   contents: write
@@ -57,33 +61,42 @@ jobs:
       #
       # 佇列由 _ownership_queue 排序：沒補過的排最前面。所以 --limit 花掉的
       # 每一檔都是真的在買歷史，不會浪費在已經補齊的那些上面。
-      - name: 回補
+      - name: 回補股權歷史
         id: backfill
         env:
           LIMIT: ${{ github.event.inputs.limit || '90' }}
         run: twsix backfill-ownership --limit "$LIMIT"
 
-      # 推送要重試。這個 repo 有五條排程會寫 main，撞在一起的時候先 push 的贏，
-      # 後到的會被 non-fast-forward 擋下來——沒有重試的話，這三個小時就白跑了。
+      # 〔年度交易資訊〕：267 檔缺這一張，而它是券商鏡像唯一不給的一頁，
+      # 本益比河流圖（自行計算）與整個殖利率模型都要它。缺的那幾檔點進去會少
+      # 兩塊，而且不會有任何錯誤訊息。
+      #
+      # 一檔兩個請求，比股權那邊便宜得多（股權是 51+36），所以 limit 給大一點。
+      # 它會自己把「上市未滿 5 年」和「這次沒抓到」分開報——前者重跑一百次也
+      # 是同一個結果，不是失敗。
+      #
+      # `|| true`：這一步失敗不該讓上面已經補好的股權歷史一起不進版控。
+      - name: 回補年度交易資訊
+        env:
+          YEARLY_LIMIT: ${{ github.event.inputs.yearly_limit || '60' }}
+        run: twsix backfill-yearly --limit "$YEARLY_LIMIT" || true
+
       - name: Commit
+        id: commit
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/ownership data/sheets
           if git diff --cached --quiet; then
-            echo "::notice::這一輪沒有補到新的股權歷史（可能已經排乾了）"
+            echo "::notice::這一輪沒有補到新的歷史（可能已經排乾了）"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git commit -q -m "股權歷史回補：$(date -u +%Y-%m-%d)" \
-                        -m "集保 51 週逐檔回補（一次性排乾）。"
-          for attempt in 1 2 3; do
-            if git pull --rebase --quiet origin main && git push --quiet origin HEAD:main; then
-              echo "推送成功（第 $attempt 次）"
-              exit 0
-            fi
-            echo "::warning::推送碰撞，第 $attempt 次重試"
-            sleep $((attempt * 20))
-          done
-          echo "::error::三次都推不上去，這一輪的回補沒有存進 repo"
-          exit 1
+          git commit -q -m "歷史回補：$(date -u +%Y-%m-%d)" \
+                        -m "集保 51 週逐檔回補 ＋ 年度交易資訊（一次性排乾）。"
+          echo "changed=yes" >> "$GITHUB_OUTPUT"
+
+      - name: 推送
+        if: steps.commit.outputs.changed == 'yes'
+        uses: ./.github/actions/push-with-retry
