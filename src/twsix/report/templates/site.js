@@ -1003,29 +1003,54 @@ var TWSIXWatch = (function(){
            parseFloat(cs.marginTop || 0) + parseFloat(cs.marginBottom || 0);
   }
 
-  function fit(frame){
+  /* iframe 在還沒載入前先有一份 about:blank 文件，而且它**有 body**。所以
+     「有沒有 body」不能拿來判斷報告到了沒有——會量到空文件，也會把
+     ResizeObserver 綁到那個等一下就被丟掉的 body 上。 */
+  function realDoc(frame){
     var doc;
-    try{ doc = frame.contentDocument; }catch(e){ return; }   /* 跨來源就放棄 */
+    try{ doc = frame.contentDocument; }catch(e){ return null; }   /* 跨來源就放棄 */
+    if(!doc || !doc.body) return null;
+    var href = doc.location && doc.location.href;
+    if(!href || href === 'about:blank') return null;
+    return doc;
+  }
+
+  function fit(frame){
+    var doc = realDoc(frame);
+    if(!doc) return;
     var h = contentHeight(doc);
     if(h > 0) frame.style.height = Math.ceil(h) + 2 + 'px';  /* +2 擋四捨五入 */
   }
 
   frames.forEach(function(frame){
-    var observed = false;
+    /* 記的是「現在盯著哪一個 body」而不是一個 observed 旗標。
+       原本用旗標，於是報告載得比 site.js 慢的時候（1 MB 的 HTML，冷啟動很常
+       發生），第一次 attach 綁到 about:blank 的 body 就把旗標鎖住了：之後高度
+       只在載入當下量對一次，展開任何一張卡片都不會再重量——內層捲軸就是這樣
+       跑出來的，而且因為外層頁面不長，右下角那顆「回到最上方」也一起消失。 */
+    var watching = null, ro = null;
+
     function attach(){
+      var doc = realDoc(frame);
+      if(!doc) return;
       fit(frame);
-      if(observed || typeof ResizeObserver === 'undefined') return;
-      var doc;
-      try{ doc = frame.contentDocument; }catch(e){ return; }
-      if(!doc || !doc.body) return;
-      new ResizeObserver(function(){ fit(frame); }).observe(doc.body);
-      observed = true;
+      if(typeof ResizeObserver === 'undefined') return;
+      if(watching === doc.body) return;           /* 已經在盯同一個了 */
+      if(ro) ro.disconnect();                     /* 換文件了，舊的丟掉 */
+      ro = new ResizeObserver(function(){ fit(frame); });
+      ro.observe(doc.body);
+      watching = doc.body;
     }
+
     frame.addEventListener('load', attach);
     attach();                                   /* 已經載好的情況 */
     window.addEventListener('resize', function(){ fit(frame); });
     /* 字體晚一點載入會改變內容高度，所以再量一次。 */
     if(document.fonts && document.fonts.ready) document.fonts.ready.then(attach);
+    /* 最後一道保險：報告載入的時機不受我們控制（快取、網速、瀏覽器怎麼排
+       iframe 的載入都會變），所以在頭幾秒再試幾次。attach 本身是冪等的，
+       綁對了就不會重綁。 */
+    [200, 800, 2000, 5000].forEach(function(ms){ setTimeout(attach, ms); });
   });
 })();
 
@@ -1243,18 +1268,45 @@ var TWSIXWatch = (function(){
 (function(){
   var top = document.getElementById('totop');
   if(top){
+    /* 嵌報告的那兩頁（市場監控、趨勢選股），「最上方」指的是報告的開頭那一列
+       ——也就是 iframe 上面那個 <h2> 的位置，不是整個網站的頁首。捲了一萬多
+       像素之後想回去的是報告的頭，不是導覽列；真的要導覽列，再往上滑一下就到。
+       其他頁面沒有 iframe.embed，target() 回 0，行為跟原本一樣。 */
+    var embed = document.querySelector('iframe.embed');
+    var anchor = null;
+    if(embed){
+      anchor = embed.previousElementSibling;
+      while(anchor && anchor.nodeType !== 1) anchor = anchor.previousElementSibling;
+      if(!anchor) anchor = embed;
+      /* 按鈕做的事變了，說明文字就得跟著變——螢幕閱讀器唸的是這一句。 */
+      top.setAttribute('aria-label', '回到報告最上方');
+      top.setAttribute('title', '回到報告最上方');
+    }
+    var target = function(){
+      if(!anchor) return 0;
+      /* 每次點的時候才量。iframe 的高度會隨著報告展開／收合改變，位置也跟著變，
+         載入時算一次存起來的值撐不到第二次點擊。 */
+      var y = anchor.getBoundingClientRect().top +
+              (window.pageYOffset || document.documentElement.scrollTop) - 12;
+      return y > 0 ? y : 0;
+    };
+
     /* 只在真的捲下去之後才出現。一直掛在那裡的話，它在沒捲的畫面上只是一塊
        擋住內容的東西。 */
     var show = function(){
-      top.hidden = (window.pageYOffset || document.documentElement.scrollTop) < 400;
+      var y = window.pageYOffset || document.documentElement.scrollTop;
+      /* 有 iframe 的頁面用「離報告開頭多遠」當門檻——報告開頭本身可能就在
+         400px 以下，用絕對位置判斷會讓按鈕在剛好回到定位時還賴著不走。 */
+      top.hidden = (y - target()) < 400;
     };
     window.addEventListener('scroll', show, { passive: true });
+    window.addEventListener('resize', show);
     show();
     top.addEventListener('click', function(){
       /* 尊重「減少動態效果」的系統設定：平滑捲動對前庭敏感的人是不舒服的。 */
       var soft = !window.matchMedia ||
                  !matchMedia('(prefers-reduced-motion: reduce)').matches;
-      window.scrollTo({ top: 0, behavior: soft ? 'smooth' : 'auto' });
+      window.scrollTo({ top: target(), behavior: soft ? 'smooth' : 'auto' });
     });
   }
 
