@@ -3,6 +3,7 @@
     "market/tpex_balance/115Q2": 883,
     "market/tpex_income/115Q2": 883,
     "market/tpex_revenue/11507": 890,
+    "market/tpex_revenue/11508": 891,
     "market/twse_balance/115Q2": 1048,
     "market/twse_income/115Q2": 1048,
     "market/twse_revenue/11507": 1085,
@@ -10,7 +11,7 @@
     "tpex_companies": 891,
     "twse_companies": 1094
   },
-  "generated_at": "2026-09-11T05:23:24+00:00",
+  "generated_at": "2026-09-11T07:07:31+00:00",
   "notes": [
     "baseline imported from 評等清單 v6.62 (published snapshot)"
   ],
@@ -33,8 +34,8 @@
     },
     {
       "name": "tpex_revenue",
-      "period": "11507",
-      "rows": 890
+      "period": "11508",
+      "rows": 891
     },
     {
       "name": "twse_balance",
