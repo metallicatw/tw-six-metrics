@@ -418,7 +418,39 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         print(f"  {name:<18} {period or '（無期別）':<8} {n} 列 -> {store.path(table)}")
 
     store.save_manifest(manifest)
+
+    # 抓回來還要**攤回每一檔**，否則個股頁看不到。
+    #
+    # 這一步原本不存在，而症狀是：〔全市場官方資料〕跑完、commit 了、綠燈了，
+    # 但 1,877 檔的個股頁上月營收還停在 115/07——只有那 72 檔被逐檔抓過的更新了。
+    # 因為 `data/market/*_revenue/11508.csv` 是給評等清單用的，個股頁上那張圖讀的
+    # 是 `data/sheets/<代號>/營收.json.gz`，而那一份只有逐檔抓取會動。
+    #
+    # 折進去放在這裡、而不是排程的下一步，是因為「下一步」正是它上一次消失的
+    # 地方：兩件事分開寫在 workflow 裡，其中一件就可以被漏掉而沒有人發現。
+    if (args.revenue or args.all) and not failed:
+        _fold_revenue(Path(args.out or settings.data_dir))
+
     return _fetch_status(written, failed)
+
+
+def _fold_revenue(data_dir: Path) -> None:
+    """把剛抓回來的全市場月營收折進每一檔的〔營收〕分頁。
+
+    折不進去不該讓抓回來的那一期作廢——資料已經在 `data/market/` 裡了，下一次
+    排程會再折一次。所以這裡吞例外，但要吞得看得見。
+    """
+    from .ingest.revenue_fold import fold_all  # noqa: PLC0415
+
+    try:
+        wrote, same, absent = fold_all(data_dir)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️ 月營收折進個股分頁失敗：{exc}", file=sys.stderr)
+        return
+    print(
+        f"  月營收折進個股分頁：更新 {wrote:,} 檔、已經是最新 {same:,} 檔、"
+        f"全市場那一份沒有 {absent:,} 檔"
+    )
 
 
 def _fetch_status(written: int, failed: list[str]) -> int:

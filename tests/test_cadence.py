@@ -29,11 +29,53 @@ REAL = ROOT / "data/sheets/2404"
 
 
 def test_the_period_is_read_off_the_real_grids_in_both_calendars():
+    """兩種曆法都要讀得出來：〔ISQ〕的表頭是西元 `2026.2Q`，〔EPQ〕是民國 `115.2Q`。
+
+    斷言改成「讀出來的和格子裡真的有的最大值一致」，不是一個寫死的期別。原本寫的
+    是 `== (2026, 7)`，而那是**當天** 2404 的〔營收〕停在哪一個月——月營收折進個股
+    分頁之後它變成 2026/08，這條就紅了，而紅的理由是「資料更新了」。
+
+    同一類錯誤這個 repo 踩過四次（test_one_lonely_quarter、115Q2 的對帳 fixture、
+    test_daily_market 那兩條）。真正要守的東西由下一條合成的測試釘住。
+    """
     grids = sheet_store.read_all(REAL)
-    assert newest_quarter(grids["ISQ"]) == (2026, 2), "表頭是西元 2026.2Q"
-    assert newest_quarter(grids["EPQ"]) == (2026, 2), "第一欄是民國 115.2Q"
-    assert newest_month(grids["營收"]) == (2026, 7)
-    assert newest_year(grids["年財務比率"]) == 2025
+    assert newest_quarter(grids["ISQ"]) == _max_period(grids["ISQ"])
+    assert newest_quarter(grids["EPQ"]) == _max_period(grids["EPQ"])
+    assert newest_month(grids["營收"]) == _max_period(grids["營收"])
+    assert newest_year(grids["年財務比率"]) >= 2024
+    # 一邊是西元、一邊是民國，講的是同一家公司的同一季——答案必須一樣。
+    # 這才是「兩種曆法都讀得出來」真正的證據。
+    assert newest_quarter(grids["ISQ"]) == newest_quarter(grids["EPQ"])
+
+
+def test_the_roc_calendar_is_converted_not_just_parsed():
+    """民國 115 是西元 2026。用合成的格子釘死，不依賴 repo 裡會變的資料。"""
+    assert newest_month([["年/月"], ["115/08"], ["115/07"]]) == (2026, 8)
+    # 季別兩種曆法都要認：〔ISQ〕的表頭是西元，〔EPQ〕的第一欄是民國。
+    assert newest_quarter([["期別", "115.2Q", "115.1Q"]]) == (2026, 2)
+    assert newest_quarter([["期別", "2026.2Q", "2026.1Q"]]) == (2026, 2)
+    # 月份只認民國：〔營收〕這張表只有這一種寫法，而多認一種等於多一條沒有
+    # 資料在背書的規則。寫在這裡是為了讓「它不認西元」是被決定的，不是被忘記的。
+    assert newest_month([["年/月"], ["2026/08"]]) is None
+
+
+def _max_period(grid):
+    """整張格子裡真的有的最新期別（年, 季／月）。
+
+    掃全部的格子而不是只掃第一列或第一欄，因為這四張表把期別放在不同的地方：
+    〔ISQ〕在表頭那一列（而且不是第 0 列，前面有空列）、〔EPQ〕在第一欄、
+    〔營收〕也在第一欄。這條測試要問的是「讀出來的對不對」，不是「它放在哪」。
+    """
+    from twsix.ingest.merge_sheets import period_key
+
+    keys = [
+        k
+        for row in grid
+        for cell in row
+        for k in (period_key(cell),)
+        if k and len(k) == 2
+    ]
+    return max(keys) if keys else None
 
 
 def test_a_normal_day_asks_for_four_sheets_instead_of_fourteen():

@@ -60,7 +60,11 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/market \
+          # data/sheets 也要加：`twsix fetch` 抓完會把月營收折回每一檔的〔營收〕
+          # 分頁（見 cli._fold_revenue）。少了這一行，抓回來的那一期只會進評等
+          # 清單，個股頁上的月營收永遠停在上一個逐檔抓取的月份——實際發生過，
+          # 1,877 檔停在 115/07，而 workflow 每天都是綠燈。
+          git add data/market data/sheets \
                   data/twse_companies.csv data/tpex_companies.csv \
                   data/manifest.json
           if git diff --cached --quiet; then
