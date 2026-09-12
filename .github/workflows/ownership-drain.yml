@@ -27,13 +27,23 @@ name: 歷史回補（一次性排乾）
 # 一檔 36 個月、約三分鐘，四份 × 280 分鐘 ≈ 370 檔／輪，1,474 檔約四個晚上。
 # 排程每天跑，不必再按。
 #
-# ── 排乾之後 ──────────────────────────────────────────
+# ── 什麼時候刪掉這個檔 ────────────────────────────────
 #
-# 每一份的第一行都會印
-#   「股權歷史覆蓋：… 檔已補齊、0 檔部分、0 檔還沒補過」
+# 每一份的第一行都會印：
+#   「股權歷史覆蓋：… 檔已補齊、0 檔部分、0 檔還沒補過」   ← 集保，已經是 0
 #   「（集保已補齊的那批裡，還有 N 檔的董監持股不到 12 個月）」
-# 兩行都到 0 就把這個檔刪掉——下面那四個「順手補」的步驟要留的話，
-# 搬進 daily.yml，不要為了它們留著一個名字寫著「一次性排乾」的檔案。
+# 第二行到 0 就刪掉這個檔，**不必再搬任何東西**。
+#
+# 原本這裡還有四個「順手補」的步驟（每日行情、三大法人、年度交易資訊、季財報），
+# 而它們是常態維護、不是一次性的——留在一個名字寫著「一次性排乾」的檔案裡，等於
+# 把「刪掉它」和「弄丟四件每天都要做的事」綁在一起。已經搬走了：
+#
+#   * 每日行情 ／ 三大法人 → daily.yml 本來就有（--days 5，穩定狀態不連網）。
+#     這裡那兩步是 --days 250 的一次性深補，歷史補完就沒有存在的理由了。
+#   * 年度交易資訊 ／ 季財報 → 搬進 daily.yml。兩支都只補「還沒有的那些」，
+#     所以補完之後每天跑等於零個請求。
+#
+# 剩下的只有董監分片與 commit。刪掉這個檔不會弄丟任何東西。
 
 on:
   schedule:
@@ -50,14 +60,6 @@ on:
         description: "每一份最多跑幾分鐘（預設 280；要比 job 的 timeout 少一截）"
         required: false
         default: "280"
-      yearly_limit:
-        description: "年度交易資訊：這一輪補幾檔（預設 300；一檔兩個請求，很快）"
-        required: false
-        default: "300"
-      quarters:
-        description: "季財報：從最新一期往回補幾季（預設 12，也就是三年）"
-        required: false
-        default: "12"
 
 permissions:
   contents: write
@@ -140,7 +142,7 @@ jobs:
           retention-days: 3
 
   # ──────────────────────────────────────────────────────────────
-  # 第二段：把四份疊回來，順手補完年度與季財報，一次 commit。
+  # 第二段：把四份疊回來，一次 commit。
   # ──────────────────────────────────────────────────────────────
   collect:
     needs: shards
@@ -148,9 +150,8 @@ jobs:
     # 被擋就把另外三份丟掉。
     if: always()
     runs-on: ubuntu-latest
-    # 第一輪要補 250 天的行情與法人（各約 20 分鐘）＋ 年度 ＋ 季財報；
-    # 之後那些日期都已經有了，這個 job 會縮到幾分鐘。
-    timeout-minutes: 200
+    # 只是套四份 patch 再 commit，幾分鐘的事。
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -182,57 +183,20 @@ jobs:
           done
           echo "共套用 $found 份"
 
-      # 〔年度交易資訊〕：還有 249 檔缺這一張，而它是券商鏡像唯一不給的一頁，
-      # 本益比河流圖（自行計算）與整個殖利率模型都要它。缺的那幾檔點進去會少
-      # 兩塊，而且不會有任何錯誤訊息。
-      #
-      # 它會自己把「上市未滿 5 年」和「這次沒抓到」分開報——前者重跑一百次也
-      # 是同一個結果，不是失敗。
-      #
-      # `|| true`：這一步失敗不該讓上面已經補好的股權歷史一起不進版控。
-      - name: 回補年度交易資訊
-        env:
-          YEARLY_LIMIT: ${{ github.event.inputs.yearly_limit || '60' }}
-        run: twsix backfill-yearly --limit "$YEARLY_LIMIT" || true
-
-      # 〔每日行情〕與〔三大法人〕：每日快照是排程上線之後才開始累積的，
-      # 所以往前只有一個月。回補是**合併不覆蓋**，而且已經有的日期完全不連網
-      # ——所以第一輪之後這兩步幾乎不花時間，放在每天跑的排程裡沒有負擔。
-      #
-      # 這兩步一定要在 runner 上跑，不能在本機那種家用 IP 上跑：證交所的
-      # MI_INDEX 對它認不得的來源回 307（那是 WAF，不是重導向），結果是那一天
-      # 只拿到櫃買的 889 列——「補到了」但只有半個市場。
-      - name: 回補每日行情
-        run: twsix backfill-prices --days 250 || true
-
-      - name: 回補三大法人
-        run: twsix backfill-institutional --days 250 || true
-
-      # 季財報：MOPS 彙總報表，一個請求換一整季的全市場。
-      #
-      # 只補「還沒有的期別」，所以排乾之後這一步幾乎不花時間。MOPS 節流得兇，
-      # 一個請求平均要重試三到五次，所以幾十個請求大約十幾到三十分鐘。
-      #
-      # `|| true`：這一步失敗不該讓上面已經補好的股權與年度資訊不進版控。
-      - name: 回補季財報
-        env:
-          QUARTERS: ${{ github.event.inputs.quarters || '12' }}
-        run: twsix backfill-statements --quarters "$QUARTERS" || true
-
       - name: Commit
         id: commit
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/ownership data/sheets data/market
+          git add data/ownership data/sheets
           if git diff --cached --quiet; then
             echo "::notice::這一輪沒有補到新的歷史（可能已經排乾了）"
             echo "changed=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git commit -q -m "歷史回補：$(date -u +%Y-%m-%d)" \
-                        -m "董監持股分片回補 ＋ 年度交易資訊 ＋ 季財報（一次性排乾）。"
+                        -m "董監持股分片回補（一次性排乾）。"
           echo "changed=yes" >> "$GITHUB_OUTPUT"
 
       - name: 推送

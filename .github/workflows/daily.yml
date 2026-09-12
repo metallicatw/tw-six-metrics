@@ -26,6 +26,11 @@ on:
     - cron: "30 9 * * 1-5"
     - cron: "30 15 * * 1-5"
   workflow_dispatch:
+    inputs:
+      yearly_limit:
+        description: "年度交易資訊：這一輪最多補幾檔（預設 40。要一次排乾就填 300）"
+        required: false
+        default: "40"
 
 permissions:
   contents: write
@@ -43,7 +48,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -70,12 +75,45 @@ jobs:
           twsix backfill-prices --days 5 || true
           twsix backfill-institutional --days 5 || true
 
+      # 〔年度交易資訊〕與〔季財報〕：從 ownership-drain.yml 搬過來的。
+      #
+      # 它們原本住在那個名字寫著「一次性排乾」的檔案裡，而它們做的是**常態維護**：
+      # 每上市一檔新股票就多一份年度資訊要補，每過一季就多一期財報要抓。放在那裡，
+      # 「刪掉排乾」和「弄丟兩件每天都要做的事」就綁在一起了——而那正是這個 repo
+      # 一再踩到的同一種坑：一件永久的事寄住在一個暫時的地方。
+      #
+      # 兩支都只補「還沒有的那些」，已經有的完全不連網，所以穩定狀態下這一步是
+      # 零個請求、幾秒鐘。一天跑兩次也沒有負擔。
+      #
+      # `--limit 40`：這裡不是用來排乾的（那是排乾那條的工作），是用來接住新上市
+      # 的那幾檔。給一個小上限，是因為這個 job 還要建站與發布，不該被一次大回補
+      # 撐爆 timeout。
+      #
+      # `|| true`：補歷史失敗不該擋住今天的行情進版控。
+      - name: 補齊年度交易資訊與季財報
+        env:
+          # ⚠️ 這個 '40' 要和上面 inputs.yearly_limit 的 default 一模一樣。
+          #
+          # 它們不一樣的時候不會有任何錯誤——排程用的是這裡的值，說明文字寫的是
+          # 上面那個，於是「每晚補幾檔」和「畫面上寫每晚補幾檔」是兩個數字。
+          # ownership-drain.yml 上一版就是這樣：說明寫 300、input default 300、
+          # 這裡寫 60，而排程觸發時 inputs 是空的，所以實際每晚只補 60。249 檔
+          # 因此排了五個晚上而不是一個，帳面上卻完全正常。
+          YEARLY_LIMIT: ${{ github.event.inputs.yearly_limit || '40' }}
+        run: |
+          twsix backfill-yearly --limit "$YEARLY_LIMIT" || true
+          twsix backfill-statements --quarters 12 || true
+
       - name: Commit
         id: commit
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/market/daily
+          # data/sheets 與 data/market 全都要加：上面那一步會寫〔年度交易資訊〕
+          # （進 data/sheets/<代號>/）與季財報彙總（進 data/market/*_income 等）。
+          # 只加 data/market/daily 的話，下面那道「被改到但沒被 commit」的檢查會
+          # 讓整趟紅掉——而那道檢查正是為了這種情況存在的。
+          git add data/market data/sheets
           if git diff --cached --quiet; then
             # 非交易日、或這一輪抓到的和上一輪一模一樣——都是正常的，不是失敗。
             echo "::notice::沒有新的一天要存"

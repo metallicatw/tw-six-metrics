@@ -131,7 +131,32 @@ def test_there_is_a_schedule_that_runs_twice_because_the_feeds_lag():
     wf = (ROOT / ".github/workflows/daily.yml").read_text("utf-8")
     assert "twsix fetch-daily" in wf
     assert wf.count("cron:") == 2, "只跑一次的話，落後的那個市場會缺一天"
-    assert "git add data/market/daily" in wf
+    # `git add` 要蓋住這個 job 真的會寫到的每一處。原本只有 data/market/daily，
+    # 而後來搬進來的〔年度交易資訊〕寫的是 data/sheets/、季財報彙總寫的是
+    # data/market/*_income——漏掉的話下面那道「被改到但沒被 commit」的檢查會
+    # 讓整趟紅掉（它就是為了這件事存在的）。
+    assert "git add data/market data/sheets" in wf
+
+
+def test_the_two_defaults_for_yearly_limit_are_the_same_number():
+    """input 的 default 和 env 的 fallback 不一樣時，不會有任何錯誤。
+
+    排程觸發時 `github.event.inputs.*` 是空的，走的是 env 那個值；而使用者在
+    畫面上讀到的是 input 的說明與 default。兩個數字不同，「每晚補幾檔」和「畫面
+    上寫每晚補幾檔」就是兩件事，而帳面上完全正常。
+
+    ownership-drain.yml 上一版就是這樣：說明寫 300、default 300、env 寫 60。
+    249 檔因此排了五個晚上而不是一個，沒有人看得出來。
+    """
+    import re
+
+    wf = (ROOT / ".github/workflows/daily.yml").read_text("utf-8")
+    default = re.search(r'yearly_limit:.*?default:\s*"(\d+)"', wf, re.S)
+    fallback = re.search(r"inputs\.yearly_limit\s*\|\|\s*'(\d+)'", wf)
+    assert default and fallback, "找不到其中一個——這條測試要守的東西不見了"
+    assert default.group(1) == fallback.group(1), (
+        f"input 預設 {default.group(1)}、排程實際用 {fallback.group(1)}"
+    )
 
 
 def test_each_stock_gets_its_own_newest_row_not_the_newest_file():
