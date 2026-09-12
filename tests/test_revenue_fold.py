@@ -128,3 +128,168 @@ def test_a_big_percentage_keeps_its_thousands_separator():
     """
     row = to_row({"資料年月": "11507", "營業收入-去年同月增減(%)": "4533.333"})
     assert row[4] == "4,533.33%"
+
+
+# ── 第二層：分頁補好了，清單也要跟著動 ──────────────────────────────────
+
+def _seeded(root, *, month="114/08", quarter="2025.2Q"):
+    """一份最小的 data/：清單兩檔，分頁一檔（5439）帶著比清單新的月份。"""
+    from twsix.store import sheets as sheet_store
+    from twsix.store.snapshots import RATING_COLUMNS, Store
+
+    blank = {c: "" for c in RATING_COLUMNS}
+    rows = []
+    for code, name, industry in (("1101", "台泥", "水泥工業"),
+                                 ("5439", "高技", "電子零組件業")):
+        row = dict(blank)
+        row.update(stock_id=code, name=name, market="上市", industry=industry,
+                   period_index="1", fiscal_quarter=quarter, revenue_month=month,
+                   composite="1")
+        rows.append(row)
+    Store(root).write("ratings", rows, RATING_COLUMNS,
+                      sort_by=("stock_id", "period_index"))
+    sheet_store.write_grid(root / "sheets" / "5439", "營收",
+                           [list(HEADER), MIRROR_5439])
+    return root
+
+
+def test_a_listing_row_older_than_its_own_sheet_is_found():
+    """個股頁寫 115/08、清單那一列還是 114/08——那是同一個網站上兩個矛盾的數字。"""
+    import tempfile
+    from pathlib import Path
+
+    root = _seeded(Path(tempfile.mkdtemp()))
+    from twsix.ingest.revenue_fold import behind
+
+    assert behind(root) == ["5439"], "分頁比清單新的那一檔沒有被找出來"
+
+
+def test_a_listing_row_that_matches_its_sheet_is_left_alone():
+    """一樣新就不要重算——1,958 檔每天重算一次只是讓每筆 commit 都看起來動了整個庫。"""
+    import tempfile
+    from pathlib import Path
+
+    root = _seeded(Path(tempfile.mkdtemp()), month="115/08", quarter="2026.2Q")
+    from twsix.ingest.revenue_fold import behind
+
+    assert behind(root) == []
+
+
+def test_a_sheet_with_no_revenue_page_is_not_called_behind():
+    """沒有分頁不等於分頁比較新。沒有東西可比的時候不要猜。"""
+    import tempfile
+    from pathlib import Path
+
+    root = _seeded(Path(tempfile.mkdtemp()))
+    (root / "sheets" / "5439" / "營收.json.gz").unlink()
+    from twsix.ingest.revenue_fold import behind
+
+    assert behind(root) == []
+
+
+def test_the_fold_reports_which_codes_it_touched_not_just_how_many():
+    """呼叫端還有第二件事要做（重算那幾檔的評等），所以要知道是哪幾檔。"""
+    import tempfile
+    from pathlib import Path
+
+    from twsix.ingest.revenue_fold import fold_all
+
+    root = Path(tempfile.mkdtemp())
+    (root / "sheets" / "5439").mkdir(parents=True)
+    (root / "market" / "tpex_revenue").mkdir(parents=True)
+    import csv as _csv
+
+    with (root / "market" / "tpex_revenue" / "11508.csv").open(
+        "w", encoding="utf-8", newline=""
+    ) as fh:
+        writer = _csv.DictWriter(fh, fieldnames=list(OFFICIAL_5439))
+        writer.writeheader()
+        writer.writerow(OFFICIAL_5439)
+
+    codes, same, absent = fold_all(root)
+    assert codes == ["5439"]
+    assert (same, absent) == (0, 0)
+    # 再折一次就沒東西可補了——而「沒東西可補」要回空的串列，不是回 None。
+    assert fold_all(root)[0] == []
+
+
+def _real_root(code="5439"):
+    """把 repo 裡真的一檔分頁複製進暫存目錄，配一份落後的清單。
+
+    用真的分頁而不是合成的，是因為這條測試要證明的正是「重算」——合成一份剛好
+    算得出評等的分頁，等於把評分引擎重寫一次在測試裡。
+    """
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    from twsix.store.snapshots import RATING_COLUMNS, Store
+
+    src = Path(__file__).resolve().parents[1] / "data" / "sheets" / code
+    root = Path(tempfile.mkdtemp())
+    shutil.copytree(src, root / "sheets" / code)
+    blank = {c: "" for c in RATING_COLUMNS}
+    row = dict(blank)
+    row.update(stock_id=code, name="高技", market="上市", industry="電子零組件業",
+               period_index="1", fiscal_quarter="2025.2Q", revenue_month="114/08",
+               composite="1")
+    Store(root).write("ratings", [row], RATING_COLUMNS,
+                      sort_by=("stock_id", "period_index"))
+    return root, code
+
+
+def test_rerating_brings_the_listing_row_up_to_the_sheet():
+    """重算的是**評等**，不是只把 revenue_month 那一格改掉。
+
+    多一個月的營收會讓〔營收年增率〕的評分跟著變。只改月份的話，留下的是一列
+    「月份是新的、等第是舊的」的資料——而它看起來完全正常。
+    """
+    from twsix.ingest.revenue_fold import rerate
+    from twsix.store.snapshots import Store
+
+    root, code = _real_root()
+    updated, kept = rerate(root, [code])
+    assert (updated, kept) == (1, 0)
+    rows = [r for r in Store(root).read("ratings") if r["stock_id"] == code]
+    newest = next(r for r in rows if r["period_index"] == "1")
+    assert newest["revenue_month"] > "114/08"
+    assert newest["fiscal_quarter"] > "2025.2Q"
+    # 九期都要重算，不是只有第一期。
+    assert len(rows) > 1
+    # 個股報表上沒有這三欄，要從舊的那一列帶過來——不然更新一檔的代價是弄丟它
+    # 的產業，然後它從清單的產業篩選和搜尋索引裡消失。
+    assert newest["name"] == "高技"
+    assert newest["market"] == "上市"
+    assert newest["industry"] == "電子零組件業"
+
+
+def test_rerating_never_adds_a_stock_the_listing_did_not_have():
+    """這張表的成員名單是全市場快照決定的，不該被「某一檔的分頁動了」改變。"""
+    from twsix.ingest.revenue_fold import rerate
+    from twsix.store.snapshots import Store
+
+    root, code = _real_root()
+    before = len(Store(root).read("ratings"))
+    updated, _ = rerate(root, ["9999"])
+    assert updated == 0
+    assert len(Store(root).read("ratings")) == before
+
+
+def test_rerating_keeps_the_old_row_when_the_new_one_is_older():
+    """抓取可能退化成一份比較短的資料。過期但正確的評等，仍然是一個評等。"""
+    from twsix.ingest.revenue_fold import rerate
+    from twsix.store.snapshots import RATING_COLUMNS, Store
+
+    root, code = _real_root()
+    rows = Store(root).read("ratings")
+    for r in rows:
+        r["fiscal_quarter"] = "2099.4Q"     # 清單假裝自己來自未來
+        r["revenue_month"] = "188/12"
+    Store(root).write("ratings", rows, RATING_COLUMNS,
+                      sort_by=("stock_id", "period_index"))
+
+    updated, kept = rerate(root, [code])
+    assert (updated, kept) == (0, 1)
+    newest = next(r for r in Store(root).read("ratings")
+                  if r["period_index"] == "1")
+    assert newest["fiscal_quarter"] == "2099.4Q", "比較舊的那一份不該蓋過去"

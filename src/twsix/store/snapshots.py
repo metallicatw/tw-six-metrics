@@ -294,6 +294,20 @@ RATING_COLUMNS: tuple[str, ...] = (
 )
 
 
+def vintage(row: dict[str, str]) -> tuple[str, str]:
+    """一列評等有多新：財報季別優先，同季再比營收月份。
+
+    兩個欄位都是可以直接比字串的格式（``2026.2Q``、``115/07``），因為年份在最前面
+    而且位數固定——這不是巧合，是活頁簿本來就這樣印的。
+
+    住在這裡而不是 cli 裡，是因為它講的是**這張表的一列**有多新，而現在有兩個地方
+    要問同一個問題：逐檔抓取之後（`_store_rating`）和全市場月營收折進來之後
+    （`ingest.revenue_fold.rerate`）。兩份各寫一次的話，遲早會有一份的規則和另一份
+    不一樣，而症狀是「同一檔在兩條路徑上得到不同的結果」。
+    """
+    return (row.get("fiscal_quarter") or "", row.get("revenue_month") or "")
+
+
 def rating_rows(rating: Any) -> list[dict[str, Any]]:
     """Flatten a :class:`~twsix.models.StockRating` into storable rows."""
     from ..models import INDICATOR_ORDER  # local import keeps store dependency-free

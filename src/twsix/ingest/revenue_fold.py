@@ -38,6 +38,7 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -164,17 +165,22 @@ def folded(existing: Grid | None, months: dict[str, list[str]]) -> Grid | None:
     return None if merged == grid else merged
 
 
-def fold_all(data_dir: Path, *, only: str | None = None) -> tuple[int, int, int]:
-    """把全市場月營收折進每一檔。回傳 ``(更新了幾檔, 沒得補幾檔, 沒有分頁幾檔)``。"""
+def fold_all(data_dir: Path, *, only: str | None = None) -> tuple[list[str], int, int]:
+    """把全市場月營收折進每一檔。
+
+    回傳 ``(真的改到的代號, 沒得補幾檔, 沒有分頁幾檔)``。回代號而不只是數量，是
+    因為呼叫端還有第二件事要做：那幾檔的評等要重算（見 `rerate`）。
+    """
     from ..store import sheets as sheet_store  # noqa: PLC0415
 
     table = market_rows(data_dir)
     sheets = data_dir / "sheets"
     if not sheets.is_dir():
-        return (0, 0, 0)
+        return ([], 0, 0)
     codes = [only] if only else sorted(p.name for p in sheets.glob("*") if p.is_dir())
 
-    wrote = same = absent = 0
+    wrote: list[str] = []
+    same = absent = 0
     for code in codes:
         months = table.get(code)
         if not months:
@@ -187,5 +193,123 @@ def fold_all(data_dir: Path, *, only: str | None = None) -> tuple[int, int, int]
             same += 1
             continue
         sheet_store.write_grid(base, "營收", merged)
-        wrote += 1
+        wrote.append(code)
     return (wrote, same, absent)
+
+
+def behind(data_dir: Path) -> list[str]:
+    """〔評等清單〕上比自己的個股分頁還舊的那幾檔。
+
+    這一支存在是為了讓修正**自己會發生**。`fold_all` 只認得「這一次折進去的」，
+    而 ratings.csv 會落後的情形不只那一種：折進去的那一輪還沒有這段重算、
+    或某一輪的重算中途失敗了。那時候 `fold_all` 下一次回的是空的（分頁已經是最新
+    了，沒東西可折），於是清單**永遠**追不回來——要有人記得跑一次一次性指令才會
+    好，而「要有人記得」正是這個 bug 一開始的成因。
+
+    比的是月份，不是時間戳：分頁的〔營收〕最新到哪一個月，對上清單那一列寫的
+    `revenue_month`。清單比較舊就重算。
+    """
+    from ..store import sheets as sheet_store  # noqa: PLC0415
+    from ..store.snapshots import Store  # noqa: PLC0415
+    from .cadence import newest_month  # noqa: PLC0415
+
+    out: list[str] = []
+    for row in Store(data_dir).read("ratings"):
+        if row.get("period_index") != "1":
+            continue
+        code = row.get("stock_id", "")
+        if not code:
+            continue
+        grid = sheet_store.read_grid(data_dir / "sheets" / code, "營收")
+        if not grid:
+            continue
+        on_sheet = newest_month(grid)
+        on_list = newest_month([["年/月"], [row.get("revenue_month", "")]])
+        if on_sheet and (on_list is None or on_sheet > on_list):
+            out.append(code)
+    return out
+
+
+def rerate(data_dir: Path, codes: Sequence[str]) -> tuple[int, int]:
+    """折完之後把這幾檔重新評等，寫回 ``data/ratings.csv``。
+
+    ## 為什麼還要這一步
+
+    這是同一個錯誤的第二層，而第二層比第一層更容易漏掉，因為第一層已經修好了。
+
+    上一次是：全市場月營收抓回來了，個股頁沒有動——因為個股頁讀的是
+    `data/sheets/<代號>/營收.json.gz`，而沒有人把全市場那一份攤回去。`fold_all`
+    修的就是那一層。
+
+    修完之後症狀變成：**個股頁寫 115/08，清單那一列還是 115/07**。因為〔台股評等
+    清單〕讀的既不是全市場那一份、也不是個股分頁，而是第三份衍生檔
+    `data/ratings.csv`——它只有「逐檔抓取」（`fetch-stock`）會更新。分頁改了、
+    清單沒改，於是同一個網站上兩個數字互相矛盾。
+
+    所以規則是：**只要有一份衍生資料被重算，所有從同一份原始資料衍生出來的東西
+    都要跟著重算**。這裡重算的是評等本身，不是只把 `revenue_month` 那一格改掉
+    ——多一個月的營收會讓〔營收年增率〕的評分跟著變，改一格等於留下一個和自己的
+    等第不一致的月份。
+
+    ## 三條和 `_store_rating` 一樣的規則
+
+    * **只更新既有的列，不新增。**這張表的成員名單是全市場快照決定的。
+    * **新的比舊的舊就不覆蓋。**抓取可能退化成一份比較短的資料。
+    * **名稱／市場／產業從舊的那一列帶過來。**個股報表上沒有這三欄。
+
+    不一樣的只有一件事：整張表**讀一次、寫一次**。`Store.upsert` 每呼叫一次就
+    把整張 CSV 讀進來再寫回去，而這裡一次要處理的是一千九百多檔——那樣是
+    一千九百多次全表讀寫。
+    """
+    from ..config import Settings  # noqa: PLC0415
+    from ..rating.engine import rate  # noqa: PLC0415
+    from ..store import sheets as sheet_store  # noqa: PLC0415
+    from ..store.snapshots import RATING_COLUMNS, Store, rating_rows, vintage  # noqa: PLC0415
+    from .derive import enrich  # noqa: PLC0415
+    from .workbook import GridsSource  # noqa: PLC0415
+
+    store = Store(data_dir)
+    by_code: dict[str, list[dict[str, Any]]] = {}
+    for row in store.read("ratings"):
+        by_code.setdefault(row.get("stock_id", ""), []).append(row)
+    if not by_code:
+        return (0, 0)
+
+    settings = Settings.load(None)
+    updated = kept = 0
+    for code in codes:
+        stored = by_code.get(code)
+        if not stored:
+            continue
+        grids = sheet_store.read_all(data_dir / "sheets" / code)
+        if not grids:
+            continue
+        try:
+            data = GridsSource(grids=enrich(grids, code), stock_id=code).load()
+            fresh = rating_rows(rate(data, settings.rules, settings.periods))
+        except Exception:  # noqa: BLE001, S112
+            # 一檔算不出來不該讓另外一千九百檔的重算作廢。原因多半是那一檔的
+            # 分頁不完整，而它在這一輪之前就已經是那樣了。
+            continue
+        if not fresh:
+            continue
+        anchor = next((r for r in stored if r.get("period_index") == "1"), stored[0])
+        newest = {k: str(v) for k, v in fresh[0].items()}
+        if vintage(anchor) > vintage(newest):
+            kept += 1
+            continue
+        for row in fresh:
+            for field in ("name", "market", "industry"):
+                if not row.get(field):
+                    row[field] = anchor.get(field, "")
+        by_code[code] = fresh
+        updated += 1
+
+    if updated:
+        store.write(
+            "ratings",
+            [r for rows in by_code.values() for r in rows],
+            RATING_COLUMNS,
+            sort_by=("stock_id", "period_index"),
+        )
+    return (updated, kept)

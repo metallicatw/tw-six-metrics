@@ -435,22 +435,42 @@ def cmd_fetch(args: argparse.Namespace) -> int:
 
 
 def _fold_revenue(data_dir: Path) -> None:
-    """把剛抓回來的全市場月營收折進每一檔的〔營收〕分頁。
+    """把剛抓回來的全市場月營收折進每一檔的〔營收〕分頁，再重算那幾檔的評等。
+
+    **兩步，不是一步。**分頁改了而清單沒改，症狀是個股頁寫 115/08、〔台股評等
+    清單〕那一列還是 115/07——同一個網站上兩個數字互相矛盾。〔評等清單〕讀的是
+    第三份衍生檔 `data/ratings.csv`，它既不是全市場那一份、也不是個股分頁。
+    理由與作法寫在 `ingest.revenue_fold.rerate` 的 docstring 裡。
+
+    兩步都寫在這裡、而不是拆成排程的兩個 step，是因為「下一步」正是這件事上一次
+    消失的地方：分開寫在 workflow 裡，其中一件就可以被漏掉而沒有人發現。
 
     折不進去不該讓抓回來的那一期作廢——資料已經在 `data/market/` 裡了，下一次
     排程會再折一次。所以這裡吞例外，但要吞得看得見。
     """
-    from .ingest.revenue_fold import fold_all  # noqa: PLC0415
+    from .ingest.revenue_fold import behind, fold_all, rerate  # noqa: PLC0415
 
     try:
-        wrote, same, absent = fold_all(data_dir)
+        codes, same, absent = fold_all(data_dir)
     except Exception as exc:  # noqa: BLE001
         print(f"  ⚠️ 月營收折進個股分頁失敗：{exc}", file=sys.stderr)
         return
     print(
-        f"  月營收折進個股分頁：更新 {wrote:,} 檔、已經是最新 {same:,} 檔、"
+        f"  月營收折進個股分頁：更新 {len(codes):,} 檔、已經是最新 {same:,} 檔、"
         f"全市場那一份沒有 {absent:,} 檔"
     )
+    try:
+        # 這一次折到的 ∪ 清單本來就落後的。第二項不是保險，是**修正自己會發生**
+        # 的條件：只認第一項的話，「折進去的那一輪沒有重算」這個狀態會永遠留著
+        # ——下一輪沒東西可折，於是也不會重算。見 `revenue_fold.behind`。
+        pending = sorted(set(codes) | set(behind(data_dir)))
+        if not pending:
+            return
+        updated, kept = rerate(data_dir, pending)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ⚠️ 評等清單重算失敗（個股分頁已經更新）：{exc}", file=sys.stderr)
+        return
+    print(f"  評等清單跟著重算：更新 {updated:,} 檔、維持原值 {kept:,} 檔")
 
 
 def _fetch_status(written: int, failed: list[str]) -> int:
@@ -985,13 +1005,10 @@ def _g(value: object) -> str:
     return "—" if value is None else f"{float(value):g}"  # type: ignore[arg-type]
 
 
-def _vintage(row: dict[str, str]) -> tuple[str, str]:
-    """一列資料有多新：財報季別優先，同季再比營收月份。
-
-    兩個欄位都是可以直接比字串的格式（``2026.2Q``、``115/07``），因為年份在
-    最前面而且位數固定——這不是巧合，是活頁簿本來就這樣印的。
-    """
-    return (row.get("fiscal_quarter") or "", row.get("revenue_month") or "")
+#: 一列評等有多新。搬到 `store.snapshots` 去了——現在有兩條路徑要問同一個問題
+#: （逐檔抓取、全市場月營收折進來），規則只能有一份。這個名字留著，因為測試和
+#: 本檔其他地方都用它。
+from .store.snapshots import vintage as _vintage  # noqa: E402
 
 
 def _store_rating(root: Path, rating: Any, *, meta: dict[str, str] | None = None) -> None:
