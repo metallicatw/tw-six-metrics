@@ -397,16 +397,61 @@ def test_the_seasonal_table_keeps_recent_years_not_the_ones_that_sort_high():
 
 
 def test_every_indicator_series_says_which_periods_it_covers():
-    """Six bare numbers cannot be read: 營收年增率 counts months, the rest quarters."""
+    """Eight bare numbers cannot be read: 營收年增率 counts months, the rest quarters."""
     page, _ = _page()
     for ind in page.indicators:
         assert ind["periods"], f"{ind['label']} 沒有期別"
         assert len(ind["periods"]) == len(ind["values"])
-        # Oldest first, matching the charts and welded to their own numbers.
-        assert ind["periods"] == sorted(ind["periods"])
+        # 表格最新在**左**（圖則是最新在右）。整站只有這一條規則：表用來查一個
+        # 數字，而要查的多半是最新那一期；圖用來看走勢，而走勢要往右跑才對。
+        assert ind["periods"] == sorted(ind["periods"], reverse=True)
     by_label = {i["label"]: i for i in page.indicators}
-    assert by_label["營收年增率"]["periods"][-1] == "115/07"
-    assert by_label["每股盈餘EPS"]["periods"][-1] == "2026.2Q"
+    assert by_label["營收年增率"]["periods"][0] == max(
+        by_label["營收年增率"]["periods"]
+    )
+    assert by_label["每股盈餘EPS"]["periods"][0].endswith("Q")
+
+
+def test_the_revenue_row_shows_one_cell_per_observation():
+    """合併過的那一條，不是 raw——raw 會讓八格裡出現兩個一月。
+
+    `revenue_months_raw` 同時留著 `115/01-02` 和 `115/01`，而二月沒有自己的一列
+    （那是活頁簿 AG 欄的形狀）。畫趨勢圖時那樣是對的，排成一列八格就變成「同一
+    個月出現兩次」，看起來像資料重複。合併版一期一格，而且它正是這一列的等第
+    實際評分的那一條。
+    """
+    page, _ = _page()
+    months = next(i for i in page.indicators if i["key"] == "revenue_yoy")["periods"]
+    assert len(months) == len(set(months)), months
+    heads = [m.split("/")[0] + "/" + m.split("/")[1][:2] for m in months]
+    assert len(heads) == len(set(heads)), f"同一個月出現兩次：{months}"
+
+
+def test_every_row_of_the_rating_table_is_the_same_length():
+    """各列補滿八期——長短不一的那幾格看起來像資料缺了，而不是規則不同。
+
+    評分的窗口**本來就**每一項不一樣（營業利益率四季、自由現金流量九季），那是
+    規則的一部分，不能為了版面去改。所以顯示的數列另外取，統一八期，來源是評分
+    自己讀的那一份 FinancialData——兩邊因此不可能各說各話。
+    """
+    page, _ = _page()
+    lengths = {len(ind["values"]) for ind in page.indicators}
+    assert lengths == {8}, lengths
+
+
+def test_the_unscored_row_is_marked_as_unscored():
+    """淨利率（歸母）在表上，但它不是第七個指標。
+
+    多一個等第就是多一條沒有人訂過的規則。它在那裡是因為上面那三列都是「賺多少」，
+    而它回答的是「賺得有多厚」。
+    """
+    page, _ = _page()
+    rows = {ind["key"]: ind for ind in page.indicators}
+    assert "net_margin" in rows, "淨利率（歸母）沒有出現"
+    assert rows["net_margin"]["scored"] is False
+    assert rows["net_margin"]["badge"] is False
+    assert not rows["net_margin"]["letter"]
+    assert all(rows[k]["scored"] for k in rows if k != "net_margin")
 
 
 def test_a_ratio_that_explodes_does_not_flatten_the_other_twenty_quarters():

@@ -86,15 +86,22 @@ def test_a_stock_without_sheets_still_gets_the_plain_page(tmp_path=None):
 
 
 def test_the_list_marks_which_codes_lead_to_a_full_page(tmp_path=None):
-    """Otherwise the one good page is findable only by clicking 1,741 codes."""
+    """Otherwise the one good page is findable only by clicking 1,741 codes.
+
+    記號的位置換過兩次，而換的理由每次都是同一個：那一格該回答的是**這一列的
+    資料算到哪裡**。先是「完整」（只說有沒有）、再是抓取日期（只說多舊）、
+    現在是〔財報基準〕（財報到哪一季、營收到哪一個月）。抓取日期沒有消失，
+    它退到那一格的 title 裡——而「有沒有完整頁」正是靠那句 title 說的。
+    """
     tmp = tmp_path or _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp))
 
     listing = (out / "index.html").read_text(encoding="utf-8")
-    assert 'class="tag full"' in listing
-    # The mark is a word, so it survives greyscale and forced colours.
-    assert "完整" in listing
+    full = listing.split('<tr data-code="5439"')[1].split("</tr>")[0]
+    plain = listing.split('<tr data-code="2330"')[1].split("</tr>")[0]
+    assert "已抓取完整資料" in full
+    assert "已抓取完整資料" not in plain
 
 
 def test_the_mark_follows_the_render_not_the_directory(tmp_path=None):
@@ -193,19 +200,31 @@ def test_the_score_is_rounded_in_the_file_not_in_the_browser():
     assert "6666666" not in text
 
 
-def test_every_page_carries_the_search_box(tmp_path=None):
-    """Including the stock pages — that is the point of putting it in base."""
+def test_the_search_box_is_on_the_pages_it_can_act_on(tmp_path=None):
+    """搜尋框原本每一頁都有，而它在多數頁面上是**騙人的**。
+
+    它做的事只有一件：跳到某一檔的個股頁。從〔台股評等清單〕和個股頁按下去，
+    那正是讀者要的；從〔市場監控〕或〔趨勢選股〕按下去，等於把人踢出他正在讀
+    的那一頁——那兩頁講的是全市場，不是某一檔。
+
+    所以它留在「以個股為單位」的那兩種頁面上，其他頁不放。不放不等於走不到：
+    導覽列每一頁都有，第一項就是清單。
+    """
     tmp = tmp_path or _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp))
 
-    for name in ("index.html", "picks.html", "stats.html", "about.html"):
-        page = served(out, name)
-        assert 'id="find"' in page, f"{name} 沒有搜尋框"
-        assert "search.json" in page, f"{name} 沒有載入索引"
+    page = served(out, "index.html")
+    assert 'id="find"' in page, "評等清單沒有搜尋框"
+    assert "search.json" in page, "評等清單沒有載入索引"
     for code in ("5439", "2330"):
         page = served(out, f"stock/{code}.html")
         assert 'id="find"' in page, f"{code} 的頁面沒有搜尋框"
+    for name in ("picks.html", "stats.html", "about.html"):
+        page = served(out, name)
+        assert 'id="find"' not in page, f"{name} 不該有搜尋框"
+        # 但一定要走得回去。
+        assert "台股評等清單" in page, f"{name} 沒有導覽列"
 
 
 def test_the_search_box_still_goes_somewhere_without_javascript():
@@ -489,10 +508,11 @@ def test_the_mark_is_the_update_date_when_the_fetch_left_one(tmp_path=None):
     build_site(_records(), out, sheets_dir=sheets)
 
     listing = (out / "index.html").read_text(encoding="utf-8")
-    assert 'class="tag when"' in listing
-    assert ">08/30<" in listing
+    # 日期本身退到 title 裡——那一欄現在印的是〔財報基準〕，也就是這一列的六個
+    # 等第算到哪一季、營收數到哪一個月。抓取日期和資料期別不是同一件事，而清單
+    # 上看得見的那一個要是後者。
     assert "報表更新於 2026-08-30" in listing
-    assert 'class="tag full"' not in listing      # 有日期就不再退回「完整」
+    assert "財報 <b>2026Q2</b>" in listing
 
     # search.json 的第五欄跟著換成日期。真假值沒變，所以讀它的 JS 照舊。
     row = next(
@@ -504,14 +524,14 @@ def test_the_mark_is_the_update_date_when_the_fetch_left_one(tmp_path=None):
 
 
 def test_a_stock_fetched_before_the_stamp_existed_still_says_完整(tmp_path=None):
-    """沒有日期就不要編一個出來——退回原本的字，不要留空或猜一個。"""
+    """沒有日期就不要編一個出來——退回原本那句話，不要留空或猜一個。"""
     tmp = tmp_path or _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp))   # 沒有 _fetched.txt
 
     listing = (out / "index.html").read_text(encoding="utf-8")
-    assert 'class="tag full"' in listing and "完整" in listing
-    assert 'class="tag when"' not in listing
+    assert "已抓取完整資料" in listing
+    assert "報表更新於" not in listing
 
 
 def test_a_corrupt_stamp_is_ignored_rather_than_printed(tmp_path=None):
@@ -524,7 +544,7 @@ def test_a_corrupt_stamp_is_ignored_rather_than_printed(tmp_path=None):
     build_site(_records(), out, sheets_dir=sheets)
     listing = (out / "index.html").read_text(encoding="utf-8")
     assert "昨天啦" not in listing
-    assert 'class="tag full"' in listing
+    assert "已抓取完整資料" in listing       # 壞日期 → 退回沒有日期的那句
 
 
 def test_the_stamp_is_not_mistaken_for_a_fourteenth_sheet(tmp_path=None):
@@ -794,12 +814,15 @@ def test_the_update_date_is_its_own_column_with_a_header(tmp_path=None):
     build_site(_records(), out, sheets_dir=sheets)
     listing = (out / "index.html").read_text("utf-8")
 
-    assert "最後<br>更新日" in listing
+    assert "財報<br>基準" in listing
     row = listing.split('<tr data-code="5439"')[1].split("</tr>")[0]
-    assert '<td class="when-cell" data-s="2026-08-30">' in row
-    # 沒有完整報告的那一檔，這一格是破折號，不是空白——空白讀起來像漏掉了。
+    # 排序鍵是「季別|月份」，所以照字串排就是照期別排。畫面上的字是換算成西元
+    # 的兩個標籤，排序鍵留的是原始寫法（民國）——換算只做在顯示這一層。
+    assert '<td class="when-cell" data-s="2026.2Q|115/08"' in row
+    assert "財報 <b>2026Q2</b>" in row and "營收 <b>2026/08</b>" in row
+    # 沒有任何期別的那一檔，這一格是破折號，不是空白——空白讀起來像漏掉了。
     plain = listing.split('<tr data-code="2330"')[1].split("</tr>")[0]
-    assert '<td class="when-cell" data-s="">' in plain and "—" in plain
+    assert 'class="when-cell"' in plain
 
 
 def test_the_watchlist_page_is_the_same_table_filtered_in_the_browser(tmp_path=None):
@@ -1138,7 +1161,7 @@ def test_the_report_is_embedded_so_the_reader_can_get_back(tmp_path=None):
 
     page = (out / MONITOR_PAGE).read_text("utf-8")
     assert 'src="monitor-report.html"' in page, "沒有把報告嵌進來"
-    assert "台股評等清單" in page and 'id="find"' in page, "頁首與搜尋框不在，等於還是出不來"
+    assert "台股評等清單" in page, "導覽列不在，等於還是出不來"
     assert 'aria-current="page"' in page
     # 想全螢幕看的人要有一條路，但那是額外的一個連結，不是唯一的入口。
     assert 'target="_blank"' in page
@@ -1215,7 +1238,7 @@ def test_the_trend_report_is_embedded_not_linked(tmp_path=None):
 
     page = (out / TREND_PAGE).read_text("utf-8")
     assert 'src="trend-report.html"' in page, "沒有把報告嵌進來"
-    assert "台股評等清單" in page and 'id="find"' in page, "頁首與搜尋框不在，等於還是出不來"
+    assert "台股評等清單" in page, "導覽列不在，等於還是出不來"
     assert 'target="_blank"' in page, "想全螢幕看的人要有一條路"
     # 報告本身一個位元組都沒有被動到。
     assert (out / TREND_REPORT).read_text("utf-8") == "<html>線圖</html>"
@@ -1274,7 +1297,14 @@ def test_the_nav_is_ordered_named_and_coloured(tmp_path=None):
         assert f"[data-theme=dark] nav a.{cls}" in css, f"{cls} 少了深色底的顏色"
 
     # 字要比原本大。13px 的導覽列在 24px 的標題底下像註腳。
-    assert re.search(r"^nav{[^}]*font-size:1[6-9]px", css, re.M), "導覽列字級沒有加大"
+    #
+    # 15px 而不是 17px：分頁改成按鈕列之後，每一項多了 7/14 的內距和一圈框線，
+    # 所以同一個字級在畫面上是更大的一塊。字級再往上加會讓七項在手機上擠不下，
+    # 而擠不下的解法是橫滑——橫滑的前提是它們看起來像按得下去的東西。
+    assert re.search(r"^nav{[^}]*font-size:1[5-9]px", css, re.M), "導覽列字級沒有加大"
+    assert re.search(r"^nav a{[^}]*border-radius:999px", css, re.M), "分頁不是按鈕列"
+    assert re.search(r"^nav{[^}]*flex-wrap:nowrap", css, re.M), "分頁會折行而不是橫滑"
+    assert re.search(r"^nav{[^}]*overflow-x:auto", css, re.M), "分頁滑不動"
     assert re.search(r"header\.top h1{[^}]*font-size:2[0-9]px", css), "大標題沒有加大"
 
 

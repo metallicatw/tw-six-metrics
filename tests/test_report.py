@@ -234,23 +234,21 @@ def test_the_four_conditions_behind_具投資價值():
 
 
 def test_the_listing_explains_具投資價值_next_to_the_checkbox():
-    """判斷依據就寫在勾選框旁邊，不是藏在另一頁。
+    """判斷依據就在勾選框旁邊那顆燈泡裡，不是藏在另一頁。
 
     讀者是在**要不要勾它**的那一刻想知道它是什麼；那時候跳去〔評分規則〕再回來，
-    多半就不勾了。行內寫得下三個條件，第四個（上一期要算得出來）在旁邊那顆燈泡裡。
+    多半就不勾了。
 
-    第四句原本放在 `title` 屬性。那等於「滑鼠停住兩秒才看得到」，而手機上根本
-    沒有滑鼠——所以它在手機上是不存在的。燈泡按得到。
+    原本是「行內三句 ＋ 燈泡裡第四句」。那個版本既擠又不完整：三句小字把篩選那
+    一列撐成兩行，卻還是沒有把規則說完，而讀者沒有理由知道還有第四條。四條一起
+    收進燈泡之後，那一列回到一行，而說明第一次是完整的。
     """
     listing = (
         ROOT / "src/twsix/report/templates/list.html.j2"
     ).read_text("utf-8")
-    hint = listing.split('class="hint"')[1].split("</span>")[0]
-    # 行內看得到的三句。
-    assert "BB" in hint and "≥ 3" in hint and "0.3" in hint
-    # 第四句在燈泡裡，而那顆燈泡要緊接在這一行後面。
-    after = listing.split('class="hint"')[1]
+    assert 'class="hint"' not in listing, "行內那三句已經收進燈泡"
+    after = listing[listing.index("只看具投資價值"):]
     bulb = after[after.index("{% call tip() %}"):after.index("{% endcall %}")]
+    # 四個條件全部寫得下，而不是只寫得下三個。
+    assert "BB" in bulb and "≥ 3" in bulb and "0.3" in bulb
     assert "上一期要算得出綜合評分" in bulb
-    # 它要接在「只看具投資價值」後面，不是接在別的勾選框後面。
-    assert listing.index("只看具投資價值") < listing.index('class="hint"')

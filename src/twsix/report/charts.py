@@ -7,10 +7,15 @@ bundle, so the charts are SVG elements written straight into the page.
 Four rules shaped what is here, and each one rejected a design that felt
 obvious first:
 
-**No dual axis.**  〔營收〕's natural picture is bars for 月營收 and a line for
-年增率 — two scales on one frame, which is the single most misleading chart
-form there is: the crossing point is an artefact of the two scales, not of the
-data.  They are drawn as two stacked panels sharing an x axis instead.
+**Dual axis only where the question needs it.**  兩個刻度畫在同一格上，兩條線的
+**交叉點沒有意義**——它是刻度湊出來的，不是資料裡的事件。這條理由到今天仍然
+成立，所以預設是不用。
+
+但〔營收〕要回答的問題是「營收在跌的那幾個月，年增率是不是也翻負了」，而分成
+上下兩格之後，讀者得在兩格之間來回對垂直位置——那正是這張圖唯一要回答的事。
+所以有兩個例外，各自把「有兩個刻度」講清楚（右軸刻度用右軸序列的顏色、圖例
+寫明哪一個看哪一軸、下面的表把兩組數字都列出來）：`_price_overlay` 疊收盤價，
+`combo()` 一組長條配幾條折線。
 
 **Colour never carries meaning alone.**  Every chart here is one series, so
 there is nothing to tell apart by hue; sign is read against a zero rule, and
@@ -696,6 +701,197 @@ def line(
         title, unit, "".join(parts), _table(labels, series, digs),
         colour=colour,
         legend=_legend(title, unit, colour, price_unit) if over else "",
+    )
+
+
+def combo(
+    labels: Sequence[str],
+    *,
+    bar: tuple[str, Sequence[Number]],
+    lines: Sequence[tuple[str, Sequence[Number], str]],
+    title: str,
+    bar_unit: str = "",
+    bar_digits: int = 0,
+    bar_colour: str = PRICE_COLOUR,
+    bar_axis: str = "right",
+    line_unit: str = "%",
+    line_digits: int = 1,
+    label_every: int = 1,
+    newest_first: bool = True,
+    frame: Frame | None = None,
+    note: str = "",
+) -> str:
+    """一組長條 ＋ 一到數條折線，兩條軸，同一個時間軸。
+
+    ## 為什麼這一支存在，而模組開頭那條規則沒有被推翻
+
+    本模組開頭寫著「No dual axis」，理由是**兩條線的交叉點是兩個刻度湊出來的**，
+    不是資料裡的事件。那條理由到今天仍然成立，而且正因為成立，它必須寫在這裡
+    ——這是這張圖唯一需要讀者小心的地方。
+
+    改成畫得出來，是因為分成上下兩格之後，要回答「營收在跌的那幾個月，年增率是
+    不是也翻負了」得在兩格之間來回對垂直位置，而那正是這張圖唯一要回答的問題。
+    `_price_overlay` 早就為了同一個理由做了同一件事（見 PRICE_RIGHT）；這一支
+    只是把它一般化成「任何一組長條配任何幾條折線」。
+
+    讓「有兩個刻度」不必用猜的，靠的是三件事：右軸的刻度用右軸那個序列的顏色、
+    圖例寫明哪一個看哪一軸、以及下面那張表把兩組數字都列出來。
+
+    ## 參數
+
+    *bar* 是 ``(名稱, 數列)``；*lines* 是 ``(名稱, 數列, 顏色)`` 的串列。
+    *bar_axis* 決定長條吃左軸還是右軸——〔營收〕是長條當主角（左軸），
+    〔八季財報趨勢〕是兩條率當主角、EPS 當配角（右軸）。
+    """
+    raw_labels = list(labels)
+    bar_name, bar_raw = bar
+    shown_labels, bar_values = _chronological(raw_labels, bar_raw, newest_first)
+    line_data = [
+        (name, _chronological(raw_labels, values, newest_first)[1], colour)
+        for name, values, colour in lines
+    ]
+
+    bar_present = [float(v) for v in bar_values if v is not None]
+    line_present = [
+        float(v) for _, values, _ in line_data for v in values if v is not None
+    ]
+    if not bar_present and not line_present:
+        return f'<p class="muted">{escape(title)}：無資料</p>'
+
+    f = frame or Frame(height=300.0)
+    # 右邊要空出一條軸的寬度，不然右軸的刻度會畫在畫布外面。
+    f = replace(f, right=max(f.right, PRICE_RIGHT))
+
+    # 長條一定含零（長條的長度就是量值），折線不必（見 line() 裡那段）。
+    bar_lo, bar_hi = _nice_bounds(bar_present) if bar_present else (0.0, 1.0)
+    line_lo, line_hi = (
+        _nice_bounds(line_present, include_zero=False) if line_present else (0.0, 1.0)
+    )
+
+    if bar_axis == "left":
+        left = (bar_lo, bar_hi, bar_digits)
+        right = (line_lo, line_hi, line_digits)
+        right_colour = line_data[0][2] if line_data else "var(--muted)"
+        right_unit = line_unit
+    else:
+        left = (line_lo, line_hi, line_digits)
+        right = (bar_lo, bar_hi, bar_digits)
+        right_colour = bar_colour
+        right_unit = bar_unit
+
+    def y_on(value: float, scale: tuple[float, float, int]) -> float:
+        lo, hi, _ = scale
+        return f.top + f.plot_h * (1 - (value - lo) / (hi - lo))
+
+    parts = _open(f, title, f"{len(shown_labels)} 期")
+    parts += _grid(f, left[0], left[1], left[2])
+
+    # 右軸的刻度，和左軸同高——兩邊的橫線是同一條，只是各自標各自的數字。
+    axis_x = f.width - f.right + 8
+    for i in range(4):
+        value = right[0] + (right[1] - right[0]) * i / 3
+        parts.append(
+            f'<text x="{axis_x:.1f}" y="{y_on(value, right) + 3.5:.1f}" '
+            f'text-anchor="start" font-size="11" fill="{right_colour}">'
+            f"{escape(_axis_label(value, right[2]))}</text>"
+        )
+
+    slot = f.plot_w / max(len(shown_labels), 1)
+    bar_scale = left if bar_axis == "left" else right
+    line_scale = right if bar_axis == "left" else left
+
+    # 長條畫在折線**之前**：兩者重疊的地方，主角要在上面，而折線是細的那一個。
+    width = max(min(slot - BAR_GAP, BAR_MAX_W), 1.0)
+    pad = (slot - width) / 2
+    zero_y = y_on(0.0, bar_scale)
+    for i, raw in enumerate(bar_values):
+        if raw is None:
+            continue
+        value = float(raw)
+        y = y_on(min(max(value, bar_scale[0]), bar_scale[1]), bar_scale)
+        top = min(y, zero_y)
+        height = max(abs(y - zero_y), 1.0)
+        x = f.left + slot * i + pad
+        # 正負用「填滿 vs 中空」分，不是用另一個色相——色相在這張圖上已經被
+        # 「哪一個序列」佔用了（見 bars() 裡同一段）。
+        skin = (
+            f'fill="{bar_colour}" fill-opacity=".24" stroke="{bar_colour}" '
+            f'stroke-width="1.5"'
+            if value < 0
+            else f'fill="{bar_colour}" fill-opacity=".55"'
+        )
+        parts.append(
+            f'<rect x="{x:.1f}" y="{top:.1f}" width="{width:.1f}" '
+            f'height="{height:.1f}" rx="{min(BAR_RADIUS, width / 2, height):.1f}" '
+            f"{skin}>"
+            f"<title>{escape(shown_labels[i] if i < len(shown_labels) else '')}　"
+            f"{escape(bar_name)} {escape(_fmt(value, bar_digits))}"
+            f"{escape(bar_unit)}</title></rect>"
+        )
+
+    markers = len(shown_labels) <= MARKER_LIMIT
+    for name, values, colour in line_data:
+        run: list[str] = []
+
+        def flush(run: list[str] = run, colour: str = colour) -> None:
+            if len(run) > 1:
+                parts.append(
+                    f'<polyline points="{" ".join(run)}" fill="none" '
+                    f'stroke="{colour}" stroke-width="{LINE_WIDTH}" '
+                    f'stroke-linejoin="round" stroke-linecap="round" />'
+                )
+            run.clear()
+
+        for i, raw in enumerate(values):
+            if raw is None:
+                flush()
+                continue
+            run.append(
+                f"{f.left + slot * (i + 0.5):.1f},"
+                f"{y_on(float(raw), line_scale):.1f}"
+            )
+        flush()
+        if not markers:
+            continue
+        for i, raw in enumerate(values):
+            if raw is None:
+                continue
+            parts.append(
+                f'<circle cx="{f.left + slot * (i + 0.5):.1f}" '
+                f'cy="{y_on(float(raw), line_scale):.1f}" r="2.8" fill="{colour}" '
+                f'stroke="var(--surface)" stroke-width="1.5">'
+                f"<title>{escape(shown_labels[i] if i < len(shown_labels) else '')}　"
+                f"{escape(name)} {escape(_fmt(float(raw), line_digits))}"
+                f"{escape(line_unit)}</title></circle>"
+            )
+
+    parts += _x_labels(f, shown_labels, label_every)
+    parts.append("</svg>")
+
+    sides = ("左軸", "右軸") if bar_axis == "left" else ("右軸", "左軸")
+    keys = [
+        f'<span class="k"><i class="bar" style="background:{bar_colour}"></i>'
+        f"{escape(bar_name)}（{sides[0]}{' ' + bar_unit.strip() if bar_unit.strip() else ''}）"
+        "</span>"
+    ]
+    keys += [
+        f'<span class="k"><i style="background:{colour}"></i>'
+        f"{escape(name)}（{sides[1]}{' ' + line_unit.strip() if line_unit.strip() else ''}）"
+        "</span>"
+        for name, _, colour in line_data
+    ]
+    series = [(bar_name, bar_values)] + [(n, v) for n, v, _ in line_data]
+    digs = [bar_digits] + [line_digits] * len(line_data)
+    return _figure(
+        title,
+        "",
+        "".join(parts),
+        _table(shown_labels, series, digs)
+        + (f'<p class="chart-note">{escape(note)}</p>' if note else ""),
+        colour=bar_colour if bar_axis == "left" else (
+            line_data[0][2] if line_data else bar_colour
+        ),
+        legend='<p class="chart-legend">' + "".join(keys) + "</p>",
     )
 
 

@@ -59,10 +59,17 @@
             aria-pressed="false" aria-label="把 {{ r.stock_id }} 加入觀察清單"
             title="加入觀察清單">☆</button></td>
   <td data-s="{{ r.stock_id }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a></td>
-  <td class="when-cell" data-s="{{ when or '' }}">
-    {%- if when %}<span class="tag when" title="報表更新於 {{ when }}　完整報告：河流圖、季節性、外資投信、個股新聞（大戶／董監持股另由每週排程更新）">{{ when[5:] | replace('-', '/') }}</span>
-    {%- elif has_full %}<span class="tag full" title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞">完整</span>
-    {%- else %}<span class="muted">—</span>{% endif %}</td>
+  {# 這一欄原本是〔最後更新日〕——「那一檔的報表最後一次抓回來是哪一天」。
+     那回答的是**抓取**的新舊，而讀者在清單上想知道的是**資料**的新舊：這一列的
+     六個等第是哪一季算出來的、營收年增率數到哪一個月。抓取日期和資料期別不是
+     同一件事——同一天抓回來的兩檔，可能一檔已經是 2026Q2、另一檔還停在 2026Q1。
+
+     排序鍵用「季別 + 月份」串起來（`2026.2|115/08`），所以照字串排就是照期別排。
+     滑鼠停留時仍然看得到抓取日期，那件事沒有消失，只是不再佔一欄。 #}
+  <td class="when-cell" data-s="{{ r.fiscal_quarter }}|{{ r.revenue_month }}"
+      {%- if when %} title="報表更新於 {{ when }}　完整報告：河流圖、季節性、外資投信、個股新聞（大戶／董監持股另由每週排程更新）"
+      {%- elif has_full %} title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞"{% endif %}>
+    {{ basis(r) }}</td>
   {# 名稱也連過去。原本只有代號可點——而讀者掃清單時眼睛落在名稱上，
      卻要把游標移回四位數字才點得到，那是每一列都要付一次的小摩擦。 #}
   <td data-s="{{ r.name }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.name }}</a></td>
@@ -78,13 +85,49 @@
 
 {# 每一欄都可以點著排序。只給那三欄會讓人試著點別欄然後以為壞了——「有些能點、
    有些不能，而且看不出是哪些」比「全部都能點」難用得多。 #}
+{# ── 財報基準：「財報:2026Q2 ／ 營收:2026/08」 ──────────────────────────
+
+   兩個來源的寫法不一樣，而且不一致的方式很容易被誤讀：
+   `fiscal_quarter` 是西元帶點（`2026.2Q`），`revenue_month` 是**民國**（`115/08`）。
+   同一格裡並排的話，`2026` 和 `115` 看起來像兩個年份系統各說各話——實際上它們
+   相差九天。所以月份在這裡換算成西元，兩個數字才對得起來。
+
+   換算只在**顯示**這一層做。存下來的還是官方給的民國，因為那是資料本身的樣子。 #}
+{% macro basis(r) -%}
+{%- set fq = r.fiscal_quarter or "" -%}
+{%- set rm = r.revenue_month or "" -%}
+{%- if not fq and not rm -%}<span class="muted">—</span>
+{%- else -%}
+<span class="basis">
+  {%- if fq %}<span class="bq">財報 <b>{{ quarter_label(fq) }}</b></span>{% endif -%}
+  {%- if rm %}<span class="br">營收 <b>{{ month_label(rm) }}</b></span>{% endif -%}
+</span>
+{%- endif -%}
+{%- endmacro %}
+
+{# `2026.2Q` -> `2026Q2`。認不出來就原樣印出去——一個看得懂的怪字串，比一個
+   自信地印錯的標籤好。 #}
+{% macro quarter_label(fq) -%}
+{%- set bits = fq.split('.') -%}
+{%- if bits|length == 2 and bits[1]|length >= 2 -%}{{ bits[0] }}Q{{ bits[1][0] }}
+{%- else -%}{{ fq }}{%- endif -%}
+{%- endmacro %}
+
+{# `115/08` -> `2026/08`。四位數的年份當成已經是西元，原樣放行。 #}
+{% macro month_label(rm) -%}
+{%- set bits = rm.split('/') -%}
+{%- if bits|length == 2 and bits[0]|length == 3 and bits[0].isdigit() -%}
+{{ bits[0]|int + 1911 }}/{{ bits[1] }}
+{%- else -%}{{ rm }}{%- endif -%}
+{%- endmacro %}
+
 {% macro table_head() -%}
 <thead><tr>
   {# 流水號那一欄不排序：它就是「現在第幾列」，點它沒有意義。 #}
   <th class="seq" aria-label="序號"></th>
   <th class="star-cell" title="觀察清單"><button type="button" class="sortable" data-col="1" aria-label="依觀察清單排序">★</button></th>
   <th><button type="button" class="sortable" data-col="2">代號</button></th>
-  <th><button type="button" class="sortable" data-col="3">最後<br>更新日</button></th>
+  <th><button type="button" class="sortable" data-col="3">財報<br>基準</button></th>
   <th><button type="button" class="sortable" data-col="4">名稱</button></th>
   <th><button type="button" class="sortable" data-col="5">產業</button></th>
   <th><button type="button" class="sortable" data-col="6">營收<br>年增率</button></th>

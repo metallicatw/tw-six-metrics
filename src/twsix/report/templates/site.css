@@ -165,13 +165,36 @@ header.top h1 a{color:inherit;text-decoration:none}
 
    未選到的分頁用同一個顏色但淡一些（不是灰的），這樣「這四項是同一組東西」
    還看得出來，而「現在在哪一項」也還是最強的那個訊號。 */
-nav{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:16px;
-  font-weight:600}
-nav a{color:var(--nav-c,var(--ink-2));text-decoration:none;padding:3px 0;
-  border-bottom:2.5px solid transparent;opacity:.72;transition:opacity .12s}
-nav a:hover{opacity:1}
-nav a[aria-current=page]{opacity:1;font-weight:700;
-  border-bottom-color:var(--nav-c,var(--accent-2))}
+/* 一列按鈕，溢出時橫向捲。
+ *
+ * 原本是 flex-wrap:wrap 的文字連結：四個名字各五到十個字，手機上換成兩三行，
+ * 而那幾行長度參差，「現在在哪一頁」要在一團字裡找那條底線。
+ *
+ * `flex-wrap:nowrap` + `overflow-x:auto` 讓它永遠是一列——不管視窗多窄，版面
+ * 的形狀都不變。捲動條刻意不藏（只調細），因為看不見的捲動等於沒有捲動：
+ * 讀者不會去滑一個看起來已經完整的東西。
+ *
+ * `scroll-snap` 讓每一顆停得整齊，`-webkit-overflow-scrolling` 是 iOS 的慣性。
+ * 兩側的 padding 與負 margin 是為了讓第一顆與最後一顆捲到底時不貼著螢幕邊。 */
+nav{display:flex;gap:8px;flex-wrap:nowrap;margin-top:10px;font-size:15px;
+  font-weight:600;overflow-x:auto;overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;
+  padding:2px 12px 8px;margin-left:-12px;margin-right:-12px}
+nav::-webkit-scrollbar{height:5px}
+nav::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+nav{scrollbar-width:thin}
+nav a{color:var(--nav-c,var(--ink-2));text-decoration:none;
+  flex:0 0 auto;white-space:nowrap;scroll-snap-align:start;
+  padding:7px 14px;border-radius:999px;line-height:1.2;
+  border:1.5px solid color-mix(in srgb,var(--nav-c,var(--ink-2)) 45%,transparent);
+  background:color-mix(in srgb,var(--nav-c,var(--ink-2)) 8%,transparent);
+  opacity:.82;transition:opacity .12s,background .12s}
+nav a:hover{opacity:1;background:color-mix(in srgb,var(--nav-c,var(--ink-2)) 16%,transparent)}
+/* 目前這一頁：實心底色。在一列同色系的膠囊裡，填滿是唯一不必比較就看得出來的
+   差別——不像粗細或透明度，那些要有旁邊那顆當對照才讀得出來。 */
+nav a[aria-current=page]{opacity:1;font-weight:700;color:#fff;
+  background:var(--nav-c,var(--accent-2));
+  border-color:var(--nav-c,var(--accent-2))}
 nav a.nav-list {--nav-c:#0e7c6f}   /* 台股評等清單 —— 綠 */
 nav a.nav-watch{--nav-c:#b25a00}   /* 台股觀察清單 —— 橘 */
 nav a.nav-trend{--nav-c:#a3306b}   /* 台股趨勢選股 —— 洋紅 */
@@ -329,6 +352,20 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
   margin:0 calc(-1 * var(--pad)) 16px;padding:12px var(--pad) 0;
   box-shadow:0 1px 0 var(--rule),0 6px 14px -12px rgba(0,0,0,.4)}
 .ident.sticky h2{margin:0;font-size:19px;border:none;padding:0;letter-spacing:-.01em}
+/* 市場與產業的小標籤，就在股名後面。
+ *
+ * 字級 11.5px、顏色用 --muted：它們是**識別**不是數據，不該和股名或旁邊那幾個
+ * 財務數字爭視線。用膠囊而不是純文字，是為了讓它和股名之間有一個明確的邊界——
+ * 「漢唐 其他電子業」連在一起念的話，會有人以為公司叫「漢唐其他電子」。
+ *
+ * vertical-align 用 middle 配上比股名小的行高，所以它跟著股名的中線走，
+ * 不會因為股名是 19px 就被拉到上面去。 */
+.chip{display:inline-block;vertical-align:middle;margin-left:7px;
+  padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600;
+  line-height:1.5;letter-spacing:0;white-space:nowrap;
+  border:1px solid var(--rule);color:var(--muted);background:var(--surface)}
+/* 市場那一顆多一點分量：它只有兩種值，是這一頁最快的一個分類。 */
+.chip.mk{color:var(--ink-2);background:var(--surface-2)}
 .ident .facts{display:flex;flex-wrap:wrap;gap:4px 18px;margin:5px 0 9px;
   font-size:12.5px;color:var(--muted);max-width:none}
 .ident .facts b{color:var(--ink);font-weight:600;
@@ -357,7 +394,8 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
 .note{border-left:3px solid var(--accent)}
 
 /* ── 圖例：雙軸圖上「哪條線看哪條軸」 ────────────────────────────────
-   只有疊了收盤價的那幾張圖才有。單序列的圖不需要圖例——標題就是圖例。 */
+   只有雙軸的那幾張圖才有（疊收盤價的，以及 charts.combo 畫的）。單序列的圖
+   不需要圖例——標題就是圖例。 */
 .chart-legend{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 6px;
   font-size:12px;color:var(--muted)}
 .chart-legend .k{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
@@ -367,15 +405,43 @@ td.series .v{text-align:right;font-variant-numeric:tabular-nums;
 .chart-legend i.area{height:10px;width:16px;border-radius:2px;
   background:linear-gradient(180deg,var(--price-edge),transparent);
   border-top:2px solid var(--price)}
+/* 長條那一格畫成一根長條，理由同上：圖例要長得像圖上的那個東西。
+   圖上的長條是 fill-opacity .55，這裡用同一個透明度，不然圖例會比圖濃。 */
+.chart-legend i.bar{height:11px;width:9px;border-radius:2px;opacity:.55}
+
+/* 圖底下那一行註解。 */
+.chart-note{margin:6px 0 0;font-size:12px;color:var(--muted)}
+
+/* 不評分的那一列（淨利率歸母）。整列壓淡一階，讓「它不在六大指標裡」是看得
+   出來的，而不是要讀者自己去數有幾列。評等那一格本來就是「—」，但只有那一格
+   淡的話，看起來像資料缺了。 */
+tr.unscored th[scope=row]{font-weight:500;color:var(--ink-2)}
+tr.unscored td.reason{color:var(--muted)}
+
+/* 月營收表。金額用等寬字，因為讀者會上下比位數；漲跌沿用全站的紅漲綠跌。 */
+table.rev td.num{font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+table.rev th .u{display:block;font-size:10.5px;font-weight:500;color:var(--muted)}
 
 /* ── 附註的燈泡 ───────────────────────────────────────────────────────
    收起來的時候只佔一個字；按下去在原地長出一塊說明。
 
    沒有 JavaScript 的時候整塊直接攤開（下面 html:not(.js) 那一段）：看不到的
    說明比擠在頁面上的說明糟，而這個網站的其他部分沒有 JS 也讀得完。 */
-.tip{position:relative;display:inline-block;vertical-align:middle;margin:2px 0 10px}
+/* 燈泡的對齊。
+ *
+ * 原本是 `margin:2px 0 10px`——那個 10px 的下邊距是給「自己站一行」的情況留的，
+ * 但燈泡幾乎從來不自己站一行：它接在一段說明的句尾，或站在一個勾選框旁邊。
+ * inline-block 的下邊距會把整個行框撐高，於是燈泡看起來永遠比旁邊的字高一點點，
+ * 而在 flex 容器（.filters）裡更明顯——align-items:center 對齊的是含邊距的盒子。
+ *
+ * 改成只留左邊 2px（不要黏著前一個字），上下都是 0。要留空白的地方由那個容器
+ * 自己的 gap 決定，那才是它該負責的事。 */
+.tip{position:relative;display:inline-block;vertical-align:middle;margin:0 0 0 2px}
 /* 標題裡的那一顆不要跟著標題放大，也不要撐開標題的行高。 */
-h2 .tip,h3 .tip{margin:0;vertical-align:middle}
+h2 .tip,h3 .tip{margin:0 0 0 4px;vertical-align:middle}
+/* 篩選那一列是 flex：燈泡由 gap 決定間距，自己不要再帶邊距。 */
+.filters .tip{margin:0}
 h2 .tipbox,h3 .tipbox{font-weight:400}
 button.bulb{appearance:none;border:1px solid var(--rule);background:var(--surface);
   border-radius:999px;cursor:pointer;font:inherit;font-size:14px;line-height:1;
@@ -561,21 +627,30 @@ tr.here th{font-weight:700}
    三樣東西被拉開成兩堆，眼睛要橫跨整個螢幕才讀得完。它要的寬度就是「打得下
    一個股名」，不是「剩下的全部」。
 
-   320 → 260：那一列後來多了一句「具投資價值」的判斷依據。用 Chromium 實際量過
-   整列的高度（一列 37px，換行變 70px）：**820px 以上是一列**，760px 以下才換行，
-   而整列內容右緣落在 776px。桌機與多數平板一列，手機換行——那是對的，那時它會
-   自己接在它說明的那個勾選框後面。 */
+   320 → 260 是那一列還有一句「具投資價值」判斷依據時量出來的（一列 37px、換行
+   70px，820px 以上維持一列）。那句話現在收進燈泡了，而且少了一個勾選框，所以這
+   一列比當時短得多——260 留著沒有壞處，它要的寬度本來就是「打得下一個股名」。 */
 .filters input[type=search]{flex:0 1 260px;min-width:170px;padding:7px 11px;
   border:1px solid var(--rule);border-radius:5px;background:var(--surface);
   color:var(--ink);font:inherit;font-size:13.5px}
 .filters label{display:inline-flex;align-items:center;gap:6px;font-size:13px;
   color:var(--ink-2);white-space:nowrap;cursor:pointer}
-/* 「具投資價值」的判斷依據，就寫在那個勾選框旁邊。
-   比標籤小、比標籤淡：它是註腳，不是第三個可以點的東西。`margin-left:-8px`
-   把它從 gap 拉回勾選框旁邊——隔著 14px 會讀成獨立的一項，而不是那一項的說明。
-   窄螢幕上整列會 wrap，那時它自己換行，仍然接在它說明的那個勾選框後面。 */
-.filters .hint{font-size:11.5px;color:var(--muted);white-space:nowrap;
-  margin-left:-8px;cursor:help;border-bottom:1px dotted var(--rule)}
+/* `.filters .hint` 拿掉了。那一行小字（「六項皆 BB 以上 · 綜合 ≥ 3 · 未較上期
+   跌逾 0.3」）本來寫在勾選框旁邊，但它既擠又不完整——四個條件只寫得下三個，
+   第四個藏在 title 裡，而且它把篩選那一列撐成兩行。整段收進燈泡之後，四個條件
+   都寫得下，那一列也回到一行。 */
+/* 財報基準那一格：兩個期別上下疊，不是並排。
+ *
+ * 並排（`財報 2026Q2　營收 2026/08`）在桌機上讀得很順，但那一欄夾在〔代號〕和
+ * 〔名稱〕中間，橫向空間是整張表最貴的資源——一列十五欄，多 60px 就要橫捲。
+ * 上下疊之後這一欄只要放得下 `2026/08`，而兩個標籤（財報／營收）本來就比數字
+ * 窄，所以整體寬度由數字決定，跟原本那一欄（`09/03`）差不多。
+ *
+ * 標籤用更小更淡的字：讀者掃這一欄的時候看的是期別，標籤只在第一次需要。 */
+.basis{display:inline-flex;flex-direction:column;gap:1px;line-height:1.25;
+  font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.basis b{color:var(--ink-2);font-weight:600;font-size:12px}
+.basis .bq b{color:var(--ink)}
 /* 可排序的標題：整格都能點，不是只有那幾個字。標題本來就窄，
    讓人瞄準三個中文字是每一次排序都要付一次的成本。 */
 thead th:has(> button.sortable){padding:0}

@@ -174,17 +174,63 @@ def test_a_status_that_is_a_sentence_is_not_squeezed_into_a_badge():
 # -- charts ----------------------------------------------------------------
 
 
-def test_revenue_and_its_growth_rate_are_two_panels_not_two_axes():
-    """One frame with two y scales is the one chart form this project refuses."""
+def test_revenue_and_its_growth_rate_share_one_frame_and_say_so():
+    """兩個刻度畫在同一格上，而這一次是刻意的。
+
+    這條規則原本是「絕不雙軸」，理由是兩條線的交叉點是刻度湊出來的、不是資料裡
+    的事件。那個理由沒有錯——但它擋掉的是這張圖唯一要回答的問題：「營收在跌的那
+    幾個月，年增率是不是也翻負了」。分成上下兩格之後，要回答它得在兩格之間來回
+    對垂直位置，而那正是圖表應該替讀者省掉的動作。
+
+    所以交叉點仍然沒有意義，而這條測試守的是「讀者看得出有兩個刻度」：圖例寫明
+    哪一個看哪一軸，而且下面那張表兩組數字都列得出來。
+    """
     page, _ = _page()
-    assert "revenue" in page.figures and "revenue_yoy" in page.figures
-    for key in ("revenue", "revenue_yoy"):
-        assert page.figures[key].count("<svg") == 1
+    svg = page.figures["revenue"]
+    assert svg.count("<svg") == 1, "兩個序列要在同一張圖上"
+    assert "左軸" in svg and "右軸" in svg, "沒有說哪一個看哪一軸"
+    assert "月營收" in svg and "年增率" in svg
+    assert "<details" in svg, "兩組數字要列得出來"
+
+
+def test_the_eight_quarter_trend_puts_the_two_rates_on_one_scale():
+    """營業利益率與淨利率（歸母）要同一個刻度，EPS 只能是另一條軸。
+
+    兩條率同刻度才比得出「業外和少數股權吃掉多少」；EPS 是元，跟百分比放同一條
+    軸上比出來的東西沒有意義。
+    """
+    page, _ = _page()
+    svg = page.figures["eight_quarters"]
+    assert svg.count("<svg") == 1
+    assert "營業利益率（左軸 %）" in svg and "淨利率（歸母）（左軸 %）" in svg
+    assert "EPS（右軸 元）" in svg
+    assert "歸屬母公司稅後淨利 ÷ 營收" in svg, "沒有說淨利率（歸母）怎麼算"
+
+
+def test_the_revenue_table_carries_the_six_columns_the_reader_compares():
+    """月份／當月營收／月增率／年增率／累計營收／累計年增率，最新在上。
+
+    金額在這裡就已經是百萬——十位數的仟元讀不出量級，而換算放在模板裡等於每個
+    模板各自記得除以一千一次。百分比是 5.24 不是 0.0524：格子裡存的是 `5.24%`
+    這種字串，讀成數字會掉一個一百倍。
+    """
+    page, _ = _page()
+    assert page.revenue_rows, "沒有月營收表"
+    top = page.revenue_rows[0]
+    assert set(top) == {
+        "month", "revenue", "mom", "yoy", "cumulative", "cumulative_yoy",
+    }
+    assert "/" in top["month"] and top["month"].split("/")[0].isdigit()
+    months = [r["month"] for r in page.revenue_rows]
+    assert months == sorted(months, reverse=True), "最新要在上面"
+    # 百分比的量級：年增率是個位到三位數，不是 0.0x。
+    rates = [abs(r["yoy"]) for r in page.revenue_rows if r["yoy"] is not None]
+    assert rates and max(rates) > 1.0, "百分比掉了一個一百倍"
 
 
 def test_every_chart_ships_its_numbers():
     page, _ = _page()
-    for key in ("revenue", "revenue_yoy", "eps"):
+    for key in ("revenue", "eight_quarters", "eps"):
         assert "<details" in page.figures[key], f"{key} 沒有數值表"
 
 

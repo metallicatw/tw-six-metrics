@@ -36,7 +36,16 @@
 
      顏色（見 site.css 的 .nav-*）補的是另一半：現在四個名字都以「台股」或「全球」
      開頭，前兩個字相同，眼睛要讀到第三個字才分得出來——顏色讓「我在哪一頁」在
-     讀完字之前就成立。 #}
+     讀完字之前就成立。
+
+     ── 為什麼是一列可以橫滑的按鈕 ──────────────────────────
+
+     原本是會換行的文字連結。四個名字各五到十個字，手機上換成兩、三行，而那幾行
+     長度不一，「現在在哪一頁」要在一團參差的字裡找底線。
+
+     改成等高的按鈕排一列、溢出時橫向捲：一列就是一列，不管視窗多窄都不會變形，
+     而目前所在的那一顆用實心底色，離一公尺遠也看得出來。橫捲條刻意留著
+     （見 site.css 的 .nav），因為看不見的捲動等於沒有捲動。 #}
   <nav>
     <a class="nav-list" href="{{ rel }}index.html"{% if page=='list' %} aria-current="page"{% endif %}>台股評等清單</a>
     <a class="nav-watch" href="{{ rel }}watchlist.html"{% if page=='watchlist' %} aria-current="page"{% endif %}>台股觀察清單</a>
@@ -58,6 +67,17 @@
     <a class="nav-more" href="{{ rel }}about.html"{% if page=='about' %} aria-current="page"{% endif %}>評分規則</a>
     {% endif %}
   </nav>
+  {# 頁首這一塊（搜尋框 ＋ 抓取）只出現在〔台股評等清單〕與個股頁。
+     它在〔趨勢選股〕〔全球市場監控〕那兩頁完全沒有作用——那裡是別的 repo 產的
+     報告嵌進來的 iframe，輸入代號按抓取跟那一頁講的事情沒有關係；而〔觀察清單〕
+     的篩選框就在下面一行，頁首再放一個輸入框只是兩個框互相搶。
+
+     個股頁保留，是因為那顆按鈕在那裡指的是**這一檔**（見 body 的 data-grab），
+     而那是唯一能把一檔資料換成最新的入口。拿掉它等於那一頁只能讀、不能更新。
+
+     site.js 的搜尋／抓取整個模組第一行就是 `if(!box) return;`——沒有這個表單的
+     頁面直接跳過，不必再加任何判斷。 #}
+  {% if page in ('list', 'stock') %}
   <form class="find" role="search" action="{{ rel }}index.html" method="get">
     {# The form's action is the fallback, and it is a real one: with scripting
        off, submitting takes the reader to 評等清單, which has its own filter
@@ -100,6 +120,7 @@
       </details>
     </div>
   </form>
+  {% endif %}
   {# 這一行原本擠了四件事：產生時間、檔數、財報季別、營收月份。後面三件在別的
      地方各自說過一次了——檔數與季別在〔評等清單〕的第一句，落後多久在下面那條
      ⚠ 橫幅——所以留在這裡只是把最上面那一行讀成一串參數。

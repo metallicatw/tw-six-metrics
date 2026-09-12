@@ -178,17 +178,25 @@ def test_the_listing_no_longer_offers_a_filter_that_filters_nothing():
     補課排程跑完之後，清單上**每一列**都有完整報告——那個勾選框篩掉零列。一個
     永遠不改變畫面的勾選框比沒有更糟：讀者會以為自己勾錯了、或以為篩選壞了。
 
-    它要回答的問題（「這一檔的報表有多新」）已經由〔最後更新日〕那一欄接手，而且
-    答得比「有／沒有」更好——所以是功成身退，不是砍功能。
+    它要回答的問題（「這一檔的報表有多新」）已經由那一欄接手，而且答得比
+    「有／沒有」更好——所以是功成身退，不是砍功能。
+
+    〔只看觀察清單〕後來也用同一個理由拿掉了，但那是**重複**不是**無效**：
+    導覽列上的〔台股觀察清單〕是同一張表、同樣的篩選，而且還多了自己的網址、
+    自己的標題、以及空的時候那句「還沒有標記任何股票，去評等清單按 ☆」。
     """
     listing = (ROOT / "src/twsix/report/templates/list.html.j2").read_text("utf-8")
     assert "only-full" not in listing
-    assert "only-watched" in listing and "only-picks" in listing, "另外兩個還要留著"
+    assert "only-watched" not in listing, "它和〔台股觀察清單〕分頁做同一件事"
+    assert "only-picks" in listing, "這一個要留著"
+    assert "watchlist.html" in (
+        ROOT / "src/twsix/report/templates/base.html.j2"
+    ).read_text("utf-8"), "拿掉勾選框的前提是分頁還在"
     js = (ROOT / "src/twsix/report/templates/site.js").read_text("utf-8")
     assert "onlyFull" not in js, "腳本裡還在找一個不存在的元素"
-    # 那一欄本身要留著：它才是現在回答「多新」的地方。
+    # 那一欄本身要留著：它才是現在回答「算到哪裡」的地方。
     macros = (ROOT / "src/twsix/report/templates/_macros.html.j2").read_text("utf-8")
-    assert "when-cell" in macros and "最後<br>更新日" in macros
+    assert "when-cell" in macros and "財報<br>基準" in macros
 
 
 def test_the_filter_row_does_not_stretch_across_the_whole_screen():

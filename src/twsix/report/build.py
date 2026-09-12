@@ -732,6 +732,11 @@ def build_site(
         if sheets_dir is not None:
             full = _full_stock_page(
                 stock_id, sheets_dir, out_dir, base, rules=rules,
+                # 市場與產業從評等那一列帶進去。券商鏡像的十六張分頁裡沒有
+                # 「產業別」——那是官方全市場資料才有的欄位，而個股頁是從鏡像
+                # 建出來的。所以 GridsSource 造出來的 FinancialData 這兩格是空的，
+                # 頁首那兩顆標籤就不會出現。
+                identity=_identity(group),
                 quote=quotes.get(stock_id),
                 delisted=stock_id in (delisted or set()),
                 inst_days=inst_history.get(stock_id),
@@ -1093,6 +1098,21 @@ def copy_static(src: Path, dest: Path) -> None:
 # =========================================================================
 
 
+def _identity(group: Any) -> tuple[str, str]:
+    """評等那幾列裡的（市場, 產業）。任何一列有值就算，沒有就回空。
+
+    `group` 是同一檔股票的所有期別。新的那幾期未必每一欄都填得滿，所以逐列找到
+    第一個有值的為止——這兩個欄位不會隨期別改變，找到一個就夠。
+    """
+    market = industry = ""
+    for row in group or ():
+        market = market or str(row.get("market", "") or "").strip()
+        industry = industry or str(row.get("industry", "") or "").strip()
+        if market and industry:
+            break
+    return (market, industry)
+
+
 def _full_stock_page(
     stock_id: str,
     sheets_dir: Path,
@@ -1100,6 +1120,7 @@ def _full_stock_page(
     base: dict[str, Any],
     *,
     rules: Any = None,
+    identity: tuple[str, str] = ("", ""),
     quote: Any = None,
     delisted: bool = False,
     inst_days: Any = None,
@@ -1156,6 +1177,11 @@ def _full_stock_page(
                 payout_basis=settings.forecast.payout_basis,
             ),
         )
+        # 鏡像那邊沒有產業別，所以清單那一列說了算。
+        if identity[0] and not getattr(rating, "market", ""):
+            rating.market = identity[0]
+        if identity[1] and not getattr(rating, "industry", ""):
+            rating.industry = identity[1]
         page = build_page(
             rating,
             valuation,

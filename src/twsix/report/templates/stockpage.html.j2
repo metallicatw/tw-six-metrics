@@ -1,5 +1,6 @@
 {% extends "base.html.j2" %}
 {% from "_macros.html.j2" import tip %}
+{% import "_macros.html.j2" as m %}
 {% block title %}{{ p.stock_id }} {{ p.name }}｜{{ site_title }}{% endblock %}
 {% block body %}
 
@@ -11,6 +12,11 @@
      決定「要不要追蹤這一檔」的時刻，是讀完它那一頁的時候，不是掃清單的時候。
      亮暗與清單那一欄是同一份狀態（見 site.js 的 TWSIXWatch）。 #}
   <h2 id="top">{{ p.stock_id }}　{{ p.name }}
+    {#- 市場與產業。小字、不搶眼，但就在股名旁邊——「2404 漢唐」說不出這是一家
+        做什麼的公司，而判斷一個營益率是高是低，第一件要知道的事就是它跟誰比。
+        原本要捲到〔評價簡表〕才看得到，那已經是最需要它的那一眼之後了。 -#}
+    {%- if p.market %}<span class="chip mk">{{ p.market }}</span>{% endif -%}
+    {%- if p.industry %}<span class="chip ind">{{ p.industry }}</span>{% endif -%}
     <button type="button" class="star" data-star="{{ p.stock_id }}"
           aria-pressed="false" aria-label="把 {{ p.stock_id }} 加入觀察清單"
           title="加入觀察清單">☆</button></h2>
@@ -152,11 +158,11 @@
 <div class="scroll">
   <table>
     <thead>
-      <tr><th>指標</th><th>評等</th><th class="num">評分</th><th class="num">近六期數列</th><th>理由</th></tr>
+      <tr><th>指標</th><th>評等</th><th class="num">評分</th><th class="num">近八期數列（最新在左）</th><th>理由</th></tr>
     </thead>
     <tbody>
       {% for ind in p.indicators %}
-      <tr>
+      <tr{% if not ind.scored %} class="unscored"{% endif %}>
         <th scope="row">{{ ind.label }}</th>
         <td>
           {%- if ind.badge -%}
@@ -167,8 +173,8 @@
         </td>
         <td class="num">{{ ind.display }}</td>
         <td class="series">
-          {# 期別在上、數值在下，同一個 grid 欄，所以一定對齊。六個裸數字沒有
-             期別是讀不出來的：營收年增率數的是月，其他五項數的是季。 #}
+          {# 期別在上、數值在下，同一個 grid 欄，所以一定對齊。八個裸數字沒有
+             期別是讀不出來的：營收年增率數的是月，其他六項數的是季。 #}
           <div class="cells" style="--n:{{ ind['values']|length }}">
             {% for label in ind["periods"] %}<span class="p">{{ label }}</span>{% endfor %}
             {% for v in ind["values"] %}
@@ -182,6 +188,42 @@
     </tbody>
   </table>
 </div>
+<p class="foot">註：淨利率（歸母）不列入評分，計算方式為 歸屬母公司稅後淨利 ÷ 營收。</p>
+
+{# 三條線一張圖，放在逐項拆開之前：讀者要先看得到「賺的錢有沒有變好賺」，
+   再往下看是哪一項把它拉上去或壓下來。 #}
+{% if p.figures.eight_quarters %}{{ p.figures.eight_quarters|safe }}{% endif %}
+
+{# 月營收本身不是六大指標之一（評分看的是年增率），但它是那條年增率的分母。
+   原本擺在整段的最後，而那個位置等於說「看完六張圖再回頭看分母」——分母要先
+   看到，後面那六張才知道自己在跟什麼比。 #}
+{% if p.figures.revenue %}{{ p.figures.revenue|safe }}{% endif %}
+
+{% if p.revenue_rows %}
+<div class="scroll">
+  <table class="rev">
+    <thead>
+      <tr>
+        <th>月份</th><th class="num">當月營收<span class="u">百萬</span></th>
+        <th class="num">月增率</th><th class="num">年增率</th>
+        <th class="num">累計營收<span class="u">百萬</span></th><th class="num">累計年增率</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in p.revenue_rows %}
+      <tr>
+        <th scope="row">{{ r.month }}</th>
+        <td class="num">{{ '{:,.0f}'.format(r.revenue) if r.revenue is not none else '—' }}</td>
+        <td class="num">{{ m.delta(r.mom) }}{% if r.mom is not none %}%{% endif %}</td>
+        <td class="num">{{ m.delta(r.yoy) }}{% if r.yoy is not none %}%{% endif %}</td>
+        <td class="num">{{ '{:,.0f}'.format(r.cumulative) if r.cumulative is not none else '—' }}</td>
+        <td class="num">{{ m.delta(r.cumulative_yoy) }}{% if r.cumulative_yoy is not none %}%{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 
 {# 每個指標的圖就接在它自己的評等後面。
    把六張圖另開一個分頁，等於要讀者記住「B 是哪一項」再切過去對——而那正是圖表
@@ -199,10 +241,6 @@
 </section>
 {% endif %}
 {% endfor %}
-
-{# 月營收本身不是六大指標之一（評分看的是年增率），但它是那條年增率的分母，
-   放在最後當背景。 #}
-{% if p.figures.revenue %}{{ p.figures.revenue|safe }}{% endif %}
 
 {# ================= 3. EPS預估與估價 ================= #}
 </section>

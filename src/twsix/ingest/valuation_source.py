@@ -32,6 +32,8 @@ from typing import Any, Protocol
 
 from ..valuation.assemble import ValuationInput
 
+Number = float | None
+
 # -- sheet names -----------------------------------------------------------
 
 BASIC = "BASIC"
@@ -116,6 +118,47 @@ def monthly_revenue(reader: CellReader) -> list[tuple[str, float]]:
         amount = reader.num(REVENUE, "B", r)
         if "/" in label and amount is not None:
             out.append((label, amount))
+    return out
+
+
+def revenue_detail(
+    reader: CellReader,
+) -> list[tuple[str, Number, Number, Number, Number, Number]]:
+    """〔營收〕A–G — 個股頁那張月營收表要的六欄，newest first。
+
+    ``(年/月, 當月營收 仟元, 月增率 %, 年增率 %, 累計營收 仟元, 累計年增率 %)``
+
+    D 欄（去年同期）刻意不取：它和 E 欄（年增率）講的是同一件事，而版面上一次
+    只回答得了一個問題。要看去年同期的絕對值，往下捲十二列就是。
+
+    E 與 G 兩欄在原始表頭上**都叫「年增率」**（一個是單月、一個是累計），所以
+    這裡只能按位置讀——見 `ingest.revenue_fold.HEADER` 上面那段。
+
+    三個百分比欄位在格子裡是 ``5.50%`` 這種**帶百分號的字串**，而 ``num()`` 把
+    它讀成 0.055。回傳的是 5.50，不是 0.055——單位換算放在這裡做一次，不是讓
+    每一個呼叫端各自記得乘一百（`merged_revenue_yoy` 的呼叫端就是這樣做的，
+    而那正是它容易被漏掉的原因）。
+    """
+    def percent(value: Number) -> Number:
+        return None if value is None else value * 100
+
+    out: list[tuple[str, Number, Number, Number, Number, Number]] = []
+    for r in reader.row_numbers(REVENUE):
+        label = reader.text(REVENUE, "A", r).strip()
+        # 表頭那一格寫的是「年/月」——它也有一條斜線，所以光看斜線會把表頭當成
+        # 一個月份收進來，而它每一欄都是空的，於是表格最上面多一列全是「—」。
+        if "/" not in label or not label.split("/")[0].strip().isdigit():
+            continue
+        out.append(
+            (
+                label,
+                reader.num(REVENUE, "B", r),
+                percent(reader.num(REVENUE, "C", r)),
+                percent(reader.num(REVENUE, "E", r)),
+                reader.num(REVENUE, "F", r),
+                percent(reader.num(REVENUE, "G", r)),
+            )
+        )
     return out
 
 

@@ -210,11 +210,22 @@ class StockPage:
     price_change_pct: Number = None
     fiscal_quarter: str = ""
     revenue_month: str = ""
+    #: 上市／上櫃，以及產業別。兩個都只是識別，不參與任何計算。
+    #:
+    #: 放在股名旁邊是因為「2404 漢唐」本身說不出這是一家做什麼的公司——而讀者
+    #: 判斷一個營益率是高是低，第一件要知道的事就是它跟誰比。原本要捲到清單頁
+    #: 或〔評價簡表〕才看得到產業，而那正是最需要它的那一眼之後。
+    market: str = ""
+    industry: str = ""
     excluded: str = ""
 
     periods: list[dict[str, Any]] = field(default_factory=list)
     indicators: list[dict[str, Any]] = field(default_factory=list)
     latest_composite: Number = None
+    #: 月營收表：``(月份, 當月營收 百萬, 月增率 %, 年增率 %, 累計營收 百萬,
+    #: 累計年增率 %)``，最新在上。金額在這裡就已經換成百萬——版面上一欄十位數
+    #: 的仟元讀不出量級，而換算放在模板裡等於每個模板各自記得除以一千一次。
+    revenue_rows: list[dict[str, Any]] = field(default_factory=list)
 
     forecast: dict[str, Any] = field(default_factory=dict)
     #: 目標價試算盤的種子——原始數字，不是格式化過的字串。
@@ -301,15 +312,61 @@ def _news(reader: Any, extra: Any = None) -> Any:
     return news_mod.describe(items)
 
 
-def _merged_yoy(reader: Any) -> list[tuple[str, Number]]:
-    """〔營收〕AD/AE — the labelled series the rating engine grades."""
-    from ..ingest.valuation_source import REVENUE
+#: 三年營收趨勢畫幾個月。三年而不是兩年：月營收有明顯的年度季節性，兩個循環
+#: 分不出「今年比去年低」和「每年這個月都低」。
+REVENUE_MONTHS = 36
 
-    out: list[tuple[str, Number]] = []
-    for row in reader.row_numbers(REVENUE):
-        label = reader.text(REVENUE, "AD", row).strip()
-        if label:
-            out.append((label, reader.num(REVENUE, "AE", row)))
+
+#: 評等表上每一列印幾期。
+#:
+#: 評分的窗口不是這個數字，而且**不可以**是：規則書寫的是「營業利益率看四季」、
+#: 「自由現金流量看九季」，每一項各自不同，因為那是規則的一部分。表格上各列長短
+#: 不一則是另一回事——讀者橫著掃的時候，一列六格、一列四格，對不齊的那幾格看起來
+#: 像是資料缺了。所以顯示的數列另外取，統一八期，取自和評分同一份 FinancialData。
+TABLE_PERIODS = 8
+
+
+def _eight_periods(data: Any, snapshot: Any) -> dict[str, tuple[list[str], list[Number]]]:
+    """每一個指標的**顯示**數列：八期，最新在前。
+
+    刻意不從 ``snapshot.indicators[key].values`` 讀——那是評分吃的窗口，長度由
+    規則決定（四季、六季、九季各有各的理由）。顯示要的是齊長，而兩者一旦共用
+    同一個數字，改版面就會動到評分。這裡直接問 ``FinancialData``，也就是評分
+    自己讀的那一份，所以兩邊不可能各說各話。
+    """
+    if data is None:
+        return {}
+    out: dict[str, tuple[list[str], list[Number]]] = {}
+
+    # 合併過的那一條（一月併進二月，`115/01-02`），不是 raw。
+    #
+    # raw 那一條同時留著 `115/01-02` **和** `115/01`，而二月沒有自己的一列——
+    # 八格的窗口裡因此會同時出現兩個一月，看起來像資料重複了。合併版一期一格，
+    # 而且它正是這一列的等第實際評分的那一條（`revenue_window(0, …)`）。
+    months = list(getattr(data, "revenue_months", []) or [])[:TABLE_PERIODS]
+    if months:
+        out["revenue_yoy"] = (months, [data.revenue_yoy.get(m) for m in months])
+
+    latest = getattr(snapshot, "fiscal_quarter", "") or ""
+    quarters = [q for q in getattr(data, "quarters", []) if str(q) <= latest] or list(
+        getattr(data, "quarters", [])
+    )
+    quarters = quarters[:TABLE_PERIODS]
+    if not quarters:
+        return out
+    labels = [str(q) for q in quarters]
+    for key, source in (
+        ("operating_margin", data.operating_margin),
+        ("eps", data.eps),
+        ("inventory_turnover", data.inventory_turnover),
+        ("free_cash_flow", data.free_cash_flow),
+        ("net_margin", data.net_margin),
+    ):
+        out[key] = (labels, [source.get(q) for q in quarters])
+    out["net_income_yoy"] = (
+        labels,
+        list(data.net_income_yoy(quarters[0], len(quarters))),
+    )
     return out
 
 
@@ -537,8 +594,8 @@ def build_page(
         annual_eps,
         current_roc_year,
         dividends,
-        monthly_revenue,
         quarterly_eps,
+        revenue_detail,
         yearly_prices,
     )
 
@@ -553,6 +610,10 @@ def build_page(
         # 拿 close 當分母是常見的錯，漲得越多錯得越多。
         price_change_pct=_change_pct(quote),
         excluded=getattr(rating, "excluded", "") or "",
+        # 兩個來源都問過：評等那一份（來自 ratings.csv）和 FinancialData。
+        # 先問 rating 是因為個股頁多半是從清單點進來的，那一份一定有值。
+        market=(getattr(rating, "market", "") or getattr(data, "market", "") or ""),
+        industry=(getattr(rating, "industry", "") or getattr(data, "industry", "") or ""),
         gaps=dict(valuation.gaps or {}),
     )
 
@@ -593,8 +654,12 @@ def build_page(
     # -- 六大財務指標評等 -------------------------------------------------
     if rating.snapshots:
         newest = rating.snapshots[0]
+        shown = _eight_periods(data, newest)
         for key in INDICATOR_ORDER:
             result = newest.indicators[key]
+            labels, values = shown.get(
+                key, (list(result.periods or ()), list(result.values or ()))
+            )
             page.indicators.append(
                 {
                     "key": key,
@@ -603,38 +668,119 @@ def build_page(
                     "badge": result.letter in GRADE_LETTERS,
                     "display": result.display,
                     "reason": result.reason,
-                    # Reversed, both of them, together: the row reads left to
-                    # right like every chart on the page, and the labels stay
-                    # welded to their own numbers.
+                    "scored": True,
+                    # 最新在**左**，和這一頁上每一張表一致（圖則是最新在右）。
+                    # 表用來查一個數字，而讀者要查的多半是最新那一期；圖用來看
+                    # 走勢，而走勢的方向在時間往右跑的時候才是對的。兩種排法各
+                    # 有各的理由，混在同一頁上才是錯的——所以整站只有這一條規則。
                     "values": [
-                        None if v is None else round(float(v), 2)
-                        for v in reversed(result.values or ())
+                        None if v is None else round(float(v), 2) for v in values
                     ],
-                    "periods": list(reversed(result.periods or ())),
+                    "periods": list(labels),
+                }
+            )
+        # 第七列：淨利率（歸母）。**不評分**——六大指標是六個，多一個等第就是
+        # 多一條沒有人訂過的規則。它在這裡是因為上一列（自由現金流量）與再上面
+        # 那兩列（稅後淨利年增率、EPS）都是「賺多少」，而這一列回答的是「賺得
+        # 有多厚」，而那正是前三列單獨看不出來的事。
+        margin = shown.get("net_margin")
+        if margin and any(v is not None for v in margin[1]):
+            page.indicators.append(
+                {
+                    "key": "net_margin",
+                    "label": "淨利率（歸母）",
+                    "letter": "",
+                    "badge": False,
+                    "display": "—",
+                    "reason": "不列入評分；歸屬母公司稅後淨利 ÷ 營收",
+                    "scored": False,
+                    "values": [
+                        None if v is None else round(float(v), 2) for v in margin[1]
+                    ],
+                    "periods": list(margin[0]),
                 }
             )
 
+        # 八季財報趨勢：兩條率（左軸 %）＋ EPS（右軸 元）。
+        #
+        # 這三條放在同一張圖上，是因為它們三個合起來才回答得了「這家公司賺的錢
+        # 是不是變好賺了」：營業利益率是本業的厚度、淨利率（歸母）是扣完業外與
+        # 少數股權之後真正留給股東的厚度，而 EPS 是那個厚度乘上規模的結果。
+        # 兩條率同一個刻度所以比得出「業外吃掉多少」，EPS 是另一個單位，只能給
+        # 它自己的軸——而右軸的刻度、長條、圖例三個同色就是在講這件事。
+        rates = shown.get("operating_margin")
+        margins = shown.get("net_margin")
+        eps_q = shown.get("eps")
+        if rates and eps_q and any(v is not None for v in eps_q[1]):
+            page.figures["eight_quarters"] = charts.combo(
+                rates[0],
+                bar=("EPS", eps_q[1]),
+                lines=[
+                    ("營業利益率", rates[1], "var(--m1)"),
+                    *(
+                        [("淨利率（歸母）", margins[1], "var(--m2)")]
+                        if margins
+                        else []
+                    ),
+                ],
+                title="八季財報趨勢",
+                bar_unit=" 元",
+                bar_digits=2,
+                bar_colour="var(--price)",
+                bar_axis="right",
+                line_unit="%",
+                line_digits=2,
+                label_every=1,
+                note="註：淨利率（歸母）＝ 歸屬母公司稅後淨利 ÷ 營收。",
+            )
+
     # -- charts -----------------------------------------------------------
-    months = monthly_revenue(reader)
-    if months:
-        window = months[:24]
-        labels = [m for m, _ in window]
-        page.figures["revenue"] = charts.bars(
-            labels, [v for _, v in window], title="月營收", unit=" 仟元", digits=0
+    #
+    # 月營收與它的年增率畫在同一張圖上，兩條軸。
+    #
+    # 原本是上下兩格，理由寫在 charts.py 開頭：兩個刻度的交叉點沒有意義。那個
+    # 理由沒有錯，但它擋掉的是這張圖唯一要回答的問題——「營收在跌的那幾個月，
+    # 年增率是不是也翻負了」。分成兩格之後，要回答它得在兩格之間來回對垂直位置。
+    # 交叉點仍然沒有意義，所以圖例寫明哪一條看哪一軸，下面的表兩組數字都列。
+    every_month = revenue_detail(reader)
+    #: 〔營收季節性〕吃的是**整段**歷史（每個月佔當年的比重），不是畫在圖上的
+    #: 那三年——三年只有三個樣本，平均出來的季節性是噪音。
+    months = [(row[0], row[1]) for row in every_month if row[1] is not None]
+    detail = every_month[:REVENUE_MONTHS]
+    if detail:
+        page.figures["revenue"] = charts.combo(
+            [row[0] for row in detail],
+            # 仟元 → 百萬。十位數的仟元在座標軸上只剩一團 0。
+            bar=("月營收", [None if r[1] is None else r[1] / 1000 for r in detail]),
+            lines=[("年增率", [r[3] for r in detail], "var(--m0)")],
+            title="三年營收趨勢",
+            bar_unit=" 百萬",
+            bar_digits=0,
+            bar_colour="var(--m1)",
+            bar_axis="left",
+            line_unit="%",
+            line_digits=1,
+            # 間隔算出來，不是寫死的——目的是讓**最後一格**剛好落在間隔上。
+            #
+            # `_x_labels` 會強制印最新那一格，但它跟前一格太近就會被讓掉；三十六
+            # 個月配 every=3 正好是這個情形，於是整張圖唯一沒有標籤的就是最右邊
+            # 那一根，也就是讀者最想確認的「現在在哪裡」。(n-1)//7 讓最後一格必定
+            # 對齊，而且期數變少時它自己會縮。
+            label_every=max(1, (len(detail) - 1) // 7),
         )
-    # 〔營收〕AD/AE rather than A/B: the graded series folds January into
-    # February, so its labels are not the same list as the revenue bars'.
-    # Drawing them on one frame would need two y scales, which is the one
-    # chart form this project refuses — they are two stacked panels instead.
-    merged = _merged_yoy(reader)[:24]
-    if merged:
-        page.figures["revenue_yoy"] = charts.line(
-            [label for label, _ in merged],
-            [None if v is None else float(v) * 100 for _, v in merged],
-            title="月營收年增率（1-2月合併）",
-            unit="%",
-            digits=1,
-        )
+        page.revenue_rows = [
+            {
+                "month": row[0],
+                "revenue": None if row[1] is None else row[1] / 1000,
+                "mom": row[2],
+                "yoy": row[3],
+                "cumulative": None if row[4] is None else row[4] / 1000,
+                "cumulative_yoy": row[5],
+            }
+            for row in detail
+        ]
+    # 〔營收〕AD/AE（一月併入二月）是**評分**吃的那一條，和上面那張圖的 A/E 不是
+    # 同一組標籤。它跟著評等走，所以留在六大指標那一段裡（statement_figures）。
     eps_series = quarterly_eps(reader)[:20]
     if eps_series:
         page.figures["eps"] = charts.bars(
