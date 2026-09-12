@@ -269,16 +269,30 @@ def test_the_quotes_table_is_found_by_title_not_by_index():
     """那個回應裡有十張表，每日收盤行情只是其中一張，現在排第九個。
 
     照索引取就是「今天對、改版就錯」，而且錯的方式是安靜地讀到價格指數。
+
+    斷言是「打亂之後和沒打亂拿到**同一份東西**」，不是一個寫死的列數。原本寫的
+    是 `== 1093`，而那是**樣本當天的上市檔數**——`twsix probe --group daily`
+    重抓一次樣本，它就變成 1,092，測試紅了，而紅的理由是「昨天有一檔停牌」，
+    不是解析錯了。同一類錯誤這個 repo 已經踩過兩次（`test_one_lonely_quarter`、
+    115Q2 的對帳 fixture）：**測行為，不要測今天的資料長什麼樣**。
     """
     payload = _sample("twse_mi_index")
     shuffled = {**payload, "tables": list(reversed(payload["tables"]))}
-    assert len(daily.parse_twse_mi_index(shuffled)) == 1093
+    straight = daily.parse_twse_mi_index(payload)
+    assert len(straight) > 900, f"樣本本身就不對，只解析出 {len(straight)} 列"
+    assert daily.parse_twse_mi_index(shuffled) == straight
 
 
 def test_two_sources_for_the_same_day_do_not_double_the_rows():
+    """同一天餵兩次上市，加上一份上櫃：列數是「上市 ＋ 上櫃」，不是三份相加。
+
+    列數從兩邊各自的長度算出來，不寫死——理由同上一條。
+    """
     web = daily.parse_twse_mi_index(_sample("twse_mi_index"))
-    merged = daily.merge_prices(web, web, daily.parse_tpex_prices(_sample("tpex_daily_openapi")))
-    assert len(merged) == len(web) + 887
+    otc = daily.parse_tpex_prices(_sample("tpex_daily_openapi"))
+    assert web and otc, "樣本是空的，這條測試沒有意義"
+    merged = daily.merge_prices(web, web, otc)
+    assert len(merged) == len(web) + len(otc)
     keys = {(r["date"], r["code"]) for r in merged}
     assert len(keys) == len(merged)
 

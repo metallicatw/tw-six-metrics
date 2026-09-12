@@ -1202,23 +1202,38 @@ def _latest_custody_friday(today: date) -> date:
     return today - timedelta(days=(today.weekday() - 4) % 7)
 
 
-def _tdcc_interval() -> float:
-    """兩次查詢頁請求之間至少隔多久，秒。預設 0.8。
+def _interval(env: str, default: float) -> float:
+    """兩次請求之間至少隔多久，秒。可以用環境變數調。
 
-    可以用 ``TWSIX_TDCC_INTERVAL`` 調，是因為分片回補會同時開 N 條連線去問同一
-    個站。單獨跑一份的時候 0.8 秒（1.25 req/s）沒有問題，八份同時跑就變成 10
-    req/s——那個量級對一個公共查詢頁不合適，而且被擋的話賠掉的是整批。所以分片
-    的排程會把這個值調大，讓**總和**的速率維持在個位數。
+    存在的理由是**分片回補會同時開 N 條連線去問同一個站**。單獨跑一份的時候
+    0.8 秒（1.25 req/s）沒有問題，八份同時跑就變成 10 req/s——那個量級對一個公共
+    查詢頁不合適，而且被擋的話賠掉的是整批。所以分片的排程會把這個值調大，讓
+    **總和**的速率維持在個位數。
 
     設成不合法的值就用預設，不要因為一個環境變數打錯字讓整批回補停擺。
     """
     import os  # noqa: PLC0415
 
     try:
-        value = float(os.environ.get("TWSIX_TDCC_INTERVAL", "") or 0.8)
+        value = float(os.environ.get(env, "") or default)
     except ValueError:
-        return 0.8
-    return value if value > 0 else 0.8
+        return default
+    return value if value > 0 else default
+
+
+def _tdcc_interval() -> float:
+    """集保查詢頁（``TWSIX_TDCC_INTERVAL``，預設 0.8 秒）。"""
+    return _interval("TWSIX_TDCC_INTERVAL", 0.8)
+
+
+def _mops_interval() -> float:
+    """公開資訊觀測站（``TWSIX_MOPS_INTERVAL``，預設 1.2 秒）。
+
+    MOPS 比集保敏感得多：被判定太快之後回的是 307，而且是**連續好幾個小時**都
+    回 307，不是慢一點再試就好。所以分片跑董監持股的時候這個值要調得比集保那邊
+    更保守——寧可多一個晚上，不要賠掉一整天。
+    """
+    return _interval("TWSIX_MOPS_INTERVAL", 1.2)
 
 
 def _backfill_holders(args: argparse.Namespace, stock: str) -> bool:
@@ -1382,11 +1397,14 @@ def _backfill_directors(args: argparse.Namespace, stock: str) -> bool:
         print(f"  董監月資料已是最新（{len(have)} 個月）")
         return False
 
-    print(f"  補董監月資料：缺 {len(wanted)} 個月，約 {len(wanted) * 2.2:.0f} 秒")
+    print(
+        f"  補董監月資料：缺 {len(wanted)} 個月，"
+        f"約 {len(wanted) * (_mops_interval() + 1.0):.0f} 秒"
+    )
     http = HttpClient(
         cache_dir=None,
         cache_ttl=0,
-        min_interval=1.2,
+        min_interval=_mops_interval(),
         timeout=60.0,
         retries=4,     # mopsov 偶爾回 307，退避重試就過得去
         backoff=2.5,
@@ -1485,8 +1503,20 @@ def _ownership_queue(data_dir: Path, codes: list[str]) -> list[str]:
             f"  ⚠️ 集保查詢頁只保留 51 週。那 {len(empty):,} 檔每過一週，"
             "能拿回來的歷史就少一週，而且再也拿不回來。"
         )
-    # 沒補過的排最前，部分的次之，已補齊的墊底（會被 _backfill_* 判定為無事可做）。
-    return empty + partial + full
+    # 集保排乾之後，`full` 會是**全部**——那時候這個排序就不再排任何東西了，
+    # 而 `--limit 40` 會從 1101 開始一路啃下去，8xxx 開頭的那批照樣等好幾個月。
+    # 差別在於這次等的是〔董監持股〕：分片排乾那一輪刻意只補集保（--what
+    # holders），因為公開資訊觀測站的月資料不會過期。不會過期不代表不用補。
+    #
+    # 所以已補齊的那一批內部再照「董監缺幾個月」排一次。沒有時效性，但有先後：
+    # 一個月都沒有的那些先補，才不會有人點進去看到一條空線。
+    directors = {code: len(own.director_months(root, code)) for code in full}
+    full_ranked = sorted(full, key=lambda c: (directors[c], c))
+    thin = sum(1 for c in full if directors[c] < 12)
+    if thin:
+        print(f"  （集保已補齊的那批裡，還有 {thin:,} 檔的董監持股不到 12 個月）")
+    # 沒補過的排最前，部分的次之，已補齊的墊底（集保無事可做，但可能還缺董監）。
+    return empty + partial + full_ranked
 
 
 def cmd_backfill(args: argparse.Namespace) -> int:

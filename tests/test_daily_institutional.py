@@ -37,10 +37,39 @@ def test_the_open_data_agrees_with_the_mirror_across_the_whole_repo():
     每天幾百分之一的列上才會現形，挑一檔對得上完全不代表什麼。
 
     這條跑的是版控裡真實的兩份資料，所以哪天證交所改了單位，它會第一個講話。
+
+    ── 為什麼門檻不是「零筆不符」 ─────────────────────────────
+
+    原本寫的是 `mismatched == 0`，而它在歷史從 7 天長到 250 天之後紅了：25,017
+    筆裡有 **2 筆**對不上，都在 115/08/31，都只差〔投信〕那一欄（3665 差 8 張、
+    6669 差 1 張），外資與自營商兩欄一模一樣。
+
+    那不是解析錯了，是**來源自己改過數字**：
+
+    * 兩邊各自都自洽（外資＋投信＋自營商＝合計，兩邊都成立）。
+    * 同一天有 1,817 筆在比，只有這 2 筆不同——欄位錯位或單位換算錯的話，錯的會是
+      那天全部 1,817 筆，不會挑兩檔。
+    * 差額不成比例（8 張 vs 1 張），所以也不是某條捨入規則。
+    * `parse_twse_institutional` 是**照欄名**取值的，欄位插一欄也不會位移。
+
+    證交所會事後更正個股的法人數字，而券商鏡像那張分頁是當天抓的、開放資料這份是
+    回補時抓的——兩個時點看到的就是不同的版本。這種事會隨歷史變長而慢慢累積，
+    所以「零」是一條**必然會失守**的線，而且失守的時候講的不是實話。
+
+    改成兩條比例：
+
+    1. 整體不符率 < 0.05%。系統性的錯（單位、欄序、捨入規則）會讓它衝到 8% 以上
+       甚至全滅，事後更正是萬分之幾——兩者差三個數量級，分得很開。
+    2. **沒有任何一天**的不符率 ≥ 5%。這條才是真正把關的：某一天的來源改了版面，
+       整體比例會被其他兩百多天稀釋掉，但那一天自己會滿江紅。
     """
+    from collections import Counter  # noqa: PLC0415
+
     history = institutional_history(DATA)
     assert history, "repo 裡沒有每日三大法人的資料，這條測試就沒有意義"
 
+    per_day: Counter[str] = Counter()
+    per_day_bad: Counter[str] = Counter()
     ok = mismatched = 0
     for folder in sorted((DATA / "sheets").iterdir()):
         days = history.get(folder.name)
@@ -60,12 +89,30 @@ def test_the_open_data_agrees_with_the_mirror_across_the_whole_repo():
             mirror = [_num(row[i]) for i in (1, 2, 3, 4)]
             if None in mirror:
                 continue     # 鏡像那一格是 `--`，沒得比
+            per_day[day.roc_label] += 1
             if [day.foreign, day.trust, day.dealer, day.total] == mirror:
                 ok += 1
             else:
                 mismatched += 1
+                per_day_bad[day.roc_label] += 1
+    total = ok + mismatched
     assert ok > 500, f"只對到 {ok} 筆，重疊的日期太少，這條測試沒有力氣"
-    assert mismatched == 0, f"{mismatched} 筆對不上"
+
+    rate = mismatched / total
+    assert rate < 0.0005, (
+        f"{total:,} 筆裡有 {mismatched:,} 筆對不上（{rate:.3%}）。"
+        "事後更正是萬分之幾；到這個量級要先看是不是單位或欄序變了"
+    )
+
+    # 一天之內就滿江紅的，是版面變了，不是零星更正。這條比整體比例敏感得多。
+    broken = sorted(
+        (d, per_day_bad[d], per_day[d])
+        for d in per_day_bad
+        if per_day[d] >= 20 and per_day_bad[d] / per_day[d] >= 0.05
+    )
+    assert not broken, "這幾天整天都對不上，來源的版面可能變了：" + "、".join(
+        f"{d} {bad}/{n}" for d, bad, n in broken
+    )
 
 
 def test_the_daily_total_is_the_sum_of_the_rounded_columns():
