@@ -264,7 +264,12 @@ def rerate(data_dir: Path, codes: Sequence[str]) -> tuple[int, int]:
     from ..config import Settings  # noqa: PLC0415
     from ..rating.engine import rate  # noqa: PLC0415
     from ..store import sheets as sheet_store  # noqa: PLC0415
-    from ..store.snapshots import RATING_COLUMNS, Store, rating_rows, vintage  # noqa: PLC0415
+    from ..store.snapshots import (  # noqa: PLC0415
+        RATING_COLUMNS,
+        Store,
+        rating_rows,
+        vintage,
+    )
     from .derive import enrich  # noqa: PLC0415
     from .workbook import GridsSource  # noqa: PLC0415
 

@@ -772,18 +772,30 @@ def combo(
         left = (bar_lo, bar_hi, bar_digits)
         right = (line_lo, line_hi, line_digits)
         right_colour = line_data[0][2] if line_data else "var(--muted)"
-        right_unit = line_unit
     else:
         left = (line_lo, line_hi, line_digits)
         right = (bar_lo, bar_hi, bar_digits)
         right_colour = bar_colour
-        right_unit = bar_unit
 
     def y_on(value: float, scale: tuple[float, float, int]) -> float:
         lo, hi, _ = scale
         return f.top + f.plot_h * (1 - (value - lo) / (hi - lo))
 
-    parts = _open(f, title, f"{len(shown_labels)} 期")
+    # `<desc>` 是螢幕閱讀器讀到的那一句，而這張圖有兩條軸——「36 期」對聽的人
+    # 來說等於什麼都沒說。把「誰是長條、誰是折線、各看哪一軸」寫進去，因為那
+    # 正是看得見的人從圖例讀到的東西。
+    sides = ("左軸", "右軸") if bar_axis == "left" else ("右軸", "左軸")
+
+    def axis_of(side: str, unit: str) -> str:
+        return side + (" " + unit.strip() if unit.strip() else "")
+
+    parts = _open(
+        f,
+        title,
+        f"{len(shown_labels)} 期；{bar_name}（長條，{axis_of(sides[0], bar_unit)}）"
+        f"與{'、'.join(n for n, _, _ in line_data)}"
+        f"（折線，{axis_of(sides[1], line_unit)}）",
+    )
     parts += _grid(f, left[0], left[1], left[2])
 
     # 右軸的刻度，和左軸同高——兩邊的橫線是同一條，只是各自標各自的數字。
@@ -868,7 +880,6 @@ def combo(
     parts += _x_labels(f, shown_labels, label_every)
     parts.append("</svg>")
 
-    sides = ("左軸", "右軸") if bar_axis == "left" else ("右軸", "左軸")
     keys = [
         f'<span class="k"><i class="bar" style="background:{bar_colour}"></i>'
         f"{escape(bar_name)}（{sides[0]}{' ' + bar_unit.strip() if bar_unit.strip() else ''}）"

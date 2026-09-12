@@ -93,10 +93,38 @@ def main() -> int:
     for name, tb in failures:
         print(f"{RED}=== {name} ==={RESET}")
         print(tb)
-    colour = RED if failed else GREEN
+    lint = _ruff()
+    colour = RED if (failed or lint) else GREEN
     tail = f"，{skipped} 跳過（少了選用相依）" if skipped else ""
     print(f"{colour}{passed} passed, {failed} failed{RESET}{tail} in {elapsed:.2f}s")
-    return 1 if failed else 0
+    return 1 if (failed or lint) else 0
+
+
+def _ruff() -> int:
+    """順手跑 CI 的那一步 lint。裝了才跑，沒裝就說一聲。
+
+    加在這裡是因為「本機全綠、CI 紅」白白燒掉一次來回，而那一次的內容是一個沒用
+    到的區域變數和一組沒排序的 import——兩件本機零成本就查得到的事。
+
+    指令與 `.github/workflows/ci.yml` 的那一步一字不差。不一樣的話，這裡綠了也
+    不代表那裡會綠，而那比不跑更糟：它給的是一個假的保證。
+    """
+    import shutil
+    import subprocess  # noqa: S404
+
+    if not shutil.which("ruff"):
+        print(f"{YELLOW}skip{RESET} ruff — 這台機器沒裝（CI 會跑）")
+        return 0
+    done = subprocess.run(  # noqa: S603
+        ["ruff", "check", "src", "tests", "scripts"],  # noqa: S607
+        cwd=REPO, capture_output=True, text=True, check=False,
+    )
+    if done.returncode:
+        print(f"{RED}=== ruff ==={RESET}")
+        print(done.stdout or done.stderr)
+    else:
+        print(f"{GREEN}ok{RESET}   ruff")
+    return done.returncode
 
 
 if __name__ == "__main__":
