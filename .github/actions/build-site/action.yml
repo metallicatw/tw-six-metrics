@@ -92,12 +92,34 @@ runs:
     - name: 帶進〔市場監控〕
       run: |
         mkdir -p site
-        rm -rf /tmp/market-monitor
-        if git clone --depth 1 --quiet \
-             https://github.com/metallicatw/market-monitor.git /tmp/market-monitor \
-           && [ -s /tmp/market-monitor/index.html ]; then
-          cp /tmp/market-monitor/index.html site/monitor-report.html
-          echo "〔市場監控〕$(wc -c < site/monitor-report.html) 位元組"
+        # 先抓它的 Pages 網址，取不到再退回 clone。
+        #
+        # 上游 2026-09 之後 index.html 不再進 git：它是每天重新產生的 1 MB 檔案，
+        # 被版控的代價是每一次合併都撞在它身上，而撞出來的衝突沒有哪一邊是對的
+        # （兩邊都是產生出來的）。改成由 workflow 直接發布給 Pages 之後，repo 裡
+        # 就沒有那個檔案了，clone 下來會是空的。
+        #
+        # 退回 clone 這條路留著，理由和〔趨勢選股〕那一步一樣：上游改版之前的
+        # 舊狀態、以及切換當下那一小段空窗，都還取得到東西。兩條都失敗才是警告
+        # ——那一頁不見不該讓整個網站發不出去（增量建站的快取裡還留著上一次那
+        # 一份，它會繼續在）。
+        got=""
+        if curl -fsSL --max-time 60 \
+             https://metallicatw.github.io/market-monitor/ \
+             -o /tmp/monitor.html && [ -s /tmp/monitor.html ]; then
+          cp /tmp/monitor.html site/monitor-report.html
+          got="Pages"
+        else
+          rm -rf /tmp/market-monitor
+          if git clone --depth 1 --quiet \
+               https://github.com/metallicatw/market-monitor.git /tmp/market-monitor \
+             && [ -s /tmp/market-monitor/index.html ]; then
+            cp /tmp/market-monitor/index.html site/monitor-report.html
+            got="clone main"
+          fi
+        fi
+        if [ -n "$got" ]; then
+          echo "〔市場監控〕取自 $got，$(wc -c < site/monitor-report.html) 位元組"
         else
           echo "::warning::market-monitor 取不到，這次沒有更新〔市場監控〕那一頁"
         fi

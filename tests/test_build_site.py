@@ -1191,6 +1191,14 @@ def test_the_report_is_copied_in_before_the_build_and_a_failure_is_not_fatal():
     assert action.index("帶進〔市場監控〕") < action.index("建立網站")
     assert "::warning::" in action
 
+    # 上游的 index.html 不再進 git（它每天重新產生，被版控的代價是每一次合併都
+    # 撞在它身上），所以主要來源是它的 Pages 網址。clone 那條路要留著當退路：
+    # 切換當下那一小段空窗、以及萬一 Pages 掛掉，都還取得到東西。
+    step = action.split("帶進〔市場監控〕")[1].split("帶進〔趨勢選股〕")[0]
+    assert "metallicatw.github.io/market-monitor" in step, "沒有從 Pages 抓"
+    assert "git clone" in step, "退路不見了"
+    assert step.index("github.io") < step.index("git clone"), "Pages 要排在 clone 前面"
+
     # 那邊 22:30 UTC 更新完，這邊四十分鐘後帶進來；沒有這一條，那一頁要等到這裡
     # 因為別的理由重建才會換，最差落後一整天。
     pages = (repo / ".github/workflows/pages.yml").read_text("utf-8")
