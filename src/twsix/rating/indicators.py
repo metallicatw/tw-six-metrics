@@ -439,18 +439,32 @@ def grade_inventory_turnover(
     key = "inventory_turnover"
     n = rules.inventory_quarters
     vals = list(values[:n])
-    if len(vals) < n or not all_present(vals, n):
-        return _insufficient(key, vals)
 
-    product = 1.0
-    for v in vals:
-        product *= v  # type: ignore[operator]
-
-    skip = product <= 0
+    # 「這一行沒有庫存」要**先於**「資料不夠」判。
+    #
+    # 兩個比率（存貨 ÷ 當季營收、存貨 ÷ 近四季營收）算得出來，靠的是資產負債表
+    # 與損益表——和周轉率算不算得出來是兩件事。而周轉率的分母是「期初期末存貨
+    # 平均」：航運、航空、資訊服務這一類公司的存貨本來就是 0，於是那個除法給不
+    # 出數字，函式在第一行就 `_insufficient` 回去了。
+    #
+    # 結果是 115 檔航運／觀光餐旅／資訊服務被標成「數據不足」——那句話的意思是
+    # 「這個數字存在，只是我們沒抓到」，而事實正好相反：它們**沒有庫存**，這個
+    # 指標對它們不適用。掃過那 122 檔「數據不足」的股票，115 檔的比率早就低於
+    # 底下那兩個門檻，只是永遠走不到這裡。
+    #
+    # 順序一換，那 115 檔就落到它們本來就該落的那一格。剩下的才是真的缺資料
+    # （上市未滿兩年、或 DR 沒有台灣格式的財報）。
+    skip = False
     if quarterly_inventory_ratio is not None:
         skip = skip or quarterly_inventory_ratio <= rules.inventory_skip_quarterly_ratio
     if annual_inventory_ratio is not None:
         skip = skip or annual_inventory_ratio <= rules.inventory_skip_annual_ratio
+    # 四季的乘積 ≤ 0 也算「不適用」，但那要先有四季的值才算得出來。
+    if not skip and len(vals) == n and all_present(vals, n):
+        product = 1.0
+        for v in vals:
+            product *= v  # type: ignore[operator]
+        skip = product <= 0
     if skip:
         return IndicatorResult(
             key=key,
@@ -458,8 +472,11 @@ def grade_inventory_turnover(
             values=tuple(vals),
             status=Status.NOT_RATED,
             grade=None,
-            reason="不評分: 無庫存或低庫存產業",
+            reason="不評分: 無庫存或低庫存產業，本指標不適用",
         )
+
+    if len(vals) < n or not all_present(vals, n):
+        return _insufficient(key, vals)
 
     b, c, d, e = vals
     mean = avg(vals)

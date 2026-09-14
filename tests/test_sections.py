@@ -371,13 +371,46 @@ def test_charts_run_oldest_left_newest_right():
     assert seasonal.index("01 月") < seasonal.index("03 月")
 
 
-def test_the_number_table_under_a_chart_follows_the_picture():
-    """Otherwise the table and the bars above it disagree about which end is now."""
+def test_the_number_table_under_a_chart_reads_newest_first():
+    """圖是舊到新（左到右），表是新到舊（上到下）。兩者刻意相反。
+
+    這條測試以前寫的是相反的規則（「表要跟著圖」）。改掉不是因為口味變了，是
+    因為那一版和這個站**自己寫下來的規則**打架——`stock_page` 裡那段註解：
+
+        最新在左，和這一頁上每一張表一致（圖則是最新在右）。表用來查一個數字，
+        而讀者要查的多半是最新那一期；圖用來看走勢，而走勢的方向在時間往右跑
+        的時候才是對的。兩種排法各有各的理由，混在同一頁上才是錯的——所以整站
+        只有這一條規則。
+
+    而那個站上每一張手寫的表（月營收明細、三大法人、大戶持股、董監月資料、
+    年度交易資訊）都是新到舊。只有圖底下那些自動產生的數值表是舊到新——它們是
+    唯一的例外，而例外就是不一致。
+
+    `_chronological` 的說明其實早就寫對了（「工作表就是最新在前給的，**而表格
+    也是那樣讀的**」），只是它把反轉過的那一份同時交給了圖和表。
+    """
     from twsix.report import charts  # noqa: PLC0415
 
     svg = charts.bars(["2026.2Q", "2025.4Q"], [2.0, 1.0], title="測試")
     body = svg[svg.index("<details") :]
-    assert body.index("2025.4Q") < body.index("2026.2Q")
+    assert body.index("2026.2Q") < body.index("2025.4Q"), "數值表不是最新在上"
+    # 圖本身仍然是舊的在左：把 2026.2Q 畫在左邊，每一條上升的線都會看起來在跌。
+    chart = svg[: svg.index("<details")]
+    assert chart.index("2025.4Q") < chart.index("2026.2Q"), "圖的時間軸反了"
+
+
+def test_a_seasonality_table_is_not_reordered():
+    """各月營收占比（1 月…12 月）、各季 EPS 占比（Q1…Q4）不是時間序列。
+
+    它們是一年之內的分布，那個順序是日曆。反轉它會變成 12 月…1 月，而那不是
+    「最新在上」，只是把日曆倒過來。
+    """
+    from twsix.report import charts  # noqa: PLC0415
+
+    svg = charts.bars(["01 月", "02 月", "03 月"], [1.0, 2.0, 3.0],
+                      title="測試", newest_first=False)
+    body = svg[svg.index("<details") :]
+    assert body.index("01 月") < body.index("02 月") < body.index("03 月")
 
 
 def test_roc_years_sort_as_numbers_not_as_strings():

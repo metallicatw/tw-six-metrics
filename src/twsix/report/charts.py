@@ -425,12 +425,28 @@ def _figure(
 
 
 def _table(labels: Sequence[str], series: Sequence[tuple[str, Sequence[Number]]],
-           digits: int | Sequence[int]) -> str:
+           digits: int | Sequence[int], *, newest_first: bool = True) -> str:
     """The numbers behind the picture — never only a picture.
 
     *digits* 可以給一個數字（所有欄同一個小數位），也可以一欄給一個——買賣超是
     整數張，股價是兩位小數，兩欄同一個位數就得有一欄被印錯。
+
+    ## 圖是舊到新，表是新到舊
+
+    `_chronological` 的說明裡本來就寫著這件事：「幾乎每一條數列進來的時候都是
+    最新在前，因為工作表和鏡像就是那樣給的，**而表格也是那樣讀的**」。但它把
+    反轉過的那一份同時交給了圖和表，於是表跟著圖變成最舊在上——和這個站上每一
+    張手寫的表（月營收明細、三大法人、大戶持股、董監月資料）都相反。
+
+    所以這裡再反轉回來。呼叫端交進來的是**圖的順序**（舊到新），而表要的是
+    最新在上。
+
+    `newest_first=False` 是「這一條根本不是時間序列」：各月營收占比（1 月…12 月）
+    與各季 EPS 占比（Q1…Q4）是一年之內的分布，那個順序是日曆，不是新舊。
     """
+    if newest_first:
+        labels = list(reversed(labels))
+        series = [(name, list(reversed(values))) for name, values in series]
     per = digits if isinstance(digits, Sequence) else [digits] * len(series)
     # 表頭跟著數字靠右。
     #
@@ -568,7 +584,8 @@ def bars(
         series.append(("收盤價", price))
         digs.append(price_digits)
     return _figure(
-        title, unit, "".join(parts), _table(labels, series, digs),
+        title, unit, "".join(parts), _table(labels, series, digs,
+                                             newest_first=newest_first),
         colour=colour,
         legend=_legend(title, unit, colour, price_unit) if over else "",
     )
@@ -704,7 +721,8 @@ def line(
         series.append(("收盤價", price))
         digs.append(price_digits)
     return _figure(
-        title, unit, "".join(parts), _table(labels, series, digs),
+        title, unit, "".join(parts), _table(labels, series, digs,
+                                             newest_first=newest_first),
         colour=colour,
         legend=_legend(title, unit, colour, price_unit) if over else "",
     )
@@ -910,7 +928,8 @@ def combo(
         # 一張窄的、再讀一張寬的，而它們講的是同一件事。
         #
         # 預設仍然是 True——「每一張圖都有它的表」是這個模組開頭那條規則。
-        (_table(shown_labels, series, digs) if table else "")
+        (_table(shown_labels, series, digs, newest_first=newest_first)
+         if table else "")
         + (f'<p class="chart-note">{escape(note)}</p>' if note else ""),
         colour=bar_colour if bar_axis == "left" else (
             line_data[0][2] if line_data else bar_colour

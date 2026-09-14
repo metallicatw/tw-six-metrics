@@ -13,6 +13,7 @@ Commands
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import time
@@ -2961,17 +2962,59 @@ def _latest_statement_period(store: Store) -> tuple[int, int]:
     return today.year - 1911, max(1, (today.month - 1) // 3)
 
 
-def _yearly_missing(data_dir: Path) -> list[str]:
-    """還沒有〔年度交易資訊〕那一張的股票，代號排序。"""
+#: 「這一檔上市還不夠久」的記號，放在它自己的資料夾裡。
+YEARLY_TOO_YOUNG = "年度交易資訊._tooyoung.json"
+
+
+def _yearly_too_young(sheet_dir: Path, today: str) -> bool:
+    """這一檔上次問的時候年份不足，而且還沒到可以再問的時候。
+
+    沒有這個記號的話，那幾檔每天晚上都會被重問一次——而答案在下一個年結之前
+    不可能改變。249 檔裡多數是這種，於是每一輪的 40 檔額度全花在註定失敗的
+    請求上，真正抓得到的那幾檔永遠輪不到。
+    """
+    try:
+        mark = json.loads((sheet_dir / YEARLY_TOO_YOUNG).read_text("utf-8"))
+    except Exception:  # noqa: BLE001 - 記號讀不開就當作沒有，重問一次
+        return False
+    return str(mark.get("retry_after", "")) > today
+
+
+def _mark_yearly_too_young(sheet_dir: Path, years: int, today: str) -> None:
+    """記下「只有 N 年」，以及要等到哪一年才值得再問。
+
+    差幾年就等幾個年結。一月中才問，是給交易所整理年度資料留的時間。
+    """
+    need = max(1, 5 - max(years, 0))
+    retry_year = int(today[:4]) + need
+    sheet_dir.mkdir(parents=True, exist_ok=True)
+    (sheet_dir / YEARLY_TOO_YOUNG).write_text(
+        json.dumps({"years": years, "checked": today,
+                    "retry_after": f"{retry_year}-01-15"},
+                   ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+def _yearly_missing(data_dir: Path, *, include_too_young: bool = False) -> list[str]:
+    """還沒有〔年度交易資訊〕那一張的股票，代號排序。
+
+    預設**不含**那些已知上市未滿五年的——它們不是「還沒補到」，是「還不能補」。
+    把它們混在一起數，那個數字每天都一樣，看起來像排程壞了。
+    """
     from .ingest.yearly_trading import SHEET  # noqa: PLC0415
 
     sheets = data_dir / "sheets"
     if not sheets.is_dir():
         return []
+    today = date.today().isoformat()
     out = []
     for d in sorted(p.name for p in sheets.glob("*") if p.is_dir()):
-        if not any((sheets / d).glob(f"{SHEET}.json*")):
-            out.append(d)
+        if any((sheets / d).glob(f"{SHEET}.json*")):
+            continue
+        if not include_too_young and _yearly_too_young(sheets / d, today):
+            continue
+        out.append(d)
     return out
 
 
@@ -3021,6 +3064,12 @@ def cmd_backfill_yearly(args: argparse.Namespace) -> int:
         if rc == EXIT_OK:
             ok += 1
         elif "至少需要" in _LAST_YEARLY_ERROR[0]:
+            m = re.search(r"只取得 (\d+) 年", _LAST_YEARLY_ERROR[0])
+            _mark_yearly_too_young(
+                data_dir / "sheets" / code,
+                int(m.group(1)) if m else 0,
+                date.today().isoformat(),
+            )
             # 「只取得 2 年」不是抓取失敗，是這檔上市還不夠久。重跑一百次也是
             # 同一個結果，所以要跟「這次沒抓到」分開算——否則每一輪都會拿兩個
             # 請求去問同一批永遠不會成功的股票。
@@ -3050,6 +3099,11 @@ def cmd_backfill_yearly(args: argparse.Namespace) -> int:
     if too_young:
         print(f"  年份不足：{', '.join(too_young[:20])}"
               + (" …" if len(too_young) > 20 else ""))
+        print("  （已記下，下一個年結之前不再問它們）")
+    waiting = len(_yearly_missing(data_dir, include_too_young=True)) - len(
+        _yearly_missing(data_dir))
+    if waiting:
+        print(f"  另有 {waiting} 檔已知上市未滿五年，這一輪連問都沒問。")
     return EXIT_OK
 
 
