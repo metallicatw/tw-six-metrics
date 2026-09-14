@@ -432,7 +432,13 @@ def _table(labels: Sequence[str], series: Sequence[tuple[str, Sequence[Number]]]
     整數張，股價是兩位小數，兩欄同一個位數就得有一欄被印錯。
     """
     per = digits if isinstance(digits, Sequence) else [digits] * len(series)
-    head = "".join(f"<th>{escape(name)}</th>" for name, _ in series)
+    # 表頭跟著數字靠右。
+    #
+    # 少了這個 `class="num"`，欄名會靠左、而它底下每一個數字靠右——一欄寬一點
+    # （「自由現金流量（單季）」配上四位數的百萬）兩者就差了大半個欄寬，看起來
+    # 像欄名和數字根本不是同一欄。三條線那張圖更明顯：EPS／營業利益率／淨利率
+    # 三個欄名各自浮在自己那一欄的左邊。
+    head = "".join(f'<th class="num">{escape(name)}</th>' for name, _ in series)
     rows = []
     for i, label in enumerate(labels):
         cells = "".join(

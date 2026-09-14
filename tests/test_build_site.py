@@ -1450,7 +1450,9 @@ def test_股價和籌碼畫在同一張圖上_用右邊那條軸():
     assert "<linearGradient" in with_px, "面積沒有由上往下淡出"
 
     # 數值表要多一欄，而且股價印兩位小數、買賣超印整數。
-    assert "<th>收盤價</th>" in with_px
+    # `class="num"`：欄名跟著它底下的數字靠右。少了它，欄名靠左、數字靠右，
+    # 一欄寬一點兩者就差了大半個欄寬，看起來像欄名和數字不是同一欄。
+    assert '<th class="num">收盤價</th>' in with_px
     assert "101.50" in with_px, "股價的小數位被買賣超那一欄的 0 位蓋掉了"
 
 
