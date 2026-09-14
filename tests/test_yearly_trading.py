@@ -272,3 +272,83 @@ def test_the_anchor_does_not_shift_a_series_that_runs_ahead():
     years, high, _low, _avg = yearly_prices(reader, 113)
     assert years[:2] == [115, 114]
     assert high[0] == 463.5
+
+
+# ── 「這一檔上市還不夠久」那個記號 ─────────────────────────────────────
+#
+# 記號本身是對的（它讓那幾檔不再每晚被重問一次），錯的是**它叫什麼名字**。
+# 第一版叫 `年度交易資訊._tooyoung.json`，而 `data/sheets/<代號>/` 這個資料夾
+# 有一條不成文但被程式碼依賴的規矩：裡面的 `*.json` / `*.json.gz` 就是分頁。
+# 於是那個記號同時造成兩件事，兩件都不是「記號寫錯了」這種看得出來的錯：
+#
+#   1. 個股頁上多出一張叫「年度交易資訊._tooyoung」的假分頁。
+#   2. CI 紅——data/sheets 底下不准有未壓縮的 .json。
+#
+# 底下三條把這兩件事釘住。`_fetched.txt` 早就用 .txt 了，而且註解裡寫著為什麼；
+# 第一版沒照做。
+
+
+def _cli():
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    from twsix import cli
+
+    return cli
+
+
+def test_那個記號不會被當成一張分頁():
+    """副檔名是 .json 的話，sheets.read_all() 會把它讀成一張表。"""
+    import tempfile
+
+    from twsix.store import sheets as sheet_store
+
+    cli = _cli()
+    d = Path(tempfile.mkdtemp())
+    sheet_store.write_grid(d, "ISQ", [["a"]])
+    cli._mark_yearly_too_young(d, 2, "2026-09-14")
+
+    names = set(sheet_store.read_all(d))
+    assert names == {"ISQ"}, f"記號被當成分頁讀進來了：{sorted(names - {'ISQ'})}"
+    assert not cli.YEARLY_TOO_YOUNG.endswith(".json"), (
+        "記號又叫 .json 了——這個資料夾裡的 .json 就是分頁，"
+        "而且 data/sheets 底下不准有未壓縮的 .json"
+    )
+
+
+def test_記號還是讀得回來():
+    """換了名字之後，那個「不要再問了」的判斷要照樣成立。"""
+    import tempfile
+
+    cli = _cli()
+    d = Path(tempfile.mkdtemp())
+    cli._mark_yearly_too_young(d, 2, "2026-09-14")
+    # 只有兩年，差三個年結 → 2029-01-15 之前都不必再問。
+    assert cli._yearly_too_young(d, "2026-09-14") is True
+    assert cli._yearly_too_young(d, "2028-12-31") is True
+    assert cli._yearly_too_young(d, "2029-06-01") is False
+
+
+def test_舊名字的記號會自己被換掉():
+    """那 101 個已經進 repo 的舊記號，不能等有人手動清。
+
+    改名放在「每天都會走到」的路徑上才會收斂——放在一次性的提交裡，排程今晚
+    用舊程式再寫一批出來，明天又是紅的。
+    """
+    import json as _json
+    import tempfile
+
+    from twsix.store import sheets as sheet_store
+
+    cli = _cli()
+    d = Path(tempfile.mkdtemp())
+    legacy = d / cli.YEARLY_TOO_YOUNG_LEGACY
+    legacy.write_text(
+        _json.dumps({"years": 2, "checked": "2026-09-14", "retry_after": "2029-01-15"}),
+        encoding="utf-8",
+    )
+
+    assert cli._yearly_too_young(d, "2026-09-14") is True, "換名之後記號讀不到了"
+    assert not legacy.exists(), "舊名字還在——個股頁上那張假分頁也還在"
+    assert (d / cli.YEARLY_TOO_YOUNG).is_file()
+    assert set(sheet_store.read_all(d)) == set(), "換完之後還是被當成分頁"

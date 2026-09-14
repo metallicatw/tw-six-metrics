@@ -13,6 +13,7 @@ Commands
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
 import sys
@@ -2963,7 +2964,44 @@ def _latest_statement_period(store: Store) -> tuple[int, int]:
 
 
 #: 「這一檔上市還不夠久」的記號，放在它自己的資料夾裡。
-YEARLY_TOO_YOUNG = "年度交易資訊._tooyoung.json"
+#:
+#: 副檔名是 **.txt 不是 .json**，理由和上面那個 ``FETCHED_STAMP`` 一模一樣，
+#: 而我第一版沒照做，於是一次踩到兩件事：
+#:
+#: 1. ``sheets.read_all()`` 把資料夾裡每一個 ``*.json`` / ``*.json.gz`` 都當成
+#:    一張分頁。叫做「年度交易資訊._tooyoung.json」的記號因此變成一張名為
+#:    「年度交易資訊._tooyoung」的**假分頁**——個股頁上會多出一張表，而那張表
+#:    的內容是一個記號。
+#: 2. ``data/sheets`` 底下不准有未壓縮的 ``.json``
+#:    （test_the_repository_no_longer_holds_uncompressed_sheets 在守這件事）。
+#:    所以第一次真的寫出記號的那一晚，CI 就紅了。
+#:
+#: 內容仍然是 JSON——副檔名在這個資料夾裡的作用是「我不是一張分頁」，不是宣告
+#: 格式。``_fetched.txt`` 也是同一個道理。
+YEARLY_TOO_YOUNG = "年度交易資訊._tooyoung.txt"
+
+#: 上一版用過的名字。留著**只為了把它清掉**，不是為了相容——那個名字一天不清，
+#: 個股頁上就一天多一張假分頁、CI 就一天是紅的。
+YEARLY_TOO_YOUNG_LEGACY = "年度交易資訊._tooyoung.json"
+
+
+def _migrate_too_young(sheet_dir: Path) -> None:
+    """把舊名字換成新的。
+
+    為什麼要自己搬而不是在 repo 裡 git mv 一次就好：那 101 個檔案改名之後，
+    **排程今天晚上還是會用舊程式再寫出新的**（合併的時間點不一定在排程之前）。
+    改名這件事放在每天都會走到的路徑上，它就會自己收斂；放在一次性的提交裡，
+    它只在那一刻是對的。
+    """
+    legacy = sheet_dir / YEARLY_TOO_YOUNG_LEGACY
+    if not legacy.is_file():
+        return
+    target = sheet_dir / YEARLY_TOO_YOUNG
+    with contextlib.suppress(OSError):
+        if target.is_file():
+            legacy.unlink()      # 新的已經在了，舊的直接丟
+        else:
+            legacy.replace(target)
 
 
 def _yearly_too_young(sheet_dir: Path, today: str) -> bool:
@@ -2973,6 +3011,7 @@ def _yearly_too_young(sheet_dir: Path, today: str) -> bool:
     不可能改變。249 檔裡多數是這種，於是每一輪的 40 檔額度全花在註定失敗的
     請求上，真正抓得到的那幾檔永遠輪不到。
     """
+    _migrate_too_young(sheet_dir)
     try:
         mark = json.loads((sheet_dir / YEARLY_TOO_YOUNG).read_text("utf-8"))
     except Exception:  # noqa: BLE001 - 記號讀不開就當作沒有，重問一次
@@ -2988,6 +3027,8 @@ def _mark_yearly_too_young(sheet_dir: Path, years: int, today: str) -> None:
     need = max(1, 5 - max(years, 0))
     retry_year = int(today[:4]) + need
     sheet_dir.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(OSError):
+        (sheet_dir / YEARLY_TOO_YOUNG_LEGACY).unlink(missing_ok=True)
     (sheet_dir / YEARLY_TOO_YOUNG).write_text(
         json.dumps({"years": years, "checked": today,
                     "retry_after": f"{retry_year}-01-15"},
