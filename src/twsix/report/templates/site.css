@@ -347,6 +347,19 @@ td.series .p{font-size:10.5px;color:var(--muted);text-align:right;
   font-variant-numeric:tabular-nums;white-space:nowrap}
 td.series .v{text-align:right;font-variant-numeric:tabular-nums;
   font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+/* 個股頁的八期數列：一期一個**真的**表格欄。
+ *
+ * 以前八期擠在一個 td 裡用 grid 排。同一列裡期別與數值對得齊，但列與列之間
+ * 對不齊——每一列各自照自己的內容算欄寬，於是〔自由現金流量〕那一列（六位數的
+ * 百萬）整排往左歪，而讀者正在做的事就是拿它的 115Q2 去對上面〔EPS〕的 115Q2。
+ *
+ * 改成真的欄位之後，對齊由表格保證，不靠任何寬度數字。`width:1%` 讓這八欄縮到
+ * 內容需要的寬度，剩下的留給〔理由〕——不加的話八欄會把表格撐開、理由被擠扁。 */
+td.pv{width:1%;text-align:right;white-space:nowrap;padding-left:9px}
+td.pv .p{display:block;font-size:10.5px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+td.pv .v{display:block;font-variant-numeric:tabular-nums;
+  font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
 /* -- 個股頁：固定頁首與分頁 ------------------------------------------ */
 .ident.sticky{position:sticky;top:0;z-index:30;background:var(--ground);
   margin:0 calc(-1 * var(--pad)) 16px;padding:12px var(--pad) 0;

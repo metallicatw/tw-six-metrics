@@ -1624,3 +1624,69 @@ def test_市場監控的說明也收進燈泡(tmp_path=None):
     # 標題和 iframe 之間不該再有一整段說明文字。
     between = page[page.index("</h2>"):page.index("<iframe")]
     assert "台股加權" not in between
+
+
+def test_the_eight_periods_are_real_table_columns(tmp_path=None):
+    """八期各佔一個**真的**表格欄，所以列與列之間一定對得齊。
+
+    以前八期擠在一個 td 裡用 CSS grid 排，每一列各自照自己的內容算欄寬。同一列
+    裡期別與數值對得齊，但〔自由現金流量〕那一列是六位數的百萬、上面幾列是兩位
+    數的百分比，於是它整排往左歪——而讀者正在做的事就是拿它的 115Q2 去對上面
+    〔EPS〕的 115Q2。
+
+    這條測試守的是那個結構：`td.pv` 在、`div class="cells"` 不在。改回 grid 不會
+    報錯、不會缺數字，只會讓對齊靜靜地壞掉，而那要把兩份截圖疊起來才看得出來。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
+    assert 'class="pv"' in page, "八期不是表格欄了"
+    assert 'class="cells"' not in page, "grid 版回來了，列與列之間會對不齊"
+    # 表頭那一格要橫跨八欄，否則整張表的欄數對不上。
+    assert 'colspan="8"' in page
+
+
+def test_the_three_margin_rows_sit_together_on_the_built_page(tmp_path=None):
+    """營業利益率 → 淨利率（歸母） → 業外佔比，在**建出來的頁面上**連著三列。
+
+    `test_sections` 那一條驗的是 `page.indicators` 的順序；這一條驗它真的走到了
+    HTML。中間任何一層把順序重排（樣板改成照 INDICATOR_ORDER 跑、或是有人加了
+    一次 sort）都不會報錯。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
+    order = [page.find(x) for x in ("營業利益率", "淨利率（歸母）", "業外佔比")]
+    assert all(i >= 0 for i in order), f"有一列不在頁面上：{order}"
+    assert order == sorted(order), "三列的順序被打亂了"
+
+
+def test_the_revenue_table_is_collapsed_and_not_duplicated(tmp_path=None):
+    """月營收明細收起來，而且整頁只有那一張。
+
+    〔三年營收趨勢〕原本自帶一張「月營收＋年增率」的收合數值表，正下方又攤著一張
+    六欄的月營收明細——同一件事讀兩次，而且下面那張是上面那張的超集。現在只留
+    六欄那一張，收起來。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+
+    page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
+    assert 'class="rev"' in page, "月營收明細不見了"
+    head = page[: page.find('class="rev"')]
+    # 那張表在一個 <details> 裡：往回找最近的一個開標籤，中間不該再有 </details>。
+    opened = head.rfind("<details")
+    assert opened >= 0 and "</details>" not in head[opened:], "月營收明細沒有收起來"
+    # 整頁只能有一張月營收表。數的是那個**表頭欄位**，不是「累計年增率」這五個
+    # 字——〔EPS預估與估價〕那一段的公式說明裡有「近十二月累計年增率」，數字串
+    # 會把它一起數進去，然後這條測試永遠紅。
+    assert page.count('<th class="num">累計年增率</th>') == 1, (
+        "月營收表在這一頁上出現了兩次"
+    )
+    # 〔三年營收趨勢〕那張圖不再自帶「月營收／年增率」兩欄的數值表。
+    assert page.count("<th>月營收</th>") == 0, "圖自己那張數值表回來了"

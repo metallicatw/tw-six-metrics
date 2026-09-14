@@ -361,6 +361,7 @@ def _eight_periods(data: Any, snapshot: Any) -> dict[str, tuple[list[str], list[
         ("inventory_turnover", data.inventory_turnover),
         ("free_cash_flow", data.free_cash_flow),
         ("net_margin", data.net_margin),
+        ("non_operating_ratio", getattr(data, "non_operating_ratio", {}) or {}),
     ):
         out[key] = (labels, [source.get(q) for q in quarters])
     out["net_income_yoy"] = (
@@ -655,6 +656,37 @@ def build_page(
     if rating.snapshots:
         newest = rating.snapshots[0]
         shown = _eight_periods(data, newest)
+
+        def _unscored(key, label, reason, after):
+            """插一列不評分的補充列，就排在 ``after`` 那一列後面。
+
+            用插的而不是接在最後：這兩列的**位置就是它們的意思**（見下面那段
+            註解）。沒有資料就整列不畫——一列八個破折號不是資訊，是雜訊。
+            """
+            got = shown.get(key)
+            if not got or not any(v is not None for v in got[1]):
+                return
+            at = next(
+                (i + 1 for i, r in enumerate(page.indicators) if r["key"] == after),
+                len(page.indicators),
+            )
+            page.indicators.insert(
+                at,
+                {
+                    "key": key,
+                    "label": label,
+                    "letter": "",
+                    "badge": False,
+                    "display": "—",
+                    "reason": reason,
+                    "scored": False,
+                    "values": [
+                        None if v is None else round(float(v), 2) for v in got[1]
+                    ],
+                    "periods": list(got[0]),
+                },
+            )
+
         for key in INDICATOR_ORDER:
             result = newest.indicators[key]
             labels, values = shown.get(
@@ -679,27 +711,30 @@ def build_page(
                     "periods": list(labels),
                 }
             )
-        # 第七列：淨利率（歸母）。**不評分**——六大指標是六個，多一個等第就是
-        # 多一條沒有人訂過的規則。它在這裡是因為上一列（自由現金流量）與再上面
-        # 那兩列（稅後淨利年增率、EPS）都是「賺多少」，而這一列回答的是「賺得
-        # 有多厚」，而那正是前三列單獨看不出來的事。
-        margin = shown.get("net_margin")
-        if margin and any(v is not None for v in margin[1]):
-            page.indicators.append(
-                {
-                    "key": "net_margin",
-                    "label": "淨利率（歸母）",
-                    "letter": "",
-                    "badge": False,
-                    "display": "—",
-                    "reason": "不列入評分；歸屬母公司稅後淨利 ÷ 營收",
-                    "scored": False,
-                    "values": [
-                        None if v is None else round(float(v), 2) for v in margin[1]
-                    ],
-                    "periods": list(margin[0]),
-                }
-            )
+        # 兩列不評分的補充列，緊接在〔營業利益率〕後面——**位置就是它們的意思**。
+        #
+        # 原本〔淨利率（歸母）〕擺在整張表最後。擺在最後，讀者要比「本業賺的」和
+        # 「最後真的留下來的」得跨過中間四列，而那正是這一列唯一的用途。搬上來
+        # 之後三列連著讀是一條完整的句子：
+        #
+        #   營業利益率   本業賺得多厚
+        #   淨利率（歸母） 扣完業外、稅、少數股權之後真正留給股東的厚度
+        #   業外佔比     這一季的稅前損益裡，有多少不是本業賺來的
+        #
+        # 第三列是第一列與第二列之間那個差額的成因。沒有它，兩條率差很多的時候
+        # 看得出「有事發生」，但看不出是業外拉上去還是稅吃掉了。
+        _unscored(
+            "net_margin",
+            "淨利率（歸母）",
+            "不列入評分；歸屬母公司稅後淨利 ÷ 營收",
+            after="operating_margin",
+        )
+        _unscored(
+            "non_operating_ratio",
+            "業外佔比",
+            "不列入評分；營業外收入及支出 ÷ 稅前淨利",
+            after="net_margin",
+        )
 
         # 八季財報趨勢：兩條率（左軸 %）＋ EPS（右軸 元）。
         #
@@ -754,6 +789,10 @@ def build_page(
             bar=("月營收", [None if r[1] is None else r[1] / 1000 for r in detail]),
             lines=[("年增率", [r[3] for r in detail], "var(--m0)")],
             title="三年營收趨勢",
+            # 這張圖不帶自己的數值表：它正下方那張月營收明細是六欄（月份、當月
+            # 營收、月增率、年增率、累計營收、累計年增率），已經包含這張圖的兩條
+            # 數列。兩張表疊著出現，讀者得先讀完一張窄的再讀一張寬的。
+            table=False,
             bar_unit=" 百萬",
             bar_digits=0,
             bar_colour="var(--m1)",

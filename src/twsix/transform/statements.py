@@ -27,6 +27,8 @@ class QuarterStatements:
     ``revenue``                 營業收入淨額            (ISQ 8)
     ``cost_of_goods``           營業成本                (ISQ 10)
     ``operating_income``        營業利益                (ISQ 21)
+    ``non_operating``           營業外收入及支出          (ISQ 69)
+    ``pretax_income``           稅前淨利                (ISQ 70)
     ``net_income_consolidated`` 合併總損益              (ISQ 76)
     ``net_income_parent``       歸屬母公司淨利（損）      (ISQ 98)
     ``eps``                     每股盈餘                (ISQ 104)
@@ -42,6 +44,8 @@ class QuarterStatements:
     revenue: Number = None
     cost_of_goods: Number = None
     operating_income: Number = None
+    non_operating: Number = None
+    pretax_income: Number = None
     net_income_consolidated: Number = None
     net_income_parent: Number = None
     eps: Number = None
@@ -88,6 +92,20 @@ def operating_margin(s: QuarterStatements) -> Number:
 def net_margin(s: QuarterStatements) -> Number:
     """稅後淨利率 (%) = 歸屬母公司淨利 / 營業收入."""
     r = _div(s.net_income_parent, s.revenue)
+    return None if r is None else r * 100
+
+
+def non_operating_ratio(s: QuarterStatements) -> Number:
+    """業外佔比 (%) = 營業外收入及支出 / 稅前淨利.
+
+    分母是稅前淨利，所以這個數字**有號**，而負號是有意義的：稅前淨利為負（本業
+    加業外仍然虧）的時候比例會翻號，「> 30% 要警戒」那把尺就不再適用。所以不取
+    絕對值，個股頁上那段說明講的正是這件事。
+
+    分母剛好是 0 就回 None——除出來是無限大，而無限大在這一欄的意思不是「業外佔
+    比很高」，是「這一季沒有稅前損益可以當分母」。``_div`` 已經擋掉了。
+    """
+    r = _div(s.non_operating, s.pretax_income)
     return None if r is None else r * 100
 
 

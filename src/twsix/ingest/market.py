@@ -71,6 +71,15 @@ OPERATING_INCOME_KEYS = ("營業利益（損失）",)
 #: 母公司業主的部分才是「稅後淨利」；沒有非控制權益的公司這一欄可能是空的。
 NET_INCOME_KEYS = ("淨利（淨損）歸屬於母公司業主", "本期淨利（淨損）")
 EPS_KEYS = ("基本每股盈餘（元）",)
+#: 〔業外佔比〕用的兩欄。上市與上櫃的彙總報表都有，欄名一字不差——這是 probe 過
+#: `data/market/twse_income/115Q2.csv` 與 `tpex_income/115Q2.csv` 的欄位列表確認
+#: 的，不是照別張表的寫法推的。
+#:
+#: 為什麼不用「稅前淨利 − 營業利益」自己導：彙總報表是**累計**，單季要先相減，
+#: 自己導等於把兩條各自相減過的數列再相減一次，誤差疊兩層。報表直接給了業外這
+#: 一欄，有現成的就不要推導。
+NON_OPERATING_KEYS = ("營業外收入及支出",)
+PRETAX_INCOME_KEYS = ("稅前淨利（淨損）",)
 
 #: 現金流量表彙總（MOPS t163sb20）。六張表的欄名一致，但還是照名字取。
 CF_OPERATING_KEYS = ("營業活動之淨現金流入（流出）",)
@@ -267,11 +276,22 @@ class MarketData:
             operating = _single(row, previous, OPERATING_INCOME_KEYS, quarter)
             net = _single(row, previous, NET_INCOME_KEYS, quarter)
             eps = _single(row, previous, EPS_KEYS, quarter)
+            non_op = _single(row, previous, NON_OPERATING_KEYS, quarter)
+            pretax = _single(row, previous, PRETAX_INCOME_KEYS, quarter)
             if revenue:
                 if operating is not None:
                     data.operating_margin[quarter] = round(operating / revenue * 100, 2)
                 if net is not None:
                     data.net_margin[quarter] = round(net / revenue * 100, 2)
+            # 〔業外佔比〕。分母是稅前淨利，所以它**有號**，而負號是有意義的：
+            # 稅前淨利為負（本業與業外加起來還是虧）的時候，這個比例會翻號，
+            # 而翻號之後「> 30% 要警戒」那把尺就不適用了。所以留著負號、不取
+            # 絕對值，個股頁上那段說明講的就是這件事。
+            #
+            # 分母剛好是 0 就留空：除出來是無限大，而「無限大」在這一欄的意思
+            # 不是「業外佔比很高」，是「這一季沒有稅前損益可以拿來當分母」。
+            if non_op is not None and pretax:
+                data.non_operating_ratio[quarter] = round(non_op / pretax * 100, 2)
             if net is not None:
                 data.net_income[quarter] = net
             if eps is not None:

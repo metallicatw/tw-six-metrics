@@ -190,7 +190,11 @@ def test_revenue_and_its_growth_rate_share_one_frame_and_say_so():
     assert svg.count("<svg") == 1, "兩個序列要在同一張圖上"
     assert "左軸" in svg and "右軸" in svg, "沒有說哪一個看哪一軸"
     assert "月營收" in svg and "年增率" in svg
-    assert "<details" in svg, "兩組數字要列得出來"
+    # 這張圖**不帶**自己的數值表：它的數值表是正下方那張六欄月營收明細（月份、
+    # 當月營收、月增率、年增率、累計營收、累計年增率），由樣板畫、而且收起來。
+    # 兩張都在的時候，讀者得先讀完一張窄的再讀一張寬的，而它們講的是同一件事。
+    assert "<details" not in svg, "數值表重複了：這張圖底下已經有一張更完整的"
+    assert page.revenue_rows, "更完整的那張也不見了——變成兩張都沒有"
 
 
 def test_the_eight_quarter_trend_puts_the_two_rates_on_one_scale():
@@ -229,9 +233,17 @@ def test_the_revenue_table_carries_the_six_columns_the_reader_compares():
 
 
 def test_every_chart_ships_its_numbers():
+    """「絕不只給一張圖」——但那條規則守的是**頁面**，不是 figure 字串。
+
+    〔三年營收趨勢〕是唯一一張自己不帶數值表的圖，因為它的數值表由樣板畫在它
+    正下方，而且欄位更完整。所以這裡把它拆成兩條路一起驗：其他圖各自帶表，
+    營收那張的數字在 `page.revenue_rows` 裡。少掉任何一邊都是「只剩一張圖」。
+    """
     page, _ = _page()
-    for key in ("revenue", "eight_quarters", "eps"):
+    for key in ("eight_quarters", "eps"):
         assert "<details" in page.figures[key], f"{key} 沒有數值表"
+    assert page.figures["revenue"], "營收那張圖不見了"
+    assert page.revenue_rows, "營收那張圖的數字不見了"
 
 
 def test_bars_are_anchored_to_zero():
