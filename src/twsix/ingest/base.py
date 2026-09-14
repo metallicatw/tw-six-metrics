@@ -12,6 +12,7 @@ it handles HTTP/2 and connection reuse better than ``urllib``.
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import hashlib
 import http.client
@@ -116,6 +117,20 @@ def tls_context() -> ssl.SSLContext:
     strict = getattr(ssl, "VERIFY_X509_STRICT", 0)
     if strict:
         ctx.verify_flags &= ~strict
+    # 櫃買（www.tpex.org.tw）2026-09-07 換憑證之後**只送 leaf、不送中繼**。
+    # 瀏覽器會照 leaf 裡的 AIA 欄位自己去把中繼抓回來，Python 的 ssl 不做這件
+    # 事，於是每一個櫃買的請求都是「unable to get local issuer certificate」——
+    # 上櫃那一半的收盤行情、上櫃三大法人、年度交易資訊整批停在原地。
+    #
+    # 補的方式是把那張中繼（連同它的根，因為 Ubuntu 的 ca-certificates 還沒收
+    # 那張根）加進信任清單。理由與代價寫在 twca_chain.pem 的檔頭。
+    #
+    # 找不到那個檔案就當作沒這回事：少了它證交所那一半仍然抓得到，而為了一個
+    # 附加的修補讓整支程式起不來是本末倒置。
+    extra = Path(__file__).with_name("twca_chain.pem")
+    if extra.is_file():
+        with contextlib.suppress(ssl.SSLError):   # 壞掉的 PEM 不該讓程式起不來
+            ctx.load_verify_locations(cafile=str(extra))
     return ctx
 
 
