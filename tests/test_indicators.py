@@ -215,3 +215,93 @@ def test_every_scored_result_explains_itself():
     for r in results:
         assert r.grade is not None
         assert r.reason, f"{r.key} scored without recording a reason"
+
+
+# ── 券商比率表（FRQ）當退路 ────────────────────────────────────────────
+#
+# 週轉率的分母是「期初期末存貨平均」，而財報是以**百萬元**為單位的。存貨不到
+# 一百萬的公司那一格被四捨五入成 0 或 1，於是我們自己算出來的要嘛是 None、
+# 要嘛是 10.0／5.0／3.33／2.0 這種「小整數除小整數」的噪音。券商手上是沒有被
+# 四捨五入的原始數——2901 欣欣：22.87／14.31／5.82／4.08。
+#
+# 但 FRQ 對**真的**沒有存貨的公司照樣會算給你一個數字，而那個數字是好幾萬。
+# 所以退路有兩道門，而兩道擋的是同一件事的兩端。
+
+
+def test_低庫存但券商有合理數字就用券商的():
+    r = grade_inventory_turnover(
+        [None, None, None, None],
+        quarterly_inventory_ratio=0.001,          # 低庫存，本來會是「不適用」
+        fallback=[22.87, 14.31, 5.82, 4.08],      # 2901 欣欣 FRQ 上的真實值
+        rules=R,
+    )
+    assert r.grade is not None, "券商有合理的數字，卻還是說不適用"
+    assert "FRQ" in (r.reason or ""), "用了借來的數字卻沒說來源"
+
+
+def test_數據不足但券商有合理數字也用券商的():
+    """另一條出口。兩條都要問，不然「補得到的」只補了一半。"""
+    r = grade_inventory_turnover(
+        [3.0, None, None, None], fallback=[3.0, 2.9, 2.8, 2.7], rules=R
+    )
+    assert r.grade is not None
+    assert "FRQ" in (r.reason or "")
+
+
+def test_券商那個幾萬次的數字不准進來():
+    """真的沒有存貨的公司，FRQ 會給出好幾萬。
+
+    量過：1,713 檔真的有存貨的股票、13,633 個季值，P99.9 是 17.12，超過 50 的
+    只有 4 個。台灣虎航 34,453、關貿 370,752、雄獅 173,569——那不是週轉率，
+    那是拿營業成本去除以一個接近零的存貨。
+
+    沒有這道門的話，它們會拿到 AA（穩定且平均 >= 1.5），以一個看起來正常的等第
+    坐在報告上——而「不適用」這個標籤存在的理由正是為了不要發生這件事。
+    """
+    r = grade_inventory_turnover(
+        [None, None, None, None],
+        quarterly_inventory_ratio=0.001,
+        fallback=[34453.48, 8401.16, 9000.0, 8800.0],   # 6757 台灣虎航
+        rules=R,
+    )
+    assert r.grade is None, f"幾萬次的『週轉率』拿到了等第：{r.reason}"
+    assert "不適用" in (r.reason or "")
+
+
+def test_券商那串全是零也不准進來():
+    """反過來那一端。四季全 0 會被判成「穩定且平均 < 1.5」，也就是 A。
+
+    那不是 A，那是「這一格沒有東西」。而且這不是新發明的標準——自己算的那條路
+    本來就有 `product <= 0 → 不適用`，借來的數字走同一把尺。
+    """
+    r = grade_inventory_turnover(
+        [None, None, None, None],
+        quarterly_inventory_ratio=0.001,
+        fallback=[0.0, 0.0, 0.0, 0.0],                  # 6198 瑞築
+        rules=R,
+    )
+    assert r.grade is None, f"全是零的『週轉率』拿到了等第：{r.reason}"
+
+
+def test_四季缺一季就整串不用():
+    """不是只丟掉缺的那一季。
+
+    等第看的是四季之間的**變化**（單季跌逾 20%、連兩季累積跌逾 20%、四季穩定
+    度）。拿三季去湊四季，算出來的變化是假的變化。
+    """
+    r = grade_inventory_turnover(
+        [None, None, None, None],
+        quarterly_inventory_ratio=0.001,
+        fallback=[5.0, 4.0, None, 3.0],
+        rules=R,
+    )
+    assert r.grade is None and "不適用" in (r.reason or "")
+
+
+def test_自己算得出來的時候不去借():
+    """借來的數字只是退路，不是偏好。優先順序不能反過來。"""
+    ours = [2.0, 1.9, 1.8, 1.7]
+    a = grade_inventory_turnover(ours, rules=R)
+    b = grade_inventory_turnover(ours, fallback=[9.9, 9.8, 9.7, 9.6], rules=R)
+    assert a.grade is b.grade and a.reason == b.reason, "自己算得出來卻去用了 FRQ"
+    assert "FRQ" not in (b.reason or "")

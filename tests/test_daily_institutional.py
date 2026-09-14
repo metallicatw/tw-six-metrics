@@ -313,7 +313,20 @@ def test_a_shuffled_otc_payload_is_refused_rather_than_silently_wrong():
 
     這是上一條的反向測試。恆等式的價值不在「現在對得上」，而在「哪天對不上的
     時候會怎麼樣」——答案必須是回空的 list，讓呼叫端當作那天沒抓到。
+
+    ## 為什麼要把它的輸出吃掉
+
+    parser 拒收的時候會印一行「779/779 列的『合計 = 外資 + 投信 + 自營商』對不上，
+    欄序可能變了」。那一行在**正式執行**的 log 裡是重要的警報；在測試的 log 裡它
+    是這條測試成功的證據，卻長得和真的出事一模一樣。
+
+    實際代價：那一行出現在 CI 的輸出裡，被當成「櫃買改了欄位順序」追查了一輪，
+    最後證實 parser 對得好好的（拿當天真的回應驗算，779/779 全部相符）。所以這裡
+    把它關起來——測試的斷言本身就是證據，不需要再對著 log 喊一次。
     """
+    import contextlib
+    import io as _io
+
     from twsix.ingest.daily import parse_tpex_institutional_dated
 
     payload = _raw_sample("tpex_insti_rwd_dated")
@@ -322,8 +335,11 @@ def test_a_shuffled_otc_payload_is_refused_rather_than_silently_wrong():
     for row in table["data"]:
         if len(row) > 22:
             row[22] = "999999999"
-    assert parse_tpex_institutional_dated(payload) == [], \
-        "欄序看起來位移了，parser 卻還是回了資料"
+    noise = _io.StringIO()
+    with contextlib.redirect_stdout(noise):
+        got = parse_tpex_institutional_dated(payload)
+    assert got == [], "欄序看起來位移了，parser 卻還是回了資料"
+    assert "對不上" in noise.getvalue(), "拒收了卻沒有說為什麼——正式執行時那一行是警報"
 
 
 def test_a_non_trading_day_is_empty_not_an_error():

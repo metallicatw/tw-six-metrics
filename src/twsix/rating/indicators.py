@@ -14,7 +14,7 @@ cosmetic — it is the dependency order of the original formulas.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ..models import (
     INDICATOR_LABELS,
@@ -78,6 +78,23 @@ class Rules:
     #: no-inventory industries are excluded from scoring entirely
     inventory_skip_quarterly_ratio: float = 0.04  # BSQ!K7
     inventory_skip_annual_ratio: float = 0.01  # BSQ!L7
+    #: 券商比率表（FRQ）上的存貨週轉率，大於這個數字就不採用。
+    #:
+    #: 這個 50 不是猜的。拿 1,713 檔**真的有等第**（也就是真的有存貨）的股票，
+    #: FRQ 上 13,633 個季值量出來的分布是：
+    #:
+    #:     中位數 0.96　P95 4.21　P99 8.25　P99.9 17.12
+    #:     超過 50 次的：13,633 個裡面 4 個（0.03%）
+    #:
+    #: 也就是說真實的季週轉率幾乎不會超過 20。而落在「低庫存」那一格的公司，
+    #: FRQ 照樣會算給你一個數字——台灣虎航 34,453 次、關貿 370,752 次、雄獅
+    #: 173,569 次。那不是週轉率，那是「拿營業成本去除以一個接近零的存貨」。
+    #:
+    #: 把那種數字填進報告，它會拿到 AA（穩定且平均 ≥ 1.5），然後以一個看起來
+    #: 正常的等第坐在那裡——這正是「不適用」這個標籤存在的理由。所以門檻設在
+    #: 真實分布 P99.9 的三倍左右：能進來的都還在可能的範圍內，進不來的落回
+    #: 「無庫存或低庫存產業，本指標不適用」。
+    inventory_fallback_max: float = 50.0
 
     # -- 6. free cash flow -------------------------------------------------
     fcf_long_quarters: int = 6
@@ -424,60 +441,49 @@ def grade_eps(
 # =========================================================================
 
 
-def grade_inventory_turnover(
-    values: Sequence[Number],
-    *,
-    quarterly_inventory_ratio: Number = None,
-    annual_inventory_ratio: Number = None,
-    rules: Rules = DEFAULT_RULES,
-) -> IndicatorResult:
-    """No-inventory industries are excluded, not scored badly.
+def _usable_fallback(
+    values: Sequence[Number], n: int, cap: float
+) -> list[float] | None:
+    """券商比率表上那一串堪不堪用。
 
-    ``quarterly_inventory_ratio`` is BSQ!K7 (inventory / quarterly revenue) and
-    ``annual_inventory_ratio`` is BSQ!L7 (inventory / trailing four quarters).
+    要 n 季全有，而且每一季都**大於 0、在 ``cap`` 以內**。任何一季不合格就整串
+    不要——不是只丟掉那一季：等第看的是四季之間的**變化**（單季跌逾 20%、連兩季
+    累積跌逾 20%、四季穩定度），混著一個假的數字算出來的變化是假的變化。
+
+    兩道門擋的是同一件事的兩端，而兩端都是「除法的分母接近零或分子接近零」：
+
+    * **上限** ——真的沒有存貨的公司，FRQ 照樣算給你一個數字，而那個數字是好幾
+      萬（台灣虎航 34,453、關貿 370,752）。量過 1,713 檔真的有存貨的股票，
+      13,633 個季值裡 P99.9 是 17.12，超過 50 的只有 4 個。
+    * **大於 0** ——反過來那一端。四季全是 0（瑞築、東華）會被判成「穩定且平均
+      < 1.5」，也就是 A。那不是 A，那是「這一格沒有東西」。
+
+    「每一季都要大於 0」不是新發明的標準，是**自己算的那條路本來就有的規則**
+    （見底下 `product <= 0` 那一段）。借來的數字走同一把尺。
     """
-    key = "inventory_turnover"
-    n = rules.inventory_quarters
     vals = list(values[:n])
+    if len(vals) < n:
+        return None
+    out: list[float] = []
+    for v in vals:
+        if v is None:
+            return None
+        f = float(v)
+        if f <= 0 or f > cap:
+            return None
+        out.append(f)
+    return out
 
-    # 「這一行沒有庫存」要**先於**「資料不夠」判。
-    #
-    # 兩個比率（存貨 ÷ 當季營收、存貨 ÷ 近四季營收）算得出來，靠的是資產負債表
-    # 與損益表——和周轉率算不算得出來是兩件事。而周轉率的分母是「期初期末存貨
-    # 平均」：航運、航空、資訊服務這一類公司的存貨本來就是 0，於是那個除法給不
-    # 出數字，函式在第一行就 `_insufficient` 回去了。
-    #
-    # 結果是 115 檔航運／觀光餐旅／資訊服務被標成「數據不足」——那句話的意思是
-    # 「這個數字存在，只是我們沒抓到」，而事實正好相反：它們**沒有庫存**，這個
-    # 指標對它們不適用。掃過那 122 檔「數據不足」的股票，115 檔的比率早就低於
-    # 底下那兩個門檻，只是永遠走不到這裡。
-    #
-    # 順序一換，那 115 檔就落到它們本來就該落的那一格。剩下的才是真的缺資料
-    # （上市未滿兩年、或 DR 沒有台灣格式的財報）。
-    skip = False
-    if quarterly_inventory_ratio is not None:
-        skip = skip or quarterly_inventory_ratio <= rules.inventory_skip_quarterly_ratio
-    if annual_inventory_ratio is not None:
-        skip = skip or annual_inventory_ratio <= rules.inventory_skip_annual_ratio
-    # 四季的乘積 ≤ 0 也算「不適用」，但那要先有四季的值才算得出來。
-    if not skip and len(vals) == n and all_present(vals, n):
-        product = 1.0
-        for v in vals:
-            product *= v  # type: ignore[operator]
-        skip = product <= 0
-    if skip:
-        return IndicatorResult(
-            key=key,
-            label=INDICATOR_LABELS[key],
-            values=tuple(vals),
-            status=Status.NOT_RATED,
-            grade=None,
-            reason="不評分: 無庫存或低庫存產業，本指標不適用",
-        )
 
-    if len(vals) < n or not all_present(vals, n):
-        return _insufficient(key, vals)
+def _grade_inventory_series(
+    key: str, vals: list[float], rules: Rules, *, source: str = ""
+) -> IndicatorResult:
+    """四季齊全之後的評等。自己算的和向 FRQ 借的都走這一條。
 
+    ``source`` 只影響 reason 上那一句「來源」。兩條路的**判準**必須一模一樣，
+    所以它們共用這一支——各寫一份的話，改了其中一邊的人不會知道另一邊也要改，
+    而症狀是「有些股票的等第規則跟別人不一樣」，沒有錯誤訊息。
+    """
     b, c, d, e = vals
     mean = avg(vals)
     assert mean is not None
@@ -523,7 +529,88 @@ def grade_inventory_turnover(
     if f["J"] != MISS:
         reason = "AA: 四季穩定且平均>=1.5次"
 
-    return _result(key, vals, f, reason)
+    res = _result(key, vals, f, reason)
+    if source and res.reason:
+        # 借來的數字要說出是借來的。報告上同一欄裡有兩種來源而不講，讀者沒有
+        # 辦法知道哪一格是我們從財報算的、哪一格是券商算好給我們的。
+        res = replace(res, reason=f"{res.reason}（來源：{source}）")
+    return res
+
+
+def grade_inventory_turnover(
+    values: Sequence[Number],
+    *,
+    quarterly_inventory_ratio: Number = None,
+    annual_inventory_ratio: Number = None,
+    fallback: Sequence[Number] = (),
+    rules: Rules = DEFAULT_RULES,
+) -> IndicatorResult:
+    """No-inventory industries are excluded, not scored badly.
+
+    ``quarterly_inventory_ratio`` is BSQ!K7 (inventory / quarterly revenue) and
+    ``annual_inventory_ratio`` is BSQ!L7 (inventory / trailing four quarters).
+    """
+    key = "inventory_turnover"
+    n = rules.inventory_quarters
+    vals = list(values[:n])
+
+
+    # 「這一行沒有庫存」要**先於**「資料不夠」判。
+    #
+    # 兩個比率（存貨 ÷ 當季營收、存貨 ÷ 近四季營收）算得出來，靠的是資產負債表
+    # 與損益表——和周轉率算不算得出來是兩件事。而周轉率的分母是「期初期末存貨
+    # 平均」：航運、航空、資訊服務這一類公司的存貨本來就是 0，於是那個除法給不
+    # 出數字，函式在第一行就 `_insufficient` 回去了。
+    #
+    # 結果是 115 檔航運／觀光餐旅／資訊服務被標成「數據不足」——那句話的意思是
+    # 「這個數字存在，只是我們沒抓到」，而事實正好相反：它們**沒有庫存**，這個
+    # 指標對它們不適用。掃過那 122 檔「數據不足」的股票，115 檔的比率早就低於
+    # 底下那兩個門檻，只是永遠走不到這裡。
+    #
+    # 順序一換，那 115 檔就落到它們本來就該落的那一格。剩下的才是真的缺資料
+    # （上市未滿兩年、或 DR 沒有台灣格式的財報）。
+    skip = False
+    if quarterly_inventory_ratio is not None:
+        skip = skip or quarterly_inventory_ratio <= rules.inventory_skip_quarterly_ratio
+    if annual_inventory_ratio is not None:
+        skip = skip or annual_inventory_ratio <= rules.inventory_skip_annual_ratio
+    # 四季的乘積 ≤ 0 也算「不適用」，但那要先有四季的值才算得出來。
+    if not skip and len(vals) == n and all_present(vals, n):
+        product = 1.0
+        for v in vals:
+            product *= v  # type: ignore[operator]
+        skip = product <= 0
+    # 兩條「算不出來」的出口，都先問一次券商的比率表。
+    #
+    # 為什麼我們自己算不出（或算出垃圾）：週轉率的分母是「期初期末存貨平均」，
+    # 而財報是以**百萬元**為單位的。存貨不到一百萬的公司，那一格被四捨五入成 0
+    # 或 1，於是除法要嘛除不下去、要嘛給出 10.0／5.0／3.33／2.0 這種一看就是
+    # 「小整數除小整數」的數字。2901 欣欣正是這樣，而券商手上是沒有被四捨五入
+    # 的原始數：22.87／14.31／5.82／4.08。
+    #
+    # 上限（`inventory_fallback_max`）是這件事的關鍵，理由寫在那個欄位上：FRQ
+    # 對**真的**沒有存貨的公司照樣會算給你一個數字，而那個數字是好幾萬。沒有
+    # 上限的話，台灣虎航會拿到一個 34,453 次的 AA。
+    borrowed = _usable_fallback(fallback, n, rules.inventory_fallback_max)
+
+    if skip:
+        if borrowed is not None:
+            return _grade_inventory_series(key, borrowed, rules, source="FRQ")
+        return IndicatorResult(
+            key=key,
+            label=INDICATOR_LABELS[key],
+            values=tuple(vals),
+            status=Status.NOT_RATED,
+            grade=None,
+            reason="不評分: 無庫存或低庫存產業，本指標不適用",
+        )
+
+    if len(vals) < n or not all_present(vals, n):
+        if borrowed is not None:
+            return _grade_inventory_series(key, borrowed, rules, source="FRQ")
+        return _insufficient(key, vals)
+
+    return _grade_inventory_series(key, [float(v) for v in vals], rules)
 
 
 # =========================================================================

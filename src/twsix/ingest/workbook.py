@@ -114,6 +114,24 @@ class SheetSource:
         """
         raise NotImplementedError
 
+    def _frq_inventory(self) -> dict[Quarter, float]:
+        """券商比率表上那一列存貨週轉率。
+
+        FRQ 本來只拿來對帳（見 `frq_ratios`），現在多一個用途：我們自己算不出來
+        的時候當退路。走 `cells()` 所以 xlsm 與抓回來的 grid 兩條路都通——這正是
+        `SheetSource` 把「格子從哪來」抽成一個方法的理由。
+        """
+        header_row, rows = FRQ_LAYOUT
+        cells = self.cells("FRQ")
+        if not cells:
+            return {}
+        out: dict[Quarter, float] = {}
+        for col, quarter in WorkbookSource._periods(cells, header_row).items():
+            value = _as_float(cells.get((rows["inventory_turnover"], col)))
+            if value is not None:
+                out[quarter] = value
+        return out
+
     def load(self) -> FinancialData:
         statements = self._statements()
         revenue = self._revenue()
@@ -176,6 +194,7 @@ class SheetSource:
             eps=eps,
             net_income=net_income,
             inventory_turnover=turnover,
+            inventory_turnover_frq=self._frq_inventory(),
             free_cash_flow=fcf,
             revenue_months=self._merged_view(revenue.labels),
             revenue_months_raw=revenue.labels,

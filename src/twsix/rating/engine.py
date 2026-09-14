@@ -47,6 +47,10 @@ class FinancialData:
     eps: dict[Quarter, float] = field(default_factory=dict)
     net_income: dict[Quarter, float] = field(default_factory=dict)
     inventory_turnover: dict[Quarter, float] = field(default_factory=dict)
+    #: 券商比率表（FRQ）上那一列存貨週轉率。只在我們自己算不出來的時候當退路
+    #: 用——存貨不到一百萬的公司，百萬為單位的財報上那一格是 0，除法給不出
+    #: 數字，但券商手上是未四捨五入的原始數。見 grade_inventory_turnover。
+    inventory_turnover_frq: dict[Quarter, float] = field(default_factory=dict)
     free_cash_flow: dict[Quarter, float] = field(default_factory=dict)
 
     #: Newest first, with January folded into February as ``115/01-02`` and no
@@ -193,6 +197,9 @@ def build_snapshot(
             data.series(data.inventory_turnover, quarter, rules.inventory_quarters),
             quarterly_inventory_ratio=data.quarterly_inventory_ratio,
             annual_inventory_ratio=data.annual_inventory_ratio,
+            fallback=data.series(
+                data.inventory_turnover_frq, quarter, rules.inventory_quarters
+            ),
             rules=rules,
         ),
         "free_cash_flow": grade_free_cash_flow(
