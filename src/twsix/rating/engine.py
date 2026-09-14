@@ -40,6 +40,10 @@ class FinancialData:
 
     operating_margin: dict[Quarter, float] = field(default_factory=dict)
     net_margin: dict[Quarter, float] = field(default_factory=dict)
+    #: 業外損益 ÷ 稅前淨利（%）。**不評分**——六大指標是六個，多一個等第就是多
+    #: 一條沒有人訂過的規則。它在個股頁上是為了回答「這一季賺的錢有多少不是本業
+    #: 賺的」，而那件事單看營業利益率或淨利率都看不出來。有號，負號有意義。
+    non_operating_ratio: dict[Quarter, float] = field(default_factory=dict)
     eps: dict[Quarter, float] = field(default_factory=dict)
     net_income: dict[Quarter, float] = field(default_factory=dict)
     inventory_turnover: dict[Quarter, float] = field(default_factory=dict)

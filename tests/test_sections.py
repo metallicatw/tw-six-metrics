@@ -439,20 +439,45 @@ def test_every_row_of_the_rating_table_is_the_same_length():
     assert lengths == {8}, lengths
 
 
-def test_the_unscored_row_is_marked_as_unscored():
-    """淨利率（歸母）在表上，但它不是第七個指標。
+#: 表上不評分的那幾列。多一個等第就是多一條沒有人訂過的規則，所以這兩列有數字、
+#: 沒有等第——而這條清單就是「哪幾列可以沒有等第」的白名單。
+UNSCORED_ROWS = ("net_margin", "non_operating_ratio")
 
-    多一個等第就是多一條沒有人訂過的規則。它在那裡是因為上面那三列都是「賺多少」，
-    而它回答的是「賺得有多厚」。
+
+def test_the_unscored_row_is_marked_as_unscored():
+    """淨利率（歸母）與業外佔比在表上，但它們不是第七、第八個指標。
+
+    多一個等第就是多一條沒有人訂過的規則。它們在那裡是因為旁邊那幾列都是「賺
+    多少」，而它們回答的是「賺得有多厚」與「有多少不是本業賺的」。
     """
     page, _ = _page()
     rows = {ind["key"]: ind for ind in page.indicators}
-    assert "net_margin" in rows, "淨利率（歸母）沒有出現"
-    assert rows["net_margin"]["scored"] is False
-    assert rows["net_margin"]["badge"] is False
-    assert not rows["net_margin"]["letter"]
-    assert all(rows[k]["scored"] for k in rows if k != "net_margin")
+    for key in UNSCORED_ROWS:
+        assert key in rows, f"{key} 沒有出現"
+        assert rows[key]["scored"] is False
+        assert rows[key]["badge"] is False
+        assert not rows[key]["letter"]
+    assert all(rows[k]["scored"] for k in rows if k not in UNSCORED_ROWS)
 
+
+def test_the_three_margin_rows_read_as_one_sentence():
+    """營業利益率 → 淨利率（歸母） → 業外佔比，連著三列，順序就是意思。
+
+    第三列是第一列與第二列之間那個差額的成因。拆開之後，兩條率差很多的時候看得
+    出「有事發生」，但看不出是業外拉上去還是稅吃掉了——而那正是這三列合起來要
+    回答的問題。
+
+    〔淨利率（歸母）〕原本在整張表最後。順序被改回去不會報錯、不會缺數字，只會
+    讓讀者每次比對都多跨四列，而那種退步沒有任何症狀。
+    """
+    page, _ = _page()
+    keys = [ind["key"] for ind in page.indicators]
+    i = keys.index("operating_margin")
+    assert keys[i : i + 3] == [
+        "operating_margin",
+        "net_margin",
+        "non_operating_ratio",
+    ], f"三列沒有連在一起：{keys}"
 
 def test_a_ratio_that_explodes_does_not_flatten_the_other_twenty_quarters():
     """年增率是重尾的：基期小的時候一季 +1,100% 是真的。

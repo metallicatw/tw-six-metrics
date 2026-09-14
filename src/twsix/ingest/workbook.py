@@ -26,6 +26,7 @@ from ..transform.statements import (
     inventory_ratios,
     inventory_turnover,
     net_margin,
+    non_operating_ratio,
     operating_margin,
 )
 from ..xlsx.extract import Workbook
@@ -38,6 +39,15 @@ LAYOUT: dict[str, tuple[int, dict[str, int]]] = {
             "revenue": 8,
             "cost_of_goods": 10,
             "operating_income": 21,
+            # 〔業外佔比〕的兩列。列號是掃過 data/sheets 底下**全部 1,947 份**
+            # ISQ 確認的，不是抽樣：第 21 列一律「營業利益」、第 69 列一律
+            # 「營業外收入及支出」、第 70 列一律「稅前淨利」，一份都沒有錯位。
+            #
+            # 第 68 列是「營業外收入及支出－其他」，只差三個字，而它是那一段
+            # 底下的一個明細、不是合計。抓錯那一列不會報錯，只會讓幾乎每一檔的
+            # 業外佔比都變成 0。
+            "non_operating": 69,
+            "pretax_income": 70,
             "net_income_consolidated": 76,
             "net_income_parent": 98,
             "eps": 104,
@@ -114,6 +124,7 @@ class SheetSource:
         ordered = statements.ordered
         op_margin: dict[Quarter, float] = {}
         n_margin: dict[Quarter, float] = {}
+        non_op: dict[Quarter, float] = {}
         eps: dict[Quarter, float] = {}
         net_income: dict[Quarter, float] = {}
         turnover: dict[Quarter, float] = {}
@@ -128,6 +139,9 @@ class SheetSource:
             v = net_margin(s)
             if v is not None:
                 n_margin[q] = round(v, 2)
+            v = non_operating_ratio(s)
+            if v is not None:
+                non_op[q] = round(v, 2)
             if s.eps is not None:
                 eps[q] = s.eps
             if s.net_income_parent is not None:
@@ -158,6 +172,7 @@ class SheetSource:
             name=self.name or name,
             operating_margin=op_margin,
             net_margin=n_margin,
+            non_operating_ratio=non_op,
             eps=eps,
             net_income=net_income,
             inventory_turnover=turnover,

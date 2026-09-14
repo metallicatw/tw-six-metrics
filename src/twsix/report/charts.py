@@ -720,6 +720,7 @@ def combo(
     newest_first: bool = True,
     frame: Frame | None = None,
     note: str = "",
+    table: bool = True,
 ) -> str:
     """一組長條 ＋ 一到數條折線，兩條軸，同一個時間軸。
 
@@ -897,7 +898,13 @@ def combo(
         title,
         "",
         "".join(parts),
-        _table(shown_labels, series, digs)
+        # `table=False` 只在**這一頁上已經有一張更完整的表**的時候用。
+        # 〔三年營收趨勢〕是唯一那個情形：它自己的數值表是「月營收＋年增率」兩欄，
+        # 而它正下方那張月營收明細是六欄，含這兩欄。兩張表疊在一起，讀者要先讀完
+        # 一張窄的、再讀一張寬的，而它們講的是同一件事。
+        #
+        # 預設仍然是 True——「每一張圖都有它的表」是這個模組開頭那條規則。
+        (_table(shown_labels, series, digs) if table else "")
         + (f'<p class="chart-note">{escape(note)}</p>' if note else ""),
         colour=bar_colour if bar_axis == "left" else (
             line_data[0][2] if line_data else bar_colour

@@ -158,12 +158,23 @@
 <div class="scroll">
   <table>
     <thead>
-      <tr><th>指標</th><th>評等</th><th class="num">評分</th><th class="num">近八期數列（最新在左）</th><th>理由</th></tr>
+      {# 八期各佔一欄，所以表頭那一格要橫跨八欄。colspan 寫死 8 是對的：
+         `_eight_periods` 的 TABLE_PERIODS 就是 8，而下面補空欄那一段也是照 8 補。 #}
+      <tr><th>指標</th><th>評等</th><th class="num">評分</th>
+        <th class="num" colspan="8">近八期數列（最新在左）</th><th>理由</th></tr>
     </thead>
     <tbody>
       {% for ind in p.indicators %}
       <tr{% if not ind.scored %} class="unscored"{% endif %}>
-        <th scope="row">{{ ind.label }}</th>
+        {# 〔業外佔比〕的判讀尺度掛在它自己那一列的名字旁邊，不是另開一段說明。
+           一個沒有尺度的百分比，讀者只能猜 15% 算多還是算少；而那把尺是查一次
+           就記得的東西，攤在頁面上每天佔一塊版面不划算。燈泡兩邊都顧到。 #}
+        <th scope="row">{{ ind.label }}{% if ind.key == "non_operating_ratio" %}{% call tip() %}<b>業外收益佔稅前利潤比例（%）＝ 業外損益 ÷ 稅前淨利 × 100%</b><br>
+          比例 &lt; 10%：本業主導，盈餘品質較高<br>
+          比例在 10~30%：有一定業外貢獻，需追蹤原因<br>
+          比例 &gt; 30%：警戒，業外收益主導，需深入調查是否一次性<br>
+          比例 &gt; 100%（即本業虧損但業外盈餘）：高度警戒，本業健康度存疑<br><br>
+          這個數字<b>有號</b>。上面那把尺假設稅前淨利是正的；稅前淨利為負（本業加業外仍然虧）的時候比例會翻成負數，那把尺就不適用——那一季要直接看營業利益與業外損益兩個絕對值，不是看比例。{% endcall %}{% endif %}</th>
         <td>
           {%- if ind.badge -%}
             <span class="g g-{{ ind.letter }}">{{ ind.letter }}</span>
@@ -172,23 +183,34 @@
           {%- endif -%}
         </td>
         <td class="num">{{ ind.display }}</td>
-        <td class="series">
-          {# 期別在上、數值在下，同一個 grid 欄，所以一定對齊。八個裸數字沒有
-             期別是讀不出來的：營收年增率數的是月，其他六項數的是季。 #}
-          <div class="cells" style="--n:{{ ind['values']|length }}">
-            {% for label in ind["periods"] %}<span class="p">{{ label }}</span>{% endfor %}
-            {% for v in ind["values"] %}
-            <span class="v">{{ "%.2f"|format(v) if v is not none else "—" }}</span>
-            {% endfor %}
-          </div>
+        {# 八期＝八個**真的**表格欄，不是一個 td 裡面的 grid。
+
+           以前是 grid：`repeat(var(--n),max-content)`，每一列各自照自己的內容
+           算欄寬。同一列裡期別與數值對得齊，但**列與列之間對不齊**——而那正是
+           讀者在做的事：拿〔自由現金流量〕的 115Q2 去對上面〔EPS〕的 115Q2。
+           自由現金流量是六位數的百萬，上面幾列是兩位數的百分比，於是它那一列
+           的八欄整排往左歪，愈往左歪得愈多。
+
+           改成真的欄位之後對齊是**表格自己保證的**，不靠任何寬度數字：同一個
+           表格欄裡的每一格本來就一樣寬。期別仍然放在數值上面，因為八個裸數字
+           沒有期別讀不出來——營收年增率數的是月，其他六項數的是季。 #}
+        {% for v in ind["values"] %}
+        <td class="pv">
+          <span class="p">{{ ind["periods"][loop.index0] if loop.index0 < ind["periods"]|length else "" }}</span>
+          <span class="v">{{ "%.2f"|format(v) if v is not none else "—" }}</span>
         </td>
+        {% endfor %}
+        {# 補足欄數：某一列只有六期的時候，不補的話它後面兩欄會由 rowspan 之外
+           的東西遞補，整張表錯位。 #}
+        {% for _ in range(8 - ind["values"]|length) %}<td class="pv"></td>{% endfor %}
         <td class="reason">{{ ind.reason }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
-<p class="foot">註：淨利率（歸母）不列入評分，計算方式為 歸屬母公司稅後淨利 ÷ 營收。</p>
+<p class="foot">註：淨利率（歸母）與業外佔比都不列入評分。淨利率（歸母）＝ 歸屬母公司稅後淨利 ÷ 營收。</p>
+
 
 {# 三條線一張圖，放在逐項拆開之前：讀者要先看得到「賺的錢有沒有變好賺」，
    再往下看是哪一項把它拉上去或壓下來。 #}
@@ -199,7 +221,17 @@
    看到，後面那六張才知道自己在跟什麼比。 #}
 {% if p.figures.revenue %}{{ p.figures.revenue|safe }}{% endif %}
 
+{# 月營收明細：收起來，就在〔三年營收趨勢〕正下方。
+
+   收起來是因為它有三十六列六欄——攤開等於在圖與下一段之間插進一個螢幕高的
+   數字牆，而多數時候讀者要的是圖。它仍然在這裡、而且是**唯一**那張表：這張圖
+   原本自帶的「數值」收合表只有月營收與年增率兩欄，是這六欄的子集，已經關掉
+   （`charts.combo(..., table=False)`）。
+
+   用 `chart-data` 這個 class 而不是自訂一個：站上每一張圖底下的數值表都長這樣，
+   而這張就是那張圖的數值表。 #}
 {% if p.revenue_rows %}
+<details class="chart-data"><summary>數值</summary>
 <div class="scroll">
   <table class="rev">
     <thead>
@@ -223,6 +255,7 @@
     </tbody>
   </table>
 </div>
+</details>
 {% endif %}
 
 {# 每個指標的圖就接在它自己的評等後面。
