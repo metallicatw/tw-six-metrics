@@ -1199,10 +1199,16 @@ def test_the_report_is_copied_in_before_the_build_and_a_failure_is_not_fatal():
     assert "git clone" in step, "退路不見了"
     assert step.index("github.io") < step.index("git clone"), "Pages 要排在 clone 前面"
 
-    # 那邊 22:30 UTC 更新完，這邊四十分鐘後帶進來；沒有這一條，那一頁要等到這裡
+    # 那邊 22:23 UTC 更新完，這邊 74 分鐘後帶進來；沒有這一條，那一頁要等到這裡
     # 因為別的理由重建才會換，最差落後一整天。
+    #
+    # 週幾是 `0-5` 不是 `0-4`：上游加了週五那一班（UTC 週五 ＝ 台北週六早上），
+    # 好讓週末看得到週五的美股收盤。這裡不跟著加的話，它產出來的那一份要等到
+    # 週一早上才會進主站，等於白加。
+    #
+    # 緩衝夠不夠、有沒有撞在 GitHub 的尖峰上，由 tests/test_schedule.py 守。
     pages = (repo / ".github/workflows/pages.yml").read_text("utf-8")
-    assert 'cron: "10 23 * * 0-4"' in pages
+    assert 'cron: "37 23 * * 0-5"' in pages
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -1329,10 +1335,13 @@ def test_the_trend_report_is_copied_in_before_the_build():
     # 建出來的那段空窗，都還取得到東西。
     assert "for ref in report main" in action
 
-    # 上游 07:10 UTC 產完，這邊五十分鐘後帶進來。只排週一到週五：週末沒有
-    # 收盤價，上游本來就不跑。
+    # 上游 07:07 UTC 起跑，這邊 100 分鐘後帶進來（那個 job 的 timeout 是 90 分，
+    # 所以「跑不完」會先變成一次失敗，而不是讓這裡安靜地抓到昨天那一份）。
+    # 只排週一到週五：週末沒有收盤價，上游本來就不跑。
+    #
+    # 緩衝夠不夠由 tests/test_schedule.py 守，那裡連上游的時間一起寫著。
     pages = (repo / ".github/workflows/pages.yml").read_text("utf-8")
-    assert 'cron: "0 8 * * 1-5"' in pages
+    assert 'cron: "47 8 * * 1-5"' in pages
 
 
 def test_the_trend_report_links_back_to_this_site():
