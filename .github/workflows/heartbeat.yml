@@ -1,0 +1,102 @@
+name: 心跳（有沒有哪一份資料悄悄停了）
+
+# 每天問一次：每一份資料還在往前走嗎？
+#
+# ## 為什麼需要這一條
+#
+# 2026-09-15 盤點的時候，下面這幾件事同時為真，而**排程全部是綠的**：
+#
+#   * 董監持股全市場停在 202606，斷了兩個月
+#   * 集保股權分散 20260828 整期不見，20260904 只有 6 檔
+#   * 季財報 115Q2 的現金流量表比損益表多 35 列，慢了四天
+#   * manifest.json 說 ratings 有 15,669 列，實際 17,503
+#
+# 一件都沒有被發現，因為它們**沒有任何症狀**。job 照綠、網頁照開，只是某一格
+# 的數字不再往前走——而「不再往前走」要有人記得上一次的數字才分得出來。
+#
+# 再加上 GitHub 這一層：負載夠高的時候排程會被**直接丟掉**，不通知、不記錄，
+# 在 Actions 分頁上和「還沒開始跑」長得一模一樣。所以「昨天那一班到底有沒有
+# 跑」這件事，只能從它該留下的東西反推。
+#
+# 這一條就是那個反推。它不看 workflow 有沒有跑，它看**資料有沒有動**——
+# 後者才是真正要的東西，而且它同時抓到「排程被丟掉」「端點被擋」「parser 壞了」
+# 「回填跑到一半」四種完全不同的故障。
+#
+# ## 它不做什麼
+#
+# **不 commit、不建站、不發布、不修任何東西。** 一個會動手的監控，壞掉的時候
+# 會把事情弄得更糟。它只有兩個輸出：一份摘要，和一個結束碼。
+#
+# ## 為什麼排在 02:13 UTC（台北 10:13）
+#
+# 早上那幾班（market.yml 09:17、ownership.yml 09:37 台北）跑完之後，而且離
+# GitHub 的尖峰（09:00–10:00 UTC）很遠。分鐘取 13 不是整十——平台在整點與圓整
+# 分鐘最擁塞，而這一條要是自己被丟掉就更沒有人會發現了。
+
+on:
+  schedule:
+    - cron: "13 2 * * *"
+  workflow_dispatch:
+
+# 讀就好。它不該有能力改任何東西。
+permissions:
+  contents: read
+
+concurrency:
+  group: heartbeat
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 上游最後一次產出是什麼時候。
+      #
+      # 用 `git clone --depth 1` 而不是 GitHub API：`build-site` 每天都在用
+      # 同一個方法 clone 這兩個 repo，所以這條路是**已經證明走得通的**，而
+      # API 那條路沒有（而且要處理 rate limit 與權杖範圍）。
+      #
+      # clone 失敗就留空字串，讓 heartbeat.py 把它當成問題——不是當成沒問題。
+      # 「上游整個掛掉」如果是最安靜的那種故障，這條就白寫了。
+      - name: 問兩個上游最後一次產出是什麼時候
+        id: upstream
+        run: |
+          set -u
+          stamp () {   # $1 = repo, $2 = 分支
+            local dir; dir="$(mktemp -d)"
+            if git clone --depth 1 --branch "$2" --quiet \
+                 "https://github.com/metallicatw/$1.git" "$dir" 2>/dev/null; then
+              git -C "$dir" log -1 --format=%cI
+            else
+              echo ""
+            fi
+          }
+          # market-monitor 的報告不進 git（每天重產的 1 MB 檔案），但它每天會
+          # commit 抓回來的快取，所以 main 的最後一個 commit 就是它最後一次
+          # 跑完的時間。
+          mm="$(stamp market-monitor main)"
+          # tw-trend-filter 的報告住在 report 這條孤兒分支上，每天 force push
+          # 覆蓋——所以那個 commit 的時間就是最後一次發布的時間。
+          tf="$(stamp tw-trend-filter report)"
+          echo "market-monitor: ${mm:-（clone 失敗）}"
+          echo "tw-trend-filter: ${tf:-（clone 失敗）}"
+          {
+            echo "mm=$mm"
+            echo "tf=$tf"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 心跳
+        env:
+          MM: ${{ steps.upstream.outputs.mm }}
+          TF: ${{ steps.upstream.outputs.tf }}
+        run: |
+          python scripts/heartbeat.py \
+            --upstream "market-monitor=$MM" \
+            --upstream "tw-trend-filter=$TF"
