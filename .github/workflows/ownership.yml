@@ -102,6 +102,17 @@ jobs:
           fi
           git commit -m "股權快照：$(date -u +%Y-%m-%d)" \
                      -m "集保股權分散（週）與董監持股（月），全市場。"
+          # 白名單式的 git add 會漏掉引擎新寫的檔案，而漏掉的症狀是下一步
+          # 「cannot pull with rebase: You have unstaged changes」——一句完全不提
+          # 檔名的訊息，或者更糟：那個檔案就這樣一直沒有被提交，而 job 是綠的。
+          #
+          # 這道守門 market / refresh / daily / stock 都有，只有這裡沒有。補上。
+          # 它要是紅了，訊息會直接寫出漏掉哪一個檔案，改白名單一行就好。
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
 
       # 推送單獨拆成一步，用共用的重試 action。這條排程原本是裸的
       # `git pull --rebase; git push`，撞上另一條 workflow 就整趟的抓取結果一起

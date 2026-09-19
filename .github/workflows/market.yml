@@ -67,7 +67,12 @@ jobs:
           # 分頁（見 cli._fold_revenue）。少了這一行，抓回來的那一期只會進評等
           # 清單，個股頁上的月營收永遠停在上一個逐檔抓取的月份——實際發生過，
           # 1,877 檔停在 115/07，而 workflow 每天都是綠燈。
-          git add data/market data/sheets \
+          # data/ratings.csv 也要加：`_fold_revenue` 折完月營收之後會**接著重算
+          # 那幾檔的評等**（見它的 docstring：「兩步，不是一步」）。漏掉它的症狀
+          # 不是資料不見，是下面那道守門直接把整趟擋下來——
+          #     ::error::這些檔案被改到了但沒有被 commit…  data/ratings.csv
+          # 守門是對的，漏的是這張白名單。refresh.yml 早就列了它。
+          git add data/market data/sheets data/ratings.csv \
                   data/twse_companies.csv data/tpex_companies.csv \
                   data/manifest.json
           if git diff --cached --quiet; then
