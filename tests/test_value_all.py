@@ -204,3 +204,45 @@ def test_發布出去的那一份蓋住整個市場():
         f"只有 {len(have)} 檔有估值，而 {len(want)} 檔有格線（{covered:.0%}）。"
         "是不是 `twsix value --all` 沒有跑？"
     )
+
+
+def test_股價高過目標價就沒有報酬可分():
+    """`abs(ret / risk)` 的另一個受害者——和負 EPS 同一家族。
+
+    股價已經高過目標價的時候 `ret` 是負的、`risk` 也是負的，abs() 把兩個負號
+    約掉，而 |ret| 大、|risk| 小的時候商還特別大：
+
+        6584 南俊國際   報酬風險比 582.26   預期報酬 −100.0%
+        3447 展達       報酬風險比   4.21   預期報酬  −61.7%
+
+    四個判斷準則從頭到尾預設報酬是正的（「報酬風險 > 2 才有買進的意義」講的是
+    還剩多少上檔），所以這種情況的報酬風險比是 0，不是一個大數。
+    """
+    rows = _rows(VALUATIONS)
+    bad = [
+        r for r in rows
+        if (_f(r["reward_risk"]) or 0) > 0 and (_f(r["expected_return"]) or 0) <= 0
+    ]
+    assert not bad, (
+        f"{len(bad)} 檔的預期報酬 ≤ 0 卻有正的報酬風險比，例如 "
+        + "、".join(
+            f"{r['stock_id']} {r['name']}（RR {r['reward_risk'][:6]}、"
+            f"報酬 {float(r['expected_return']) * 100:.0f}%）"
+            for r in bad[:4]
+        )
+    )
+
+
+def test_沒有上檔和算不出來不是同一件事():
+    """零報酬給 0.00，不是空白。
+
+    空白的意思是「算不出來」——清單上顯示 —，排序沉到底。而「股價已經超過目標
+    價」是**算得出來的一個答案**，答案是不要買。兩者混在一起，讀者會以為這一檔
+    只是缺資料。
+    """
+    rows = _rows(VALUATIONS)
+    zero = [r for r in rows if r["reward_risk"] == "0"]
+    assert zero, "一檔『股價高過目標價』都沒有？全市場實測是 309 檔"
+    for r in zero[:50]:
+        assert r["target_price"], f"{r['stock_id']} 報酬風險比 0 卻連目標價都沒有"
+        assert r["risk_free"] == "0", f"{r['stock_id']} 不可能同時零報酬又無風險"

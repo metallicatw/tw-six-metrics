@@ -214,6 +214,24 @@ def value_with_pe(eps: float, band: PeBand, market_price: float) -> PriceView | 
     if market_price <= downside:
         return PriceView(target, downside, market_price, ret, None, None)
     risk = downside / market_price - 1
+    # 沒有上檔就沒有「報酬風險比」可言。
+    #
+    # 股價已經高過目標價的時候，`abs(ret / risk)` 還是會給出一個很漂亮的數字：
+    # 兩邊都是負的，abs() 把負號約掉，而 |ret| 大、|risk| 小的時候商還特別大。
+    # 實測全市場 194 檔 RR > 2 裡有 4 檔是這樣來的：
+    #
+    #     6584 南俊國際   RR 582.26   預期報酬 −100.0%
+    #     3447 展達       RR   4.21   預期報酬  −61.7%
+    #     6834 天二科技   RR   2.12   預期報酬  −89.1%
+    #
+    # 和「預估EPS為負」是同一家族的錯：一個比值的分子分母各自帶著符號，而
+    # abs() 把那個資訊丟掉了。四個判斷準則（〔EPS預估與估價〕K17:L21）從頭到尾
+    # 預設報酬是正的——「報酬風險 > 2 才有買進的意義」講的是還剩多少上檔。
+    #
+    # 給 0.0 而不是 None：0 的意思是「每承擔一單位風險換到零報酬」，那是真的；
+    # None 的意思是「算不出來」，那是另一件事，而清單上兩種的顯示不一樣。
+    if ret <= 0:
+        return PriceView(target, downside, market_price, ret, risk, 0.0)
     rr = abs(ret / risk) if risk else None
     return PriceView(target, downside, market_price, ret, risk, rr)
 
