@@ -935,12 +935,128 @@ def _fetched_reader(root: Path, stock: str):
     return GridSource(grids) if grids else None
 
 
+def _valuation_options(settings: Settings):
+    from .valuation import ValuationOptions  # noqa: PLC0415
+
+    return ValuationOptions(
+        growth_method=settings.forecast.revenue_growth_method,
+        margin_method=settings.forecast.margin_method,
+        pe_basis=settings.forecast.pe_basis,
+        payout_basis=settings.forecast.payout_basis,
+    )
+
+
+def cmd_value_all(args: argparse.Namespace) -> int:
+    """全市場估值：每一檔各算一次，寫成 `data/valuations.csv`.
+
+    ## 為什麼這個指令以前不存在，而它應該存在
+
+    `twsix value` 一次算一檔，來源是 `fetch-stock` 存下來的券商鏡像格線。於是
+    `data/valuations.csv` 裡長期**只有一列**（5439）——不是因為算不出來，是因為
+    沒有人一檔一檔去跑。
+
+    而格線早就在了：`data/sheets/` 底下 1,957 檔都有 BSQ／OPQ／CFQ／EPQ／股利／
+    年度交易資訊。也就是說全市場的估值**一個請求都不用發**就算得出來，實測
+    1,958 檔 13 秒。缺的只是一個迴圈。
+
+    這件事擋著兩個功能：〔台股評等清單〕要加的報酬風險比欄位，以及
+    〔趨勢∩六大∩報酬〕那一頁——兩個都需要全市場的報酬風險比，而不是一檔。
+
+    ## 算不出報酬風險比的那些，不是失敗
+
+    實測 1,958 檔：899 檔有報酬風險比，其餘兩種原因——
+
+    * **561 檔沒有本益比區間**。它要〔年度交易資訊〕的歷史高低點，而那張表目前
+      有 249 檔還沒回補到（`backfill-yearly` 每晚補 40 檔）。這一類會隨著回補
+      自己變少。
+    * **483 檔股價已經低於下檔價**，`PriceView.risk_free`。這一類**不是缺資料**，
+      是「沒有下檔風險」，見 `store.snapshots.VALUATION_COLUMNS` 的 `risk_free`。
+
+    所以這裡回 EXIT_OK：算不出來的那些是資料的狀態，不是這支指令失敗。真正該紅
+    的是「整批都算不出來」，那由 `_shrank` 擋（同一個教訓的第四次：抓取很少乾脆
+    地失敗，它比較常成功地拿到半份）。
+    """
+    from .ingest.valuation_source import read_valuation_input  # noqa: PLC0415
+    from .store.daily import latest_quotes  # noqa: PLC0415
+    from .store.snapshots import VALUATION_COLUMNS, valuation_row  # noqa: PLC0415
+    from .valuation import evaluate  # noqa: PLC0415
+
+    settings = Settings.load(args.config)
+    root = Path(args.data or settings.data_dir)
+    opts = _valuation_options(settings)
+
+    # 股價用每日全市場行情，不用分頁上那一格——那一格要等有人按下那一檔的
+    # 「立即更新」才會動，而價格是這整張表上唯一每天都變的東西。個股頁那條路
+    # （`cmd_stock_page`）本來就是這樣做的，這裡跟著它走，否則同一檔在清單上和
+    # 在它自己的頁面上會有兩個報酬風險比。
+    quotes = latest_quotes(root)
+
+    codes = sorted(
+        p.name for p in (root / "sheets").iterdir()
+        if p.is_dir() and not p.name.startswith(".")
+    )
+    rows: list[dict[str, Any]] = []
+    failed: list[str] = []
+    with_rr = risk_free = priced = 0
+    for code in codes:
+        reader = _fetched_reader(root, code)
+        if reader is None:
+            failed.append(f"{code}：沒有快取格線")
+            continue
+        quote = quotes.get(code)
+        priced += quote is not None
+        try:
+            result = evaluate(
+                read_valuation_input(
+                    reader,
+                    stock_id=code,
+                    as_of=args.as_of or (quote.date if quote else ""),
+                    market_price=quote.close if quote is not None else None,
+                ),
+                opts,
+            )
+        except Exception as exc:  # noqa: BLE001 - 一檔算不出來不該停下整批
+            failed.append(f"{code}：{type(exc).__name__} {exc}")
+            continue
+        row = valuation_row(result)
+        rows.append(row)
+        if row["reward_risk"] is not None:
+            with_rr += 1
+        elif row["risk_free"]:
+            risk_free += 1
+
+    if not rows:
+        print("一檔都算不出來——`data/sheets/` 是空的嗎？", file=sys.stderr)
+        return EXIT_FAIL
+
+    store = Store(root)
+    shrink = _shrank(store, "valuations", len(rows))
+    if shrink:
+        print(f"::error::全市場估值：{shrink}", file=sys.stderr)
+        return EXIT_FAIL
+    n = store.write("valuations", rows, VALUATION_COLUMNS, sort_by=("stock_id",))
+    print(
+        f"全市場估值：{n} 檔　有報酬風險比 {with_rr}　"
+        f"股價已低於下檔價（無風險）{risk_free}　"
+        f"算不出來 {len(rows) - with_rr - risk_free}　"
+        f"（{priced} 檔用今天的收盤價）"
+    )
+    for line in failed[:10]:
+        print(f"  ! {line}", file=sys.stderr)
+    if len(failed) > 10:
+        print(f"  ! …另外 {len(failed) - 10} 檔", file=sys.stderr)
+    print(f"寫入 {store.path('valuations')}")
+    return EXIT_OK
+
+
 def cmd_value(args: argparse.Namespace) -> int:
     """估值：EPS 預估、本益比估價、PEG／總報酬、殖利率估價.
 
     Reads the same sheets the rating engine does, through the same reader the
     tests exercise, and writes ``data/valuations.csv`` for the site to pick up.
     """
+    if getattr(args, "all", False):
+        return cmd_value_all(args)
     settings = Settings.load(args.config)
     from .ingest.valuation_source import WorkbookReader, read_valuation_input
     from .store.snapshots import VALUATION_COLUMNS, valuation_row
@@ -3305,6 +3421,11 @@ def build_parser() -> argparse.ArgumentParser:
     val.add_argument("--workbook", help="從 .xlsm 讀取資料（離線可用）")
     val.add_argument("--golden", help="從已凍結的樣本讀取，如 5439")
     val.add_argument("--fetched", help="從 fetch-stock 存下的格線讀取，如 5439")
+    val.add_argument(
+        "--all", action="store_true",
+        help="全市場：把 data/sheets 底下每一檔的格線各算一次，"
+             "直接寫成 data/valuations.csv（不連網，約 13 秒）",
+    )
     val.add_argument("--data", help="資料目錄（--fetched 用）")
     val.add_argument("--as-of", dest="as_of", help="評估日，民國格式如 115/08/27")
     val.add_argument("--out", help="把結果寫入資料目錄")

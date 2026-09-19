@@ -91,3 +91,21 @@ def test_月營收那一條要記得帶上評等清單():
         "market.yml 的 git add 少了 data/ratings.csv，而 twsix fetch 會寫它"
         "（_fold_revenue → rerate）。整趟會被守門擋下來。"
     )
+
+
+def test_每日那一條要記得帶上全市場估值():
+    """`daily.yml` 跑 `twsix value --all`，而它每天都會改到 data/valuations.csv。
+
+    每天都會改，是因為估值的股價取自當天的收盤（`cmd_value_all` 的
+    `latest_quotes`）。所以這個漏掉的話不是偶爾紅，是**每天**紅。
+    """
+    daily = (WORKFLOWS / "daily.yml").read_text("utf-8")
+    assert "twsix value --all" in daily, (
+        "daily.yml 不跑全市場估值了？那 data/valuations.csv 會停在某一天的價格，"
+        "而〔台股評等清單〕與〔趨勢∩六大∩報酬〕都讀它。"
+    )
+    add = daily.split("git add", 1)[1].split("\n          if", 1)[0]
+    assert "data/valuations.csv" in add, (
+        "daily.yml 的 git add 少了 data/valuations.csv，而 `twsix value --all` "
+        "每天都會寫它。守門會擋下整趟。"
+    )

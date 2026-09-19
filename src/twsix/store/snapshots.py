@@ -363,6 +363,17 @@ VALUATION_COLUMNS: tuple[str, ...] = (
     "expected_return",
     "expected_risk",
     "reward_risk",
+    #: 股價已經在下檔價之下——**沒有下檔風險**，不是「算不出來」。
+    #:
+    #: 這一欄存在，是因為那兩種情況在 CSV 裡長得一模一樣：`reward_risk` 兩邊都
+    #: 是空的。而它們的意思正好相反——一個是判斷準則裡最好的那一種（〔EPS預估
+    #: 與估價〕K17:L21 說「報酬風險 > 2 才有買進的意義」，而這裡連分母都沒有），
+    #: 另一個是資料不足。拿 `> 2` 去篩會把最好的那一批和沒資料的一起丟掉：
+    #: 全市場 1,958 檔裡有 483 檔在這一類。
+    #:
+    #: 也可以從「有 target_price 卻沒有 reward_risk」推出來，但那是要讀過
+    #: `PriceView` 才知道的推論，而讀這個檔案的人不一定讀過。
+    "risk_free",
     "forward_pe",
     "eps_growth",
     "peg",
@@ -399,6 +410,7 @@ def valuation_row(v: Any) -> dict[str, Any]:
         "expected_return": p.expected_return if p else None,
         "expected_risk": p.expected_risk if p else None,
         "reward_risk": p.reward_risk if p else None,
+        "risk_free": 1 if (p is not None and p.risk_free) else 0,
         "forward_pe": g.forward_pe if g else None,
         "eps_growth": g.eps_growth if g else None,
         "peg": g.peg if g else None,

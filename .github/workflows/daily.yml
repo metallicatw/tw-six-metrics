@@ -125,6 +125,20 @@ jobs:
           twsix backfill-yearly --limit "$YEARLY_LIMIT" || true
           twsix backfill-statements --quarters 12 || true
 
+      # 〔全市場估值〕：EPS 預估、本益比估價、報酬風險比，1,958 檔寫進
+      # data/valuations.csv。
+      #
+      # 排在這裡，是因為它吃的正是前面幾步剛更新完的東西：今天的收盤價
+      # （`fetch-daily` 寫的 data/market/daily，估值的股價取自那裡而不是分頁上
+      # 那一格——分頁要等有人按「立即更新」才會動）與剛回補到的〔年度交易資訊〕
+      # （本益比區間要它）。股價是這張表上唯一每天都變的東西，所以每天重算。
+      #
+      # **不連網、13 秒**：來源全是 `data/sheets/` 底下已經抓好的券商鏡像格線。
+      # 也因為這樣它沒有 `|| true`：它不會因為外面的世界而失敗。會失敗只有一種
+      # 情況——整批都算不出來（`_shrank` 擋著），而那是真的壞了。
+      - name: 全市場估值
+        run: twsix value --all
+
       - name: Commit
         id: commit
         run: |
@@ -134,7 +148,11 @@ jobs:
           # （進 data/sheets/<代號>/）與季財報彙總（進 data/market/*_income 等）。
           # 只加 data/market/daily 的話，下面那道「被改到但沒被 commit」的檢查會
           # 讓整趟紅掉——而那道檢查正是為了這種情況存在的。
-          git add data/market data/sheets
+          #
+          # data/valuations.csv 也要加，理由一樣：〔全市場估值〕那一步每天都會
+          # 改到它（股價每天都在動）。漏掉它的話，那道檢查每天都會紅——而那正是
+          # market.yml 的白名單漏掉 data/ratings.csv 時發生過的事。
+          git add data/market data/sheets data/valuations.csv
           if git diff --cached --quiet; then
             # 非交易日、或這一輪抓到的和上一輪一模一樣——都是正常的，不是失敗。
             echo "::notice::沒有新的一天要存"
