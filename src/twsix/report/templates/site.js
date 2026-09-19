@@ -769,26 +769,71 @@
  * ========================================================================= */
 var TWSIXWatch = (function(){
   var KEY = 'twsix.watchlist';
+  /* 存的是**一個陣列**，而順序就是使用者自己排的順序。
+   *
+   * 上一版把它讀進一個物件（`set[code] = 1`）再用 `Object.keys(set)` 存回去，
+   * 而那樣會靜靜地把順序換掉：JS 物件的「整數樣」鍵（"1101"、"2330"）一律照
+   * 數字大小排在前面。所以不管使用者按星號的先後，存進去的永遠是代號小到大
+   * ——存的是陣列、看起來也像有順序，順序卻不是他給的那個。
+   *
+   * 現在陣列 `order` 是唯一的真相，物件 `set` 只是查表用的索引（1,769 列要
+   * 逐列問「這一檔有沒有被標記」，陣列的 indexOf 會是 O(n²)）。兩者一起改，
+   * 改的地方只有 toggle 與 move。
+   *
+   * 舊資料相容：存進去的本來就是一個代號陣列，所以舊瀏覽器裡那一份直接讀得
+   * 進來，只是它的順序是代號大小——那也是一個合理的起點。 */
+  var order = [];
   var set = {};
 
-  function reload(){
+  function reindex(){
     set = {};
+    order.forEach(function(c){ set[c] = 1; });
+  }
+  function reload(){
+    order = [];
+    /* 去重用的是**這一次**看到哪些，不是上一次留下來的 `set`。
+     *
+     * 第一版拿 `set` 當去重的依據而沒有先清掉它，於是「上一頁回來」重讀的時候，
+     * 記憶體裡已經有的那幾檔會被當成重複而整個跳過——存檔裡有三檔，讀回來只
+     * 剩一檔。而那一檔還是對的，所以畫面看起來只是「怎麼少了兩檔」。
+     * node 那份 harness 第一次跑就把它抓出來了。 */
+    var seen = {};
     try{
-      (JSON.parse(localStorage.getItem(KEY) || '[]') || []).forEach(function(c){
-        set[c] = 1;
+      var raw = JSON.parse(localStorage.getItem(KEY) || '[]') || [];
+      raw.forEach(function(c){
+        c = String(c);
+        if(c && !seen[c]){ seen[c] = 1; order.push(c); }  /* 以第一次出現為準 */
       });
-    }catch(e){}
+    }catch(e){ order = []; }
+    reindex();
     return set;
   }
   function save(){
-    try{ localStorage.setItem(KEY, JSON.stringify(Object.keys(set))); }catch(e){}
+    try{ localStorage.setItem(KEY, JSON.stringify(order)); }catch(e){}
   }
   function has(code){ return !!set[code]; }
   function toggle(code){
-    if(set[code]) delete set[code]; else set[code] = 1;
+    if(set[code]){
+      order.splice(order.indexOf(code), 1);
+    }else{
+      order.push(code);      /* 新加的排在最後面，不是插進中間 */
+    }
+    reindex();
     save();
     return !!set[code];
   }
+  /* 往前或往後挪一格。回傳有沒有真的動到——已經在第一個還按「上移」不該
+     被當成一次改動（那會白存一次 localStorage，也會讓畫面重畫一次）。 */
+  function move(code, delta){
+    var i = order.indexOf(code);
+    var j = i + delta;
+    if(i < 0 || j < 0 || j >= order.length) return false;
+    order[i] = order[j];
+    order[j] = code;
+    save();
+    return true;
+  }
+  function index(code){ return order.indexOf(code); }
   /* 一顆星要長什麼樣，只有這裡說了算——實心／空心、aria-pressed、以及那一句
      說明。三個地方各寫一次，改一個就會有兩個沒改到。 */
   function paint(btn){
@@ -804,7 +849,9 @@ var TWSIXWatch = (function(){
   }
   reload();
   return {reload: reload, has: has, toggle: toggle, paint: paint,
-          count: function(){ return Object.keys(set).length; },
+          move: move, index: index,
+          count: function(){ return order.length; },
+          order: function(){ return order.slice(); },
           all: function(){ return set; }};
 })();
 
@@ -860,6 +907,9 @@ var TWSIXWatch = (function(){
     if(!btn) return;
     TWSIXWatch.toggle(btn.getAttribute('data-star'));
     paintStar(btn);
+    /* 取消一檔之後，剩下那幾列的「第一個／最後一個」變了——不重畫的話，
+       原本的最後一列會留著一顆按不動的「下移」。 */
+    applyCustomOrder();
     apply();
     count();
   });
@@ -898,6 +948,84 @@ var TWSIXWatch = (function(){
     if(b) sortBy(+b.getAttribute('data-col'));
   });
 
+  /* ---- 自訂順序（只有〔觀察清單〕那一頁） ------------------------------
+   *
+   * 順序存在 TWSIXWatch 的那個陣列裡，這裡只做兩件事：照它排一次 DOM，以及
+   * 把兩顆鈕接上去。
+   *
+   * 和「點欄位排序」怎麼共存：按上移／下移**先把表格切回自訂順序**再動。
+   * 理由是，照〔綜合評分〕排的時候按「上移」沒有任何一個答案是對的——是要改
+   * 自訂順序（但畫面不會動，因為畫面照的是評分），還是要改畫面（但那不是一個
+   * 存得起來的東西）。兩個都不對，所以不給那個狀態存在：按了就回到自訂順序。
+   * 那也是為什麼那兩顆鈕在別的排序下不會變灰——沒有死掉的按鈕要解釋。 */
+  var watchOrder = table.getAttribute('data-watchlist') === '1';
+  function applyCustomOrder(){
+    if(!watchOrder) return;
+    var pos = {};
+    TWSIXWatch.order().forEach(function(code, i){ pos[code] = i; });
+    var decorated = rows.map(function(tr, i){
+      var p = pos[tr.getAttribute('data-code')];
+      /* 不在清單裡的排在後面（它們本來就會被篩掉，但 DOM 順序仍然要確定，
+         否則每次重排的結果會隨瀏覽器的排序實作而不同）。 */
+      return [p === undefined ? Infinity : p, i, tr];
+    });
+    decorated.sort(function(a, b){ return a[0] - b[0] || a[1] - b[1]; });
+    var frag = document.createDocumentFragment();
+    decorated.forEach(function(d){ frag.appendChild(d[2]); });
+    body.appendChild(frag);
+    sortCol = -1;
+    [].forEach.call(table.querySelectorAll('th button.sortable'), function(b){
+      b.classList.remove('asc', 'desc');
+      b.setAttribute('aria-sort', 'none');
+    });
+    paintMoves();
+  }
+  /* 第一個的「上移」和最後一個的「下移」按了不會有事——所以不要讓它們看起來
+     可以按。`disabled` 而不是藏起來：藏起來會讓那一格的寬度在第一列和其他列
+     之間跳動，整欄看起來是歪的。 */
+  function paintMoves(){
+    if(!watchOrder) return;
+    /* 「第一個／最後一個」要照**自訂順序**數，不是照 `rows`。
+     *
+     * `rows` 是載入時抓下來的那一份 DOM 順序（建站時照綜合評分排的），它從頭
+     * 到尾不會變——所以拿它數出來的最後一列，是評分最低的那一檔，不是清單最
+     * 下面那一檔。第一版就是這樣，症狀是**第二列的「下移」變成灰的**，而第一
+     * 列和最後一列看起來都正常。
+     *
+     * 照 TWSIXWatch 的陣列數，那份陣列就是畫面上的順序。 */
+    var byCode = {};
+    rows.forEach(function(tr){ byCode[tr.getAttribute('data-code')] = tr; });
+    var live = TWSIXWatch.order().filter(function(c){ return byCode[c]; });
+    live.forEach(function(code, i){
+      var tr = byCode[code];
+      var up = tr.querySelector('button.mv-up');
+      var dn = tr.querySelector('button.mv-dn');
+      if(up) up.disabled = i === 0;
+      if(dn) dn.disabled = i === live.length - 1;
+    });
+    [].forEach.call(table.querySelectorAll('td.star-cell .mv'), function(el){
+      el.hidden = false;
+    });
+  }
+  if(watchOrder){
+    table.addEventListener('click', function(e){
+      var btn = e.target.closest('button[data-move]');
+      if(!btn || btn.disabled) return;
+      var code = btn.getAttribute('data-move');
+      var delta = +btn.getAttribute('data-delta');
+      /* 先回到自訂順序——見上面那段。已經是自訂順序的話這一步不花什麼。 */
+      applyCustomOrder();
+      if(!TWSIXWatch.move(code, delta)) return;
+      applyCustomOrder();
+      /* 焦點跟著那一列走。不跟的話，用鍵盤連按兩次「上移」，第二次按到的是
+         剛剛被換下來的那一檔——而畫面上看起來完全正常。 */
+      var moved = body.querySelector('tr[data-code="' + code + '"] button[data-delta="' +
+                                     (delta < 0 ? '-1' : '1') + '"]');
+      if(moved && !moved.disabled) moved.focus();
+      else if(moved) (moved.parentNode.querySelector('button:not([disabled])') || moved).focus();
+    });
+  }
+
   /* ---- 篩選 ------------------------------------------------------------ */
   var q = document.getElementById('q');
   var onlyWatched = document.getElementById('only-watched');
@@ -933,6 +1061,7 @@ var TWSIXWatch = (function(){
   [q, onlyWatched, onlyPicks].forEach(function(el){
     if(el) el.addEventListener(el.tagName === 'INPUT' && el.type === 'search' ? 'input' : 'change', apply);
   });
+  applyCustomOrder();
   apply();
 
   /* 上一頁回來的時候要再篩一次。
@@ -953,6 +1082,7 @@ var TWSIXWatch = (function(){
   function resync(){
     TWSIXWatch.reload();
     [].forEach.call(table.querySelectorAll('button[data-star]'), paintStar);
+    applyCustomOrder();
     apply();
   }
   window.addEventListener('pageshow', resync);

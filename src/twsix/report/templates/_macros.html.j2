@@ -57,7 +57,22 @@
        這是一份靜態網站，沒有可以放你私人清單的地方，也不該有。 #}
     <button type="button" class="star" data-star="{{ r.stock_id }}"
             aria-pressed="false" aria-label="把 {{ r.stock_id }} 加入觀察清單"
-            title="加入觀察清單">☆</button></td>
+            title="加入觀察清單">☆</button>
+    {# 自訂順序的兩顆鈕。**只在〔觀察清單〕那一頁出現**（site.js 看
+       `table[data-watchlist]` 才裝上去），在〔評等清單〕上它們沒有意義——
+       那一頁的順序是綜合評分。
+
+       為什麼是上移／下移而不是拖曳：這張表在手機上是**橫向捲動**的，而拖曳
+       一列要先按住不放——那個手勢和頁面捲動搶同一根手指，按住的瞬間畫面到底
+       是要捲還是要拖，瀏覽器得猜，而它經常猜錯。兩顆鈕沒有這個問題，鍵盤也
+       按得到，螢幕閱讀器也念得出來。代價是把一檔從第 20 移到第 1 要按 19 次
+       ——而一份觀察清單通常只有十幾檔，那個代價不常發生。 #}
+    <span class="mv" hidden>
+      <button type="button" class="mv-up" data-move="{{ r.stock_id }}" data-delta="-1"
+              aria-label="把 {{ r.stock_id }} 往上移" title="往上移">▲</button>
+      <button type="button" class="mv-dn" data-move="{{ r.stock_id }}" data-delta="1"
+              aria-label="把 {{ r.stock_id }} 往下移" title="往下移">▼</button>
+    </span></td>
   <td data-s="{{ r.stock_id }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a></td>
   {# 這一欄原本是〔最後更新日〕——「那一檔的報表最後一次抓回來是哪一天」。
      那回答的是**抓取**的新舊，而讀者在清單上想知道的是**資料**的新舊：這一列的

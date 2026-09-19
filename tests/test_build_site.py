@@ -1955,3 +1955,43 @@ def test_沒有趨勢報告就兩項都不出現(tmp_path=None):
     assert not (out / "cross.html").exists(), "沒有上游報告卻畫了交集那一頁"
     nav = (out / "index.html").read_text("utf-8").split("<nav>")[1].split("</nav>")[0]
     assert "趨勢∩六大∩報酬" not in nav
+
+
+def test_觀察清單那一頁才有上移下移(tmp_path=None):
+    """兩顆鈕在〔評等清單〕上沒有意義——那一頁的順序是綜合評分。
+
+    HTML 兩頁都有（同一個 macro 畫的），由 site.js 看 `data-watchlist` 才
+    取消 hidden。這裡守的是那個條件還在：拿掉的話兩顆鈕會出現在 1,769 列的
+    評等清單上，按下去改的是一份和那一頁無關的順序。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    watch = (out / "watchlist.html").read_text("utf-8")
+    assert 'data-watchlist="1"' in watch
+    assert 'data-move="5439"' in watch and 'data-delta="-1"' in watch
+    js = (out / "assets" / "site.js").read_text("utf-8")
+    assert "data-watchlist" in js and "button[data-move]" in js, (
+        "site.js 沒有把那兩顆鈕接上去，或是沒有只在觀察清單那一頁接"
+    )
+    # 預設是收起來的：沒有 JS 的時候，兩顆按了不會有事的鈕比沒有鈕糟。
+    assert '<span class="mv" hidden>' in watch
+
+
+def test_排序和自訂順序不會打架(tmp_path=None):
+    """照〔綜合評分〕排的時候按「上移」沒有任何一個答案是對的。
+
+    所以不給那個狀態存在：按了就先切回自訂順序再動。這一條釘住那個順序——
+    `applyCustomOrder()` 要在 `TWSIXWatch.move()` **之前**被呼叫到。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    js = (out / "assets" / "site.js").read_text("utf-8")
+    block = js.split("button[data-move]", 1)[1].split("\n  }", 1)[0]
+    before = block.index("applyCustomOrder()")
+    moved = block.index("TWSIXWatch.move(")
+    assert before < moved, (
+        "按上移的時候沒有先切回自訂順序——在別的排序下按，存起來的順序會和"
+        "畫面上看到的對不起來"
+    )

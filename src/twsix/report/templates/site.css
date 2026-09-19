@@ -726,6 +726,24 @@ button.star{appearance:none;border:none;background:none;cursor:pointer;padding:2
 button.star:hover{color:var(--g1);background:var(--surface-2)}
 button.star.on{color:var(--g1)}
 button.star:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+/* 自訂順序那兩顆鈕（只在〔觀察清單〕出現，由 site.js 取消 hidden）。
+   直向疊在星號右邊：這一欄本來就窄，並排會把表格整個往右推一截。 */
+.star-cell .mv{display:inline-flex;flex-direction:column;gap:1px;vertical-align:middle;
+  margin-left:2px}
+.star-cell .mv button{appearance:none;border:1px solid var(--rule);background:var(--surface-2);
+  color:var(--ink-2);cursor:pointer;border-radius:3px;padding:0 3px;
+  font-size:9px;line-height:1.25;min-width:18px}
+.star-cell .mv button:hover:not(:disabled){border-color:var(--accent-2);color:var(--accent-2)}
+.star-cell .mv button:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+/* 第一列的「上移」和最後一列的「下移」按了不會有事，所以不要讓它們看起來
+   可以按。留在原處而不是藏起來——藏起來那一格的寬度會在第一列和其他列之間
+   跳動，整欄看起來是歪的。 */
+.star-cell .mv button:disabled{opacity:.28;cursor:default}
+/* 手指按得到。手機上這兩顆是主要的操作方式（拖曳在橫向捲動的表格裡沒法用），
+   9px 的字配 18px 的寬度按不準。 */
+@media (max-width:640px){
+  .star-cell .mv button{min-width:26px;font-size:11px;padding:2px 4px}
+}
 /* 個股頁標題旁邊那一顆：跟著標題放大，並且和文字拉開一點——貼著股名會讀成
    名字的一部分。`vertical-align` 讓它對齊中文字的視覺中線，不是基線。 */
 h2 button.star{font-size:19px;margin-left:10px;vertical-align:2px;padding:2px 5px}

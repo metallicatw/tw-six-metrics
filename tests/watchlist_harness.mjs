@@ -62,4 +62,38 @@ store.set('twsix.watchlist', '{壞掉的 JSON');
 W.reload();
 out.push(['壞掉的 JSON', W.count()]);
 
+/* ── 自訂順序 ───────────────────────────────────────────────────────
+ *
+ * 存的是一個陣列，而順序就是使用者排的順序。上一版是把它讀進物件再
+ * `Object.keys()` 存回去——而 JS 物件的「整數樣」鍵（"1101"、"2330"）一律照
+ * 數字大小排。所以不管按星號的先後，存進去永遠是代號小到大：存的是陣列、
+ * 看起來也像有順序，順序卻不是使用者給的那個。 */
+store.set('twsix.watchlist', '[]');
+W.reload();
+['2330', '1101', '6811'].forEach(c => W.toggle(c));
+out.push(['按星號的先後', W.order()]);
+
+out.push(['往上移一格', (W.move('6811', -1), W.order())]);
+out.push(['移完存起來的', store.get('twsix.watchlist')]);
+out.push(['第一個再往上', [W.move('2330', -1), W.order()]]);
+out.push(['最後一個再往下', [W.move('1101', 1), W.order()]]);
+out.push(['不在清單裡的', W.move('9999', -1)]);
+
+/* 取消再加回來，要排到最後面——不是回到原本的位置。使用者按的是「移除」，
+   加回來是一個新的動作。 */
+W.toggle('2330'); W.toggle('2330');
+out.push(['取消再加回來', W.order()]);
+
+/* 上一頁回來：順序要原封不動讀回來。 */
+store.set('twsix.watchlist', JSON.stringify(['6811', '2412', '1101']));
+W.reload();
+out.push(['reload 的順序', W.order()]);
+out.push(['reload 之後 index', [W.index('6811'), W.index('1101'), W.index('9999')]]);
+
+/* 同一個代號在存檔裡出現兩次（手動改過、或兩個分頁同時寫）——去重，
+   而且以第一次出現的位置為準。 */
+store.set('twsix.watchlist', JSON.stringify(['1101', '2330', '1101']));
+W.reload();
+out.push(['重複的代號', [W.order(), W.count()]]);
+
 console.log(JSON.stringify(out));
