@@ -928,6 +928,9 @@ def build_site(
     _write_search_index(out_dir, rows, rich_ids, fetched_at, fetched_ts)
     written["search.json"] = 1
 
+    _write_cross_feed(out_dir, live, valuation_by_stock, quarter)
+    written[CROSS_FEED] = 1
+
     # 最後才寫，而且要在 .nojekyll 之前——它是「這一份網站已經完整」的signal，
     # 早於內容寫出去就會讓還在等的瀏覽器提早重新載入。
     write_build_stamp(out_dir, ctx.build_id)
@@ -936,6 +939,79 @@ def build_site(
     write_build_state(out_dir, rich_ids, fetched_at, fetched_ts, signatures=sigs)
     (out_dir / ".nojekyll").write_text("", encoding="utf-8")
     return written
+
+
+#: 〔趨勢∩六大∩報酬〕那一頁要的資料，發布給 **tw-trend-filter** 去接。
+CROSS_FEED = "cross.json"
+
+
+def _write_cross_feed(
+    out_dir: Path,
+    rows: list[Row],
+    valuations: dict[str, dict[str, Any]],
+    quarter: str,
+) -> None:
+    """`cross.json` — 每一檔的六大綜合評分、目標價、下檔價。
+
+    ## 為什麼是這三個數字，而不是直接發布報酬風險比
+
+    報酬風險比拆開來是
+
+        目標價 ＝ 歷年本益比高 × 預估EPS      ← 和今天的股價無關
+        下檔價 ＝ 歷年本益比低 × 預估EPS      ← 和今天的股價無關
+        報酬風險比 ＝ |(目標價/股價 − 1) ÷ (下檔價/股價 − 1)|
+
+    只有最後一步要股價。而 tw-trend-filter **本來就有今天的收盤**——它為了畫
+    線圖把全市場的 OHLCV 都抓下來了。所以發布前兩個、讓它自己算最後一步，兩邊
+    用的就是同一天的同一個價格。
+
+    另一條路是這邊直接發布算好的報酬風險比，那樣趨勢那支就得排在這條排程後面
+    才拿得到當天的值——而它目前跑在前面 34 分鐘。要對齊就得把它往後推，再把
+    下游拉報告那一條也往後推，報告上站會從台北 16:47 變成 18:07。
+
+    而且**同一天不只是好看而已**：趨勢挑的是「今天突破、今天放量」的股票，也
+    就是今天剛漲上去的那一批。用昨天的價格算，分母偏低、報酬被高估、報酬風險
+    比系統性偏高——偏差的方向剛好倒向「看起來更該買」。那不是雜訊，是有方向的。
+
+    ## 格式
+
+    `rows` 是 {代號: [六大, 目標價, 下檔價]}，算不出來的那一格是 null。
+    1,900 檔約 70 KB。對照 `search.json` 那邊的理由：這個檔案每天被下載一次，
+    用陣列不用物件。
+
+    `quarter` 與 `as_of` 讓接收端可以把日期寫在畫面上——一份沒有日期的估值，
+    和一份標錯日期的估值，後者比較糟。
+    """
+    import json
+
+    as_of = ""
+    payload: dict[str, list[float | None]] = {}
+    for r in rows:
+        view = valuations.get(r.stock_id)
+        target = view["target_price"] if view else None
+        floor = view["downside_price"] if view else None
+        if view and not as_of:
+            as_of = view.get("as_of") or ""
+        if r.composite_value is None and target is None:
+            continue          # 兩邊都沒有的不必佔一列
+        payload[r.stock_id] = [
+            round(r.composite_value, 4) if r.composite_value is not None else None,
+            round(target, 4) if target is not None else None,
+            round(floor, 4) if floor is not None else None,
+        ]
+    (out_dir / CROSS_FEED).write_text(
+        json.dumps(
+            {
+                "as_of": as_of,
+                "quarter": quarter,
+                "columns": ["six", "target", "downside"],
+                "rows": payload,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
 
 
 #: How many characters of a stock name are worth indexing.  Every listed name

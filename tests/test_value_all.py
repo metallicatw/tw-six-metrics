@@ -246,3 +246,44 @@ def test_沒有上檔和算不出來不是同一件事():
     for r in zero[:50]:
         assert r["target_price"], f"{r['stock_id']} 報酬風險比 0 卻連目標價都沒有"
         assert r["risk_free"] == "0", f"{r['stock_id']} 不可能同時零報酬又無風險"
+
+
+# ── cross.json：發布給 tw-trend-filter 的那一份 ────────────────────────
+
+
+def test_接收端用今天的收盤重算得到同一個判斷():
+    """`cross.json` 只發目標價與下檔價，報酬風險比由 tw-trend-filter 自己算。
+
+    這條測試就是兩個 repo 之間的那個約定：拿 `cross.json` 發出去的兩個數字
+    （四捨五入到小數第四位）加上同一個股價，要重算出和 `valuations.csv` 一樣
+    的**判斷**。對不起來的話，同一檔在〔台股評等清單〕和〔趨勢∩六大∩報酬〕
+    上會是兩個報酬風險比，而使用者無從判斷哪一個是對的。
+
+    驗的是**門檻的哪一邊**，不是小數第幾位。位數本來就會差一點：CSV 存十位
+    有效數字、`cross.json` 存四位，而股價貼近下檔價的時候分母很小，會把那點
+    捨入放大（實測最大相對差 5.2e-4）。真正要緊的是沒有任何一檔因此換邊——
+    換邊才會讓一檔股票進或不進那份名單。
+    """
+    flipped: list[str] = []
+    worst = 0.0
+    checked = 0
+    for r in _rows(VALUATIONS):
+        target, floor = _f(r["target_price"]), _f(r["downside_price"])
+        price, stored = _f(r["market_price"]), _f(r["reward_risk"])
+        if None in (target, floor, price) or price <= 0:
+            continue
+        if price <= floor:
+            assert r["risk_free"] == "1", f"{r['stock_id']} 應該標成無風險"
+            continue
+        assert stored is not None, f"{r['stock_id']} 少了報酬風險比"
+        # 這兩行就是接收端會做的事——發出去的是四位。
+        ret = round(target, 4) / price - 1
+        calc = 0.0 if ret <= 0 else abs(ret / (round(floor, 4) / price - 1))
+        checked += 1
+        worst = max(worst, abs(calc - stored) / max(stored, 1e-9))
+        for edge in (1.0, 2.0, 3.0):
+            if (calc > edge) != (stored > edge):
+                flipped.append(f"{r['stock_id']}（{stored} vs {calc}，門檻 {edge}）")
+    assert checked > 500, f"只對到 {checked} 檔，這條測試沒有驗到東西"
+    assert not flipped, "四捨五入讓這幾檔換了邊：" + "、".join(flipped[:5])
+    assert worst < 1e-3, f"最大相對差 {worst:.2e}，比預期大——是不是少存了幾位？"

@@ -1806,3 +1806,59 @@ def test_燈泡裡有那張勝率對照表(tmp_path=None):
     for must in ("損益兩平", "33.3%", "25%", "rrguide"):
         assert must in listing, f"燈泡裡少了「{must}」"
     assert "沒有下檔風險" in listing, "燈泡沒有說 ∞ 是什麼"
+
+
+# ── cross.json：發布給 tw-trend-filter 的那一份 ────────────────────────
+
+
+def test_網站發布了_cross_json(tmp_path=None):
+    """〔趨勢∩六大∩報酬〕那一頁的資料由這個檔案跨 repo 送過去。
+
+    發的是**和股價無關**的三個數字（六大、目標價、下檔價），不是算好的報酬風險
+    比——接收端拿它自己那一份今天的收盤算最後一步，兩邊才會是同一天的同一個
+    價格。理由寫在 `_write_cross_feed` 的 docstring 裡。
+    """
+    import json
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(
+        _records(), out, sheets_dir=_sheets(tmp),
+        valuations=_valuations(**{"5439": {
+            "target_price": "395.6582", "downside_price": "155.2678",
+            "reward_risk": "1.62", "as_of": "2026-09-18"}}),
+    )
+    feed = json.loads((out / "cross.json").read_text("utf-8"))
+    assert feed["columns"] == ["six", "target", "downside"], feed["columns"]
+    assert feed["quarter"], "沒有寫是哪一季的六大——接收端沒辦法在畫面上標日期"
+    assert feed["as_of"] == "2026-09-18", feed["as_of"]
+
+    six, target, floor = feed["rows"]["5439"]
+    assert abs(target - 395.6582) < 1e-6 and abs(floor - 155.2678) < 1e-6
+    assert six is not None and 0 <= six <= 6
+
+    # 沒有估值的那一檔仍然要在，只是後兩格是 null：六大有、報酬風險比沒有的
+    # 那幾檔要能出現在名單下方「資料不足」那一區，而不是整個消失。
+    assert feed["rows"]["2330"][1] is None, feed["rows"]["2330"]
+    assert feed["rows"]["2330"][0] is not None, "連六大都沒有帶過去"
+
+
+def test_cross_json_不發算好的報酬風險比(tmp_path=None):
+    """發算好的值，接收端就只能用昨天的價格——而趨勢挑的正是今天剛漲上去的。
+
+    這一條盯的是「有沒有人為了省事把 reward_risk 直接塞進去」。塞了之後畫面
+    看起來一模一樣，只是那個數字比實際的樂觀。
+    """
+    import json
+
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    feed = json.loads((out / "cross.json").read_text("utf-8"))
+    assert "reward_risk" not in feed["columns"], (
+        "cross.json 開始發算好的報酬風險比了。那個數字綁在**這邊**的收盤價上，"
+        "而接收端跑在這條排程前面 34 分鐘——它拿到的會是昨天的價格算出來的。"
+    )
+    assert "market_price" not in feed["columns"], (
+        "發了股價就等於發了報酬風險比——接收端會拿它去算，而它是昨天的"
+    )
