@@ -2167,6 +2167,13 @@ def cmd_fetch_daily(args: argparse.Namespace) -> int:
     daily = Daily(http)
     written = 0
     failed: list[str] = []
+    #: 「半個市場不見了」——和上面那些警告分開放，因為只有這一類會讓整支失敗。
+    holes: list[str] = []
+    #: 今天（台北）。**還沒過完的那一天不算洞**：第一班跑的時候，兩個交易所
+    #: 不一定都已經把當天的資料放上去，那時候檔案裡只有一邊是正常的，第二班
+    #: 會把它補齊（寫檔是合併不是覆蓋）。把那個狀態算成失敗的話，每天下午
+    #: 都可能紅一次然後晚上自己好——而會自己好的紅燈，兩個星期就沒有人看了。
+    today = datetime.now(_TAIPEI).date().isoformat()
     for label, fetch, columns, folder in (
         ("收盤行情", daily.prices, PRICE_COLUMNS, "prices"),
         ("三大法人", daily.institutional, INSTITUTIONAL_COLUMNS, "institutional"),
@@ -2194,10 +2201,25 @@ def cmd_fetch_daily(args: argparse.Namespace) -> int:
             written += 1
             print(f"  {label:<6} {day}　{n} 檔{note}")
             # 少了一整個交易所不是「一個來源打嗝」，是半個市場不見了。
+            #
+            # 這個偵測本來就在，漏的是**升級**：它以前只 append 到 `failed`，
+            # 而 `failed` 只會變成 `::warning::`，整支照樣回 EXIT_OK。於是
+            # 證交所的 WAF 把 runner 擋掉的那一天，log 上有一行黃字、job 是
+            # 綠的、網站上半個市場的收盤價停在昨天——沒有人會發現。
+            #
+            # 一年 252 個交易日的檔案，沒有任何一天只有一個交易所，所以這件事
+            # 一旦發生就是真的壞了，不是常態的抖動。
             markets = {r.get("market") for r in group}
             for want in ("上市", "上櫃"):
-                if want not in markets:
-                    failed.append(f"{label} {day}：完全沒有{want}的資料")
+                if want in markets:
+                    continue
+                note = f"{label} {day}：完全沒有{want}的資料"
+                if day < today:
+                    # 已經過完的交易日還缺半個市場——沒有人會回頭補它，
+                    # 因為每日排程只抓「今天」。
+                    holes.append(note)
+                else:
+                    failed.append(note + "（今天還沒過完，晚一班會補齊）")
 
     # 個股新聞：同一個排程的第三件事。分類列表一頁 30 篇，抓八頁約 240 篇——
     # 一天跑兩次，這已經蓋過上一次之後的全部，而且留了很寬的餘裕。
@@ -2210,6 +2232,17 @@ def cmd_fetch_daily(args: argparse.Namespace) -> int:
     failed.extend(daily.problems)
     for line in failed:
         print(f"::warning::{line}")
+    for line in holes:
+        print(f"::error::{line}")
+
+    # 兩種失敗，分開判：
+    #
+    #   holes  已經過完的交易日缺了半個市場。一定要紅——寫進去的那份檔案
+    #          從此就是那個樣子，而每日排程只抓「今天」，沒有人會回頭補。
+    #   failed 來源打嗝、新聞抓不到、今天還沒補齊。留警告就好；這些東西
+    #          下一班會自己解決，每次都紅的話這條排程的紅燈就沒有意義了。
+    if holes:
+        return EXIT_FAIL
     return EXIT_OK if written or not failed else EXIT_FAIL
 
 

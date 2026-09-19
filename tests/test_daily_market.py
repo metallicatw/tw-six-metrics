@@ -590,3 +590,139 @@ def test_yearly_trading_still_accepts_a_stock_listed_on_only_one_exchange():
     years = [row[0] for row in grid if row and row[0]]
     assert len(years) == 25, f"只解出 {len(years)} 年"
     assert sources == ["twse"], sources
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# 「半個市場不見了」要讓整支失敗，不是留一條黃字
+# ─────────────────────────────────────────────────────────────────────────
+
+
+def _run_fetch_daily(rows_by_source, *, out_dir, today):
+    """跑一次真正的 `cmd_fetch_daily`，但網路整條換掉。回傳結束碼與輸出。
+
+    直接跑指令而不是 grep 原始碼：這一條守的是**結束碼**，而結束碼是原始碼裡
+    看不出來的東西——`failed` 裡有東西、`written` 也有東西的時候，到底回 0 還是
+    回 1，要跑過才知道。（上一版那條測試是 grep 出來的，所以它從頭到尾都不知道
+    那個警告根本不會讓 job 變紅。）
+    """
+    import argparse
+    import contextlib
+    import io
+
+    from twsix import cli
+    from twsix.ingest import base as ingest_base
+    from twsix.ingest import daily as daily_mod
+
+    class _NoNetwork:
+        def get(self, *a, **k):
+            raise OSError("測試裡不打網路")
+
+    class _StubDaily:
+        problems: list[str] = []
+
+        def __init__(self, _http):
+            pass
+
+        def prices(self, day=None):
+            return list(rows_by_source["prices"])
+
+        def institutional(self, day=None):
+            return list(rows_by_source["institutional"])
+
+    real_http, real_daily = ingest_base.HttpClient, daily_mod.Daily
+    real_now = cli.datetime
+    try:
+        ingest_base.HttpClient = lambda **k: _NoNetwork()
+        daily_mod.Daily = _StubDaily
+
+        class _Clock:
+            @staticmethod
+            def now(tz=None):
+                import datetime as _dt
+                return _dt.datetime.fromisoformat(today + "T16:00:00+08:00")
+        cli.datetime = _Clock
+
+        ns = argparse.Namespace(config=None, out=out_dir)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(io.StringIO()):
+            code = cli.cmd_fetch_daily(ns)
+        return code, buf.getvalue()
+    finally:
+        ingest_base.HttpClient, daily_mod.Daily = real_http, real_daily
+        cli.datetime = real_now
+
+
+def _row(day, code, market):
+    return {"date": day, "code": code, "market": market, "close": "10",
+            "open": "10", "high": "10", "low": "10", "change": "0", "volume": "1"}
+
+
+def _inst(day, code, market):
+    return {"date": day, "code": code, "market": market,
+            "foreign": "1", "trust": "1", "dealer": "1", "total": "3"}
+
+
+def test_已經過完的交易日缺半個市場要讓整支失敗():
+    """這是那個修不掉的洞：每日排程只抓「今天」。
+
+    昨天的檔案少了上市，今天不會有人回頭補它——而在這個修法之前，那件事只是
+    log 中間的一行黃字，job 是綠的，網站照常發布。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        code, out = _run_fetch_daily(
+            {"prices": [_row("2026-09-14", "1101", "上櫃")],
+             "institutional": [_inst("2026-09-14", "1101", "上櫃")]},
+            out_dir=tmp, today="2026-09-15",
+        )
+    assert code != 0, (
+        "已經過完的交易日只有上櫃，卻回了 0。這一天的檔案從此就是那個樣子，"
+        "而每日排程只抓『今天』——沒有人會回頭補。\n" + out
+    )
+    assert "::error::" in out, "要用 ::error:: 而不是 ::warning::"
+    assert "完全沒有上市" in out
+
+
+def test_今天還沒過完就只有半個市場不算失敗():
+    """第一班跑的時候兩個交易所不一定都放上去了，第二班會補齊（寫檔是合併）。
+
+    把那個狀態算成失敗的話，每天下午都可能紅一次然後晚上自己好——而**會自己好
+    的紅燈，兩個星期之內就沒有人看了**。那時候真的壞掉的那一次也會一起被忽略。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        code, out = _run_fetch_daily(
+            {"prices": [_row("2026-09-15", "1101", "上櫃")],
+             "institutional": [_inst("2026-09-15", "1101", "上櫃")]},
+            out_dir=tmp, today="2026-09-15",
+        )
+    assert code == 0, "今天的半份被當成失敗了，這會變成每天下午紅一次\n" + out
+    assert "::warning::" in out, "還是要說一聲，只是不讓 job 紅"
+
+
+def test_兩個交易所都在就什麼都不說():
+    with tempfile.TemporaryDirectory() as tmp:
+        code, out = _run_fetch_daily(
+            {"prices": [_row("2026-09-14", "1101", "上市"),
+                        _row("2026-09-14", "6180", "上櫃")],
+             "institutional": [_inst("2026-09-14", "1101", "上市"),
+                               _inst("2026-09-14", "6180", "上櫃")]},
+            out_dir=tmp, today="2026-09-15",
+        )
+    assert code == 0, out
+    assert "完全沒有" not in out, out
+
+
+def test_新聞抓不到不會讓整支失敗():
+    """新聞是同一個排程的第三件事，但它掛掉不該把行情丟掉。
+
+    這一條也順便釘住「不是所有 failed 都致命」——分兩籃是刻意的。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        code, out = _run_fetch_daily(
+            {"prices": [_row("2026-09-14", "1101", "上市"),
+                        _row("2026-09-14", "6180", "上櫃")],
+             "institutional": [_inst("2026-09-14", "1101", "上市"),
+                               _inst("2026-09-14", "6180", "上櫃")]},
+            out_dir=tmp, today="2026-09-15",
+        )
+    assert "個股新聞" in out, "新聞那一步沒有跑到？"
+    assert code == 0, "新聞抓不到卻讓整支失敗了\n" + out
