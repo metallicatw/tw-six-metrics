@@ -40,12 +40,19 @@ ENDPOINTS: dict[str, str] = {
     "dividend": f"{OPENAPI}/opendata/t187ap45_L",
 }
 
-#: A key each payload must contain.  The contract test asserts these.
+#: A key each payload must contain.  ``tests/test_endpoint_contract.py``
+#: checks these against the real files in ``data/`` — every entry is either
+#: verified there or listed as uncheckable **with a reason**.
+#:
+#: 在那條測試存在之前，這個 dict 是純註解——而註解會飄。「存貨」在這裡放了很久，
+#: 但開放資料的資產負債表根本沒有這一欄（`ingest/market.py` 的 docstring 早就
+#: 這樣寫了），於是存貨周轉率永遠是空的，兩份文件互相矛盾也沒有人發現。
 CONTRACT_KEYS: dict[str, tuple[str, ...]] = {
     "company": ("公司代號", "公司名稱", "產業別"),
     "revenue": ("公司代號", "營業收入-當月營收", "資料年月"),
     "income": ("公司代號", "營業收入", "營業利益（損失）"),
-    "balance": ("公司代號", "存貨", "資產總計"),
+    # 「存貨」不在這裡面：量過，這張表只到彙總層級（流動資產／資產總計……）。
+    "balance": ("公司代號", "資產總計"),
     "dividend": ("公司代號",),
     "stock_day_all": ("Code", "ClosingPrice"),
 }

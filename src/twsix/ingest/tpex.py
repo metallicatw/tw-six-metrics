@@ -26,11 +26,20 @@ ENDPOINTS: dict[str, str] = {
     "institutional": f"{BASE}/insti/dailyTrade",
 }
 
+#: 櫃買的開放資料**中英文混著來**，而且是一張表一個樣：月營收那張是中文欄名
+#: （`公司代號`、`營業收入-當月營收`），公司基本資料與財報那三張整張是英文
+#: （`SecuritiesCompanyCode`、`CompanyAbbreviation`）。
+#:
+#: 這裡原本四張全寫「公司代號」，四張裡有三張對不上——而它沒有造成災難，是因為
+#: 讀取端 `market.CODE_KEYS` 本來就同時認兩種拼法。也就是說：端點真的改過名，
+#: 唯一記著這件事的地方是讀取端的別名列表，不是這份號稱是契約的 dict。
+#: `tests/test_endpoint_contract.py` 現在拿真實的檔案對它。
 CONTRACT_KEYS: dict[str, tuple[str, ...]] = {
-    "company": ("公司代號", "公司名稱"),
-    "revenue": ("公司代號", "營業收入-當月營收"),
-    "income": ("公司代號", "營業收入"),
-    "balance": ("公司代號", "存貨"),
+    "company": ("SecuritiesCompanyCode", "CompanyName", "CompanyAbbreviation"),
+    "revenue": ("公司代號", "營業收入-當月營收", "資料年月"),
+    "income": ("SecuritiesCompanyCode", "營業收入"),
+    # 「存貨」不在這裡面，理由同 `twse.CONTRACT_KEYS`。
+    "balance": ("SecuritiesCompanyCode", "資產總計"),
 }
 
 
