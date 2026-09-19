@@ -53,6 +53,10 @@
        複製進來，取不到的時候少一個導覽項，比多一個 404 的連結好。 #}
     {% if trend_page %}
     <a class="nav-trend" href="{{ rel }}{{ trend_page }}"{% if page=='trend' %} aria-current="page"{% endif %}>台股趨勢選股</a>
+    {# 緊接在〔趨勢選股〕右邊，因為它就是那一頁再加兩個條件。獨立一頁而不是
+       那一頁上的一顆按鈕，是因為「今天有哪幾檔同時過三關」是一個會被直接打開、
+       直接分享的問題——它要有自己的網址。 #}
+    <a class="nav-cross" href="{{ rel }}{{ cross_page }}"{% if page=='cross' %} aria-current="page"{% endif %}>趨勢∩六大∩報酬</a>
     {% endif %}
     {% if monitor_page %}
     <a class="nav-mon" href="{{ rel }}{{ monitor_page }}"{% if page=='monitor' %} aria-current="page"{% endif %}>全球市場監控＋日股觀察</a>

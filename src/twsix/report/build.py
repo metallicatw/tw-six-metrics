@@ -90,6 +90,16 @@ MONITOR_REPORT = "monitor-report.html"
 TREND_PAGE = "trend.html"
 TREND_REPORT = "trend-report.html"
 
+#: 〔趨勢∩六大∩報酬〕。嵌的是**同一份** `trend-report.html`，只是網址帶了
+#: `#cross`——那個片段讓報告把兩個門檻預先填成「六大 > 3」「報酬風險比 > 2」。
+#:
+#: 兩個入口共用一份報告，而不是產兩份：趨勢圖、側欄卡片、那一百 MB 的圖表資料
+#: 都要各維護一次，而它們沒有任何一處該不一樣。
+#:
+#: 那兩個門檻要比的數字（六大評分、目標價、下檔價）由 `cross.json` 從這邊發過去，
+#: 見 `_write_cross_feed`。
+CROSS_PAGE = "cross.html"
+
 #: The site is about Taiwanese stocks, read in Taiwan, against 民國 quarters
 #: and 月營收 filed to a Taiwanese calendar.  Stamping it in UTC — or in
 #: whatever zone the build machine happens to sit in, which for GitHub Actions
@@ -657,6 +667,7 @@ def build_site(
         hidden_pages=sorted(HIDDEN_PAGES),
         monitor_page=MONITOR_PAGE if has_monitor else "",
         trend_page=TREND_PAGE if has_trend else "",
+        cross_page=CROSS_PAGE if has_trend else "",
         repo=repo,
         site_title=ctx.site_title,
         generated_at=ctx.generated_at,
@@ -917,6 +928,10 @@ def build_site(
             **base, page="trend", rel="", report=TREND_REPORT
         ).dump(str(out_dir / TREND_PAGE))
         written["trend.html（趨勢選股）"] = 1
+        env.get_template("cross.html.j2").stream(
+            **base, page="cross", rel="", report=TREND_REPORT
+        ).dump(str(out_dir / CROSS_PAGE))
+        written["cross.html（趨勢∩六大∩報酬）"] = 1
 
     if has_monitor:
         env.get_template("monitor.html.j2").stream(
@@ -1314,6 +1329,7 @@ def _full_stock_page(
         delisted=delisted,
         monitor_page=base.get("monitor_page", ""),
         trend_page=base.get("trend_page", ""),
+        cross_page=base.get("cross_page", ""),
     )
     return True
 
@@ -1331,6 +1347,7 @@ def build_stock_page(
     delisted: bool = False,
     monitor_page: str = "",
     trend_page: str = "",
+    cross_page: str = "",
 ) -> Path:
     """Render 〔評價簡表〕〔六大財務指標評等〕〔EPS預估與估價〕〔殖利率估價〕.
 
@@ -1353,6 +1370,7 @@ def build_stock_page(
         # 從這裡帶進去——漏掉的話那 1,769 頁的導覽列會比別的頁面少一項。
         monitor_page=monitor_page,
         trend_page=trend_page,
+        cross_page=cross_page,
         repo=repo,
         page="stock",
         # 完整版也給頁首那顆按鈕一個對象，字改成「重新抓取」：資料會過期，而且

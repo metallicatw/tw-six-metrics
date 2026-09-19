@@ -1281,12 +1281,16 @@ def test_the_trend_report_is_embedded_not_linked(tmp_path=None):
 #: 那幾檔），後兩項講「現在在發生什麼」（今天技術面在動的，以及這一切之外的
 #: 大盤與海外）。
 #:
-#: 名字帶著範圍，因為前三項全是台股、第四項根本不是，而原本那四個兩字詞
+#: 名字帶著範圍，因為前四項全是台股、第五項根本不是，而原本那四個兩字詞
 #: （評等／觀察／趨勢／監控）看不出這件事。
+#:
+#: 〔趨勢∩六大∩報酬〕緊接在〔台股趨勢選股〕右邊，因為它就是那一頁再加兩個
+#: 條件——往尾巴補一個最省事，而那正好會把「由近而遠」破壞掉。
 NAV_EXPECTED = [
     ("nav-list",  "台股評等清單"),
     ("nav-watch", "台股觀察清單"),
     ("nav-trend", "台股趨勢選股"),
+    ("nav-cross", "趨勢∩六大∩報酬"),
     ("nav-mon",   "全球市場監控＋日股觀察"),
 ]
 
@@ -1310,7 +1314,7 @@ def test_the_nav_is_ordered_named_and_coloured(tmp_path=None):
 
     html = (out / "index.html").read_text("utf-8")
     nav = html[html.index("<nav>"):html.index("</nav>")]
-    got = re.findall(r'<a class="(nav-[a-z]+)"[^>]*>([^<>]+)</a>', nav)
+    got = re.findall(r'<a class="(nav-[a-z-]+)"[^>]*>([^<>]+)</a>', nav)
     assert got == NAV_EXPECTED, got
 
     # 四個 class 在 CSS 裡各自要有一個顏色，而且四個必須不一樣——四項同色
@@ -1862,3 +1866,92 @@ def test_cross_json_不發算好的報酬風險比(tmp_path=None):
     assert "market_price" not in feed["columns"], (
         "發了股價就等於發了報酬風險比——接收端會拿它去算，而它是昨天的"
     )
+
+
+# ── 〔趨勢∩六大∩報酬〕那一頁 ──────────────────────────────────────────
+
+
+def _with_trend(tmp: Path) -> Path:
+    """一個已經有 `trend-report.html` 的 site 目錄。
+
+    導覽列上那兩項**看檔案在不在**才出現——本機建站沒有那份報告，寫死一個連結
+    就是一個 404。
+    """
+    out = tmp / "site"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "trend-report.html").write_text("<html>上游那份報告</html>", "utf-8")
+    return out
+
+
+def test_交集那一頁嵌的是同一份報告加_cross(tmp_path=None):
+    """兩個入口共用一份 `trend-report.html`。
+
+    產兩份 HTML 的話，趨勢圖、側欄卡片、那一百 MB 的圖表資料都要各維護一次，
+    而它們沒有任何一處該不一樣。`#cross` 是那份報告自己認得的片段，它讓兩個
+    門檻預先填成 3 和 2。
+    """
+    import re
+
+    tmp = tmp_path or _tmp()
+    out = _with_trend(tmp)
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "cross.html").read_text("utf-8")
+    src = re.search(r'<iframe[^>]*src="([^"]*)"', page).group(1)
+    assert src.endswith("trend-report.html#cross"), (
+        f"嵌的是 {src}——少了 #cross 的話這一頁和〔台股趨勢選股〕一模一樣"
+    )
+    assert "六大財務指標最新綜合評分 &gt; 3" in page, "燈泡沒有說清楚門檻是什麼"
+    assert "沒有下檔風險" in page, "燈泡沒有說 ∞ 是什麼"
+
+
+def test_每一種頁面的導覽列都有那一項(tmp_path=None):
+    """個股頁**自己組 context**，不是用 `**base`。
+
+    所以導覽列多一項就要記得從三個地方各帶一次，而漏掉的症狀是：那 1,769 頁的
+    導覽列比別的頁面少一項，或者連結是 `href=""`——點下去回到自己。
+    """
+    import re
+
+    tmp = tmp_path or _tmp()
+    out = _with_trend(tmp)
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    # 每一項該指到哪一個檔案。只檢查「有沒有那一項」不夠——漏掉參數的時候
+    # 那一項**還在**，只是 `href` 變成 `{{ rel }}` 自己（個股頁上是 `../`），
+    # 點下去回到上一層。第一版就是這樣：拿掉 `cross_page=cross_page` 全綠。
+    WANT = {"nav-list": "index.html", "nav-watch": "watchlist.html",
+            "nav-trend": "trend.html", "nav-cross": "cross.html"}
+    seen = {}
+    for name in ("index.html", "cross.html", "trend.html", "watchlist.html",
+                 "stock/5439.html"):
+        html = (out / name).read_text("utf-8")
+        nav = html.split("<nav>")[1].split("</nav>")[0]
+        items = re.findall(
+            r'class="(nav-[\w-]+)" href="([^"]*)"[^>]*>([^<]+)<', nav)
+        seen[name] = [t for _, _, t in items]
+        for cls, href, label in items:
+            want = WANT.get(cls)
+            if want is None:
+                continue
+            assert href.endswith(want), (
+                f"{name} 的〔{label}〕指到 {href!r}，應該以 {want} 結尾"
+                "——多半是某個 context 漏了帶那個參數"
+            )
+    first = seen["index.html"]
+    assert "趨勢∩六大∩報酬" in first, first
+    for name, items in seen.items():
+        assert items == first, (
+            f"{name} 的導覽列和〔評等清單〕不一樣：\n  {items}\n  {first}"
+        )
+
+
+def test_沒有趨勢報告就兩項都不出現(tmp_path=None):
+    """上游取不到的時候少一個導覽項，比多一個 404 的連結好。
+
+    交集那一頁嵌的就是那份報告——報告不在，這一頁是一個空框。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    assert not (out / "cross.html").exists(), "沒有上游報告卻畫了交集那一頁"
+    nav = (out / "index.html").read_text("utf-8").split("<nav>")[1].split("</nav>")[0]
+    assert "趨勢∩六大∩報酬" not in nav
