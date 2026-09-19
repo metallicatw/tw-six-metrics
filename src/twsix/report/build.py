@@ -143,6 +143,10 @@ def _env(assets: bool = False):  # type: ignore[no-untyped-def]
     # 內嵌——那張要能單獨用瀏覽器開起來，旁邊沒有 assets/ 可以連。
     env.globals["assets"] = assets
     env.globals["asset_v"] = asset_version()
+    # 這兩句是 global 而不是傳進去的變數，因為用到它們的是 `table_head()`，而
+    # 那個 macro 是被 `{% from ... import %}` 匯入的——匯入的 macro 看不到匯入
+    # 它的那一頁的 context。傳參數也可以，但那會讓三個呼叫端各記一次同一件事。
+    env.globals["reward_risk_notes"] = list(REWARD_RISK_NOTES)
     if not assets:
         from markupsafe import Markup
 
@@ -356,6 +360,12 @@ class Row:
     composite_value: float | None
     #: 不在官方名單上了。頁面還在、搜尋還找得到，但「今天的市場」那幾頁不算它。
     delisted: bool = False
+    #: 〔EPS預估與估價〕的報酬風險比。它來自 `data/valuations.csv`，不是評等表
+    #: ——所以 `rows_from_store` 填不到它，由 `build_site` 補上。
+    reward_risk: float | None = None
+    #: 股價已經低於下檔價：**沒有下檔風險**，不是算不出來。兩者的 `reward_risk`
+    #: 都是 None，意思正好相反。見 `store.snapshots.VALUATION_COLUMNS`。
+    risk_free: bool = False
 
 
 def rows_from_store(
@@ -537,6 +547,9 @@ def _valuation_view(raw: dict[str, str]) -> dict[str, Any]:
         out[key] = _float(raw.get(key, ""))
     out["as_of"] = raw.get("as_of", "")
     out["revenue_month"] = raw.get("revenue_month", "")
+    # 「沒有下檔風險」和「算不出來」的 reward_risk 都是 None——這一格是它們唯一
+    # 分得開的地方。清單上前者顯示 ∞ 並排在最前面，後者顯示 —。
+    out["risk_free"] = raw.get("risk_free", "") == "1"
     # 價格帶位置 0..1 for the cheap/fair/expensive strip; None when unplottable.
     lo, hi, price = out["cheap_price"], out["expensive_price"], out["market_price"]
     out["price_position"] = (
@@ -591,6 +604,14 @@ def build_site(
     valuation_by_stock = {
         r["stock_id"]: _valuation_view(r) for r in (valuations or [])
     }
+    # 報酬風險比要出現在〔台股評等清單〕最右邊那一欄，而它住在另一張表裡。
+    # 在這裡接起來，而不是在 `rows_from_store`：那支函式的輸入是評等表，讓它
+    # 多讀一張表會讓「一列評等是什麼」這個問題有兩個答案。
+    for r in rows:
+        view = valuation_by_stock.get(r.stock_id)
+        if view is not None:
+            r.reward_risk = view["reward_risk"]
+            r.risk_free = view["risk_free"]
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "stock").mkdir(exist_ok=True)
     write_assets(out_dir)

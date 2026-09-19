@@ -230,6 +230,24 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;
 .g-na{background:transparent;color:var(--muted);border:1px solid var(--rule)}
 .pick{color:var(--accent-2);font-weight:600}
 .up{color:var(--up)}.down{color:var(--down)}
+/* 報酬風險比。沿用六個等第那一套色階（g4 最好 → g0 最差）：它們在同一張表上
+   並排，兩套顏色會讓讀者以為它們是兩種不同的刻度。
+   用文字顏色而不是底色——這一欄是數字，整格染色會蓋掉等寬字的對齊。
+   `--up`／`--down` 是漲跌（台股紅漲綠跌），和這裡的好壞是兩回事，不能共用。 */
+.rr{font-weight:600;font-variant-numeric:tabular-nums}
+.rr-best{color:var(--g4)}.rr-ok{color:var(--g3)}
+.rr-weak{color:var(--g1)}.rr-bad{color:var(--g0)}
+.rrguide{list-style:none;margin:6px 0;padding:0;font-size:12px}
+.rrguide li{display:grid;grid-template-columns:5.5em 7em 1fr;gap:2px 8px;
+  padding:4px 0;border-top:1px solid var(--rule)}
+.rrguide li:first-child{border-top:none}
+.rrguide em{font-style:normal;color:var(--muted);white-space:nowrap}
+.rrguide span{white-space:normal}
+/* 手機上三欄擠成 5.5em 會斷字。改成兩行：門檻與勝率一行，說明一行。 */
+@media (max-width:640px){
+  .rrguide li{grid-template-columns:5.5em 1fr}
+  .rrguide span{grid-column:1 / -1}
+}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
   background:var(--rule);border:1px solid var(--rule);border-radius:5px;overflow:hidden;margin-bottom:14px}
 .card{background:var(--surface);padding:10px 14px}

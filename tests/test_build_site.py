@@ -791,7 +791,24 @@ def test_every_column_can_be_sorted_and_sorts_by_a_key_not_by_the_printed_text(t
     # 第 0 欄是流水號，它不排序（點「現在第幾列」沒有意義），所以可排序的欄
     # 從 1 開始。這一串一旦和 `tr.cells[col]` 對不起來，排序會整排錯開一格。
     cols = re.findall(r'class="sortable" data-col="(\d+)"', listing)
-    assert [int(c) for c in cols] == list(range(1, 15))
+    assert [int(c) for c in cols] == list(range(1, 17))
+
+    # 數個數還不夠。`data-col` 是 `tr.cells[col]` 的索引，而它是手寫的：中間插
+    # 一欄卻忘了把後面的號碼往後推，排序會整排錯開一格——畫面上完全正常，只是
+    # 按〔綜合評分〕排出來的其實是〔評分變化〕。所以逐欄對位置。
+    head = listing.split("<thead>")[1].split("</thead>")[0]
+    ths = re.findall(r"<th\b.*?</th>", head, re.S)
+    for i, th in enumerate(ths):
+        m = re.search(r'data-col="(\d+)"', th)
+        assert m is None or int(m.group(1)) == i, (
+            f"第 {i} 欄的表頭寫著 data-col={m.group(1)}"
+            f"（{re.sub(r'<[^>]+>', '', th).strip()[:16]}）"
+        )
+    first = listing.split('<tr data-code="')[1].split("</tr>")[0]
+    body_cols = len(re.findall(r"<td\b", first))
+    assert body_cols == len(ths), (
+        f"表頭 {len(ths)} 欄、資料列 {body_cols} 欄——對不起來排序會整排錯開"
+    )
 
     row = listing.split('<tr data-code="5439"')[1].split("</tr>")[0]
     assert re.search(r'class="num" data-s="[-0-9.]+"', row)   # 綜合評分排的是數字
@@ -1701,3 +1718,91 @@ def test_the_revenue_table_is_collapsed_and_not_duplicated(tmp_path=None):
     )
     # 〔三年營收趨勢〕那張圖不再自帶「月營收／年增率」兩欄的數值表。
     assert page.count("<th>月營收</th>") == 0, "圖自己那張數值表回來了"
+
+
+# ── 〔台股評等清單〕新增的兩欄 ─────────────────────────────────────────
+
+
+def _valuations(**by_stock) -> list[dict[str, str]]:
+    """`data/valuations.csv` 的最小形狀，只填這兩欄真正會用到的格。"""
+    from twsix.store.snapshots import VALUATION_COLUMNS
+
+    out = []
+    for code, values in by_stock.items():
+        row = dict.fromkeys(VALUATION_COLUMNS, "")
+        row["stock_id"] = code
+        row.update(values)
+        out.append(row)
+    return out
+
+
+def test_清單上看得到上市或上櫃(tmp_path=None):
+    """產業前面那一欄。上櫃的流動性、法人參與度、本益比水準都和上市不一樣，
+
+    而這個資料本來就在評等表的 `market` 欄裡，只是一直沒有被畫出來。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    listing = (out / "index.html").read_text("utf-8")
+    assert ">市場<" in listing, "表頭沒有〔市場〕這一欄"
+    row = listing.split('<tr data-code="2330"')[1].split("</tr>")[0]
+    assert 'data-s="上市"' in row, f"2330 那一列看不到「上市」：{row[:400]}"
+
+
+def test_清單最右邊是報酬風險比(tmp_path=None):
+    """三種值要分得開：數字、∞（沒有下檔風險）、—（算不出來）。
+
+    ∞ 和 — 在 `valuations.csv` 裡長得一模一樣（`reward_risk` 都是空的），
+    意思卻正好相反。混在一起的話，拿 `> 2` 去篩會把最好的那一批和沒資料的
+    一起丟掉——而丟掉的方式是「它們不在名單上」，沒有任何徵兆。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(
+        _records(), out, sheets_dir=_sheets(tmp),
+        valuations=_valuations(
+            **{"5439": {"reward_risk": "2.5", "risk_free": "0"},
+               "2330": {"reward_risk": "", "risk_free": "1",
+                        "target_price": "100", "market_price": "50",
+                        "downside_price": "60"}},
+        ),
+    )
+    listing = (out / "index.html").read_text("utf-8")
+    assert ">報酬<br>風險比<" in listing.replace("\n", ""), "表頭沒有〔報酬風險比〕"
+
+    good = listing.split('<tr data-code="5439"')[1].split("</tr>")[0]
+    assert "2.50" in good and "rr-ok" in good, good[-400:]
+
+    free = listing.split('<tr data-code="2330"')[1].split("</tr>")[0]
+    assert "∞" in free, "『股價已低於下檔價』沒有畫成 ∞"
+    assert 'data-s="999999"' in free, (
+        "∞ 的排序鍵不是一個大數——照〔報酬風險比〕排的時候它會沉到底，"
+        "而它其實是最好的那一種"
+    )
+
+
+def test_算不出報酬風險比的顯示破折號而不是零(tmp_path=None):
+    """沒有估值的那一檔。0.00 會被讀成「很差」，而它其實是「不知道」。"""
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp), valuations=[])
+    row = (out / "index.html").read_text("utf-8") \
+        .split('<tr data-code="5439"')[1].split("</tr>")[0]
+    last = row.rsplit("<td", 1)[1]
+    assert "—" in last and "0.00" not in last, last
+    assert 'data-s="-999"' in last, "算不出來的排序鍵要沉到底"
+
+
+def test_燈泡裡有那張勝率對照表(tmp_path=None):
+    """報酬風險比單看數字沒有意義——2.0 是好是壞，要對上「三次對一次就打平」
+
+    才成立。所以那張表跟著數字走，不是放在另一頁。
+    """
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    listing = served(out, "index.html")
+    for must in ("損益兩平", "33.3%", "25%", "rrguide"):
+        assert must in listing, f"燈泡裡少了「{must}」"
+    assert "沒有下檔風險" in listing, "燈泡沒有說 ∞ 是什麼"

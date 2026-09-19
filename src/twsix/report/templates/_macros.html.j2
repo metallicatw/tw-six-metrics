@@ -73,6 +73,10 @@
   {# 名稱也連過去。原本只有代號可點——而讀者掃清單時眼睛落在名稱上，
      卻要把游標移回四位數字才點得到，那是每一列都要付一次的小摩擦。 #}
   <td data-s="{{ r.name }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.name }}</a></td>
+  {# 上市／上櫃。「這一檔在哪個市場」是掃清單時會分開看的一件事——上櫃的流動性、
+     法人參與度、本益比水準都和上市不一樣。資料本來就在評等表的 `market` 欄裡，
+     只是一直沒有被畫出來。 #}
+  <td class="muted" data-s="{{ r.market }}">{{ r.market }}</td>
   <td class="muted" data-s="{{ r.industry }}">{{ r.industry }}</td>
   {% for key in ('revenue_yoy','operating_margin','net_income_yoy','eps','inventory_turnover','free_cash_flow') %}
   <td data-s="{{ {'AA':4,'A':3,'BB':2,'B':1,'C':0}.get(r.grades[key], -999) }}">{{ grade(r.grades[key]) }}</td>
@@ -80,7 +84,39 @@
   <td class="num" data-s="{{ r.composite|float(default=-999) }}">{{ score(r.composite) }}</td>
   <td class="num" data-s="{{ r.composite_delta if r.composite_delta is not none else -999 }}">{{ delta(r.composite_delta) }}</td>
   <td class="pick-cell" data-s="{{ 1 if r.value_pick else 0 }}">{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
+  <td class="num" data-s="{{ reward_key(r) }}">{{ reward(r) }}</td>
 </tr>
+{%- endmacro %}
+
+{# ── 報酬風險比 ────────────────────────────────────────────────────────
+   〔EPS預估與估價〕的 R 欄：|預期報酬 ÷ 預期風險|。
+
+   三種值，而其中兩種在資料裡長得一模一樣（`reward_risk` 都是 None），意思卻
+   正好相反：
+
+     數字        照四段門檻上色。
+     ∞          股價已經低於下檔價——**沒有下檔風險**，是四段裡最好的那一種。
+                全市場有 492 檔在這一類。排序鍵給一個大數，讓它排在最前面。
+     —          算不出來（多半是還沒回補到〔年度交易資訊〕，沒有本益比區間；
+                也可能是預估 EPS 為負，本益比估價不適用）。排序鍵 -999，沉到底。
+
+   把 ∞ 和 — 混在一起是這個功能最容易犯的錯：拿 `> 2` 去篩會同時丟掉最好的
+   那一批和沒資料的那一批，而丟掉的方式是「它們不在名單上」，沒有任何徵兆。 #}
+{% macro reward_key(r) -%}
+{%- if r.risk_free -%}999999
+{%- elif r.reward_risk is none -%}-999
+{%- else -%}{{ '%.6f'|format(r.reward_risk) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro reward(r) -%}
+{%- if r.risk_free -%}
+<span class="rr rr-best" title="股價已經低於下檔價，沒有下檔風險">∞</span>
+{%- elif r.reward_risk is none -%}<span class="muted">—</span>
+{%- else -%}
+{%- set v = r.reward_risk -%}
+{%- set cls = 'rr-best' if v >= 3 else ('rr-ok' if v >= 2 else ('rr-weak' if v >= 1 else 'rr-bad')) -%}
+<span class="rr {{ cls }}" title="損益兩平所需的最低勝率約 {{ '%.0f'|format(100 / (1 + v)) }}%">{{ '%.2f'|format(v) }}</span>
+{%- endif -%}
 {%- endmacro %}
 
 {# 每一欄都可以點著排序。只給那三欄會讓人試著點別欄然後以為壞了——「有些能點、
@@ -129,16 +165,39 @@
   <th><button type="button" class="sortable" data-col="2">代號</button></th>
   <th><button type="button" class="sortable" data-col="3">財報<br>基準</button></th>
   <th><button type="button" class="sortable" data-col="4">名稱</button></th>
-  <th><button type="button" class="sortable" data-col="5">產業</button></th>
-  <th><button type="button" class="sortable" data-col="6">營收<br>年增率</button></th>
-  <th><button type="button" class="sortable" data-col="7">營業<br>利益率</button></th>
-  <th><button type="button" class="sortable" data-col="8">稅後淨利<br>年增率</button></th>
-  <th><button type="button" class="sortable" data-col="9">EPS</button></th>
-  <th><button type="button" class="sortable" data-col="10">存貨<br>周轉率</button></th>
-  <th><button type="button" class="sortable" data-col="11">自由<br>現金流</button></th>
-  <th class="num"><button type="button" class="sortable" data-col="12">綜合<br>評分</button></th>
-  <th class="num"><button type="button" class="sortable" data-col="13">評分<br>變化</button></th>
-  <th><button type="button" class="sortable" data-col="14">具投資<br>價值</button></th>
+  <th><button type="button" class="sortable" data-col="5">市場</button></th>
+  <th><button type="button" class="sortable" data-col="6">產業</button></th>
+  <th><button type="button" class="sortable" data-col="7">營收<br>年增率</button></th>
+  <th><button type="button" class="sortable" data-col="8">營業<br>利益率</button></th>
+  <th><button type="button" class="sortable" data-col="9">稅後淨利<br>年增率</button></th>
+  <th><button type="button" class="sortable" data-col="10">EPS</button></th>
+  <th><button type="button" class="sortable" data-col="11">存貨<br>周轉率</button></th>
+  <th><button type="button" class="sortable" data-col="12">自由<br>現金流</button></th>
+  <th class="num"><button type="button" class="sortable" data-col="13">綜合<br>評分</button></th>
+  <th class="num"><button type="button" class="sortable" data-col="14">評分<br>變化</button></th>
+  <th><button type="button" class="sortable" data-col="15">具投資<br>價值</button></th>
+  <th class="num"><button type="button" class="sortable" data-col="16">報酬<br>風險比</button>{% call tip() %}
+  <b>報酬風險比 ＝ ｜預期報酬 ÷ 預期風險｜</b>，來自〔EPS預估與估價〕。
+  它回答的是一件很具體的事：<b>這一筆要對幾次才不會賠</b>。
+  {# 這裡刻意**不用 <table>**。它住在一個 <th> 裡面，而表格裡再包一張表格有兩個
+     代價：手機上三欄會擠成一團（燈泡本來就窄），以及任何按 `</thead>` 切字串的
+     東西都會被裡面那張表的 `</thead>` 騙到——這條測試第一版就是這樣紅的。 #}
+  <ul class="rrguide">
+    <li><b>小於 1</b><em>要贏 50%～100%</em>
+        <span>⚠️ 絕對不要進場。賺的比賠的少，要贏過一半甚至幾乎全對才打平。</span></li>
+    <li><b>1.0</b><em>要贏 50%</em>
+        <span>⚖️ 勝率必須過半，等於把成敗整個押在方向看對。</span></li>
+    <li><b>2.0</b><em>要贏 33.3%</em>
+        <span>✅ 及格的進場低標。三次對一次就打平，錯兩次還活著。</span></li>
+    <li><b>3.0 或以上</b><em>要贏 25% 以下</em>
+        <span>🌟 最理想的交易黃金區。四次對一次就打平，容錯最高。</span></li>
+  </ul>
+  <p class="stop">中間那一欄是<b>損益兩平所需的最低勝率</b>＝ 1 ÷（1 ＋ 報酬風險比）。</p>
+  <p class="stop"><b>∞</b>＝股價已經低於下檔價，沒有下檔風險，比 3.0 還好。
+  <b>—</b>＝算不出來：多半是還沒回補到〔年度交易資訊〕（沒有本益比區間），
+  也可能是預估 EPS 為負、本益比估價不適用。<b>兩者不是同一件事</b>。</p>
+  <p class="stop">{% for note in reward_risk_notes %}{{ note }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{% endcall %}</th>
 </tr></thead>
 {%- endmacro %}
 
