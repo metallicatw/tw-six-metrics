@@ -81,14 +81,25 @@ def _build(root: Path, *, days=("2026-09-11", "2026-09-14"),
             _write_gz(data / "market" / "daily" / folder / f"{d}.csv.gz",
                       rows, ["date", "code", "market", "close"])
 
+    # 逐檔檔案的欄位同樣要和真的那一份一樣（date/holders/shares/t1..t8），
+    # 理由見下面彙總那一段。
+    stock_cols = ["date", "holders", "shares"] + [f"t{i}" for i in range(1, 9)]
     for code in _codes(ownership_codes):
-        rows = [{"date": p, "holders": "1", "shares": "100"} for p in ownership_periods]
-        _write_gz(data / "ownership" / "stock" / f"{code}.csv.gz",
-                  rows, ["date", "holders", "shares"])
+        rows = [dict({"date": p, "holders": "1", "shares": "100"},
+                     **{f"t{i}": "1" for i in range(1, 9)})
+                for p in ownership_periods]
+        _write_gz(data / "ownership" / "stock" / f"{code}.csv.gz", rows, stock_cols)
+    # 彙總檔的欄位要和真的那一份一樣（code/holders/shares/t1..t8）——
+    # `store.ownership.weeks()` 會逐欄讀它，少一欄就 KeyError。
+    # `test_心跳數的期別要和網站讀到的一樣` 把那支函式接進來比對，所以這裡
+    # 不能只寫兩欄意思意思。
+    holders_cols = ["code", "holders", "shares"] + [f"t{i}" for i in range(1, 9)]
     for p in holders_periods:
         _write_gz(data / "ownership" / "holders" / f"{p}.csv.gz",
-                  [{"code": c, "holders": "1"} for c in _codes(4000)],
-                  ["code", "holders"])
+                  [dict({"code": c, "holders": "1", "shares": "100"},
+                        **{f"t{i}": "1" for i in range(1, 9)})
+                   for c in _codes(4000)],
+                  holders_cols)
 
     for code in _codes(director_codes):
         rows = [{"month": m, "held": "1", "pledged": "0"} for m in director_months]
@@ -196,56 +207,106 @@ def test_兩套資料的日期對不齊要叫():
 # ── 股權分散／董監持股：抓到了沒回填完 ──────────────────────────────────────
 
 
-def test_彙總抓到了卻沒回填完要叫():
-    """2026-09 真實發生的那一件。
+def test_彙總補上的那幾期不算洞():
+    """**這一條是一個誤報的墓碑。**
 
-    `holders/20260828` 有 4,047 列，而 `stock/` 裡那一期**一檔都沒有**。
-    兩邊各自看起來都正常：彙總是滿的，攤平的最新一期（20260911）也是滿的。
-    只有讓這兩份互相對帳才看得出中間漏了一期。
-    """
-    report = _run(ownership_periods=("20260911",),          # 攤平只有最新這一期
-                  holders_periods=("20260904", "20260911"))  # 彙總有兩期
-    assert "股權分散" in _fatal(report), _all(report)
-    assert "20260904" in _all(report), "要說出是哪一期"
-    assert "還救得回來" in _all(report), "要說出彙總檔還在、來得及補"
+    第一版的心跳只數 `ownership/stock/` 這個逐檔目錄，然後對著彙總喊「抓到了、
+    沒回填完」。跑在真實資料上一次報四條，看起來很有說服力——四條全是錯的。
 
+    錯在網站讀的不是那個目錄。`store/ownership.py` 的 `weeks()` 是這樣寫的：
 
-def test_回填只跑了幾檔也要叫():
-    """20260904 攤平之後只有 6 檔——不是沒有，是幾乎沒有。
+        out = stock_history(root, stock_id)                  # 逐檔累積的
+        for stamp, path in _snapshots(root, HOLDERS_DIR):    # 再疊上全市場彙總
+            out[day] = ...
 
-    只檢查「那一期在不在」的話，這種會漏掉：它在。
+    也就是**聯集**；而彙總從來不刪（整個 repo 沒有一行 unlink 碰它）。所以逐檔
+    落後幾期是穩定狀態，不是資料掉了——實測 2330 逐檔 51 週、聯集 53 週，多出
+    來的正是第一版在喊「不見了」的那兩期。
+
+    所以這一條驗的是**不要叫**：逐檔沒有、彙總有的那一期，網站看得到，心跳就
+    不該把它當成洞。
     """
     with tempfile.TemporaryDirectory() as tmp:
-        data = _build(Path(tmp), ownership_periods=("20260911",),
+        data = _build(Path(tmp),
+                      ownership_periods=("20260911",),            # 逐檔只有最新這期
+                      holders_periods=("20260904", "20260911"))   # 彙總有兩期
+        report = hb.run(data, TODAY)
+    assert "股權分散" not in _fatal(report), (
+        "逐檔目錄沒有、但彙總有的那一期被當成洞了。網站讀的是兩邊的聯集，"
+        "那一期它看得到。" + _all(report)
+    )
+
+
+def test_彙總也沒有才是真的停了():
+    """上一條的另一半：兩邊都停在舊的那一期，那才該叫。
+
+    少了這一條，把整個檢查刪掉也會全綠——而那正是上一條的修法最容易滑過頭的
+    方向（誤報改到後來變成什麼都不報）。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        data = _build(Path(tmp),
+                      ownership_periods=("20260703",),
+                      holders_periods=("20260703",))
+        report = hb.run(data, TODAY)
+    assert "股權分散" in _fatal(report), (
+        "兩邊都停在 20260703（距今兩個多月）卻沒有叫。" + _all(report)
+    )
+
+
+def test_心跳數的期別要和網站讀到的一樣():
+    """**結構守門：心跳量的東西，必須和網站量的是同一個。**
+
+    上面那個誤報的根因不是門檻寫錯，是**量錯對象**——而量錯對象不會有任何
+    症狀，它只會產出一串很有說服力的假警報。所以這裡直接把兩邊接起來比：
+    心跳認得的期別集合，要等於 `store.ownership` 給網站的那一份。
+
+    將來 `weeks()` 改成只讀逐檔、或心跳改成只讀彙總，這一條都會紅。
+    """
+    from twsix.store import ownership as own
+
+    with tempfile.TemporaryDirectory() as tmp:
+        data = _build(Path(tmp),
+                      ownership_periods=("20260904",),
                       holders_periods=("20260904", "20260911"))
-        # 手動補上六檔 20260904，模擬「回填跑到一半」
-        for code in _codes(6):
-            _write_gz(data / "ownership" / "stock" / f"{code}.csv.gz",
-                      [{"date": "20260904", "holders": "1", "shares": "1"},
-                       {"date": "20260911", "holders": "1", "shares": "1"}],
-                      ["date", "holders", "shares"])
-        report = hb.run(data, TODAY)
-    assert "股權分散" in _fatal(report), _all(report)
-    assert "只有 6 檔" in _all(report)
+        root = data / "ownership"
+        # 網站那一側：某一檔看得到哪幾週
+        site = {f"{d:%Y%m%d}" for d in own.weeks(root, "1000")}
+        # 心跳那一側
+        mine = set(hb._period_coverage(root / "stock", root / "holders", "date"))
+    assert site == mine, (
+        f"心跳看到 {sorted(mine)}，網站看到 {sorted(site)}。"
+        "兩邊量的不是同一個東西——這正是那四條假警報的來源。"
+    )
 
 
-def test_董監持股斷了兩個月要叫():
-    """2026-09 真實發生的另一件：全市場停在 202606，之後每個月只有 4 檔。
+def test_董監停了兩期以上要叫():
+    """月報的單位是月，不是天。
 
-    這裡不能用「最新的月份」判斷新鮮度——202608 確實存在，只是它只有 4 檔。
-    要找的是**最後一個蓋到全市場的月份**。
+    M 月的資料 M+1 月才公告，所以「落後一個月」是穩定狀態。第一版拿「該月
+    1 號」算距今幾天、門檻 45 天，於是 9/19 看到 202608（當期）會算成落後
+    49 天而誤報。
     """
     with tempfile.TemporaryDirectory() as tmp:
-        data = _build(Path(tmp), director_months=("202606",), directors_rollup=())
-        for code in _codes(4):
-            _write_gz(data / "ownership" / "directors_stock" / f"{code}.csv.gz",
-                      [{"month": m, "held": "1", "pledged": "0"}
-                       for m in ("202606", "202607", "202608")],
-                      ["month", "held", "pledged"])
+        data = _build(Path(tmp), director_months=("202604",),
+                      directors_rollup=("202604",))
         report = hb.run(data, TODAY)
-    assert "董監持股" in _fatal(report), _all(report)
-    assert "202606" in _all(report), "要說出最後一個完整的月份是哪一個"
-    assert "floor" in _all(report), "要指出下一步去看哪裡"
+    assert "董監持股" in _fatal(report), (
+        "停在 202604（落後五個月）卻沒有叫。" + _all(report))
+    assert "202604" in _all(report), "要說出最後一個完整的月份是哪一個"
+
+
+def test_董監落後一個月是正常的():
+    """守的是上一條的反面：當期資料不可以被當成過期。
+
+    這一條就是第一版誤報的那個情境——今天 2026-09-19、最新 202608。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        data = _build(Path(tmp), director_months=("202608",),
+                      directors_rollup=("202608",))
+        report = hb.run(data, TODAY)
+    assert "董監持股" not in _fatal(report), (
+        "202608 是八月的月報、九月才公告，這是當期資料，不該被當成過期。"
+        + _all(report))
 
 
 def test_董監只剩零星幾檔不算完整月份():

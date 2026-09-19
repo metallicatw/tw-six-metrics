@@ -82,8 +82,15 @@ DAILY_MIN_ROWS = 1500
 #: 集保股權分散：一週一期，資料日是週五、週日前後上架。14 天等於連續漏掉兩期。
 OWNERSHIP_MAX_DAYS = 14
 
-#: 董監持股：月資料。45 天等於漏掉一整個月又過了半個月。
-DIRECTORS_MAX_DAYS = 45
+#: 董監持股：月資料，**用月份數，不用天數**。
+#:
+#: 第一版寫 `DIRECTORS_MAX_DAYS = 45`，然後拿「該月 1 號」去算距今幾天——
+#: 於是 2026-09-19 看到 202608（八月的月報，九月才公告）會算成「距今 49 天」
+#: 而超過門檻。那份資料是當期的、完全正常的，門檻卻在叫。
+#:
+#: 月報的自然單位是月：M 月的資料在 M+1 月才公告，所以「落後 1 個月」是穩定
+#: 狀態。2 給的是一個月的緩衝；連續落後 3 個月就是真的停了。
+DIRECTORS_MAX_MONTHS = 2
 
 #: 股權／董監的每一期至少要有幾檔。全市場約 1,950 檔（含興櫃約 4,000）。
 #: 這一條抓的是「彙總抓到了，但回填到每一檔的那一步沒跑完」——20260904 只有
@@ -160,6 +167,17 @@ def trading_days_between(start: date, end: date) -> int:
         if cur.weekday() < 5:
             days += 1
     return days
+
+
+def _months_between(period_yyyymm: str, today: date) -> int:
+    """`202608` 距離今天幾個**月**（不是幾天）。
+
+    月報的自然單位是月：M 月的資料要到 M+1 月才公告，所以「落後 1 個月」是
+    穩定狀態，不是落後。用天數算會讓當期資料在月底看起來像過期三十天——
+    第一版就是這樣誤報的。
+    """
+    year, month = int(period_yyyymm[:4]), int(period_yyyymm[4:6])
+    return (today.year - year) * 12 + (today.month - month)
 
 
 def _read_gz_rows(path: Path) -> list[dict[str, str]]:
@@ -258,123 +276,121 @@ def _latest_period(rows_by_period: dict[str, int]) -> tuple[str, int]:
     return newest, rows_by_period[newest]
 
 
-def check_ownership(data_dir: Path, today: date, report: Report) -> None:
-    """集保股權分散：週資料，而且每一期要蓋到全市場。
+def _period_coverage(
+    per_stock_dir: Path,
+    rollup_dir: Path,
+    column: str,
+) -> dict[str, int]:
+    """每一期**實際蓋到幾檔**——逐檔累積的和全市場彙總，兩邊聯集。
 
-    這一項有兩份資料講同一件事：`holders/<日期>.csv.gz` 是那一週的彙總（四千
-    多列），`stock/<代號>.csv.gz` 是攤平到每一檔的歷史。第二份是由第一份回填
-    出來的。
+    ## 這一段改過一次，而改之前它報的是假警報
 
-    **所以最有力的檢查是讓這兩份互相對帳**，而不是去猜日曆上的間隔該有多長。
-    2026-09 的實際狀況正是這種：`holders/20260828` 有 4,047 列，而 `stock/`
-    裡那一期**一檔都沒有**；`holders/20260904` 有 4,051 列，`stock/` 裡只有
-    6 檔。回填那一步沒跑完，而兩邊各自看起來都正常。
+    第一版只數 `ownership/stock/` 和 `ownership/directors_stock/` 這兩個逐檔
+    目錄，然後對著彙總喊「抓到了、沒回填完」。跑在真實資料上一次報四條，
+    看起來很有說服力——而四條全是錯的。
 
-    用日曆間隔判斷的話會踩到農曆年：2026-02-13 → 2026-02-26 隔了 13 天，那是
-    合法的（資料日順延）。對帳沒有這個問題——沒有哪個假日會讓一期只剩 6 檔。
+    錯在**網站讀的不是那個目錄**。`store/ownership.py` 的 `weeks()` 和
+    `director_months()` 都是這樣寫的：
+
+        out = stock_history(root, stock_id)      # 逐檔累積的
+        for stamp, path in _snapshots(root, HOLDERS_DIR):   # 再疊上全市場彙總
+            ...
+
+    也就是**聯集**。而彙總從來不刪（整個 repo 裡沒有一行 unlink／prune 碰它），
+    所以逐檔那一份落後幾期是穩定狀態，不是資料掉了：逐檔目錄由 backfill 慢慢
+    補、彙總是當期的來源，兩邊加起來才是網站看到的東西。
+
+    實測 2330：逐檔 51 週、聯集 53 週，多出來的 2026-08-28 與 2026-09-04 正是
+    第一版在喊「不見了」的那兩期——它們一直都在。
+
+    所以這裡數的是聯集。一期只要出現在任何一邊就算數，而「蓋到幾檔」取兩邊的
+    大的那個（彙總是全市場一次寫完，逐檔是累積的）。
     """
-    d = data_dir / "ownership" / "stock"
-    if not d.is_dir():
-        report.bad("股權分散", f"找不到 {d}")
-        return
-    per_period: Counter[str] = Counter()
-    for p in d.glob("*.csv.gz"):
-        for row in _read_gz_rows(p):
-            if row.get("date"):
-                per_period[row["date"]] += 1
+    counts: Counter[str] = Counter()
+    if per_stock_dir.is_dir():
+        for path in per_stock_dir.glob("*.csv.gz"):
+            for row in _read_gz_rows(path):
+                key = (row.get(column) or "").strip()
+                if key:
+                    counts[key] += 1
+    if rollup_dir.is_dir():
+        for path in sorted(rollup_dir.glob("*.csv.gz")):
+            period = path.name.split(".")[0]
+            rows = len(_read_gz_rows(path))
+            counts[period] = max(counts[period], rows)
+    return dict(counts)
+
+
+def check_ownership(data_dir: Path, today: date, report: Report) -> None:
+    """集保股權分散：週資料。看的是「網站讀得到的最新一期是哪一期」。
+
+    集保開放資料只給最新一週，沒有日期參數——漏掉的那幾期**打端點是拿不回來
+    的**。所以這裡守的是「還在往前走嗎」，不是「逐檔目錄補到哪裡了」。
+    """
+    root = data_dir / "ownership"
+    per_period = _period_coverage(root / "stock", root / "holders", "date")
     if not per_period:
-        report.bad("股權分散", f"{d} 裡沒有任何一期")
+        report.bad("股權分散", f"{root} 底下一期都沒有")
         return
 
-    newest, n = _latest_period(dict(per_period))
+    newest = max(per_period)
+    n = per_period[newest]
     newest_date = datetime.strptime(newest, "%Y%m%d").date()
     behind = (today - newest_date).days
-    report.note("股權分散", f"最新 {newest}（{n} 檔，落後 {behind} 天，共 {len(per_period)} 期）")
-
+    report.note(
+        "股權分散",
+        f"最新 {newest}（{n:,} 檔，落後 {behind} 天，逐檔＋彙總共 {len(per_period)} 期）",
+    )
     if behind > OWNERSHIP_MAX_DAYS:
         report.bad(
             "股權分散",
             f"最新一期是 {newest}，距今 {behind} 天（上限 {OWNERSHIP_MAX_DAYS}）。"
-            "集保開放資料只給『最新一週』，沒有日期參數——漏掉的那幾期"
-            "**打端點是拿不回來的**，只能從 data/ownership/holders/ 的彙總檔回填。",
+            "集保只給最新一週、沒有日期參數，所以漏掉的那幾期打端點是拿不回來的"
+            "——先確認 ownership.yml 最近有沒有跑成功。",
         )
-
-    # 對帳：彙總有的那幾期，攤平之後也要有，而且要完整。
-    _reconcile_rollup(data_dir / "ownership" / "holders", per_period, "股權分散", report)
-
-
-def _reconcile_rollup(
-    rollup_dir: Path,
-    flattened: Counter[str],
-    label: str,
-    report: Report,
-) -> None:
-    """彙總檔裡有的每一期，攤平後的資料也要有，而且要蓋到全市場。
-
-    彙總是滾動視窗（只留最近幾期），所以「攤平有、彙總沒有」是正常的舊資料，
-    不算問題。反過來才是問題：**抓到了卻沒有回填**。
-    """
-    if not rollup_dir.is_dir():
-        return
-    for p in sorted(rollup_dir.glob("*.csv.gz")):
-        period = p.name.split(".")[0]
-        have = flattened.get(period, 0)
-        if have >= PER_PERIOD_MIN_CODES:
-            continue
-        rows = len(_read_gz_rows(p))
+    if n < PER_PERIOD_MIN_CODES:
         report.bad(
-            label,
-            f"{period} 的彙總有 {rows:,} 列，但攤平之後只有 {have} 檔"
-            f"（正常約 1,950）。抓到了、沒回填完。彙總檔還在（{p}），"
-            "所以這一期**還救得回來**——再拖到彙總被輪替掉就只剩那一份了。",
+            "股權分散",
+            f"最新一期 {newest} 只蓋到 {n:,} 檔（正常約 1,950，全市場含興櫃約 4,000）。"
+            "這一期抓到一半就停了。",
         )
 
 
 def check_directors(data_dir: Path, today: date, report: Report) -> None:
-    """董監持股：月資料。這一項在 2026-09 的盤點裡已經斷了兩個月。"""
-    d = data_dir / "ownership" / "directors_stock"
-    if not d.is_dir():
-        report.bad("董監持股", f"找不到 {d}")
-        return
-    per_month: Counter[str] = Counter()
-    for p in d.glob("*.csv.gz"):
-        for row in _read_gz_rows(p):
-            if row.get("month"):
-                per_month[row["month"]] += 1
+    """董監持股：月資料。同樣看聯集，理由見 `_period_coverage`。"""
+    root = data_dir / "ownership"
+    per_month = _period_coverage(root / "directors_stock", root / "directors", "month")
     if not per_month:
-        report.bad("董監持股", f"{d} 裡沒有任何一個月")
+        report.bad("董監持股", f"{root} 底下一個月都沒有")
         return
 
-    # 「最新的月份」不能直接取 max：末端常常只有零星幾檔（回補跑到一半），
-    # 那種月份看起來很新、其實是空的。要找的是**最後一個蓋到全市場的月份**。
+    # 「最新的月份」不能直接取 max：末端可能只有零星幾檔（逐檔回補跑到一半，
+    # 而那個月的彙總還沒抓）。要找的是最後一個**蓋到全市場**的月份。
     full = sorted(m for m, c in per_month.items() if c >= PER_PERIOD_MIN_CODES)
     newest_any = max(per_month)
     report.note(
         "董監持股",
         f"最後一個完整月 {full[-1] if full else '無'}"
-        f"（最新有資料的月份 {newest_any}，{per_month[newest_any]} 檔，共 {len(per_month)} 個月）",
+        f"（最新有資料的月份 {newest_any}，{per_month[newest_any]:,} 檔，"
+        f"逐檔＋彙總共 {len(per_month)} 個月）",
     )
     if not full:
-        report.bad("董監持股", f"沒有任何一個月蓋到全市場，最新 {newest_any} 只有 {per_month[newest_any]} 檔")
+        report.bad(
+            "董監持股",
+            f"沒有任何一個月蓋到全市場，最新 {newest_any} 只有 {per_month[newest_any]} 檔",
+        )
         return
 
-    # 和股權分散同一套對帳：`directors/<月份>.csv.gz` 是彙總，
-    # `directors_stock/<代號>.csv.gz` 是攤平。202607 的彙總有 1,085 列，
-    # 攤平之後只有 4 檔——同一種「抓到了沒回填完」。
-    _reconcile_rollup(data_dir / "ownership" / "directors", per_month, "董監持股", report)
-
-    newest_date = datetime.strptime(full[-1] + "01", "%Y%m%d").date()
-    behind = (today - newest_date).days
-    if behind > DIRECTORS_MAX_DAYS:
+    behind = _months_between(full[-1], today)
+    if behind > DIRECTORS_MAX_MONTHS:
         thin = [f"{m}({per_month[m]} 檔)" for m in sorted(per_month) if m > full[-1]]
         report.bad(
             "董監持股",
-            f"最後一個完整的月份是 {full[-1]}，距今 {behind} 天（上限 "
-            f"{DIRECTORS_MAX_DAYS}）。"
+            f"最後一個蓋到全市場的月份是 {full[-1]}，落後 {behind} 個月（上限 "
+            f"{DIRECTORS_MAX_MONTHS}）。"
             + (f"之後只有零星幾檔：{'、'.join(thin)}。" if thin else "")
-            + "先看 data/ownership/directors_stock/*.floor 有沒有被寫進一個太新的"
-            "月份——floor 的意思是『問到這個月就沒有了』，寫太新的話之後的月份"
-            "就永遠問不到。",
+            + "先確認 ownership.yml 的 `twsix fetch-ownership` 最近有沒有跑成功"
+            "——那一步寫的是當月的全市場彙總，逐檔目錄是由 backfill 慢慢補的。",
         )
 
 
