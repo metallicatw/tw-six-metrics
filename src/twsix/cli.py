@@ -337,6 +337,44 @@ def _shrank(store: Any, table: str, incoming: int) -> str:
     return f"既有 {existing} 列，這次只有 {incoming} 列，看起來是半份，不覆蓋"
 
 
+def _downgrades(store: Any, table: str, rows: list[dict[str, str]]) -> str:
+    """手上那一份比這次抓回來的**完整**——回一句話說明，否則回空字串。
+
+    `_shrank` 擋的是「少了一大截」，這裡擋的是「少了一小截，但少掉的是同一群
+    人」，而後者靠數量看不出來。
+
+    證交所／櫃買的開放資料把損益表與資產負債表**按行業拆成好幾張**，而
+    `ENDPOINTS` 只讀 `_ci`（一般業）那一張。公開資訊觀測站的彙總報表則是六張
+    一起回，所以同一期差了 35 家上市（1,048 → 1,083）與 7 家上櫃
+    （883 → 890）——2801 彰銀、2812 台中銀、5864 致和證……整個金融、證券、
+    保險、金控全部不在開放資料那一份裡。
+
+    1,048 是 1,083 的 96.8%，遠在 `SHRINK_FLOOR` 之上，所以舊的判斷讓它過了。
+    實際發生的事是：回補把 115Q2 補成完整的 1,083 列，當天的 `twsix fetch`
+    再把它蓋回 1,048 列，而回補下一次看到「已經有檔案了」就跳過——於是**最新
+    的那一季永遠缺金融股**，直到它不再是最新的那一季，然後就這樣凍住。
+    115Q2 的損益表與資產負債表比現金流量表少 35／7 家，就是這麼來的。
+
+    開放資料那一份沒有任何彙總報表沒有的東西：逐欄比過，它獨有的欄位只有
+    「出表日期」與上櫃那組英文別名（`SecuritiesCompanyCode` 等），代號則是
+    完整的子集合。所以這裡不是二選一的取捨，是不要拿子集合去蓋母集合。
+    """
+    from .ingest.mops_summary import is_summary_rows  # noqa: PLC0415
+
+    if is_summary_rows(rows):
+        return ""                      # 這次抓回來的就是完整版
+    try:
+        existing = store.read(table)
+    except Exception:  # noqa: BLE001 - 讀不到就當作沒有
+        return ""
+    if not is_summary_rows(existing):
+        return ""
+    return (
+        f"既有 {len(existing)} 列是彙總報表寫的（含金融業），"
+        f"這次開放資料只有 {len(rows)} 列（一般業），不覆蓋"
+    )
+
+
 def cmd_fetch(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient
@@ -405,6 +443,14 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         if shrink:
             print(f"  {name:<18} 跳過：{shrink}", file=sys.stderr)
             failed.append(f"{name}：{shrink}")
+            continue
+        # 這一種跳過**不算失敗**：穩定狀態下它每天都會發生（回補把最新一期補成
+        # 完整版之後，開放資料那一份就一直是子集合了）。算成失敗的話，下面
+        # `if (args.revenue or args.all) and not failed` 那一步會從此不再執行
+        # ——月營收就永遠折不回個股頁，而畫面上不會有任何徵兆。
+        downgrade = _downgrades(store, table, rows)
+        if downgrade:
+            print(f"  {name:<18} 跳過：{downgrade}")
             continue
         n = store.write(table, rows, columns, sort_by=_id_columns(columns))
         written += 1
@@ -2862,6 +2908,7 @@ def cmd_backfill_statements(args: argparse.Namespace) -> int:
     from .ingest.mops_summary import (  # noqa: PLC0415
         MARKETS,
         SUMMARY_ENDPOINTS,
+        is_summary_rows,
         parse_summary,
         summary_form,
         summary_url,
@@ -2899,10 +2946,21 @@ def cmd_backfill_statements(args: argparse.Namespace) -> int:
             for kind in SUMMARY_ENDPOINTS:
                 table = market_path(f"{prefix[market]}_{kind}", period)
                 existing = store.read(table)
-                if existing and not args.force:
+                if existing and not args.force and is_summary_rows(existing):
                     skipped += 1
                     print(f"  {period} {MARKETS[market]} {kind}：已經有 {len(existing)} 列，跳過")
                     continue
+                if existing and not args.force:
+                    # 「有檔案」不等於「有完整的一期」。最新的那一季是
+                    # `twsix fetch` 用開放資料寫的，而開放資料只給 `_ci`
+                    # 一般業那一張表——金融、證券、保險、金控全部不在裡面。
+                    # 舊的判斷看到檔案就跳過，於是那一期**永遠**停在缺金融股
+                    # 的版本：115Q2 的損益表 1,048 列、現金流量表 1,083 列，
+                    # 差的 35 家全是銀行與金控。見 `_downgrades` 的 docstring。
+                    print(
+                        f"  {period} {MARKETS[market]} {kind}："
+                        f"手上那 {len(existing)} 列是開放資料寫的（只有一般業），重抓"
+                    )
                 body = urllib.parse.urlencode(
                     summary_form(market, year, season)
                 ).encode()

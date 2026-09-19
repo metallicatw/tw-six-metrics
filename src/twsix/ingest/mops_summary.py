@@ -77,6 +77,26 @@ SUMMARY_ENDPOINTS: dict[str, str] = {
 #: `TYPEK` 的值 → 這個專案裡的市場名稱。
 MARKETS: dict[str, str] = {"sii": "上市", "otc": "上櫃"}
 
+#: `parse_summary` 給每一列都補上的三欄。開放資料那條路寫出來的**沒有**：
+#: 上市那份有「年度」「季別」但沒有「市場」，上櫃那份連那兩欄都改叫
+#: `Year`／`Season`。
+#:
+#: 所以這三欄可以當成**出處**——手上這一份
+#: `data/market/twse_income/115Q2.csv` 是彙總報表寫的（六張表都在，含銀行、
+#: 證券、保險、金控），還是開放資料寫的（只有 `_ci` 一般業那一張）。兩份長得
+#: 幾乎一樣：同樣的欄名、同樣的量級、一千多列，差別只在少了那三十幾家金融股
+#: ——正是沒有人會看出來的那種差別。
+PROVENANCE_COLUMNS = ("市場", "年度", "季別")
+
+
+def is_summary_rows(rows: list[dict[str, str]]) -> bool:
+    """這一份是不是彙總報表寫的（＝完整版，含金融業）。
+
+    空的一律回 False：沒有資料就不該被當成「已經有完整版了，跳過」。
+    """
+    return bool(rows) and all(c in rows[0] for c in PROVENANCE_COLUMNS)
+
+
 _CODE = re.compile(r"^\d{4}$")
 
 
