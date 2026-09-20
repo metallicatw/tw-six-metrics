@@ -97,15 +97,15 @@
   {# 上市／上櫃。「這一檔在哪個市場」是掃清單時會分開看的一件事——上櫃的流動性、
      法人參與度、本益比水準都和上市不一樣。資料本來就在評等表的 `market` 欄裡，
      只是一直沒有被畫出來。 #}
-  <td class="muted" data-s="{{ r.market }}">{{ r.market }}</td>
+  <td class="muted mid" data-s="{{ r.market }}">{{ r.market }}</td>
   <td class="muted" data-s="{{ r.industry }}">{{ r.industry }}</td>
   {% for key in ('revenue_yoy','operating_margin','net_income_yoy','eps','inventory_turnover','free_cash_flow') %}
-  <td data-s="{{ {'AA':4,'A':3,'BB':2,'B':1,'C':0}.get(r.grades[key], -999) }}">{{ grade(r.grades[key]) }}</td>
+  <td class="mid" data-s="{{ {'AA':4,'A':3,'BB':2,'B':1,'C':0}.get(r.grades[key], -999) }}">{{ grade(r.grades[key]) }}</td>
   {% endfor %}
-  <td class="num" data-s="{{ r.composite|float(default=-999) }}">{{ score(r.composite) }}</td>
-  <td class="num" data-s="{{ r.composite_delta if r.composite_delta is not none else -999 }}">{{ delta(r.composite_delta) }}</td>
-  <td class="pick-cell" data-s="{{ 1 if r.value_pick else 0 }}">{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
-  <td class="num" data-s="{{ reward_key(r) }}">{{ reward(r) }}</td>
+  <td class="num mid" data-s="{{ r.composite|float(default=-999) }}">{{ score(r.composite) }}</td>
+  <td class="num mid" data-s="{{ r.composite_delta if r.composite_delta is not none else -999 }}">{{ delta(r.composite_delta) }}</td>
+  <td class="pick-cell mid" data-s="{{ 1 if r.value_pick else 0 }}">{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
+  <td class="num mid" data-s="{{ reward_key(r) }}">{{ reward(r) }}</td>
 </tr>
 {%- endmacro %}
 
@@ -210,21 +210,21 @@
   <th><button type="button" class="sortable" data-col="2">代號</button></th>
   <th><button type="button" class="sortable" data-col="3">財報<br>基準</button></th>
   <th><button type="button" class="sortable" data-col="4">名稱</button></th>
-  <th><button type="button" class="sortable" data-col="5">市場</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="5">市場</button></th>
   <th><button type="button" class="sortable" data-col="6">產業</button></th>
-  <th><button type="button" class="sortable" data-col="7">營收<br>年增率</button></th>
-  <th><button type="button" class="sortable" data-col="8">營業<br>利益率</button></th>
-  <th><button type="button" class="sortable" data-col="9">稅後淨利<br>年增率</button></th>
-  <th><button type="button" class="sortable" data-col="10">EPS</button></th>
-  <th><button type="button" class="sortable" data-col="11">存貨<br>周轉率</button></th>
-  <th><button type="button" class="sortable" data-col="12">自由<br>現金流</button></th>
-  <th class="num"><button type="button" class="sortable" data-col="13">綜合<br>評分</button></th>
-  <th class="num"><button type="button" class="sortable" data-col="14">評分<br>變化</button></th>
-  <th><button type="button" class="sortable" data-col="15">具投資<br>價值</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="7">營收<br>年增率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="8">營業<br>利益率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="9">稅後淨利<br>年增率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="10">EPS</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="11">存貨<br>周轉率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="12">自由<br>現金流</button></th>
+  <th class="num mid"><button type="button" class="sortable" data-col="13">綜合<br>評分</button></th>
+  <th class="num mid"><button type="button" class="sortable" data-col="14">評分<br>變化</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="15">具投資<br>價值</button></th>
   {# 燈泡包在 `.hdtip` 裡和標題**並排**。不包的話它接在
      `報酬<br>風險比` 後面，自己掉到第三行去——整列標題被撐高一截，而且那顆
      燈泡看起來像是下一欄的東西。 #}
-  <th class="num"><span class="hdtip"><button type="button" class="sortable" data-col="16">報酬<br>風險比</button>{% call tip() %}
+  <th class="num mid"><span class="hdtip"><button type="button" class="sortable" data-col="16">報酬<br>風險比</button>{% call tip() %}
   <b>報酬風險比 ＝ ｜預期報酬 ÷ 預期風險｜</b>，來自〔EPS預估與估價〕。
   它回答的是一件很具體的事：<b>這一筆要對幾次才不會賠</b>。
   {# 這裡刻意**不用 <table>**。它住在一個 <th> 裡面，而表格裡再包一張表格有兩個
