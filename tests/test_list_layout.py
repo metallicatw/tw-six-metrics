@@ -338,3 +338,25 @@ def test_說明出界會被推回來():
     close = JS[close_at:]
     close = close[:close.index("\n  }") + 4]
     assert "transform = ''" in close, f"關掉的時候沒有把位移清掉：{close}"
+
+
+def test_窄版的嵌入報告要夠高():
+    """手機上兩層捲軸疊在一起，是最難用的一種版面。
+
+    嵌進來的那兩份報告（趨勢、市場監控）在窄版是縱向堆疊的：篩選列、可以左右
+    滑的卡片列、圖、時間範圍。實測 390×844 上那份趨勢報告整頁 803px 高，而
+    `78vh` 只有 658px——iframe 內部於是自己再長出一個捲軸，而捲到哪一層要看
+    手指落在哪裡。
+
+    這一條守的是「窄版有一條自己的高度」，不是那個數字本身。
+    """
+    rules = re.findall(r"(?m)^\s*iframe\.embed\s*\{([^}]*)\}", CSS)
+    assert len(rules) == 2, f"iframe.embed 有 {len(rules)} 條規則，預期基準一條＋窄版一條"
+    base, narrow = (re.sub(r"\s+", " ", r) for r in rules)
+    assert "78vh" in base, base
+    narrow_vh = int(re.search(r"height:(\d+)vh", narrow).group(1))
+    assert narrow_vh > 78, f"窄版的高度 {narrow_vh}vh 沒有比桌機的 78vh 高"
+    # 那一條要落在容器查詢裡——用 @media 的話，「切換手機版」那顆按鈕對它無效。
+    block = CSS[CSS.index("@container page (max-width:760px)"):]
+    block = block[:block.index("\n}")]
+    assert "iframe.embed" in block, "窄版那一條不在 @container page 裡"

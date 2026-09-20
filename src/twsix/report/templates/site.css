@@ -1059,6 +1059,12 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
   th.corner span{font-size:10px}
   .basis>.scroll,.basis>.warnings{margin-left:10px;margin-right:10px}
   table.basis-t th:nth-child(2),table.basis-t td:nth-child(2){width:36%}
+  /* 嵌進來的那兩份報告（趨勢、市場監控）在窄版是縱向堆疊的：篩選列、可以
+     左右滑的卡片列、圖、時間範圍。實測 390×844 上那份趨勢報告整頁 803px 高，
+     而 78vh 只有 658px——於是 iframe 內部自己再長出一個捲軸，手機上變成兩層
+     捲軸疊在一起，捲哪一層要看手指落在哪裡。
+     拉到 88vh（743px）把內層要捲的距離從 145px 壓到 60px。 */
+  iframe.embed{height:88vh;min-height:520px}
 }
 @container page (max-width:480px){
   .calc-inputs{grid-template-columns:1fr;gap:12px}
