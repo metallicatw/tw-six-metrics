@@ -811,7 +811,8 @@ def test_every_column_can_be_sorted_and_sorts_by_a_key_not_by_the_printed_text(t
     )
 
     row = listing.split('<tr data-code="5439"')[1].split("</tr>")[0]
-    assert re.search(r'class="num" data-s="[-0-9.]+"', row)   # 綜合評分排的是數字
+    # `class="num mid"`：num 管字體與等寬數字，mid 管「標題和數值站在同一條軸上」。
+    assert re.search(r'class="num mid" data-s="[-0-9.]+"', row)   # 綜合評分排的是數字
     assert 'data-s="4"' in row                                # AA -> 4
     assert 'data-s="高技"' in row                              # 名稱排的是名稱
     js = (out / "assets" / "site.js").read_text("utf-8")
@@ -1905,15 +1906,17 @@ def test_那一頁預設就帶_cross(tmp_path=None):
     assert src.endswith("trend-report.html#cross"), (
         f"嵌的是 {src}——少了 #cross 的話這一頁只剩技術面四關"
     )
-    assert "六大財務指標最新綜合評分 &gt; 3" in page, "燈泡沒有說清楚門檻是什麼"
+    assert "六大 &gt; 3" in page, "燈泡沒有說清楚常用的那一組門檻是什麼"
     assert "沒有下檔風險" in page, "燈泡沒有說「無風險」是什麼"
     # 分頁標題（瀏覽器分頁上、加書籤時看到的那個字）也要跟著改。
     # 漏掉的症狀很安靜：頁面上寫著新名字，書籤和分頁上還是舊的。
     title = page.split("<title>")[1].split("</title>")[0]
     assert title.startswith("趨勢X六大X報酬"), f"分頁標題還是舊的：{title}"
     assert "<h2>趨勢X六大X報酬" in page, "頁面上的標題沒改"
-    # 併頁之後最重要的一句：怎麼回到「只看四關」。沒有這一句，舊的用法就消失了。
-    assert "改成 <b>0</b>" in page, "燈泡沒有說怎麼關掉那兩個門檻"
+    # 兩個門檻預設是 0（＝不啟用），而這一頁的名字寫著六大和報酬——不說清楚的話
+    # 讀者會以為名單已經篩過那兩關了。
+    assert "只顯示、不篩" in page, "燈泡沒有說那兩個數字預設不拿來篩"
+    assert "預設都是 <b>0</b>" in page, "燈泡沒有說預設值是 0"
 
 
 def test_舊的交集網址是一頁轉址(tmp_path=None):

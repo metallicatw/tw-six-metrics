@@ -222,12 +222,50 @@ p{margin:0 0 10px;max-width:78ch}
    所以在寬螢幕上讓它突出內容欄：負的 margin-left 讓它往兩側各吃掉一段留白。
    `min(1600px, …)` 是上限——再寬下去每一列會長到眼睛追不回行首。 */
 @media (min-width:1280px){
-  .scroll.wide{width:min(1600px,calc(100vw - 32px));
-    margin-left:calc((100% - min(1600px,100vw - 32px)) / 2)}
+  /* 盒子跟著表格，表格跟著內容——兩邊都不要被撐開。
+     這是「每一欄的間距太大」真正的來源：表格本來是 `width:100%`，而這個盒子
+     在 1920 的螢幕上有 1,600px，於是多出來的 377px 被平均塞進十七欄——每一欄
+     憑空多 22px 的留白，而表格自己只需要 1,256px。
+
+     `fit-content` 而不是 `max-content`：一個**捲動容器**的 max-content 和它
+     裡面那張表的 max-content 不是同一個數字（實測 4,079 對 1,256），所以寫
+     max-content 只會撞到 max-width 上限，等於沒收緊。
+
+     `margin-left:50%` ＋ `translateX(-50%)`：置中，而且**不必事先知道寬度**。
+     寬度是內容決定的，所以算不出一個固定的負 margin；這一組是「不知道自己
+     多寬也能置中」的標準寫法，順便讓它可以對稱地超出內容欄。
+
+     兩側各留 8px（`100vw - 16px`）而不是 16px：表格自然寬 1,256，而 1280 的
+     筆電扣掉 32px 只剩 1,248——差 8px 就要為了一欄橫向捲。 */
+  .scroll.wide{width:fit-content;max-width:min(1600px,calc(100vw - 16px));
+    margin-left:50%;transform:translateX(-50%)}
+  /* 表格不再拉滿容器。拉滿的是**留白**，不是資訊。
+     `max-content` 而不是 `auto`：`auto` 的表格會填滿它的容器，而容器是用
+     `fit-content` 算的——兩個互相看對方，結果是誰都沒有收緊。 */
+  #t{width:max-content;min-width:0}
 }
 /* 格子收緊。十七欄各省 8px 就是 136px——和上面那一段合起來，1280 以上的螢幕
    一眼看得到全部欄位，不必橫向捲。字級沒有動，收的是留白。 */
 #t th,#t td{padding:4px 5px}
+/* ── 標題和數值要站在同一條軸上 ────────────────────────────────
+   量 2026-09-20 那一份（1920 與 1400 兩個寬度都量過），標題那塊字的中心和
+   數值的中心差了多少：
+
+       六個等第欄   +22 ～ +34px
+       報酬風險比   −38px（兩個寬度都是 −38）
+
+   六個等第欄那三十幾像素是這樣來的：標題是一個兩行的寬標籤靠左，數值是一顆
+   26px 的小方塊也靠左——兩個「靠左」的中心因此差了半個標題的寬度。它們的內容
+   是**記號**不是文字，置中之後兩邊同軸。
+
+   左讀的那幾欄（代號／財報基準／名稱／產業）**不置中**：名稱和產業長度差很多，
+   置中會讓每一列的起點都不一樣，掃一整欄會比現在累。 */
+#t th.mid,#t td.mid{text-align:center}
+/* 報酬風險比那 −38px 是燈泡造成的：標題和燈泡並排，所以標題被往左推了半顆
+   燈泡。左邊補一塊一樣寬的空白，標題才真的落在格子的中心上——也就是數值的
+   那條軸上。`--bulb` 兩邊共用，改一個地方就好。 */
+thead th .hdtip::before{content:'';flex:0 0 auto;width:var(--bulb)}
+thead th .hdtip .bulb{min-width:var(--bulb)}
 table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:560px}
 /* 對齊規則只有兩條，套在所有表格上：
    文字靠左、數字靠右，而標題永遠跟著它那一欄的內容走。
@@ -262,7 +300,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;
    不包在同一個 inline-flex 裡的話，燈泡接在 `報酬<br>風險比` 後面會自己掉到
    第三行去——整列標題被撐高一截，而那顆燈泡看起來像是下一欄的東西。
    `align-items:center` 讓它對齊兩行標題的中線，不是最後一行的基線。 */
-thead th .hdtip{display:inline-flex;align-items:center;gap:5px}
+thead th .hdtip{--bulb:30px;display:inline-flex;align-items:center;gap:5px}
 .rrguide{list-style:none;margin:6px 0;padding:0;font-size:12px}
 .rrguide li{display:grid;grid-template-columns:5.5em 7em 1fr;gap:2px 8px;
   padding:4px 0;border-top:1px solid var(--rule)}
