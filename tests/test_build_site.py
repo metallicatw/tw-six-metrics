@@ -1776,12 +1776,17 @@ def test_清單最右邊是報酬風險比(tmp_path=None):
     assert ">報酬<br>風險比<" in listing.replace("\n", ""), "表頭沒有〔報酬風險比〕"
 
     good = listing.split('<tr data-code="5439"')[1].split("</tr>")[0]
-    assert "2.50" in good and "rr-ok" in good, good[-400:]
+    # 類別名是 `rrv-*`。`.rr-*` 是個股頁〔建議〕那顆徽章，兩者撞名的時候
+    # 徽章那條會把數值的顏色蓋掉（見 tests/test_list_layout.py）。
+    assert "2.50" in good and "rrv-ok" in good, good[-400:]
 
     free = listing.split('<tr data-code="2330"')[1].split("</tr>")[0]
-    assert "∞" in free, "『股價已低於下檔價』沒有畫成 ∞"
+    # 以前這裡畫的是 ∞。那個符號要先知道它代表什麼才看得懂，而清單上最常被問
+    # 的就是「∞ 是好還是壞」，所以直接寫成字。
+    assert "無風險" in free, "『股價已低於下檔價』沒有畫成「無風險」"
+    assert "∞" not in free, "還留著 ∞"
     assert 'data-s="999999"' in free, (
-        "∞ 的排序鍵不是一個大數——照〔報酬風險比〕排的時候它會沉到底，"
+        "「無風險」的排序鍵不是一個大數——照〔報酬風險比〕排的時候它會沉到底，"
         "而它其實是最好的那一種"
     )
 

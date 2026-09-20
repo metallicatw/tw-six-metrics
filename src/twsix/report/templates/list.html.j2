@@ -68,7 +68,7 @@
   （4）上一期要算得出綜合評分——上一期缺資料的話不算，這是活頁簿 IFERROR 的行為。
   {% endcall %}
 </div>
-<div class="scroll"><table id="t">
+<div class="scroll wide"><table id="t">
 {{ table_head() }}
 <tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at) }}{% endfor %}</tbody>
 </table></div>

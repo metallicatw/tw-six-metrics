@@ -18,7 +18,7 @@
   還沒有標記任何股票。到<a href="{{ rel }}index.html">評等清單</a>，
   按每一列最左邊的 ☆ 就會加進來。
 </p>
-<div class="scroll"><table id="t" data-watchlist="1">
+<div class="scroll wide"><table id="t" data-watchlist="1">
 {{ table_head() }}
 <tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at) }}{% endfor %}</tbody>
 </table></div>

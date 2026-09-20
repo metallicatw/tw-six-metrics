@@ -833,6 +833,22 @@ var TWSIXWatch = (function(){
     save();
     return true;
   }
+  /* 直接挪到第一個。
+
+     為什麼不是「按 19 次上移」：一份觀察清單通常十幾檔，而「把這一檔提到最
+     上面」是實際最常做的動作（今天要盯它）。用上移做那件事要按到第 19 次，
+     而中間每一次都會存一次 localStorage、重排一次表格、移動一次焦點。
+
+     `splice` 兩次而不是交換：交換只對相鄰的兩個有意義，跳到第一個是**插入**
+     ——中間那幾檔要整批往後退一格，順序才不會被打亂。 */
+  function top(code){
+    var i = order.indexOf(code);
+    if(i <= 0) return false;
+    order.splice(i, 1);
+    order.unshift(code);
+    save();
+    return true;
+  }
   function index(code){ return order.indexOf(code); }
   /* 一顆星要長什麼樣，只有這裡說了算——實心／空心、aria-pressed、以及那一句
      說明。三個地方各寫一次，改一個就會有兩個沒改到。 */
@@ -849,7 +865,7 @@ var TWSIXWatch = (function(){
   }
   reload();
   return {reload: reload, has: has, toggle: toggle, paint: paint,
-          move: move, index: index,
+          move: move, top: top, index: index,
           count: function(){ return order.length; },
           order: function(){ return order.slice(); },
           all: function(){ return set; }};
@@ -1000,8 +1016,11 @@ var TWSIXWatch = (function(){
       var tr = byCode[code];
       var up = tr.querySelector('button.mv-up');
       var dn = tr.querySelector('button.mv-dn');
+      var tp = tr.querySelector('button.mv-top');
       if(up) up.disabled = i === 0;
       if(dn) dn.disabled = i === live.length - 1;
+      /* 〔置頂〕和〔上移〕在第一列是同一件「按了不會有事」，所以一起變灰。 */
+      if(tp) tp.disabled = i === 0;
     });
     [].forEach.call(table.querySelectorAll('td.star-cell .mv'), function(el){
       el.hidden = false;
@@ -1012,15 +1031,20 @@ var TWSIXWatch = (function(){
       var btn = e.target.closest('button[data-move]');
       if(!btn || btn.disabled) return;
       var code = btn.getAttribute('data-move');
-      var delta = +btn.getAttribute('data-delta');
+      var delta = btn.getAttribute('data-delta');
       /* 先回到自訂順序——見上面那段。已經是自訂順序的話這一步不花什麼。 */
       applyCustomOrder();
-      if(!TWSIXWatch.move(code, delta)) return;
+      /* `delta === 'top'` 是〔置頂〕。走同一個處理器而不是另外掛一個：
+         「先切回自訂順序、動完再重排、焦點跟著走」這三步兩者完全一樣，
+         分開寫的話改了一邊就會有一邊沒改到。 */
+      var moved_ok = (delta === 'top') ? TWSIXWatch.top(code)
+                                       : TWSIXWatch.move(code, +delta);
+      if(!moved_ok) return;
       applyCustomOrder();
       /* 焦點跟著那一列走。不跟的話，用鍵盤連按兩次「上移」，第二次按到的是
          剛剛被換下來的那一檔——而畫面上看起來完全正常。 */
       var moved = body.querySelector('tr[data-code="' + code + '"] button[data-delta="' +
-                                     (delta < 0 ? '-1' : '1') + '"]');
+                                     (delta === 'top' ? 'top' : (+delta < 0 ? '-1' : '1')) + '"]');
       if(moved && !moved.disabled) moved.focus();
       else if(moved) (moved.parentNode.querySelector('button:not([disabled])') || moved).focus();
     });
@@ -1524,6 +1548,8 @@ var TWSIXWatch = (function(){
   function close(){
     if(!open) return;
     open.classList.remove('open','flip');
+    var box = open.querySelector('.tipbox');
+    if(box) box.style.transform = '';    /* 見 show()：那是推回畫面內的位移 */
     var b = open.querySelector('button.bulb');
     if(b) b.setAttribute('aria-expanded','false');
     open = null;
@@ -1538,9 +1564,26 @@ var TWSIXWatch = (function(){
     /* 靠右邊界的那幾顆要往左展開。量出來再決定，不能照 class 猜：同一顆燈泡
        在桌機上離右邊很遠，在手機上就貼著邊。 */
     var box = tip.querySelector('.tipbox');
-    if(box && box.getBoundingClientRect().right > window.innerWidth - 8){
+    if(!box) return;
+    box.style.transform = '';
+    if(box.getBoundingClientRect().right > window.innerWidth - 8){
       tip.classList.add('flip');
     }
+    /* 翻面之後還是出界的話，直接推回來。
+       會發生這件事的是**在橫向捲動的表格裡**的那幾顆：`right:0` 是相對於那顆
+       燈泡的，而那一欄本身可能已經被捲到畫面外了——翻面只是換一個出界的方向。
+       〔報酬風險比〕是清單最右邊那一欄，正好是這個情形。
+       推完再檢查左邊，免得把它推出左邊界（說明比視窗還寬的時候會發生）。 */
+    var r = box.getBoundingClientRect();
+    var shift = 0;
+    var over = r.right - (window.innerWidth - 8);
+    if(over > 0) shift = -over;
+    if(r.left + shift < 8) shift = 8 - r.left;
+    /* `transform` 而不是 `margin-left`：翻面之後這個盒子是 `left:auto;right:0`，
+       而絕對定位在那個組合下解的是 left——margin 被吃進那條方程式裡，推不動它
+       （實測 -145px 下去，量到的位置一個像素都沒變）。transform 不管定位方式
+       都會動。 */
+    if(shift) box.style.transform = 'translateX(' + Math.round(shift) + 'px)';
   }
 
   document.addEventListener('click', function(e){

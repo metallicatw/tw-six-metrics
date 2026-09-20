@@ -216,6 +216,21 @@ h4{margin:14px 0 6px}
 p{margin:0 0 10px;max-width:78ch}
 .muted{color:var(--muted);font-size:12.5px}
 .scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:5px;background:var(--surface);margin-bottom:14px}
+/* 〔評等清單〕／〔觀察清單〕那一張：十七欄。
+   量 2026-09-20 那一份：表格 1,315px，而內容欄只有 1,200px——最右邊兩欄
+   （具投資價值、報酬風險比）**在 1920 的螢幕上也看不到**，因為夾住它的不是
+   視窗而是那條 1240 的 max-width。而橫向捲軸在表格下方一整頁的位置，不捲到
+   底根本不知道右邊還有東西。
+
+   所以在寬螢幕上讓它突出內容欄：負的 margin-left 讓它往兩側各吃掉一段留白。
+   `min(1600px, …)` 是上限——再寬下去每一列會長到眼睛追不回行首。 */
+@media (min-width:1280px){
+  .scroll.wide{width:min(1600px,calc(100vw - 32px));
+    margin-left:calc((100% - min(1600px,100vw - 32px)) / 2)}
+}
+/* 格子收緊。十七欄各省 8px 就是 136px——和上面那一段合起來，1280 以上的螢幕
+   一眼看得到全部欄位，不必橫向捲。字級沒有動，收的是留白。 */
+#t th,#t td{padding:4px 5px}
 table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:560px}
 /* 對齊規則只有兩條，套在所有表格上：
    文字靠左、數字靠右，而標題永遠跟著它那一欄的內容走。
@@ -239,9 +254,18 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;
    並排，兩套顏色會讓讀者以為它們是兩種不同的刻度。
    用文字顏色而不是底色——這一欄是數字，整格染色會蓋掉等寬字的對齊。
    `--up`／`--down` 是漲跌（台股紅漲綠跌），和這裡的好壞是兩回事，不能共用。 */
-.rr{font-weight:600;font-variant-numeric:tabular-nums}
-.rr-best{color:var(--g4)}.rr-ok{color:var(--g3)}
-.rr-weak{color:var(--g1)}.rr-bad{color:var(--g0)}
+/* 類別名是 `rrv-*`。`.rr` 底下那個是**別人**——個股頁〔建議〕那顆徽章
+   （`.rr-可買進`…），而它那一條在這一條後面、權重一樣，所以它的
+   `color:var(--badge-ink)`（給有底色的徽章用的墨色）會把這裡的顏色整個蓋掉。
+   落在沒有底色的表格上，結果就是「數值和背景同色，看不到」。 */
+.rrv{font-weight:600;font-variant-numeric:tabular-nums}
+.rrv-best{color:var(--g4)}.rrv-ok{color:var(--g3)}
+.rrv-weak{color:var(--g1)}.rrv-bad{color:var(--g0)}
+/* 有燈泡的標題格：標題和燈泡**並排**。
+   不包在同一個 inline-flex 裡的話，燈泡接在 `報酬<br>風險比` 後面會自己掉到
+   第三行去——整列標題被撐高一截，而那顆燈泡看起來像是下一欄的東西。
+   `align-items:center` 讓它對齊兩行標題的中線，不是最後一行的基線。 */
+thead th .hdtip{display:inline-flex;align-items:center;gap:5px}
 .rrguide{list-style:none;margin:6px 0;padding:0;font-size:12px}
 .rrguide li{display:grid;grid-template-columns:5.5em 7em 1fr;gap:2px 8px;
   padding:4px 0;border-top:1px solid var(--rule)}
@@ -726,10 +750,18 @@ button.star{appearance:none;border:none;background:none;cursor:pointer;padding:2
 button.star:hover{color:var(--g1);background:var(--surface-2)}
 button.star.on{color:var(--g1)}
 button.star:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
-/* 自訂順序那兩顆鈕（只在〔觀察清單〕出現，由 site.js 取消 hidden）。
+/* 自訂順序那幾顆鈕（只在〔觀察清單〕出現，由 site.js 取消 hidden）。
    直向疊在星號右邊：這一欄本來就窄，並排會把表格整個往右推一截。 */
 .star-cell .mv{display:inline-flex;flex-direction:column;gap:1px;vertical-align:middle;
   margin-left:2px}
+/* ⚠️ 這一條非有不可。
+   `hidden` 屬性是靠瀏覽器預設樣式的 `[hidden]{display:none}` 生效的，權重
+   (0,1,0)；上面那一條是 `.star-cell .mv`，權重 (0,2,0)——**它贏**。
+   所以 site.js 那句 `el.hidden` 從來沒有作用過，而症狀是那幾顆 ▲▼ 在
+   〔評等清單〕上也照樣出現：那一頁的順序是綜合評分，移動它沒有任何意義，
+   而且每一列多佔十幾像素，正是最右邊兩欄被擠出畫面的原因之一。
+   同一類的錯在 market-monitor 的 `.mode-toggle-btn[hidden]` 上也犯過一次。 */
+.star-cell .mv[hidden]{display:none}
 .star-cell .mv button{appearance:none;border:1px solid var(--rule);background:var(--surface-2);
   color:var(--ink-2);cursor:pointer;border-radius:3px;padding:0 3px;
   font-size:9px;line-height:1.25;min-width:18px}

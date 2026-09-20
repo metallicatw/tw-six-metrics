@@ -558,7 +558,7 @@ def _valuation_view(raw: dict[str, str]) -> dict[str, Any]:
     out["as_of"] = raw.get("as_of", "")
     out["revenue_month"] = raw.get("revenue_month", "")
     # 「沒有下檔風險」和「算不出來」的 reward_risk 都是 None——這一格是它們唯一
-    # 分得開的地方。清單上前者顯示 ∞ 並排在最前面，後者顯示 —。
+    # 分得開的地方。清單上前者顯示「無風險」並排在最前面，後者顯示 —。
     out["risk_free"] = raw.get("risk_free", "") == "1"
     # 價格帶位置 0..1 for the cheap/fair/expensive strip; None when unplottable.
     lo, hi, price = out["cheap_price"], out["expensive_price"], out["market_price"]

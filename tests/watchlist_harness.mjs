@@ -96,4 +96,21 @@ store.set('twsix.watchlist', JSON.stringify(['1101', '2330', '1101']));
 W.reload();
 out.push(['重複的代號', [W.order(), W.count()]]);
 
+/* ── 置頂 ───────────────────────────────────────────────────────────
+ *
+ * 「把這一檔提到最上面」是實際最常做的動作（今天要盯它），而用上移做那件事
+ * 要按到第十幾次，中間每一次都存一次 localStorage、重排一次表格。
+ *
+ * 它是**插入**，不是交換：中間那幾檔要整批往後退一格。寫成交換的話
+ * ['a','b','c','d'] 置頂 d 會得到 ['d','b','c','a']——第一個和最後一個
+ * 對調，而中間兩個沒動。畫面上「d 到最前面了」是對的，所以不會有人發現
+ * a 被丟到最後面去了。 */
+store.set('twsix.watchlist', JSON.stringify(['a', 'b', 'c', 'd']));
+W.reload();
+out.push(['置頂最後一個', [W.top('d'), W.order()]]);
+out.push(['置頂之後存起來的', store.get('twsix.watchlist')]);
+out.push(['已經在第一個再置頂', [W.top('d'), W.order()]]);
+out.push(['不在清單裡的置頂', W.top('9999')]);
+out.push(['置頂中間那個', [W.top('c'), W.order()]]);
+
 console.log(JSON.stringify(out));
