@@ -112,14 +112,12 @@
 :root:not([data-theme=light]) nav a.nav-list {--nav-c:#4fd6c4}
 :root:not([data-theme=light]) nav a.nav-watch{--nav-c:#f0a72a}
 :root:not([data-theme=light]) nav a.nav-trend{--nav-c:#f07ab0}
-:root:not([data-theme=light]) nav a.nav-cross{--nav-c:#c08cf5}
 :root:not([data-theme=light]) nav a.nav-mon  {--nav-c:#6fb0f5}
 :root:not([data-theme=light]) nav a.nav-more {--nav-c:#98a6b4}
 }
 :root[data-theme=dark] nav a.nav-list {--nav-c:#4fd6c4}
 :root[data-theme=dark] nav a.nav-watch{--nav-c:#f0a72a}
 :root[data-theme=dark] nav a.nav-trend{--nav-c:#f07ab0}
-:root[data-theme=dark] nav a.nav-cross{--nav-c:#c08cf5}
 :root[data-theme=dark] nav a.nav-mon  {--nav-c:#6fb0f5}
 :root[data-theme=dark] nav a.nav-more {--nav-c:#98a6b4}
 *{box-sizing:border-box}
@@ -202,7 +200,6 @@ nav a.nav-watch{--nav-c:#b25a00}   /* 台股觀察清單 —— 橘 */
 nav a.nav-trend{--nav-c:#a3306b}   /* 台股趨勢選股 —— 洋紅 */
 /* 趨勢∩六大∩報酬 —— 紫。刻意排在洋紅（趨勢）和藍（監控）中間：它是趨勢那一頁
    再加兩個條件，顏色上也該是它的鄰居，而不是另一個色系。 */
-nav a.nav-cross{--nav-c:#6b3fa0}
 nav a.nav-mon  {--nav-c:#1c62b8}   /* 全球市場監控 —— 藍 */
 nav a.nav-more {--nav-c:#5f6b78}   /* 那三個預設隱藏的 */
 .stamp{font-size:11.5px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}

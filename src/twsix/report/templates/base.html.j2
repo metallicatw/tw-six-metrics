@@ -52,11 +52,11 @@
     {# 這兩項只有那個檔案真的在 site/ 裡才出現。它們由建站流程從另外兩個 repo
        複製進來，取不到的時候少一個導覽項，比多一個 404 的連結好。 #}
     {% if trend_page %}
-    <a class="nav-trend" href="{{ rel }}{{ trend_page }}"{% if page=='trend' %} aria-current="page"{% endif %}>台股趨勢選股</a>
-    {# 緊接在〔趨勢選股〕右邊，因為它就是那一頁再加兩個條件。獨立一頁而不是
-       那一頁上的一顆按鈕，是因為「今天有哪幾檔同時過三關」是一個會被直接打開、
-       直接分享的問題——它要有自己的網址。 #}
-    <a class="nav-cross" href="{{ rel }}{{ cross_page }}"{% if page=='cross' %} aria-current="page"{% endif %}>趨勢∩六大∩報酬</a>
+    {# 這裡本來有兩項：〔台股趨勢選股〕和〔趨勢∩六大∩報酬〕。兩頁嵌的是同一份
+       報告，差別只有兩個輸入框的預設值（那兩個門檻就攤在報告最上面那一列，
+       隨時可以改成 0）。兩個導覽項買到的只有那個預設值，所以併成一項。
+       舊網址 cross.html 留一頁轉址。 #}
+    <a class="nav-trend" href="{{ rel }}{{ trend_page }}"{% if page=='trend' %} aria-current="page"{% endif %}>趨勢X六大X報酬</a>
     {% endif %}
     {% if monitor_page %}
     <a class="nav-mon" href="{{ rel }}{{ monitor_page }}"{% if page=='monitor' %} aria-current="page"{% endif %}>全球市場監控＋日股觀察</a>

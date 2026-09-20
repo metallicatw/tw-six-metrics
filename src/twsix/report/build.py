@@ -87,17 +87,25 @@ MONITOR_REPORT = "monitor-report.html"
 #:
 #: 技術面挑出來的標的，讀者的下一個問題一定是「這家公司體質怎麼樣」，而那個
 #: 答案就在這裡。兩個網站互相指，中間不必經過任何人的記憶。
+#:
+#: 這一頁現在叫〔趨勢X六大X報酬〕，而且預設就帶 `#cross`（六大 > 3、
+#: 報酬風險比 > 2）。想只看技術面四關的，把那兩個數字改成 0 即可——
+#: 那正是以前〔台股趨勢選股〕那一頁的全部內容。
 TREND_PAGE = "trend.html"
 TREND_REPORT = "trend-report.html"
 
-#: 〔趨勢∩六大∩報酬〕。嵌的是**同一份** `trend-report.html`，只是網址帶了
-#: `#cross`——那個片段讓報告把兩個門檻預先填成「六大 > 3」「報酬風險比 > 2」。
+#: 舊的〔趨勢∩六大∩報酬〕。**現在只是一頁轉址。**
 #:
-#: 兩個入口共用一份報告，而不是產兩份：趨勢圖、側欄卡片、那一百 MB 的圖表資料
-#: 都要各維護一次，而它們沒有任何一處該不一樣。
+#: 它和〔趨勢選股〕嵌的本來就是同一份 `trend-report.html`，差別只有網址後面那個
+#: `#cross`——它讓報告把兩個門檻預先填成「六大 > 3」「報酬風險比 > 2」。而那兩
+#: 個門檻就攤在報告最上面那一列，隨時可以改成 0。兩個導覽項、兩個網址、兩份說明，
+#: 買到的只有兩個輸入框的預設值，所以併成一頁（見 TREND_PAGE 的說明）。
+#:
+#: 檔案留著而不是刪掉：它曾經是一個可以分享、可以加書籤的網址，拿掉會變成
+#: GitHub Pages 的 404——一個「這個網站壞了」的畫面，而內容好好地在隔壁。
 #:
 #: 那兩個門檻要比的數字（六大評分、目標價、下檔價）由 `cross.json` 從這邊發過去，
-#: 見 `_write_cross_feed`。
+#: 見 `_write_cross_feed`——那個**沒有**變，趨勢那支程式還是照樣讀它。
 CROSS_PAGE = "cross.html"
 
 #: The site is about Taiwanese stocks, read in Taiwan, against 民國 quarters
@@ -667,7 +675,6 @@ def build_site(
         hidden_pages=sorted(HIDDEN_PAGES),
         monitor_page=MONITOR_PAGE if has_monitor else "",
         trend_page=TREND_PAGE if has_trend else "",
-        cross_page=CROSS_PAGE if has_trend else "",
         repo=repo,
         site_title=ctx.site_title,
         generated_at=ctx.generated_at,
@@ -928,10 +935,11 @@ def build_site(
             **base, page="trend", rel="", report=TREND_REPORT
         ).dump(str(out_dir / TREND_PAGE))
         written["trend.html（趨勢選股）"] = 1
+        # 舊網址。只剩一頁轉址——`page=` 不用給，它不在導覽列上。
         env.get_template("cross.html.j2").stream(
-            **base, page="cross", rel="", report=TREND_REPORT
+            **base, target=TREND_PAGE
         ).dump(str(out_dir / CROSS_PAGE))
-        written["cross.html（趨勢∩六大∩報酬）"] = 1
+        written["cross.html（轉址到趨勢X六大X報酬）"] = 1
 
     if has_monitor:
         env.get_template("monitor.html.j2").stream(
@@ -1329,7 +1337,6 @@ def _full_stock_page(
         delisted=delisted,
         monitor_page=base.get("monitor_page", ""),
         trend_page=base.get("trend_page", ""),
-        cross_page=base.get("cross_page", ""),
     )
     return True
 
@@ -1347,7 +1354,6 @@ def build_stock_page(
     delisted: bool = False,
     monitor_page: str = "",
     trend_page: str = "",
-    cross_page: str = "",
 ) -> Path:
     """Render 〔評價簡表〕〔六大財務指標評等〕〔EPS預估與估價〕〔殖利率估價〕.
 
@@ -1370,7 +1376,6 @@ def build_stock_page(
         # 從這裡帶進去——漏掉的話那 1,769 頁的導覽列會比別的頁面少一項。
         monitor_page=monitor_page,
         trend_page=trend_page,
-        cross_page=cross_page,
         repo=repo,
         page="stock",
         # 完整版也給頁首那顆按鈕一個對象，字改成「重新抓取」：資料會過期，而且

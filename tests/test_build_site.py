@@ -1244,14 +1244,14 @@ def test_the_trend_tab_appears_only_when_the_report_is_really_there(tmp_path=Non
     sheets = _sheets(tmp)
 
     build_site(_records(), out, sheets_dir=sheets)
-    assert "台股趨勢選股" not in (out / "index.html").read_text("utf-8")
+    assert "趨勢X六大X報酬" not in (out / "index.html").read_text("utf-8")
     assert not (out / TREND_PAGE).exists(), "沒有報告就不該畫一個空的框"
 
     out.mkdir(parents=True, exist_ok=True)
     (out / TREND_REPORT).write_text("<html>線圖</html>", encoding="utf-8")
     build_site(_records(), out, sheets_dir=sheets)
     listing = (out / "index.html").read_text("utf-8")
-    assert ">台股趨勢選股</a>" in listing and "trend.html" in listing
+    assert ">趨勢X六大X報酬</a>" in listing and "trend.html" in listing
     # 個股頁在子目錄裡，連結要帶 ../。這一項本來漏掉過一次：完整版的個股頁
     # 自己組 context，不是 `**base`，所以導覽列多一項就要記得從那裡帶進去。
     assert '"../trend.html"' in (out / "stock" / "5439.html").read_text("utf-8")
@@ -1268,7 +1268,8 @@ def test_the_trend_report_is_embedded_not_linked(tmp_path=None):
     build_site(_records(), out, sheets_dir=_sheets(tmp))
 
     page = (out / TREND_PAGE).read_text("utf-8")
-    assert 'src="trend-report.html"' in page, "沒有把報告嵌進來"
+    # `#cross`：併頁之後預設就是最嚴的那一組門檻（見 test_那一頁預設就帶_cross）。
+    assert 'src="trend-report.html#cross"' in page, "沒有把報告嵌進來"
     assert "台股評等清單" in page, "導覽列不在，等於還是出不來"
     assert 'target="_blank"' in page, "想全螢幕看的人要有一條路"
     # 報告本身一個位元組都沒有被動到。
@@ -1284,13 +1285,13 @@ def test_the_trend_report_is_embedded_not_linked(tmp_path=None):
 #: 名字帶著範圍，因為前四項全是台股、第五項根本不是，而原本那四個兩字詞
 #: （評等／觀察／趨勢／監控）看不出這件事。
 #:
-#: 〔趨勢∩六大∩報酬〕緊接在〔台股趨勢選股〕右邊，因為它就是那一頁再加兩個
-#: 條件——往尾巴補一個最省事，而那正好會把「由近而遠」破壞掉。
+#: 〔趨勢X六大X報酬〕是原本的〔台股趨勢選股〕和〔趨勢∩六大∩報酬〕併起來的一項。
+#: 兩頁嵌的本來就是同一份報告，差別只有兩個輸入框的預設值——而那兩個門檻就攤在
+#: 報告最上面那一列，隨時可以改成 0。兩個導覽項買到的只有那個預設值。
 NAV_EXPECTED = [
     ("nav-list",  "台股評等清單"),
     ("nav-watch", "台股觀察清單"),
-    ("nav-trend", "台股趨勢選股"),
-    ("nav-cross", "趨勢∩六大∩報酬"),
+    ("nav-trend", "趨勢X六大X報酬"),
     ("nav-mon",   "全球市場監控＋日股觀察"),
 ]
 
@@ -1888,25 +1889,53 @@ def _with_trend(tmp: Path) -> Path:
     return out
 
 
-def test_交集那一頁嵌的是同一份報告加_cross(tmp_path=None):
-    """兩個入口共用一份 `trend-report.html`。
+def test_那一頁預設就帶_cross(tmp_path=None):
+    """併成一頁之後，預設是**最嚴**的那一組門檻。
 
-    產兩份 HTML 的話，趨勢圖、側欄卡片、那一百 MB 的圖表資料都要各維護一次，
-    而它們沒有任何一處該不一樣。`#cross` 是那份報告自己認得的片段，它讓兩個
-    門檻預先填成 3 和 2。
+    `#cross` 是那份報告自己認得的片段，它讓兩個門檻預先填成 3 和 2。少了它，
+    這一頁就退回以前那個「只看技術面四關」——而那一頁的名字現在寫著六大和報酬。
     """
     import re
 
     tmp = tmp_path or _tmp()
     out = _with_trend(tmp)
     build_site(_records(), out, sheets_dir=_sheets(tmp))
-    page = (out / "cross.html").read_text("utf-8")
+    page = (out / "trend.html").read_text("utf-8")
     src = re.search(r'<iframe[^>]*src="([^"]*)"', page).group(1)
     assert src.endswith("trend-report.html#cross"), (
-        f"嵌的是 {src}——少了 #cross 的話這一頁和〔台股趨勢選股〕一模一樣"
+        f"嵌的是 {src}——少了 #cross 的話這一頁只剩技術面四關"
     )
     assert "六大財務指標最新綜合評分 &gt; 3" in page, "燈泡沒有說清楚門檻是什麼"
-    assert "沒有下檔風險" in page, "燈泡沒有說 ∞ 是什麼"
+    assert "沒有下檔風險" in page, "燈泡沒有說「無風險」是什麼"
+    # 分頁標題（瀏覽器分頁上、加書籤時看到的那個字）也要跟著改。
+    # 漏掉的症狀很安靜：頁面上寫著新名字，書籤和分頁上還是舊的。
+    title = page.split("<title>")[1].split("</title>")[0]
+    assert title.startswith("趨勢X六大X報酬"), f"分頁標題還是舊的：{title}"
+    assert "<h2>趨勢X六大X報酬" in page, "頁面上的標題沒改"
+    # 併頁之後最重要的一句：怎麼回到「只看四關」。沒有這一句，舊的用法就消失了。
+    assert "改成 <b>0</b>" in page, "燈泡沒有說怎麼關掉那兩個門檻"
+
+
+def test_舊的交集網址是一頁轉址(tmp_path=None):
+    """`cross.html` 曾經是一個可以分享、可以加書籤的網址。
+
+    直接拿掉檔案的話，那些連結會變成 GitHub Pages 的 404——一個「這個網站壞了」
+    的畫面，而內容好好地在隔壁。
+
+    `http-equiv=refresh` 而不是 JS：轉址不該取決於 JavaScript 有沒有跑起來。
+    """
+    tmp = tmp_path or _tmp()
+    out = _with_trend(tmp)
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "cross.html").read_text("utf-8")
+    assert 'http-equiv="refresh"' in page, "轉址靠 JS 的話，JS 沒跑就卡在這一頁"
+    assert 'url=trend.html' in page, page[:400]
+    assert 'rel="canonical"' in page and 'href="trend.html"' in page
+    # meta refresh 被瀏覽器設定擋掉的人，唯一的出路是頁面上那個連結。
+    assert '<a href="trend.html">' in page, "沒有可以按的連結"
+    # 它不該再出現在導覽列上。
+    nav = (out / "index.html").read_text("utf-8").split("<nav>")[1].split("</nav>")[0]
+    assert "cross.html" not in nav, "轉址頁還掛在導覽列上"
 
 
 def test_每一種頁面的導覽列都有那一項(tmp_path=None):
@@ -1924,9 +1953,9 @@ def test_每一種頁面的導覽列都有那一項(tmp_path=None):
     # 那一項**還在**，只是 `href` 變成 `{{ rel }}` 自己（個股頁上是 `../`），
     # 點下去回到上一層。第一版就是這樣：拿掉 `cross_page=cross_page` 全綠。
     WANT = {"nav-list": "index.html", "nav-watch": "watchlist.html",
-            "nav-trend": "trend.html", "nav-cross": "cross.html"}
+            "nav-trend": "trend.html"}
     seen = {}
-    for name in ("index.html", "cross.html", "trend.html", "watchlist.html",
+    for name in ("index.html", "trend.html", "watchlist.html",
                  "stock/5439.html"):
         html = (out / name).read_text("utf-8")
         nav = html.split("<nav>")[1].split("</nav>")[0]
@@ -1942,24 +1971,26 @@ def test_每一種頁面的導覽列都有那一項(tmp_path=None):
                 "——多半是某個 context 漏了帶那個參數"
             )
     first = seen["index.html"]
-    assert "趨勢∩六大∩報酬" in first, first
+    assert "趨勢X六大X報酬" in first, first
     for name, items in seen.items():
         assert items == first, (
             f"{name} 的導覽列和〔評等清單〕不一樣：\n  {items}\n  {first}"
         )
 
 
-def test_沒有趨勢報告就兩項都不出現(tmp_path=None):
+def test_沒有趨勢報告就整項不出現(tmp_path=None):
     """上游取不到的時候少一個導覽項，比多一個 404 的連結好。
 
-    交集那一頁嵌的就是那份報告——報告不在，這一頁是一個空框。
+    那一頁嵌的就是那份報告——報告不在，這一頁是一個空框。
+    轉址頁也不要畫：它指向的那一頁根本不存在。
     """
     tmp = tmp_path or _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp))
-    assert not (out / "cross.html").exists(), "沒有上游報告卻畫了交集那一頁"
+    assert not (out / "trend.html").exists(), "沒有上游報告卻畫了那一頁"
+    assert not (out / "cross.html").exists(), "沒有上游報告卻畫了轉址頁"
     nav = (out / "index.html").read_text("utf-8").split("<nav>")[1].split("</nav>")[0]
-    assert "趨勢∩六大∩報酬" not in nav
+    assert "趨勢X六大X報酬" not in nav
 
 
 def test_觀察清單那一頁才有上移下移(tmp_path=None):
