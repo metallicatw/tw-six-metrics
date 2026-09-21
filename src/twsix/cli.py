@@ -1852,10 +1852,80 @@ def stale_codes(root: Path, *, universe: set[str] | None = None) -> list[tuple[s
     out = [
         (code, quarter)
         for code, quarter in latest.items()
-        if quarter < newest and (universe is None or code in universe)
+        if quarter < newest
+        and (universe is None or code in universe)
+        and not _refresh_is_stuck(root, code, quarter)
     ]
     out.sort(key=lambda pair: (pair[1], pair[0]))
     return out
+
+
+#: 「補過了但期別沒有往前」的記號檔名。和 `年度交易資訊._tooyoung.txt` 同一種
+#: 做法：把「我問過了、答案就是這樣」寫下來，而不是每一輪重新發現一次。
+STUCK_MARK = "_stuck.json"
+
+
+def _stuck_path(root: Path, code: str) -> Path:
+    return root / "sheets" / code / STUCK_MARK
+
+
+def _refresh_is_stuck(root: Path, code: str, quarter: str) -> bool:
+    """這一檔補過了、期別沒有前進，而且全市場還沒換季——那就別再問了。
+
+    ## 症狀
+
+        $ git log --oneline | grep 評等補課
+        4494f3dc 評等補課：0 列
+        e8df957f 評等補課：0 列
+        b5a041f8 評等補課：0 列
+        eebd50a5 評等補課：0 列
+
+    每一次都是同樣三檔（1589 永冠-KY、912000 晨訊科-DR、3718），每一次都只動
+    `_fetched.txt` 的時間戳。佇列的定義是「期別小於全市場最大值」，而：
+
+    * 1589 與 912000 的券商鏡像**上游本來就只到那一季**（912000 是 DR，
+      `ingest/market.py` 自己寫著「DR 一項指標都算不出來」）；
+    * 3718 走 `new_listings()`，它永遠算不出評等、永遠寫不進 ratings。
+
+    所以它們重算出來還是同一列 → `ratings.csv` 零差異 → 「0 列」。
+
+    ## 代價
+
+    `refresh.yml` 一天四班，每班 3 檔 × 15 個請求 ＝ 每天 180 次無效請求；
+    而且 `_fetched.txt` 有變 → `changed=yes` → **每一班都重建網站並發布一次
+    Pages**，一天四次零內容差異的發布。最近 20 個 commit 裡有 9 個是這種噪音，
+    真正的故障訊號會被埋掉。
+
+    ## 解除的條件
+
+    記號裡存的是「卡在哪一期」。全市場換季之後（`newest` 前進），那一期就
+    不再是當初卡住的那一期，記號自動失效——不需要任何人去清它。
+    """
+    import json as _json
+
+    mark = _stuck_path(root, code)
+    try:
+        data = _json.loads(mark.read_text("utf-8"))
+    except (OSError, ValueError):
+        return False
+    return data.get("quarter") == quarter
+
+
+def mark_refresh_stuck(root: Path, code: str, quarter: str) -> None:
+    """補完了、期別還是那一期——寫下記號（見 `_refresh_is_stuck`）。"""
+    import json as _json
+
+    mark = _stuck_path(root, code)
+    mark.parent.mkdir(parents=True, exist_ok=True)
+    mark.write_text(_json.dumps({"quarter": quarter}, ensure_ascii=False) + "\n",
+                    encoding="utf-8")
+
+
+def clear_refresh_stuck(root: Path, code: str) -> None:
+    """期別真的往前了——把記號拿掉。"""
+    mark = _stuck_path(root, code)
+    with contextlib.suppress(OSError):
+        mark.unlink()
 
 
 def sheetless_codes(root: Path, *, universe: set[str] | None = None) -> list[str]:
@@ -1979,6 +2049,20 @@ def cmd_refresh(args: argparse.Namespace) -> int:
             }
         _store_rating(root, rating, meta=meta)
         done.append(code)
+        # **補完了，期別有沒有真的往前？**
+        #
+        # 沒有前進就寫一個記號，佇列下一輪跳過它——否則這一檔會每天被重抓
+        # 四次、寫出四個「評等補課：0 列」的空 commit，而且每一次都觸發一次
+        # 零內容差異的 Pages 發布。詳見 `_refresh_is_stuck`。
+        # 期別在 snapshots[0]（期別 1 ＝ 最新的那一期），不在 rating 上。
+        snaps = getattr(rating, "snapshots", None) or []
+        now_q = str(getattr(snaps[0], "fiscal_quarter", "") if snaps else "")
+        if was and was != "新上市" and now_q and now_q <= was:
+            print(f"  （補完還是 {now_q}，上游就到這裡了——先跳過它，"
+                  "等全市場換季再問）")
+            mark_refresh_stuck(root, code, was)
+        else:
+            clear_refresh_stuck(root, code)
 
     print(f"\n補好 {len(done)} 檔，失敗 {len(failed)} 檔，還剩 {total - len(done)} 檔")
     for line in failed:
@@ -3250,12 +3334,36 @@ def _yearly_too_young(sheet_dir: Path, today: str) -> bool:
     return str(mark.get("retry_after", "")) > today
 
 
+#: 封鎖最多封到下一個年結。**不要一次賭好幾年。**
+#:
+#: 原本是「差幾年就等幾年」（`need = 5 - years`），於是一檔只回了一年的股票會被
+#: 封到四年後。實測分佈：
+#:
+#:     缺年度交易資訊 250 檔，其中有封鎖記號 202 檔
+#:       2027-01-15: 38   2028-01-15: 51   2029-01-15: 70   2030-01-15: 43
+#:
+#: 問題在於判定的依據只有「這次回了幾年」——它**不分**「這檔真的只上市兩年」
+#: 和「交易所這一次只回了兩年」。只要哪天回了一份格式正確但內容截斷的 JSON，
+#: 這檔就被封到 2030 年，而且之後連問都不會問
+#: （`_yearly_missing(include_too_young=False)`）。
+#:
+#: 代價不小：本益比河流圖與整個殖利率模型都要這一張，那 250 檔的個股頁會少
+#: 兩塊，而且沒有任何錯誤訊息（`valuations.csv` 裡 509 列沒有 cheap_price、
+#: 744 列沒有 target_price）。
+#:
+#: 改成最多封一年：每年自我修正一次。代價是每年多問幾百個請求——一年一次。
+YEARLY_MAX_BLOCK_YEARS = 1
+
+
 def _mark_yearly_too_young(sheet_dir: Path, years: int, today: str) -> None:
     """記下「只有 N 年」，以及要等到哪一年才值得再問。
 
-    差幾年就等幾個年結。一月中才問，是給交易所整理年度資料留的時間。
+    一月中才問，是給交易所整理年度資料留的時間。
+
+    上限一年，理由見 `YEARLY_MAX_BLOCK_YEARS`：這個判定分不出「真的太新」和
+    「這一次回得不完整」，所以不能拿它去換好幾年的沉默。
     """
-    need = max(1, 5 - max(years, 0))
+    need = min(max(1, 5 - max(years, 0)), YEARLY_MAX_BLOCK_YEARS)
     retry_year = int(today[:4]) + need
     sheet_dir.mkdir(parents=True, exist_ok=True)
     with contextlib.suppress(OSError):

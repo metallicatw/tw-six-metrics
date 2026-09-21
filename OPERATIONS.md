@@ -42,18 +42,19 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 
 | 時間 | 排程 | repo | 做什麼 | 發布網站？ |
 | --- | --- | --- | --- | --- |
-| 02:10 | 評等補課 | tw-six-metrics | `twsix refresh --limit 100` | ✅ 有變動才 |
+| 02:23 | 評等補課 | tw-six-metrics | `twsix refresh --limit 100` | ✅ 有變動才 |
 | **06:30**（一–五） | 每日更新報告 | **market-monitor** | 抓資料＋產生 `index.html` | ❌ 只 commit 自己 |
-| **07:10**（一–五） | pages | tw-six-metrics | 全站重建，順手抓兩個衛星 | ✅ |
-| 08:10 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
-| 09:20（每天） | 全市場官方資料 | tw-six-metrics | `twsix fetch --all` | ❌ **只存資料** |
-| 09:30（一、四） | 股權資料 | tw-six-metrics | `twsix fetch-ownership` ＋補齊歷史 | ✅ 一定建 |
-| 14:10 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
-| **15:10**（一–五） | 每日篩選 | **tw-trend-filter** | 掃全市場約 1,900 檔 → `report` 分支 | ❌ 只推自己 |
-| **16:00**（一–五） | pages | tw-six-metrics | 全站重建，順手抓兩個衛星 | ✅ |
-| 17:30（一–五） | 每日全市場 | tw-six-metrics | `twsix fetch-daily` | ✅ 有變動才 |
-| 20:10 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
-| 23:30（一–五） | 每日全市場（第二次） | tw-six-metrics | 同上 | ✅ 有變動才 |
+| **07:37**（一–五） | pages | tw-six-metrics | 全站重建，順手抓兩個衛星 | ✅ |
+| 08:23 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
+| 09:17（每天） | 全市場官方資料 | tw-six-metrics | `twsix fetch --all` | ❌ **只存資料** |
+| 09:37（一、四） | 股權資料 | tw-six-metrics | `twsix fetch-ownership` ＋補齊歷史 | ✅ 一定建 |
+| 10:13（每天） | 心跳 | tw-six-metrics | `scripts/heartbeat.py`，只讀不寫 | ❌ |
+| 14:23 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
+| **15:07**（一–五） | 每日篩選 | **tw-trend-filter** | 掃全市場約 1,900 檔 → `report` 分支 | ❌ 只推自己 |
+| 15:41（一–五） | 每日全市場 | tw-six-metrics | `twsix fetch-daily` | ✅ 有變動才 |
+| **16:47**（一–五） | pages | tw-six-metrics | 全站重建，順手抓兩個衛星 | ✅ |
+| 20:23 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
+| 21:47（一–五） | 每日全市場（第二次） | tw-six-metrics | 同上 | ✅ 有變動才 |
 
 排程順序是刻意排的：**衛星先產、pages 後收**。market-monitor 06:30 產完，
 07:10 的 pages 接走；tw-trend-filter 15:10 產完，16:00 的 pages 接走。
@@ -71,12 +72,18 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 
 | 建站路徑 | 跑 `scripts/run_tests.py`？ |
 | --- | --- |
-| **pages**（07:10／16:00／push／手動） | ✅ 全部跑完才建 |
-| 每日全市場、股權資料、評等補課、加一檔個股 | ❌ `test: "false"` |
+| **pages**（07:37／16:47／push／手動） | ✅ 全部跑完才建 |
+| 股權資料、加一檔個股 | ✅ 建站之前先跑一次 |
+| 每日全市場、評等補課 | ✅ `git add` 之前先跑一次 |
 
-所以測試紅的時候，**網站不會完全停住**——那幾條排程照樣默默建站發布，
-只有 pages 這條路被擋。症狀會是「網站有些地方在動，但推上去的改動一直沒生效」。
-看到這種情形，先去 Actions 看 pages 是不是紅的。
+（以前只有 pages 這一條會跑測試。而 `ci.yml` 是 `on: push`，用 GITHUB_TOKEN 推的
+commit **不會**觸發別的 workflow——所以每天約十次 bot push 把資料寫進 main，
+其中六次從頭到尾沒有跑過 704 個測試裡的任何一個。而測試裡有好幾條是直接對
+`data/` 跑的：它們守得住壞資料，卻在寫入壞資料的那條路上不會被執行。）
+
+測試紅的時候，會寫資料的那幾條排程現在會**在 commit 之前停下來**——壞資料進不了
+repo。症狀是那條排程變紅而網站停在昨天，而不是「網站有些地方在動，但推上去的
+改動一直沒生效」。
 
 ---
 

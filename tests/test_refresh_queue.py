@@ -152,3 +152,83 @@ def test_restating_needs_no_network_and_no_pages():
     root = _table([{"stock_id": "1101", "period_index": "1", "fiscal_quarter": "2026.2Q"}])
     rc = cmd_restate(argparse.Namespace(config=None, data=str(root), codes="1101"))
     assert rc == EXIT_OK, "沒有分頁的時候要安靜跳過，不是失敗"
+
+
+# ---------------------------------------------------------------------------
+# 補過了但期別沒有前進：別再問了
+# ---------------------------------------------------------------------------
+
+
+def test_補過但沒進步的那一檔會離開佇列():
+    """症狀：
+
+        $ git log --oneline | grep 評等補課
+        4494f3dc 評等補課：0 列
+        e8df957f 評等補課：0 列
+        b5a041f8 評等補課：0 列
+        eebd50a5 評等補課：0 列
+
+    每一次都是同樣三檔（1589 永冠-KY、912000 晨訊科-DR、3718），每一次都只動
+    `_fetched.txt` 的時間戳。佇列的定義是「期別小於全市場最大值」，而 1589 與
+    912000 的上游**本來就只到那一季**，3718 則永遠算不出評等。
+
+    代價：`refresh.yml` 一天四班 × 3 檔 × 15 個請求 ＝ 每天 180 次無效請求；
+    而且 `_fetched.txt` 有變 → changed=yes → **每一班都重建網站並發布一次
+    Pages**，一天四次零內容差異的發布，還把 commit log 汙染成噪音。
+    """
+    import tempfile
+
+    from twsix.cli import (
+        clear_refresh_stuck,
+        mark_refresh_stuck,
+        stale_codes,
+    )
+
+    # `scripts/run_tests.py` 只跑**零參數**的 `test_` 函式（pytest 的 fixture
+    # 在那支 runner 裡不存在），所以不能用 `tmp_path`。
+    root = Path(tempfile.mkdtemp())
+    _write_ratings(root, {"1101": "2026.2Q", "1589": "2025.3Q", "3018": "2025.4Q"})
+
+    assert [c for c, _ in stale_codes(root)] == ["1589", "3018"]
+
+    # 1589 補過了，期別還是 2025.3Q。
+    mark_refresh_stuck(root, "1589", "2025.3Q")
+    assert [c for c, _ in stale_codes(root)] == ["3018"], (
+        "補過但沒進步的那一檔還留在佇列裡"
+    )
+
+    # 全市場換季之後記號自動失效——記號記的是「卡在哪一期」，不是「別再問」。
+    _write_ratings(root, {"1101": "2026.3Q", "1589": "2026.2Q", "3018": "2025.4Q"})
+    assert "1589" in [c for c, _ in stale_codes(root)], (
+        "期別前進了，記號卻還擋著"
+    )
+
+    # 真的補起來之後把記號拿掉。
+    clear_refresh_stuck(root, "1589")
+    _write_ratings(root, {"1101": "2026.3Q", "1589": "2025.3Q", "3018": "2025.4Q"})
+    assert "1589" in [c for c, _ in stale_codes(root)]
+
+
+def test_補課完會自己判斷有沒有進步():
+    """記號不是人去寫的——補完那一刻就該知道。"""
+    import inspect
+
+    from twsix.cli import cmd_refresh
+
+    src = inspect.getsource(cmd_refresh)
+    assert "mark_refresh_stuck(root, code, was)" in src, (
+        "補完沒有判斷期別有沒有前進"
+    )
+    assert "clear_refresh_stuck(root, code)" in src, (
+        "真的補起來之後沒有把記號拿掉"
+    )
+
+
+def _write_ratings(root, latest):
+    """寫一份只有期別 1 的 ratings。"""
+    from twsix.store.snapshots import Store
+
+    rows = [{"stock_id": c, "period_index": "1", "fiscal_quarter": q}
+            for c, q in latest.items()]
+    Store(root).write("ratings", rows,
+                      ["stock_id", "period_index", "fiscal_quarter"])
