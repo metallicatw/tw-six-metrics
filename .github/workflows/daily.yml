@@ -81,6 +81,18 @@ jobs:
       # 建站要 jinja2，所以是 [report] 而不是裸的 .
       - run: pip install -e ".[report]"
 
+      # 抓回來的東西要 commit 進 repo，先確認引擎是好的。
+      #
+      # ⚠️ **bot 的 push 不會觸發 `ci.yml`**（`on: push` 對 GITHUB_TOKEN 推的
+      # commit 不生效），所以這條路上沒有第二次機會。每天約十次 bot push 把資料
+      # 寫進 main，而測試裡有好幾條是直接對 `data/` 跑的——它們守得住壞資料，
+      # 卻在寫入壞資料的那條路上不會被執行。
+      #
+      # 87 秒，零相依（`ownership.yml` 早就這樣做了）。
+      - name: 測試
+        run: python scripts/run_tests.py
+
+
       - name: 抓取
         run: twsix fetch-daily
 
@@ -153,6 +165,20 @@ jobs:
           # 改到它（股價每天都在動）。漏掉它的話，那道檢查每天都會紅——而那正是
           # market.yml 的白名單漏掉 data/ratings.csv 時發生過的事。
           git add data/market data/sheets data/valuations.csv
+          # ⚠️ **守門要在提早 exit 的上面。**
+          #
+          # 它防的是「引擎寫了一個白名單沒列的檔案」。而它以前排在
+          # `changed=no → exit 0` 的**下面**——於是只要白名單裡的檔案剛好都
+          # 沒變（非交易日、期別沒換、補課 0 列，這在穩定狀態下是常態），
+          # 那個漏掉的檔案一聲不吭地留在 runner 上，job 綠燈。
+          #
+          # 也就是說這道門在最需要它的那一天（引擎開始寫新檔案的第一天，
+          # 而那天多半沒有別的變動）剛好是關著的。
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
           if git diff --cached --quiet; then
             # 非交易日、或這一輪抓到的和上一輪一模一樣——都是正常的，不是失敗。
             echo "::notice::沒有新的一天要存"
@@ -164,11 +190,6 @@ jobs:
                   | sed 's#.*/##; s#\.csv\.gz$##' | sort -u | paste -sd' ' -)"
           git commit -m "每日行情：${days:-$(date -u +%Y-%m-%d)}" \
                      -m "全市場收盤與三大法人買賣超，四個請求。"
-          if ! git diff --quiet; then
-            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
-            git diff --name-only | sed 's/^/  /'
-            exit 1
-          fi
 
       # 推送單獨拆成一步，用共用的重試 action。這條排程原本是裸的
       # `git pull --rebase; git push`，撞上另一條 workflow 就整趟的抓取結果一起

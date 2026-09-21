@@ -185,7 +185,7 @@ class _FakeHttp:
         return SUMMARY_HTML.encode("utf-8")
 
 
-def _backfill(root: Path, *, force=False):
+def _backfill(root: Path, *, force=False, quarters=1):
     """跑一次回補，回傳它總共發了幾個請求。"""
     from twsix.ingest import base
 
@@ -202,7 +202,7 @@ def _backfill(root: Path, *, force=False):
         # 回補會把每一期每一張表印出來——在測試輸出裡那是十幾行雜訊。
         with contextlib.redirect_stdout(io.StringIO()):
             cmd_backfill_statements(argparse.Namespace(
-                config=None, out=str(root), quarters=1, force=force))
+                config=None, out=str(root), quarters=quarters, force=force))
     finally:
         base.HttpClient = original  # type: ignore[assignment]
     return sum(len(c.asked) for c in calls)
@@ -227,18 +227,62 @@ def test_回補會重抓開放資料寫的那一期():
         )
 
 
-def test_回補仍然跳過已經完整的那一期():
+def test_回補仍然跳過已經完整的舊期別():
     """不能把「不跳過」改成「都不跳過」——那會變成每天重抓十二季。
 
-    回補每天跑，`--quarters 12`。全部重抓是 72 個請求打一個會節流到 307 的
-    站台，而且十二季裡有十一季的內容一個月都不會再變。
+    回補每天跑，`--quarters 12`。全部重抓是打一個會節流到 307 的站台，
+    而且十二季裡有十一季的內容一個月都不會再變。
+
+    ⚠️ **最新的那一期是例外**（見下一條）：它每天重抓，成本是 6 個請求。
+    所以這一條問的是「**舊的**那幾期有沒有被放過」——四期全部完整的時候，
+    請求數要等於「只抓了最新那一期」，不是零。
     """
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         store = Store(root)
         rows = _summary_rows()
         columns = sorted({k for r in rows for k in r})
-        for name in ("twse_income", "twse_balance", "twse_cashflow",
-                     "tpex_income", "tpex_balance", "tpex_cashflow"):
-            store.write(market_path(name, "115Q2"), rows, columns)
-        assert _backfill(root) == 0, "已經是完整版的那一期還是被重抓了"
+        for period in ("115Q2", "115Q1", "114Q4", "114Q3"):
+            for name in ("twse_income", "twse_balance", "twse_cashflow",
+                         "tpex_income", "tpex_balance", "tpex_cashflow"):
+                store.write(market_path(name, period), rows, columns)
+        newest_only = _backfill(root, quarters=4)
+        everything = _backfill(root, quarters=4, force=True)
+        assert newest_only == 6, (
+            f"四期全部完整，卻發了 {newest_only} 個請求（只該抓最新那一期）"
+        )
+        assert everything == 24, everything
+        assert newest_only < everything, "舊的那幾期沒有被跳過"
+
+
+def test_最新的那一期永遠重抓():
+    """「已經是彙總版就跳過」對舊期別是對的，對最新那一期是錯的。
+
+    ## 為什麼
+
+    損益表與資產負債表每天被 `twsix fetch --all` 用開放資料降級成非彙總版，
+    所以它們明天會被重抓、補齊。**現金流量表的開放資料根本不存在**——它永遠
+    停在第一次彙總寫下的那一份，`is_summary_rows()` 永遠為真，於是永遠跳過。
+
+    症狀是心跳每天報一次而且修不好：
+
+        季財報 tpex：115Q2 三張表的列數對不上
+        {'income': 891, 'balance': 891, 'cashflow': 890}
+
+    差的那一列是 2938（2026-09-19 才被 watchlist 加進來的）：它進得了 income、
+    進不了 cashflow。唯一的修法是手動 `--force`，而沒有任何排程會傳它。
+
+    一個**結構上無法變綠**的監控，兩週之後就等於沒有監控——而這支心跳存在的
+    理由正是「排程全部是綠的但資料悄悄停了」。
+
+    這一條守的是那個條件裡的 `not is_newest`。
+    """
+    src = (Path(__file__).resolve().parents[1]
+           / "src/twsix/cli.py").read_text("utf-8")
+    i = src.index("def cmd_backfill_statements")
+    body = src[i:i + 4000]
+    assert "newest = periods[0]" in body, "沒有算出最新的那一期"
+    assert "is_newest = (year, season) == newest" in body, body[:0] or "沒有標出最新那一期"
+    assert "not is_newest" in body and "is_summary_rows(existing)" in body, (
+        "跳過的條件沒有把最新那一期排除掉——現金流量表會永遠停在第一份"
+    )

@@ -22,6 +22,22 @@ from ..models import INDICATOR_LABELS, INDICATOR_ORDER
 from ..store import news as news_store
 from ..store.daily import close_history, institutional_history, latest_quotes
 
+#: 台北時區。
+#:
+#: 抓取層（`cli.py`）早就全面改用它了，理由寫在那裡：「runner 跑在 UTC，
+#: 台北深夜跨日時 `date.today()` 會指到前一天」。呈現層沒跟上，而
+#: `pages.yml` 的 `cron: "37 23 * * 0-5"` 是 **UTC 23:37**——建站當下 UTC
+#: 還是前一天、台北已經是隔天早上 07:37。於是網頁上的「資料落後 N 個月」與
+#: 「下一次財報截止日」每天有八小時的窗口會算錯一天，而那八小時剛好涵蓋
+#: 主要的兩次建站之一。
+_TAIPEI = timezone(timedelta(hours=8))
+
+
+def _today_tw() -> date:
+    """今天（台北）。呈現層一律用這個，不要用 `date.today()`。"""
+    return datetime.now(_TAIPEI).date()
+
+
 ENGINE_VERSION = "0.1.0"
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 
@@ -492,7 +508,7 @@ def vintage_note(revenue_month: str, today: date | None = None) -> str:
     if roc is None:
         return ""
     year, month = roc
-    now = today or date.today()
+    now = today or _today_tw()
     behind = (now.year - year) * 12 + (now.month - month)
     if behind <= STALE_AFTER_MONTHS:
         return ""
@@ -854,7 +870,7 @@ def build_site(
     # where the search box and the per-stock pages actually lead.
     from ..ingest.cadence import next_filing  # noqa: PLC0415
 
-    deadline, next_q = next_filing(date.today())
+    deadline, next_q = next_filing(_today_tw())
     env.get_template("list.html.j2").stream(
         **base, page="list", rel="", rows=live,
         fresh_count=fresher_than(live, quarter),

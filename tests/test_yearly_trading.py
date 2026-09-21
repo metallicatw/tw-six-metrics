@@ -323,10 +323,12 @@ def test_記號還是讀得回來():
     cli = _cli()
     d = Path(tempfile.mkdtemp())
     cli._mark_yearly_too_young(d, 2, "2026-09-14")
-    # 只有兩年，差三個年結 → 2029-01-15 之前都不必再問。
+    # ⚠️ 封鎖上限是**一年**（`YEARLY_MAX_BLOCK_YEARS`），不是「差幾年等幾年」。
+    # 以前只回兩年就封到 2029，而這個判定分不出「真的太新」和「這一次回得不
+    # 完整」——見下面 `test_一次壞回應不該換到四年封鎖`。
     assert cli._yearly_too_young(d, "2026-09-14") is True
-    assert cli._yearly_too_young(d, "2028-12-31") is True
-    assert cli._yearly_too_young(d, "2029-06-01") is False
+    assert cli._yearly_too_young(d, "2026-12-31") is True
+    assert cli._yearly_too_young(d, "2027-06-01") is False
 
 
 def test_舊名字的記號會自己被換掉():
@@ -352,3 +354,34 @@ def test_舊名字的記號會自己被換掉():
     assert not legacy.exists(), "舊名字還在——個股頁上那張假分頁也還在"
     assert (d / cli.YEARLY_TOO_YOUNG).is_file()
     assert set(sheet_store.read_all(d)) == set(), "換完之後還是被當成分頁"
+
+
+def test_一次壞回應不該換到四年封鎖():
+    """判定的依據只有「這次回了幾年」——它**不分**「這檔真的只上市兩年」和
+    「交易所這一次只回了兩年」。
+
+    只要哪天回了一份格式正確但內容截斷的 JSON，這檔就被封到 2030 年，
+    而且之後連問都不會問（`_yearly_missing(include_too_young=False)`）。
+
+    實測分佈：缺年度交易資訊 250 檔，其中 202 檔有封鎖記號——
+    2027 年 38 檔、2028 年 51、2029 年 70、2030 年 43。
+
+    代價：本益比河流圖與整個殖利率模型都要這一張，那 250 檔的個股頁會少兩塊，
+    而且沒有任何錯誤訊息（valuations.csv 裡 509 列沒有 cheap_price）。
+
+    改成最多封一年——每年自我修正一次。
+    """
+    import json
+    import tempfile
+
+    from twsix.cli import YEARLY_TOO_YOUNG, _mark_yearly_too_young
+
+    base = Path(tempfile.mkdtemp())
+    for years in (0, 1, 2, 4):
+        d = base / f"y{years}"
+        _mark_yearly_too_young(d, years, "2026-09-14")
+        mark = json.loads((d / YEARLY_TOO_YOUNG).read_text("utf-8"))
+        assert mark["retry_after"] == "2027-01-15", (
+            f"只回了 {years} 年就封到 {mark['retry_after']}"
+        )
+        assert mark["years"] == years

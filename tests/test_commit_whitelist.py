@@ -109,3 +109,48 @@ def test_每日那一條要記得帶上全市場估值():
         "daily.yml 的 git add 少了 data/valuations.csv，而 `twsix value --all` "
         "每天都會寫它。守門會擋下整趟。"
     )
+
+
+def test_守門要在提早exit的上面():
+    """有那一行不等於跑得到那一行。
+
+    守門防的是「引擎寫了一個白名單沒列的檔案」。而它原本排在
+    `changed=no → exit 0` 的**下面**：
+
+        git add <白名單>
+        if git diff --cached --quiet; then      # 白名單裡的都沒變
+          echo "changed=no"; exit 0             # ← 直接走人
+        fi
+        ...
+        if ! git diff --quiet; then             # ← 守門在這裡，跑不到
+          echo "::error::這些檔案被改到了但沒有被 commit"
+
+    於是只要白名單裡的檔案剛好都沒變——非交易日、期別沒換、補課 0 列，
+    在穩定狀態下這是常態——那個漏掉的檔案就一聲不吭地留在 runner 上，
+    job 綠燈。
+
+    這道門在最需要它的那一天（引擎開始寫新檔案的第一天，而那天多半沒有
+    別的變動）剛好是關著的。
+
+    上一條測的是「字串在不在」，這一條測的是「跑不跑得到」——`test_commit_whitelist`
+    自己的開頭就寫著那兩種壞法，而這是比較糟的那一種。
+    """
+    bad = []
+    for p in _writing_workflows(scheduled_only=True):
+        # 註解要先剝掉——這一段的說明文字裡就寫著 `changed=no → exit 0`，
+        # 不剝的話測到的是自己的註解（第一版就這樣紅了）。
+        text = "\n".join(ln for ln in p.read_text("utf-8").splitlines()
+                         if not ln.lstrip().startswith("#"))
+        if GUARD not in text:
+            continue
+        guard_at = text.index(GUARD)
+        # 提早離開的那幾行：`changed=no` 之後的 `exit 0`。
+        for m in re.finditer(r'changed=no', text):
+            exit_at = text.find('exit 0', m.end())
+            if 0 <= exit_at < guard_at:
+                bad.append(f"{p.name}（守門在 exit 0 之後）")
+                break
+    assert not bad, (
+        "這幾條的守門排在提早 exit 的下面，白名單裡的檔案都沒變的那一天就跑不到："
+        + "、".join(bad)
+    )

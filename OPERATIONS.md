@@ -42,18 +42,19 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 
 | 時間 | 排程 | repo | 做什麼 | 發布網站？ |
 | --- | --- | --- | --- | --- |
-| 02:10 | 評等補課 | tw-six-metrics | `twsix refresh --limit 100` | ✅ 有變動才 |
+| 02:23 | 評等補課 | tw-six-metrics | `twsix refresh --limit 100` | ✅ 有變動才 |
 | **06:30**（一–五） | 每日更新報告 | **market-monitor** | 抓資料＋產生 `index.html` | ❌ 只 commit 自己 |
-| **07:10**（一–五） | pages | tw-six-metrics | 全站重建，順手抓兩個衛星 | ✅ |
-| 08:10 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
-| 09:20（每天） | 全市場官方資料 | tw-six-metrics | `twsix fetch --all` | ❌ **只存資料** |
-| 09:30（一、四） | 股權資料 | tw-six-metrics | `twsix fetch-ownership` ＋補齊歷史 | ✅ 一定建 |
-| 14:10 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
-| **15:10**（一–五） | 每日篩選 | **tw-trend-filter** | 掃全市場約 1,900 檔 → `report` 分支 | ❌ 只推自己 |
-| **16:00**（一–五） | pages | tw-six-metrics | 全站重建，順手抓兩個衛星 | ✅ |
-| 17:30（一–五） | 每日全市場 | tw-six-metrics | `twsix fetch-daily` | ✅ 有變動才 |
-| 20:10 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
-| 23:30（一–五） | 每日全市場（第二次） | tw-six-metrics | 同上 | ✅ 有變動才 |
+| **07:37**（一–五） | pages | tw-six-metrics | 全站重建，順手抓兩個衛星 | ✅ |
+| 08:23 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
+| 09:17（每天） | 全市場官方資料 | tw-six-metrics | `twsix fetch --all` | ❌ **只存資料** |
+| 09:37（一、四） | 股權資料 | tw-six-metrics | `twsix fetch-ownership` ＋補齊歷史 | ✅ 一定建 |
+| 10:13（每天） | 心跳 | tw-six-metrics | `scripts/heartbeat.py`，只讀不寫 | ❌ |
+| 14:23 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
+| **15:07**（一–五） | 每日篩選 | **tw-trend-filter** | 掃全市場約 1,900 檔 → `report` 分支 | ❌ 只推自己 |
+| 15:41（一–五） | 每日全市場 | tw-six-metrics | `twsix fetch-daily` | ✅ 有變動才 |
+| **16:47**（一–五） | pages | tw-six-metrics | 全站重建，順手抓兩個衛星 | ✅ |
+| 20:23 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
+| 21:47（一–五） | 每日全市場（第二次） | tw-six-metrics | 同上 | ✅ 有變動才 |
 
 排程順序是刻意排的：**衛星先產、pages 後收**。market-monitor 06:30 產完，
 07:10 的 pages 接走；tw-trend-filter 15:10 產完，16:00 的 pages 接走。
@@ -71,12 +72,18 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 
 | 建站路徑 | 跑 `scripts/run_tests.py`？ |
 | --- | --- |
-| **pages**（07:10／16:00／push／手動） | ✅ 全部跑完才建 |
-| 每日全市場、股權資料、評等補課、加一檔個股 | ❌ `test: "false"` |
+| **pages**（07:37／16:47／push／手動） | ✅ 全部跑完才建 |
+| 股權資料、加一檔個股 | ✅ 建站之前先跑一次 |
+| 每日全市場、評等補課 | ✅ `git add` 之前先跑一次 |
 
-所以測試紅的時候，**網站不會完全停住**——那幾條排程照樣默默建站發布，
-只有 pages 這條路被擋。症狀會是「網站有些地方在動，但推上去的改動一直沒生效」。
-看到這種情形，先去 Actions 看 pages 是不是紅的。
+（以前只有 pages 這一條會跑測試。而 `ci.yml` 是 `on: push`，用 GITHUB_TOKEN 推的
+commit **不會**觸發別的 workflow——所以每天約十次 bot push 把資料寫進 main，
+其中六次從頭到尾沒有跑過 704 個測試裡的任何一個。而測試裡有好幾條是直接對
+`data/` 跑的：它們守得住壞資料，卻在寫入壞資料的那條路上不會被執行。）
+
+測試紅的時候，會寫資料的那幾條排程現在會**在 commit 之前停下來**——壞資料進不了
+repo。症狀是那條排程變紅而網站停在昨天，而不是「網站有些地方在動，但推上去的
+改動一直沒生效」。
 
 ---
 
@@ -112,6 +119,59 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 也一定會建站發布，所以它可以當成另一個「順便更新網站」的按鈕。
 
 ---
+
+## 還沒處理：五條排程各自發布 Pages
+
+`daily` / `ownership` / `pages` / `refresh` / `stock` 五支都會跑
+`actions/deploy-pages`，而它們用的是**五個不同的** concurrency group：
+
+| workflow | group |
+| --- | --- |
+| daily | `daily` |
+| ownership | `ownership` |
+| pages | `pages` |
+| refresh | `refresh` |
+| stock | `add-stock` |
+
+`deploy-pages` 沒有跨 workflow 的互斥，而時間上必然重疊——`refresh` 00:23 起跑、
+`timeout-minutes: 120`；`market` 01:17；`ownership` 01:37。兩個 job 同時發布，
+可能的結果是**較舊的那一份後上線**，症狀是「網站回到幾分鐘前的版本」，而兩個
+job 都是綠的。
+
+GitHub 官方的作法是讓所有發布 Pages 的 workflow 共用同一個 group。要這樣做，
+發布那一步得拆成獨立的 job：
+
+```yaml
+jobs:
+  fetch:
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      ...                      # 到 build-site（它會 upload-pages-artifact）為止
+
+  publish:
+    needs: fetch
+    if: needs.fetch.outputs.changed == 'yes'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages-deploy      # ← 五支共用這一個
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+抓取那部分維持各自的 group，所以不會互相排隊——排隊的只有最後那一步。
+
+**為什麼還沒做：** 這要動五條正式的發布流程，而它沒辦法在本機驗證——
+YAML 解析得過不代表 `needs` 的 outputs、permissions、environment 都接對了，
+而接錯的症狀是「網站不再更新」。值得做，但要挑一個看得到第一次執行的時間做。
 
 ## 出事的時候先看這裡
 
