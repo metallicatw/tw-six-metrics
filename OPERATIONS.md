@@ -120,6 +120,59 @@ repo。症狀是那條排程變紅而網站停在昨天，而不是「網站有�
 
 ---
 
+## 還沒處理：五條排程各自發布 Pages
+
+`daily` / `ownership` / `pages` / `refresh` / `stock` 五支都會跑
+`actions/deploy-pages`，而它們用的是**五個不同的** concurrency group：
+
+| workflow | group |
+| --- | --- |
+| daily | `daily` |
+| ownership | `ownership` |
+| pages | `pages` |
+| refresh | `refresh` |
+| stock | `add-stock` |
+
+`deploy-pages` 沒有跨 workflow 的互斥，而時間上必然重疊——`refresh` 00:23 起跑、
+`timeout-minutes: 120`；`market` 01:17；`ownership` 01:37。兩個 job 同時發布，
+可能的結果是**較舊的那一份後上線**，症狀是「網站回到幾分鐘前的版本」，而兩個
+job 都是綠的。
+
+GitHub 官方的作法是讓所有發布 Pages 的 workflow 共用同一個 group。要這樣做，
+發布那一步得拆成獨立的 job：
+
+```yaml
+jobs:
+  fetch:
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      ...                      # 到 build-site（它會 upload-pages-artifact）為止
+
+  publish:
+    needs: fetch
+    if: needs.fetch.outputs.changed == 'yes'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages-deploy      # ← 五支共用這一個
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+抓取那部分維持各自的 group，所以不會互相排隊——排隊的只有最後那一步。
+
+**為什麼還沒做：** 這要動五條正式的發布流程，而它沒辦法在本機驗證——
+YAML 解析得過不代表 `needs` 的 outputs、permissions、environment 都接對了，
+而接錯的症狀是「網站不再更新」。值得做，但要挑一個看得到第一次執行的時間做。
+
 ## 出事的時候先看這裡
 
 **網站沒有更新到我剛推的東西** → Actions 看 pages 是不是紅的。它是唯一會跑

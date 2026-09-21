@@ -65,7 +65,16 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  # ⚠️ **不要 cancel-in-progress。**
+  #
+  # 這一條會在**發布途中**砍掉自己。連續兩次 push 是很常見的（一次推兩個
+  # commit、或推完馬上發現要補一行），而第二次會把第一次的 build 或
+  # `deploy-pages` 中途取消——取消的那一步在 Actions 上長得和「還沒跑到」
+  # 一樣，而網站停在更早的版本。
+  #
+  # 省下的那幾分鐘 runner 時間，換一個「網站有時候會退回舊版而且看不出原因」
+  # 的症狀，不划算。排隊就排隊。
+  cancel-in-progress: false
 
 jobs:
   build:
