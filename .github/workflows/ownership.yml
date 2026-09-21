@@ -92,6 +92,20 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/ownership data/sheets
+          # ⚠️ **守門要在提早 exit 的上面。**
+          #
+          # 它防的是「引擎寫了一個白名單沒列的檔案」。而它以前排在
+          # `changed=no → exit 0` 的**下面**——於是只要白名單裡的檔案剛好都
+          # 沒變（非交易日、期別沒換、補課 0 列，這在穩定狀態下是常態），
+          # 那個漏掉的檔案一聲不吭地留在 runner 上，job 綠燈。
+          #
+          # 也就是說這道門在最需要它的那一天（引擎開始寫新檔案的第一天，
+          # 而那天多半沒有別的變動）剛好是關著的。
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
           if git diff --cached --quiet; then
             # 董監是月報，週週跑會有四分之三的次數沒有新資料——那是正常的，
             # 不是失敗。快照的位元組是穩定的（gzip mtime=0），所以內容一樣就
@@ -108,11 +122,6 @@ jobs:
           #
           # 這道守門 market / refresh / daily / stock 都有，只有這裡沒有。補上。
           # 它要是紅了，訊息會直接寫出漏掉哪一個檔案，改白名單一行就好。
-          if ! git diff --quiet; then
-            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
-            git diff --name-only | sed 's/^/  /'
-            exit 1
-          fi
 
       # 推送單獨拆成一步，用共用的重試 action。這條排程原本是裸的
       # `git pull --rebase; git push`，撞上另一條 workflow 就整趟的抓取結果一起

@@ -166,6 +166,20 @@ jobs:
                   "data/ownership/stock/$code.csv.gz" \
                   "data/ownership/directors_stock/$code."* \
                   data/ratings.csv || true
+          # ⚠️ **守門要在提早 exit 的上面。**
+          #
+          # 它防的是「引擎寫了一個白名單沒列的檔案」。而它以前排在
+          # `changed=no → exit 0` 的**下面**——於是只要白名單裡的檔案剛好都
+          # 沒變（非交易日、期別沒換、補課 0 列，這在穩定狀態下是常態），
+          # 那個漏掉的檔案一聲不吭地留在 runner 上，job 綠燈。
+          #
+          # 也就是說這道門在最需要它的那一天（引擎開始寫新檔案的第一天，
+          # 而那天多半沒有別的變動）剛好是關著的。
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
           if git diff --cached --quiet; then
             echo "::notice::$code 的資料沒有變化，不需要 commit"
             exit 0
@@ -174,11 +188,6 @@ jobs:
           # 上面那份 git add 是白名單，所以「引擎多寫了一個檔案」這件事會以
           # 「cannot pull with rebase: You have unstaged changes」的形式出現在
           # 下一行——一個完全不提檔名的訊息。先自己講清楚。
-          if ! git diff --quiet; then
-            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
-            git diff --name-only | sed 's/^/  /'
-            exit 1
-          fi
           # 這期間可能有別的 commit 進來（例如另一次抓取），rebase 再推。
           git pull --rebase origin main
           git push origin HEAD:main

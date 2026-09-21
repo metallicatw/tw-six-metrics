@@ -3089,13 +3089,37 @@ def cmd_backfill_statements(args: argparse.Namespace) -> int:
     )
     prefix = {"sii": "twse", "otc": "tpex"}
     wrote = skipped = failed = 0
+    #: **最新的那一期永遠重抓**，不管它看起來多完整。
+    #
+    # 「已經是彙總版就跳過」對舊的期別是對的（那些期別不會再變）。對最新的
+    # 那一期是錯的，而且錯得完全無聲：
+    #
+    #   * 損益表與資產負債表每天被 `twsix fetch --all` 用開放資料降級成
+    #     非彙總版 → `is_summary_rows()` 為假 → 明天重抓 → 補齊。
+    #   * **現金流量表的開放資料根本不存在**，所以它永遠停在第一次彙總寫下的
+    #     那一份，`is_summary_rows()` 永遠為真 → 永遠跳過。
+    #
+    # 症狀：新掛牌的股票（2938 是 2026-09-19 被 watchlist 加進來的）進得了
+    # income 進不了 cashflow，於是心跳每天報
+    #
+    #     季財報 tpex：115Q2 三張表的列數對不上
+    #     {'income': 891, 'balance': 891, 'cashflow': 890}
+    #
+    # 而唯一的修法是手動 `--force`（沒有任何排程會傳它）。一個**結構上無法
+    # 變綠**的監控，兩週之後就等於沒有監控——而這支心跳存在的理由正是
+    # 「排程全部是綠的但資料悄悄停了」。
+    #
+    # 成本：一期三個請求（MOPS 一個請求換一整季），每天一次。
+    newest = periods[0] if periods else None
     for year, season in periods:
         period = f"{year}Q{season}"
+        is_newest = (year, season) == newest
         for market in MARKETS:
             for kind in SUMMARY_ENDPOINTS:
                 table = market_path(f"{prefix[market]}_{kind}", period)
                 existing = store.read(table)
-                if existing and not args.force and is_summary_rows(existing):
+                if (existing and not args.force and not is_newest
+                        and is_summary_rows(existing)):
                     skipped += 1
                     print(f"  {period} {MARKETS[market]} {kind}：已經有 {len(existing)} 列，跳過")
                     continue
