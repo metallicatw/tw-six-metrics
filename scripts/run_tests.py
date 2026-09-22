@@ -10,9 +10,11 @@ a CI job that has not restored its cache yet.
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import time
 import traceback
+import uuid
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -49,11 +51,42 @@ def load(path: Path):  # type: ignore[no-untyped-def]
     return module
 
 
+def _mute_annotations() -> str | None:
+    """測試跑的期間，讓 GitHub 不要把輸出裡的 `::error::` 當成指令。
+
+    心跳、每日行情那幾支測試會拿**假資料**（落後 7 個交易日、2026-09-01……）
+    去跑真正的報告函式，而那些函式會印 `::error::`。GitHub 看到就在 job 上掛
+    一條紅色的 Error，看起來就像「資料真的停了」——2026-09-22 就被這樣誤會過：
+    真正失敗的是另一條測試，那幾行紅字全是測試夾具。
+
+    `::stop-commands::<token>` 之後的輸出不再被解析，直到印出 `::<token>::`。
+    只在 GitHub Actions 上做；本機照舊。
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return None
+    token = uuid.uuid4().hex
+    print(f"::stop-commands::{token}", flush=True)
+    return token
+
+
+def _unmute(token: str | None, failures: list[tuple[str, str]], lint: int) -> None:
+    """恢復解析，然後只為**真的**失敗留下註記。"""
+    if token is None:
+        return
+    print(f"::{token}::", flush=True)
+    for name, _ in failures:
+        print(f"::error title=測試失敗::{name}")
+    if lint:
+        print("::error title=ruff::ruff check 沒過")
+
+
 def main() -> int:
     files = sorted((REPO / "tests").glob("test_*.py"))
     if not files:
         print("no tests found")
         return 1
+
+    token = _mute_annotations()
 
     passed = failed = skipped = 0
     failures: list[tuple[str, str]] = []
@@ -94,6 +127,7 @@ def main() -> int:
         print(f"{RED}=== {name} ==={RESET}")
         print(tb)
     lint = _ruff()
+    _unmute(token, failures, lint)
     colour = RED if (failed or lint) else GREEN
     tail = f"，{skipped} 跳過（少了選用相依）" if skipped else ""
     print(f"{colour}{passed} passed, {failed} failed{RESET}{tail} in {elapsed:.2f}s")

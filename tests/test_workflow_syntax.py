@@ -110,3 +110,61 @@ def test_掃描器分得出_env_和_run():
     assert _inputs_in_run(bad_block) == [3]
     bad_inline = '        run: twsix refresh --limit "${{ inputs.limit || 100 }}"\n'
     assert _inputs_in_run(bad_inline) == [1]
+
+
+def _runner():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_run_tests", ROOT / "scripts" / "run_tests.py")
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_測試夾具的_error_不會變成_GitHub_的紅字():
+    """心跳測試用假資料印的 `::error::` 曾被當成「資料真的停了」。
+
+    runner 在 Actions 上要先 `::stop-commands::`，跑完再恢復，然後只替真正
+    失敗的測試留註記。
+    """
+    import contextlib
+    import io
+    import os
+
+    runner = _runner()
+    old = os.environ.get("GITHUB_ACTIONS")
+    out = io.StringIO()
+    try:
+        os.environ["GITHUB_ACTIONS"] = "true"
+        with contextlib.redirect_stdout(out):
+            token = runner._mute_annotations()
+            print("::error::每日收盤：最新的一天是 2026-09-04（夾具）")
+            runner._unmute(token, [("test_x.py::test_y", "tb")], 0)
+    finally:
+        if old is None:
+            os.environ.pop("GITHUB_ACTIONS", None)
+        else:
+            os.environ["GITHUB_ACTIONS"] = old
+
+    lines = out.getvalue().splitlines()
+    assert token and lines[0] == f"::stop-commands::{token}", "沒有先關掉指令解析"
+    resume = lines.index(f"::{token}::")
+    assert resume > lines.index("::error::每日收盤：最新的一天是 2026-09-04（夾具）"), (
+        "夾具的 ::error:: 印在關掉解析之前"
+    )
+    assert lines[resume + 1] == "::error title=測試失敗::test_x.py::test_y", (
+        "恢復之後沒有替真正的失敗留註記"
+    )
+
+
+def test_本機不印那些指令():
+    import os
+
+    runner = _runner()
+    old = os.environ.pop("GITHUB_ACTIONS", None)
+    try:
+        assert runner._mute_annotations() is None
+    finally:
+        if old is not None:
+            os.environ["GITHUB_ACTIONS"] = old

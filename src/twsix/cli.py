@@ -1862,7 +1862,14 @@ def stale_codes(root: Path, *, universe: set[str] | None = None) -> list[tuple[s
 
 #: 「補過了但期別沒有往前」的記號檔名。和 `年度交易資訊._tooyoung.txt` 同一種
 #: 做法：把「我問過了、答案就是這樣」寫下來，而不是每一輪重新發現一次。
-STUCK_MARK = "_stuck.json"
+#:
+#: ⚠️ **不能是 .json。** 這個資料夾裡的 .json 就是分頁：`sheets.read_all()` 會把
+#: 它讀成一張叫「_stuck」的表、出現在個股頁上，而且 `data/sheets` 底下不准有
+#: 未壓縮的 .json（`test_the_repository_no_longer_holds_uncompressed_sheets`）。
+#: 第一版就叫 `_stuck.json`，重蹈了 `年度交易資訊._tooyoung.json` 的覆轍。
+#: 內容就是一行期別，例如 ``2025.3Q``。
+STUCK_MARK = "_stuck.txt"
+STUCK_MARK_LEGACY = "_stuck.json"
 
 
 def _stuck_path(root: Path, code: str) -> Path:
@@ -1901,31 +1908,61 @@ def _refresh_is_stuck(root: Path, code: str, quarter: str) -> bool:
     記號裡存的是「卡在哪一期」。全市場換季之後（`newest` 前進），那一期就
     不再是當初卡住的那一期，記號自動失效——不需要任何人去清它。
     """
+    _migrate_stuck_mark(root / "sheets" / code)
+    try:
+        marked = _stuck_path(root, code).read_text("utf-8").strip()
+    except OSError:
+        return False
+    return marked == quarter
+
+
+def _migrate_stuck_mark(sheet_dir: Path) -> bool:
+    """把舊名字 `_stuck.json` 換成 `_stuck.txt`。有換就回 True。"""
     import json as _json
 
-    mark = _stuck_path(root, code)
-    try:
-        data = _json.loads(mark.read_text("utf-8"))
-    except (OSError, ValueError):
+    legacy = sheet_dir / STUCK_MARK_LEGACY
+    if not legacy.is_file():
         return False
-    return data.get("quarter") == quarter
+    try:
+        quarter = str(_json.loads(legacy.read_text("utf-8")).get("quarter") or "")
+    except (OSError, ValueError, AttributeError):
+        quarter = ""
+    target = sheet_dir / STUCK_MARK
+    if quarter and not target.exists():
+        target.write_text(quarter + "\n", encoding="utf-8")
+    legacy.unlink()
+    return True
+
+
+def migrate_stuck_marks(root: Path) -> int:
+    """整個 `data/sheets` 掃一遍，把舊名字的記號全部換掉。回傳換了幾個。
+
+    只靠 `_refresh_is_stuck` 順路換不夠：它只會被佇列裡的股票走到，而一檔
+    後來追上最新期別的股票，它的舊記號就永遠沒人碰——那張假分頁也永遠在。
+    `refresh.yml` 在跑測試**之前**先呼叫這一支，否則「不准有 .json」那條測試
+    會先紅，而修它的程式碼排在測試後面，永遠走不到。
+    """
+    sheets = root / "sheets"
+    if not sheets.is_dir():
+        return 0
+    return sum(_migrate_stuck_mark(d) for d in sorted(sheets.iterdir()) if d.is_dir())
 
 
 def mark_refresh_stuck(root: Path, code: str, quarter: str) -> None:
     """補完了、期別還是那一期——寫下記號（見 `_refresh_is_stuck`）。"""
-    import json as _json
-
     mark = _stuck_path(root, code)
     mark.parent.mkdir(parents=True, exist_ok=True)
-    mark.write_text(_json.dumps({"quarter": quarter}, ensure_ascii=False) + "\n",
-                    encoding="utf-8")
+    mark.write_text(quarter + "\n", encoding="utf-8")
+    with contextlib.suppress(OSError):
+        (mark.parent / STUCK_MARK_LEGACY).unlink()
 
 
 def clear_refresh_stuck(root: Path, code: str) -> None:
     """期別真的往前了——把記號拿掉。"""
     mark = _stuck_path(root, code)
-    with contextlib.suppress(OSError):
-        mark.unlink()
+    for path in (mark, mark.parent / STUCK_MARK_LEGACY):
+        with contextlib.suppress(OSError):
+            path.unlink()
 
 
 def sheetless_codes(root: Path, *, universe: set[str] | None = None) -> list[str]:
