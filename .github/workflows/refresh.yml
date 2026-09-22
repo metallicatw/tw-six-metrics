@@ -97,7 +97,16 @@ jobs:
 
       # 每檔 15 個請求（十三張鏡像分頁 + 證交所與櫃買的年度交易資訊）。
       - name: 補課
-        run: twsix refresh --limit "${{ inputs.limit || 100 }}"
+        env:
+          # 手動觸發時是使用者填的自由文字；走 env 才不會被當成 shell 程式碼。
+          IN_LIMIT: ${{ inputs.limit || 100 }}
+        run: |
+          case "$IN_LIMIT" in
+            ''|*[!0-9]*)
+              echo "::error::「這一批補幾檔」只能是正整數，收到的是：$IN_LIMIT"
+              exit 1 ;;
+          esac
+          twsix refresh --limit "$IN_LIMIT"
 
       - name: Commit
         id: commit

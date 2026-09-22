@@ -18,11 +18,11 @@ on:
   workflow_dispatch:
     inputs:
       group:
-        description: "哪一組（daily = 每日股價與三大法人；statements = 公開資訊觀測站的彙總報表）"
+        description: "哪一組（daily = 每日股價與三大法人；statements = 公開資訊觀測站的彙總報表；all = 全部）"
         required: false
         default: "daily"
         type: choice
-        options: [daily, statements, ""]
+        options: [daily, statements, all]
       name:
         description: "只打其中一個候選端點（填名稱，例如 twse_t86_rwd）"
         required: false
@@ -51,12 +51,18 @@ jobs:
 
       # 打不通也是一種事實：失敗的那一個會存下一份只有 meta 的樣本，說明它為什麼
       # 沒拿到。所以這一步不該因為某個端點掛掉就紅字。
+      # 輸入走 env，不直接內插進 shell：`name` 是自由文字，而這個 job 握有
+      # contents: write。內插的話，填一個 `x; curl … | sh` 就會被當成程式碼執行。
       - name: 抓樣本
+        env:
+          IN_GROUP: ${{ inputs.group }}
+          IN_NAME: ${{ inputs.name }}
         run: |
-          args=""
-          [ -n "${{ inputs.group }}" ] && args="$args --group ${{ inputs.group }}"
-          [ -n "${{ inputs.name }}" ] && args="$args --name ${{ inputs.name }}"
-          twsix probe $args
+          set --
+          # all 就是不指定組別（原本用空字串當選項，actionlint 判為語法錯）。
+          [ -n "$IN_GROUP" ] && [ "$IN_GROUP" != all ] && set -- "$@" --group "$IN_GROUP"
+          [ -n "$IN_NAME" ] && set -- "$@" --name "$IN_NAME"
+          twsix probe "$@"
 
       - name: Commit
         id: commit
