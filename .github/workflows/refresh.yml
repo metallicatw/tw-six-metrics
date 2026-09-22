@@ -83,6 +83,13 @@ jobs:
 
       - run: pip install -e ".[report]"
 
+      # 舊版把「補過但沒進步」的記號寫成 `_stuck.json`，而 data/sheets 底下的
+      # .json 會被當成分頁、也會讓下一步的測試紅掉。這一步必須排在測試**前面**：
+      # 排在後面的話，測試先紅、job 停下，修它的這一步永遠走不到。
+      # 只改記號的檔名，不連網、不動任何分頁。換下來的檔案由下面的 git add data/sheets 帶走。
+      - name: 換掉舊名字的記號
+        run: python -c "from pathlib import Path; from twsix.cli import migrate_stuck_marks; print('換掉', migrate_stuck_marks(Path('data')), '個舊記號')"
+
       # 抓回來的東西要 commit 進 repo，先確認引擎是好的。
       #
       # ⚠️ **bot 的 push 不會觸發 `ci.yml`**（`on: push` 對 GITHUB_TOKEN 推的

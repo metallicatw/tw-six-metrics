@@ -224,6 +224,65 @@ def test_補課完會自己判斷有沒有進步():
     )
 
 
+def test_補課的記號不是_json():
+    """這個資料夾裡的 .json 就是分頁。
+
+    第一版叫 `_stuck.json`：`sheets.read_all()` 把它讀成一張「_stuck」表，
+    而 bot 把它 commit 進 repo 之後，`test_the_repository_no_longer_holds_
+    uncompressed_sheets` 在 ci、pages、每一條會寫資料的排程上全部紅掉。
+    `年度交易資訊._tooyoung` 以前就踩過同一個坑。
+    """
+    import tempfile
+
+    from twsix import cli
+    from twsix.store import sheets as sheet_store
+
+    assert not cli.STUCK_MARK.endswith(".json"), "記號又叫 .json 了"
+    root = Path(tempfile.mkdtemp())
+    sheet_dir = root / "sheets" / "1589"
+    sheet_store.write_grid(sheet_dir, "ISQ", [["a"]])
+    cli.mark_refresh_stuck(root, "1589", "2025.3Q")
+    assert set(sheet_store.read_all(sheet_dir)) == {"ISQ"}, "記號被當成一張分頁了"
+    assert not list((root / "sheets").rglob("*.json"))
+
+
+def test_舊名字的補課記號會被換掉而且照樣生效():
+    """已經進 repo 的 `_stuck.json` 不能等人手動清，而且換名不能讓那一檔回到佇列。"""
+    import json as _json
+    import tempfile
+
+    from twsix import cli
+
+    root = Path(tempfile.mkdtemp())
+    _write_ratings(root, {"1101": "2026.2Q", "1589": "2025.3Q", "3018": "2025.4Q"})
+    for code in ("1589", "9999"):  # 9999：已經不在佇列裡的那種
+        d = root / "sheets" / code
+        d.mkdir(parents=True)
+        (d / cli.STUCK_MARK_LEGACY).write_text(
+            _json.dumps({"quarter": "2025.3Q"}), encoding="utf-8"
+        )
+
+    # 佇列順路換：1589 的記號換成新名字，而且仍然把它擋在佇列外。
+    assert [c for c, _ in stale_codes(root)] == ["3018"]
+    assert (root / "sheets/1589" / cli.STUCK_MARK).read_text("utf-8").strip() == "2025.3Q"
+    assert not (root / "sheets/1589" / cli.STUCK_MARK_LEGACY).exists()
+
+    # 佇列走不到的那一檔，要靠整批掃。
+    assert (root / "sheets/9999" / cli.STUCK_MARK_LEGACY).exists()
+    assert cli.migrate_stuck_marks(root) == 1
+    assert not list((root / "sheets").rglob("*.json"))
+    assert cli.migrate_stuck_marks(root) == 0, "第二次掃不該再有東西可換"
+
+
+def test_換記號排在測試前面():
+    """排在後面就是死結：測試先紅、job 停下，修它的那一步永遠走不到。"""
+    wf = (Path(__file__).resolve().parents[1] / ".github/workflows/refresh.yml").read_text("utf-8")
+    fix = wf.find("migrate_stuck_marks")
+    test = wf.find("python scripts/run_tests.py")
+    assert fix >= 0, "refresh.yml 沒有換舊記號"
+    assert fix < test, "換舊記號排在測試後面，測試會先紅"
+
+
 def _write_ratings(root, latest):
     """寫一份只有期別 1 的 ratings。"""
     from twsix.store.snapshots import Store
