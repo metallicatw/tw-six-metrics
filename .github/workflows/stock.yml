@@ -108,9 +108,11 @@ jobs:
       # 這一步不連網，只讀 data/sheets/<代號>/_fetched.txt。
       - name: 需要抓嗎
         id: need
+        env:
+          IN_FORCE: ${{ inputs.force }}
         run: |
           code="${{ steps.pick.outputs.code }}"
-          if [ "${{ inputs.force }}" = "true" ]; then
+          if [ "$IN_FORCE" = "true" ]; then
             echo "::notice::強制重抓 $code"
             echo "stale=yes" >> "$GITHUB_OUTPUT"
             exit 0
