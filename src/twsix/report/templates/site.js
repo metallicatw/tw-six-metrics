@@ -1665,3 +1665,504 @@ var TWSIXWatch = (function(){
     }
   });
 })();
+
+
+/* =========================================================================
+ * 子分頁（〔財務健診〕裡的〔財務地雷〕〔成長力分析〕）
+ *
+ * 用 hidden 屬性切換：.subpanel 沒有自己的 display，所以 [hidden] 不會被別的
+ * 規則蓋掉（這個專案踩過三次那個坑）。
+ * ========================================================================= */
+(function(){
+  [].forEach.call(document.querySelectorAll('.subtabs'), function(bar){
+    var btns = [].slice.call(bar.querySelectorAll('[data-sub]'));
+    function show(id){
+      btns.forEach(function(b){
+        var on = b.getAttribute('data-sub') === id;
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        var panel = document.getElementById(b.getAttribute('data-sub'));
+        if(panel) panel.hidden = !on;
+      });
+    }
+    btns.forEach(function(b){
+      b.addEventListener('click', function(){ show(b.getAttribute('data-sub')); });
+    });
+  });
+})();
+
+
+/* =========================================================================
+ * 自己畫的折線圖（SVG）
+ *
+ * 個股頁一直是零相依的（河流圖、季節性都是自己畫的 SVG），這兩張也一樣：不為了
+ * 兩張圖多載一個上百 KB 的圖表函式庫，而且深色模式跟著 CSS 變數走。
+ *
+ *   TWSIXChart(el, {
+ *     x: ['2026-09-22', ...],                 // 日期
+ *     series: [{name, color, values, width, dash, step, area}],
+ *     hlines: [{value, color, label}],        // 水平虛線（目標價）
+ *     range: [i0, i1],                        // 只畫這一段（含）
+ *     yMin, yMax, fmt, height, title
+ *   })
+ *
+ * 滑鼠（或手指）移到圖上：一條直線加一個小框列出那一天每一條線的值。
+ * ========================================================================= */
+var TWSIXChart = (function(){
+  var NS = 'http://www.w3.org/2000/svg';
+  function cssVar(name, fallback){
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+    return (v && v.trim()) || fallback;
+  }
+  function el(tag, attrs){
+    var e = document.createElementNS(NS, tag);
+    for(var k in attrs) if(attrs.hasOwnProperty(k)) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function nice(lo, hi, n){
+    if(!(hi > lo)){ hi = lo + 1; lo = lo - 1; }
+    var span = hi - lo, raw = span / n;
+    var p = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+    var step = [1, 2, 2.5, 5, 10].map(function(m){ return m * p; })
+      .filter(function(s){ return s >= raw; })[0] || raw;
+    var a = Math.floor(lo / step) * step, b = Math.ceil(hi / step) * step, out = [];
+    for(var v = a; v <= b + step / 2; v += step) out.push(Math.round(v * 1e6) / 1e6);
+    return out;
+  }
+  function fmtNum(v){
+    if(v === null || v === undefined || isNaN(v)) return '—';
+    var a = Math.abs(v);
+    return v.toLocaleString(undefined, {maximumFractionDigits: a >= 1000 ? 0 : 2});
+  }
+
+  function draw(box, o){
+    box.innerHTML = '';
+    var W = Math.max(280, box.clientWidth || 600);
+    var H = o.height || (W < 560 ? 230 : 300);
+    var m = {l: 50, r: 12, t: o.title ? 26 : 10, b: 26};
+    var i0 = o.range ? o.range[0] : 0, i1 = o.range ? o.range[1] : o.x.length - 1;
+    if(i1 < i0){ var t = i0; i0 = i1; i1 = t; }
+    var n = i1 - i0 + 1;
+    var lo = Infinity, hi = -Infinity;
+    o.series.forEach(function(s){
+      for(var i = i0; i <= i1; i++){
+        var v = s.values[i];
+        if(v === null || v === undefined || isNaN(v)) continue;
+        if(v < lo) lo = v; if(v > hi) hi = v;
+      }
+    });
+    (o.hlines || []).forEach(function(h){ if(h.value < lo) lo = h.value; if(h.value > hi) hi = h.value; });
+    if(o.yMin !== undefined) lo = o.yMin;
+    if(o.yMax !== undefined) hi = o.yMax;
+    if(!isFinite(lo)){ box.innerHTML = '<p class="stale">這一段沒有資料。</p>'; return; }
+    var pad = (hi - lo) * 0.04;
+    var ticks = (o.yMin !== undefined && o.yMax !== undefined)
+      ? (function(){ var a = []; for(var v = o.yMin; v <= o.yMax; v++) a.push(v); return a; })()
+      : nice(lo - pad, hi + pad, 5);
+    var y0 = ticks[0], y1 = ticks[ticks.length - 1];
+    var pw = W - m.l - m.r, ph = H - m.t - m.b;
+    function X(i){ return m.l + (n <= 1 ? pw / 2 : (i - i0) / (n - 1) * pw); }
+    function Y(v){ return m.t + ph - (v - y0) / (y1 - y0) * ph; }
+    var ink = cssVar('--ink', '#111'), muted = cssVar('--muted', '#777'), rule = cssVar('--rule', '#ddd');
+    var svg = el('svg', {viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, class: 'pxsvg', role: 'img'});
+    if(o.title){
+      var tt = el('text', {x: W / 2, y: 16, 'text-anchor': 'middle', class: 'pxt'});
+      tt.textContent = o.title; svg.appendChild(tt);
+    }
+    ticks.forEach(function(v){
+      svg.appendChild(el('line', {x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: rule, 'stroke-width': 1}));
+      var tx = el('text', {x: m.l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'pxa'});
+      tx.textContent = fmtNum(v); svg.appendChild(tx);
+    });
+    var nx = W < 560 ? 4 : 7;
+    for(var k = 0; k < nx; k++){
+      var i = Math.round(i0 + (n - 1) * k / (nx - 1));
+      var lx = el('text', {x: X(i), y: H - 8, 'text-anchor': k === 0 ? 'start' : (k === nx - 1 ? 'end' : 'middle'), class: 'pxa'});
+      lx.textContent = o.x[i]; svg.appendChild(lx);
+      svg.appendChild(el('line', {x1: X(i), x2: X(i), y1: m.t, y2: m.t + ph, stroke: rule, 'stroke-width': 1, opacity: .6}));
+    }
+    (o.hlines || []).forEach(function(h){
+      svg.appendChild(el('line', {x1: m.l, x2: W - m.r, y1: Y(h.value), y2: Y(h.value),
+        stroke: h.color, 'stroke-width': 1.4, 'stroke-dasharray': '6 4'}));
+    });
+    o.series.forEach(function(s, si){
+      var d = '', started = false, prevY = null;
+      for(var i = i0; i <= i1; i++){
+        var v = s.values[i];
+        if(v === null || v === undefined || isNaN(v)){ started = false; continue; }
+        if(!started){ d += 'M' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); started = true; }
+        else if(s.step){ d += 'H' + X(i).toFixed(1) + 'V' + Y(v).toFixed(1); }
+        else d += 'L' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1);
+        prevY = v;
+      }
+      if(s.area && d){
+        var gid = 'g' + Math.random().toString(36).slice(2);
+        /* 漸層對著**座標軸**（userSpaceOnUse），不是對著這一塊面積自己的外框：
+           否則分數一直在 4～5 之間的那一段，4 會被塗成最底下的顏色。 */
+        var grad = el('linearGradient', {id: gid, gradientUnits: 'userSpaceOnUse',
+          x1: 0, y1: m.t, x2: 0, y2: m.t + ph});
+        s.area.forEach(function(st){ grad.appendChild(el('stop', {offset: st[0], 'stop-color': st[1], 'stop-opacity': st[2]})); });
+        var defs = el('defs', {}); defs.appendChild(grad); svg.appendChild(defs);
+        var first = s.values.slice(i0, i1 + 1).findIndex(function(v){ return v !== null && v !== undefined; });
+        if(first >= 0){
+          var fa = d + 'V' + (m.t + ph) + 'H' + X(i0 + first).toFixed(1) + 'Z';
+          svg.appendChild(el('path', {d: fa, fill: 'url(#' + gid + ')', stroke: 'none'}));
+        }
+      }
+      svg.appendChild(el('path', {d: d, fill: 'none', stroke: s.color === 'ink' ? ink : s.color,
+        'stroke-width': s.width || 1.4, 'stroke-dasharray': s.dash || '', 'stroke-linejoin': 'round'}));
+    });
+    var cross = el('line', {y1: m.t, y2: m.t + ph, stroke: muted, 'stroke-dasharray': '3 3', visibility: 'hidden'});
+    svg.appendChild(cross);
+    var hit = el('rect', {x: m.l, y: m.t, width: pw, height: ph, fill: 'transparent'});
+    svg.appendChild(hit);
+    box.appendChild(svg);
+    var tip = document.createElement('div');
+    tip.className = 'pxtip'; tip.hidden = true; box.appendChild(tip);
+    function move(ev){
+      var r = svg.getBoundingClientRect();
+      var cx = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+      var i = Math.round(i0 + (cx * W / r.width - m.l) / pw * (n - 1));
+      i = Math.max(i0, Math.min(i1, i));
+      cross.setAttribute('x1', X(i)); cross.setAttribute('x2', X(i));
+      cross.setAttribute('visibility', 'visible');
+      var h = '<b>' + o.x[i] + '</b>';
+      o.series.forEach(function(s){
+        h += '<span><i style="background:' + (s.color === 'ink' ? ink : s.color) + '"></i>' + s.name +
+             '<em>' + (o.fmt ? o.fmt(s.values[i]) : fmtNum(s.values[i])) + '</em></span>';
+      });
+      tip.innerHTML = h; tip.hidden = false;
+      var px = X(i) * r.width / W;
+      tip.style.left = Math.min(Math.max(4, px + 12), r.width - tip.offsetWidth - 4) + 'px';
+      tip.style.top = (m.t + 6) + 'px';
+    }
+    function leave(){ cross.setAttribute('visibility', 'hidden'); tip.hidden = true; }
+    hit.addEventListener('mousemove', move);
+    hit.addEventListener('touchstart', move, {passive: true});
+    hit.addEventListener('touchmove', move, {passive: true});
+    hit.addEventListener('mouseleave', leave);
+    var legend = document.createElement('div');
+    legend.className = 'pxlegend';
+    o.series.concat(o.hlines || []).forEach(function(s){
+      if(!s.name && !s.label) return;
+      var c = s.color === 'ink' ? ink : s.color;
+      legend.innerHTML += '<span><i class="' + (s.value !== undefined || s.dash ? 'dash' : '') +
+        '" style="border-color:' + c + ';background:' + (s.value !== undefined || s.dash ? 'transparent' : c) +
+        '"></i>' + (s.name || s.label) + '</span>';
+    });
+    box.appendChild(legend);
+  }
+
+  return function(box, opts){
+    box._pxOpts = opts;
+    draw(box, opts);
+    if(!box._pxObs && typeof ResizeObserver !== 'undefined'){
+      var last = box.clientWidth;
+      box._pxObs = new ResizeObserver(function(){
+        if(Math.abs(box.clientWidth - last) < 4) return;
+        last = box.clientWidth;
+        draw(box, box._pxOpts);
+      });
+      box._pxObs.observe(box);
+    }
+  };
+})();
+
+/* 每日收盤：還原 `report/health.py` 的 encode_history。
+   d0 是第一天，g 是「每一天和前一天差幾個日曆天」（一個字元一天，'1' = 1 天）。 */
+function pxDecode(raw){
+  if(!raw || !raw.d0 || !raw.c) return null;
+  var p = raw.d0.split('-');
+  var t = Date.UTC(+p[0], +p[1] - 1, +p[2]);
+  var dates = [raw.d0];
+  for(var i = 0; i < (raw.g || '').length; i++){
+    t += (raw.g.charCodeAt(i) - 48) * 86400000;
+    dates.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return {d: dates, c: raw.c.slice()};
+}
+function pxHistory(){
+  var node = document.getElementById('px-hist');
+  if(!node) return null;
+  try{ return pxDecode(JSON.parse(node.textContent)); }catch(e){ return null; }
+}
+/* 簡單移動平均；前 n-1 天沒有值（null），不是用不足 n 天的平均湊。 */
+function pxSMA(c, n){
+  var out = new Array(c.length), s = 0;
+  for(var i = 0; i < c.length; i++){
+    s += c[i];
+    if(i >= n) s -= c[i - n];
+    out[i] = i >= n - 1 ? s / n : null;
+  }
+  return out;
+}
+
+
+/* 股價健診的六項，某一天（第 i 天）。純函式——node 測試直接呼叫它
+   （tests/pxhealth_harness.mjs）。C 是收盤、MA 是 {20:[], 60:[], 240:[]}。
+   回傳 [{label, ok(true 正常／false 警示／null 資料不足), text}]。 */
+function pxChecks(C, MA, i, P){
+  function winMax(i, n){ var m = -Infinity; for(var k = Math.max(0, i - n + 1); k <= i; k++) if(C[k] > m) m = C[k]; return m; }
+  function winMin(i, n){ var m = Infinity; for(var k = Math.max(0, i - n + 1); k <= i; k++) if(C[k] < m) m = C[k]; return m; }
+  function f2(v){ return v.toFixed(2); }
+  var w1 = Math.round(P.m1 * 21), w2 = Math.round(P.m2 * 21), c = C[i], rows = [];
+  if(i >= w1 - 1){
+    var hi = winMax(i, w1), dd = (1 - c / hi) * 100;
+    rows.push({label: P.m1 + ' 個月內從高檔下跌 ≥ ' + P.p1 + '%', ok: dd < P.p1,
+      text: '區間高點 ' + f2(hi) + '，目前 ' + f2(c) + '，回檔 ' + dd.toFixed(1) + '%'});
+  } else rows.push({label: P.m1 + ' 個月內從高檔下跌 ≥ ' + P.p1 + '%', ok: null, text: '資料不足'});
+  if(i >= w2 - 1){
+    var lo = winMin(i, w2), up = (c / lo - 1) * 100;
+    rows.push({label: P.m2 + ' 個月內從低檔上漲 ≥ ' + P.p2 + '%', ok: up >= P.p2,
+      text: '區間低點 ' + f2(lo) + '，目前 ' + f2(c) + '，自低點 ' + (up >= 0 ? '+' : '') + up.toFixed(1) + '%' +
+            (up >= P.p2 ? '' : '（未達 ' + P.p2 + '%）')});
+  } else rows.push({label: P.m2 + ' 個月內從低檔上漲 ≥ ' + P.p2 + '%', ok: null, text: '資料不足'});
+  if(i >= P.d3){
+    var pl = winMin(i - 1, P.d3);
+    rows.push({label: '股價低於前 ' + P.d3 + ' 個交易日低點', ok: c >= pl,
+      text: '前 ' + P.d3 + ' 日低點 ' + f2(pl) + '，目前 ' + f2(c)});
+  } else rows.push({label: '股價低於前 ' + P.d3 + ' 個交易日低點', ok: null, text: '資料不足'});
+  [[20, '月線'], [60, '季線'], [240, '年線']].forEach(function(p){
+    var v = MA[p[0]][i];
+    rows.push({label: '股價低於' + p[1] + '(' + p[0] + 'MA)', ok: v === null ? null : c >= v,
+      text: v === null ? '資料不足（要 ' + p[0] + ' 個交易日）' : p[1] + '(' + p[0] + 'MA) ' + f2(v) + '，目前 ' + f2(c)});
+  });
+  return rows;
+
+}
+
+/* =========================================================================
+ * 股價健診
+ *
+ * 六條檢查，每一天都算一次；「正常」的數目就是那一天的總評分（0～6）。
+ *
+ *   1. N 個月內從高檔下跌 ≥ X%     跌幅達到就「警示」
+ *   2. N 個月內從低檔上漲 ≥ X%     漲幅**沒有**達到就「警示」（強勢股的反彈力道）
+ *   3. 股價低於前 D 個交易日低點   跌破就「警示」
+ *   4～6. 股價低於月線／季線／年線  低於就「警示」
+ *
+ * 一個月以 21 個交易日計。資料不夠長的那一項是「資料不足」，不算正常也不算
+ * 警示——那一天的評分也就不畫（畫出來會是一個被少算的分數）。
+ * ========================================================================= */
+(function(){
+  var root = document.getElementById('pxh');
+  if(!root) return;
+  var H = pxHistory();
+  var out = document.getElementById('pxh-out');
+  if(!H || H.c.length < 2){ out.innerHTML = '<p class="stale">每日收盤不足，無法健診。</p>'; return; }
+  var C = H.c, D = H.d, N = C.length;
+  var MA = {20: pxSMA(C, 20), 60: pxSMA(C, 60), 240: pxSMA(C, 240)};
+  var $ = function(id){ return document.getElementById(id); };
+  var inputs = {m1: $('pxh-m1'), p1: $('pxh-p1'), m2: $('pxh-m2'), p2: $('pxh-p2'), d3: $('pxh-d3')};
+  var PRESETS = {short: [1, 10, 1, 10, 20], mid: [3, 20, 3, 20, 60]};
+  var r0 = $('pxh-r0'), r1 = $('pxh-r1');
+  var view = [0, N - 1], score = [];
+
+  function params(){
+    function v(k, d){ var x = parseFloat(inputs[k].value); return isNaN(x) || x <= 0 ? d : x; }
+    return {m1: v('m1', 3), p1: v('p1', 20), m2: v('m2', 3), p2: v('p2', 20), d3: Math.round(v('d3', 60))};
+  }
+  function run(){
+    var P = params();
+    score = new Array(N);
+    for(var i = 0; i < N; i++){
+      var rs = pxChecks(C, MA, i, P);
+      score[i] = rs.some(function(r){ return r.ok === null; }) ? null
+        : rs.filter(function(r){ return r.ok; }).length;
+    }
+    var last = N - 1, rows = pxChecks(C, MA, last, P);
+    var s = score[last];
+    var h = '<div class="pxh-sum"><b>' + D[last] + '</b>' +
+      '<span>收盤價 <b>' + C[last].toLocaleString() + '</b></span>' +
+      ['20', '60', '240'].map(function(k){
+        var v = MA[k][last], nm = {20: '月線', 60: '季線', 240: '年線'}[k];
+        return '<span>' + nm + '(' + k + 'MA) <b>' + (v === null ? '—' : v.toFixed(2)) + '</b></span>';
+      }).join('') +
+      '<span>股價健診總評分 <b>' + (s === null ? rows.filter(function(r){ return r.ok; }).length + '（部分項目資料不足）' : s) + '</b></span></div>' +
+      '<div class="scroll"><table class="hl-t"><thead><tr><th>健診項目</th><th class="st">狀態</th><th>說明</th></tr></thead><tbody>' +
+      rows.map(function(r){
+        return '<tr><td>' + r.label + '</td><td class="st">' +
+          (r.ok === null ? '<span class="hl-na">— 資料不足</span>' : r.ok ? '<span class="hl-ok">✅ 正常</span>' : '<span class="hl-hit">⚠️ 警示</span>') +
+          '</td><td>' + r.text + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<p class="note-s">註：每個項目「警示」代表偏弱訊號；越多警示代表股價越弱。</p>';
+    out.innerHTML = h;
+    charts();
+  }
+
+  function charts(){
+    var rng = [view[0], view[1]];
+    TWSIXChart($('pxh-c1'), {x: D, range: rng, series: [
+      {name: '收盤價', color: 'ink', values: C, width: 1.5},
+      {name: '月線(20MA)', color: '#2563eb', values: MA[20], width: 1.2},
+      {name: '季線(60MA)', color: '#ea7c0c', values: MA[60], width: 1.2},
+      {name: '年線(240MA)', color: '#dc2626', values: MA[240], width: 1.2}
+    ]});
+    /* 分數越高越健康；顏色沿用台股慣例，強（高分）是紅、弱（低分）是綠。 */
+    TWSIXChart($('pxh-c2'), {x: D, range: rng, yMin: 0, yMax: 6, height: 200,
+      fmt: function(v){ return v === null || v === undefined ? '資料不足' : String(v); },
+      series: [{name: '總評分', color: '#e0582a', values: score, step: true, width: 1.6,
+        area: [[0, '#ef4444', .32], [.5, '#f59e0b', .22], [1, '#10b981', .28]]}]});
+    $('pxh-span').textContent = D[view[0]] + ' ～ ' + D[view[1]] + '（' + (view[1] - view[0] + 1) + ' 個交易日）';
+  }
+
+  function setView(a, b){
+    view = [Math.max(0, Math.min(a, b)), Math.min(N - 1, Math.max(a, b))];
+    r0.value = view[0]; r1.value = view[1];
+    charts();
+  }
+  r0.max = r1.max = N - 1; r0.value = 0; r1.value = N - 1;
+  r0.addEventListener('input', function(){ setView(+r0.value, +r1.value); });
+  r1.addEventListener('input', function(){ setView(+r0.value, +r1.value); });
+  [].forEach.call(root.querySelectorAll('[data-zoom]'), function(b){
+    b.addEventListener('click', function(){
+      [].forEach.call(root.querySelectorAll('[data-zoom]'), function(x){ x.classList.toggle('on', x === b); });
+      var n = +b.getAttribute('data-zoom');
+      setView(n ? N - n : 0, N - 1);
+    });
+  });
+  function preset(k){
+    var v = PRESETS[k];
+    inputs.m1.value = v[0]; inputs.p1.value = v[1]; inputs.m2.value = v[2]; inputs.p2.value = v[3]; inputs.d3.value = v[4];
+    run();
+  }
+  $('pxh-run').addEventListener('click', run);
+  $('pxh-short').addEventListener('click', function(){ preset('short'); });
+  $('pxh-mid').addEventListener('click', function(){ preset('mid'); });
+  Object.keys(inputs).forEach(function(k){
+    inputs[k].addEventListener('keydown', function(e){ if(e.key === 'Enter') run(); });
+  });
+  /* 分頁一開始是 hidden 的，那時候量到的寬度是 0。第一次切到這一頁才畫。 */
+  var tab = document.getElementById('tab-pxhealth');
+  var drawn = false;
+  function first(){ if(drawn || root.offsetWidth === 0) return; drawn = true; run(); }
+  if(tab) tab.addEventListener('click', function(){ setTimeout(first, 0); });
+  /* 直接帶 #pxhealth 開進來的時候，分頁是由頁面最後那段腳本打開的——可能比這裡
+     晚。盯著它的寬度，一變成非零就畫。 */
+  if(typeof ResizeObserver !== 'undefined'){
+    new ResizeObserver(function(){ first(); }).observe(root);
+  }
+  setTimeout(first, 0);
+})();
+
+
+/* 三年 EPS：逐年累乘營收，乘該年淨利率，除以股數。
+   rev 百萬元、sh 億股、g／m 是百分比的三元素陣列。百萬 ÷ 億股 ＝ 元 ÷ 100。 */
+function y3Eps(rev, sh, g, m){
+  var eps = [], r = rev;
+  for(var y = 0; y < 3; y++){ r = r * (1 + g[y] / 100); eps.push(r * (m[y] / 100) / (sh * 100)); }
+  return eps;
+}
+
+/* =========================================================================
+ * 推估三年目標價
+ *
+ * 逐年累乘：今年營收 ＝ 年營收 ×（1＋今年成長率），明年 ＝ 今年 ×（1＋明年成長
+ * 率）……該年 EPS ＝ 該年營收 × 該年淨利率 ÷ 股數（百萬元 ÷ 億股要再除以 100），
+ * 目標價 ＝ 該年 EPS × 本益比。
+ *
+ * 目標價矩陣的顏色：九格一起由低到高、綠→黃→紅（台股慣例，高＝紅）；三張圖上
+ * 的虛線用同一格的顏色，對得起來。
+ * ========================================================================= */
+(function(){
+  var box = document.getElementById('y3');
+  if(!box) return;
+  var seed = {};
+  try{ seed = JSON.parse(box.getAttribute('data-seed') || '{}'); }catch(e){ return; }
+  var $ = function(id){ return document.getElementById(id); };
+  var el = {rev: $('y3-rev'), sh: $('y3-sh'), g: $('y3-g'), m: $('y3-m'), pe: $('y3-pe'), out: $('y3-out')};
+  var H = pxHistory();
+
+  function nums(t){
+    return String(t || '').split(/[,，\s]+/).map(parseFloat).filter(function(v){ return !isNaN(v); });
+  }
+  function three(list, d){
+    var a = list.slice(0, 3);
+    while(a.length < 3) a.push(a.length ? a[a.length - 1] : d);
+    return a;
+  }
+  function defaults(){
+    var g = seed.growth === null || seed.growth === undefined ? 10 : seed.growth;
+    var m = seed.margin === null || seed.margin === undefined ? 10 : seed.margin;
+    el.rev.value = Math.round(seed.revenue);
+    el.sh.value = Math.round(seed.shares * 100) / 100;
+    el.g.value = [g, g, g].join(', ');
+    el.m.value = [m, m, m].join(', ');
+    el.pe.value = (seed.pe || [15, 20, 25]).join(', ');
+  }
+  /* 綠 → 黃 → 橘 → 紅。t 在 0～1。 */
+  function heat(t){
+    var stops = [[22,163,74],[132,190,50],[210,196,30],[245,158,11],[234,108,32],[220,38,38]];
+    t = Math.max(0, Math.min(1, t)) * (stops.length - 1);
+    var i = Math.min(stops.length - 2, Math.floor(t)), f = t - i;
+    var c = stops[i].map(function(v, k){ return Math.round(v + (stops[i + 1][k] - v) * f); });
+    return 'rgb(' + c.join(',') + ')';
+  }
+  function money(v){ return Math.round(v).toLocaleString(); }
+  function signCls(v){ return v > 0 ? 'up' : (v < 0 ? 'down' : ''); }
+
+  function run(){
+    var rev = parseFloat(el.rev.value), sh = parseFloat(el.sh.value);
+    if(isNaN(rev) || isNaN(sh) || !sh){
+      el.out.innerHTML = '<p class="stale">年營收與股數都要填，而且股數不能是 0。</p>'; return;
+    }
+    var g = three(nums(el.g.value), 0), m = three(nums(el.m.value), 10);
+    var pes = nums(el.pe.value).sort(function(a, b){ return a - b; });
+    if(!pes.length) pes = [15, 20, 25];
+    var eps = y3Eps(rev, sh, g, m);
+    var all = [];
+    pes.forEach(function(pe){ eps.forEach(function(e){ all.push(e * pe); }); });
+    var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
+    function color(v){ return heat(hi > lo ? (v - lo) / (hi - lo) : .5); }
+    var base = seed.base_year || new Date().getFullYear() - 1;
+    var names = ['今年（' + (base + 1) + '）', '明年（' + (base + 2) + '）', '後年（' + (base + 3) + '）'];
+    var h = '<h5 class="y3-h">預估未來三年 EPS 與目標價</h5><div class="scroll"><table class="y3-t"><thead><tr><th>項目</th>' +
+      names.map(function(n){ return '<th>' + n + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      '<tr><th scope="row">營收成長率</th>' + g.map(function(v){ return '<td class="' + signCls(v) + '">' + (v > 0 ? '▲ ' : v < 0 ? '▼ ' : '') + v.toFixed(2) + '%</td>'; }).join('') + '</tr>' +
+      '<tr><th scope="row">淨利率（歸母）</th>' + m.map(function(v){ return '<td class="' + signCls(v) + '">' + v.toFixed(2) + '%</td>'; }).join('') + '</tr>' +
+      '<tr class="eps"><th scope="row">預估 EPS（元）</th>' + eps.map(function(v){ return '<td>' + v.toFixed(2) + '</td>'; }).join('') + '</tr>' +
+      pes.map(function(pe){
+        return '<tr class="tp"><th scope="row">預估 PE＝' + pe + '</th>' + eps.map(function(e){
+          var v = e * pe; return '<td style="background:' + color(v) + '">' + money(v) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<p class="note-s">營收成長率：<span class="up">紅 ▲ 成長</span>、<span class="down">綠 ▼ 衰退</span>。目標價的底色是九格一起由低到高（綠 → 紅）。' +
+      '淨利率（歸母）＝ 歸屬母公司稅後淨利 ÷ 營收。</p>';
+    var charts = [];
+    if(H && H.c.length > 1){
+      var start = Math.max(0, H.c.length - 500);
+      names.forEach(function(n, y){
+        var id = 'y3-c' + y;
+        h += '<h5 class="y3-h">股價走勢 vs ' + n.replace(/（.*/, '') + '目標價</h5><div class="pxc" id="' + id + '"></div>';
+        charts.push([id, y]);
+      });
+    }
+    el.out.innerHTML = h;
+    var labels = ['保守', '中性', '樂觀'];
+    charts.forEach(function(c){
+      var y = c[1];
+      TWSIXChart($(c[0]), {x: H.d, range: [Math.max(0, H.c.length - 500), H.c.length - 1],
+        title: (box.getAttribute('data-code') || '') + ' ' + names[y].replace(/（.*/, '') + '：股價走勢 vs 目標價',
+        series: [{name: '收盤價', color: 'ink', values: H.c, width: 1.4}],
+        hlines: pes.map(function(pe, k){
+          var v = eps[y] * pe;
+          return {value: v, color: color(v),
+                  label: (pes.length === 3 ? labels[k] : '') + '(PE=' + pe + ') ' + money(v)};
+        })});
+    });
+  }
+  $('y3-run').addEventListener('click', run);
+  $('y3-reset').addEventListener('click', function(){ defaults(); run(); });
+  [el.rev, el.sh, el.g, el.m, el.pe].forEach(function(i){
+    i.addEventListener('keydown', function(e){ if(e.key === 'Enter') run(); });
+    i.addEventListener('change', run);
+  });
+  defaults();
+  /* 〔EPS預估與估價〕一開始是 hidden 的：寬度 0 的時候不畫圖，切過去再畫。 */
+  function first(){ if(box.offsetWidth === 0 || box._drawn) return; box._drawn = true; run(); }
+  var tab = document.getElementById('tab-eps');
+  if(tab) tab.addEventListener('click', function(){ setTimeout(first, 0); });
+  if(typeof ResizeObserver !== 'undefined'){
+    new ResizeObserver(function(){ first(); }).observe(box);
+  }
+  setTimeout(first, 0);
+})();

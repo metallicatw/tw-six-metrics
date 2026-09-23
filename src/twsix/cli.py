@@ -2239,9 +2239,12 @@ def cmd_backfill_prices(args: argparse.Namespace) -> int:
     from .ingest.daily import PRICE_COLUMNS, Daily, by_date  # noqa: PLC0415
     from .store.daily import merge_day_rows, read_day_rows  # noqa: PLC0415
 
+    # 回補很長一段（history.yml 一次補三年）的時候放慢：證交所連續打太快會回
+    # 307 轉址（實測 1.2 秒一次、第二個請求就被擋），那一天就只剩上櫃半個市場。
+    pause = getattr(args, "pause", None) or settings.ingest.min_interval_seconds
     http = HttpClient(
         cache_dir=None, cache_ttl=0,
-        min_interval=settings.ingest.min_interval_seconds,
+        min_interval=pause,
         retries=settings.ingest.retries,
         timeout=90.0,
     )
@@ -2286,6 +2289,12 @@ def cmd_backfill_prices(args: argparse.Namespace) -> int:
             holidays += 1
             print(f"  {iso} 沒有資料（非交易日）")
             continue
+        # 只拿到一個市場：多半是被限速，等一下再問一次。還是只有一半就照樣存，
+        # 下一次回補會看到「只有半個市場」而補另一半。
+        got = {str(r.get("market") or "") for r in rows} | markets
+        if not {"上市", "上櫃"} <= got and getattr(args, "pause", None):
+            time.sleep(max(10.0, pause * 4))
+            rows = merge_day_rows(rows, daily.prices_on(iso))
         for d2, group in sorted(by_date(rows).items()):
             group = merge_day_rows(read_day_rows(store.root, folder, d2), group)
             store.write_gz(
@@ -3758,6 +3767,9 @@ def build_parser() -> argparse.ArgumentParser:
     bp.add_argument("--days", type=int, default=25,
                     help="要補幾個交易日（預設 25，蓋得住 20 日的視窗）")
     bp.add_argument("--out", help="資料目錄")
+    bp.add_argument("--pause", type=float, default=None,
+                    help="兩個請求之間至少隔幾秒（長回補用 3；預設沿用設定檔）。"
+                         "給了這個參數，只拿到半個市場的那一天會等一下再問一次")
     bp.set_defaults(func=cmd_backfill_prices)
 
     bi = sub.add_parser(

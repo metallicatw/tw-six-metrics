@@ -240,3 +240,41 @@ def merge_day_rows(
     merged = {(r.get("code") or ""): r for r in old if r.get("code")}
     merged.update({(r.get("code") or ""): r for r in new if r.get("code")})
     return list(merged.values())
+
+
+#: 〔股價健診〕與〔推估三年目標價〕要的長度：畫 500 個交易日，而第一天就要有
+#: 年線（240MA），所以往前多讀 240 天。資料不夠長的時候照樣畫，只是年線從
+#: 第 240 天起才有。
+HISTORY_DAYS = 760
+
+
+def price_history(
+    data_dir: Path, *, days: int = HISTORY_DAYS
+) -> dict[str, tuple[list[str], list[float]]]:
+    """`{代號: ([日期...], [收盤...])}`，**舊的在前**，最多 *days* 個交易日。
+
+    和 `close_history` 讀同一批檔案，但那一支每加一筆就掃一次整段去重——20 天
+    沒關係，760 天乘 1,900 檔就是十億次比較。這裡每個檔案就是一天，同一檔在同一
+    個檔案裡只會出現一次，所以不必去重；讀完再整段反轉。
+    """
+    folder = data_dir / "market" / "daily" / "prices"
+    if not folder.is_dir():
+        return {}
+    dates: dict[str, list[str]] = {}
+    closes: dict[str, list[float]] = {}
+    for path in sorted(folder.glob("*.csv.gz"), reverse=True)[:days]:
+        for row in _rows(path):
+            code = (row.get("code") or "").strip()
+            close = _num(row.get("close", ""))
+            if not code or close is None or close <= 0:
+                continue
+            d = dates.setdefault(code, [])
+            day = (row.get("date") or path.name[:10]).strip()
+            if d and d[-1] == day:
+                continue
+            d.append(day)
+            closes.setdefault(code, []).append(close)
+    return {
+        code: (list(reversed(d)), list(reversed(closes[code])))
+        for code, d in dates.items()
+    }

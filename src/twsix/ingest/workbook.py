@@ -147,10 +147,13 @@ class SheetSource:
         net_income: dict[Quarter, float] = {}
         turnover: dict[Quarter, float] = {}
         fcf: dict[Quarter, float] = {}
+        rev_q: dict[Quarter, float] = {}
 
         for _i, q in enumerate(ordered):
             s = statements.quarters[q]
             older = statements.get(q.shift(-1))
+            if s.revenue is not None:
+                rev_q[q] = s.revenue
             v = operating_margin(s)
             if v is not None:
                 op_margin[q] = round(v, 2)
@@ -196,6 +199,8 @@ class SheetSource:
             inventory_turnover=turnover,
             inventory_turnover_frq=self._frq_inventory(),
             free_cash_flow=fcf,
+            revenue=rev_q,
+            revenue_monthly=dict(getattr(self, "_raw_monthly", {}) or {}),
             revenue_months=self._merged_view(revenue.labels),
             revenue_months_raw=revenue.labels,
             revenue_yoy=revenue.yoy(),
@@ -255,6 +260,7 @@ class SheetSource:
             if not isinstance(value, str) or "/" not in value or amount is None:
                 continue
             raw[value.strip()] = amount
+        self._raw_monthly = dict(raw)
 
         rows: list[MonthlyRevenue] = []
         for label, amount in raw.items():
