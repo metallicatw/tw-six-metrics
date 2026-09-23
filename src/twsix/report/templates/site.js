@@ -1263,13 +1263,58 @@ var TWSIXWatch = (function(){
 
   var seed = {};
   try{ seed = JSON.parse(box.getAttribute('data-seed') || '{}'); }catch(e){ return; }
-  var price = parseFloat(box.getAttribute('data-price'));
-  if(isNaN(price)) price = null;
+  var market = parseFloat(box.getAttribute('data-price'));
+  if(isNaN(market) || market <= 0) market = null;
   /* 現價是哪一天的收盤價。矩陣裡每一格的報酬與風險都是拿它算的，所以每一次
      提到它都要帶日期——一個沒有日期的股價看起來永遠像今天的。 */
   var priceDate = box.getAttribute('data-price-date') || '';
+
+  /* ---- 進場成本價位 ------------------------------------------------------
+   * 每一格第二行的「預期報酬（＋）／預期風險（−）」拿誰當基準。預設是現價；
+   * 讀者填了自己的成本就改用成本——已經買了的人要問的是「相對我買的價錢還有
+   * 多少空間」，不是相對今天的收盤。
+   *
+   * `price` 這個名字保留給「現在拿來比的那個價格」，下面 delta()／legend()
+   * 照舊讀它，所以兩種基準走的是同一條算式，不是兩份。
+   *
+   * 填過的數字記在這台瀏覽器（每一檔一個鍵）。localStorage 在無痕視窗、被
+   * 封鎖的網站資料裡會丟例外——那時候就只是不記，照樣能算。 */
+  var costKey = 'twsix.cost.' + (box.getAttribute('data-code') || '');
+  var costIn = document.getElementById('c-cost');
+  var costReset = document.getElementById('c-cost-reset');
+  var costNote = document.getElementById('c-cost-note');
+  var cost = null;
+  var price = market;
+  function readCost(){
+    var v = costIn ? parseFloat(costIn.value) : NaN;
+    return (isNaN(v) || v <= 0) ? null : v;
+  }
+  function applyCost(){
+    cost = readCost();
+    price = cost !== null ? cost : market;
+    try{
+      if(cost !== null) localStorage.setItem(costKey, String(cost));
+      else localStorage.removeItem(costKey);
+    }catch(e){}
+    if(costReset) costReset.hidden = cost === null;
+    if(costNote){
+      costNote.textContent = cost !== null
+        ? (market !== null ? '現價 ' + market.toFixed(2) + '，相對成本 ' +
+           (market >= cost ? '+' : '−') + (Math.abs(market / cost - 1) * 100).toFixed(1) + '%' : '')
+        : (market !== null ? '空白＝用現價 ' + market.toFixed(2) +
+           (priceDate ? '（' + priceDate + ' 收盤）' : '') : '這一檔還沒有收盤價，填了成本才算得出報酬與風險');
+    }
+  }
+  if(costIn){
+    try{
+      var saved = parseFloat(localStorage.getItem(costKey));
+      if(!isNaN(saved) && saved > 0) costIn.value = String(saved);
+    }catch(e){}
+  }
+  applyCost();
   function priceLabel(){
-    return price.toFixed(2) + (priceDate ? '（' + priceDate + ' 收盤）' : '');
+    if(cost !== null) return '進場成本 ' + cost.toFixed(2);
+    return '現價 ' + price.toFixed(2) + (priceDate ? '（' + priceDate + ' 收盤）' : '');
   }
 
   var el = {
@@ -1355,7 +1400,7 @@ var TWSIXWatch = (function(){
     var up = target / price - 1;
     var txt = (up >= 0 ? '+' : '−') + (Math.abs(up) * 100).toFixed(1) + '%';
     return { text: txt, title: (up >= 0 ? '預期報酬 ' : '預期風險 ') + txt +
-             '（相對現價 ' + priceLabel() + '）' };
+             '（相對' + priceLabel() + '）' };
   }
 
   function legend(fam, lo, hi, fmt){
@@ -1365,8 +1410,8 @@ var TWSIXWatch = (function(){
       }).join('') + '</span>' +
       '<span>' + fmt(lo) + ' → ' + fmt(hi) + '</span>' +
       (price === null ? '' :
-       '<span>　每格第二行是相對現價 ' + priceLabel() +
-       ' 的預期報酬（＋）或預期風險（−）</span>') + '</p>';
+       '<span' + (cost !== null ? ' class="bycost"' : '') + '>　每格第二行是相對' +
+       priceLabel() + ' 的預期報酬（＋）或預期風險（−）</span>') + '</p>';
   }
 
   /* 表頭左上角是兩個座標軸，不是一個標題。「淨利率＼成長率」要讀者自己猜哪個
@@ -1439,6 +1484,17 @@ var TWSIXWatch = (function(){
   document.getElementById('c-reset').addEventListener('click', function(){
     fill(defaults()); run();
   });
+  /* 成本改了只要重畫矩陣——同一條 run()，基準換掉而已。`input` 而不是
+     `change`：邊打邊看那一行數字跟著動，才知道自己打的是不是想要的那個價位。 */
+  if(costIn){
+    costIn.addEventListener('input', function(){ applyCost(); run(); });
+    costIn.addEventListener('keydown', function(e){ if(e.key === 'Enter') run(); });
+  }
+  if(costReset){
+    costReset.addEventListener('click', function(){
+      costIn.value = ''; applyCost(); run(); costIn.focus();
+    });
+  }
   [el.rev, el.sh, el.g, el.m, el.pe].forEach(function(i){
     i.addEventListener('change', run);
     i.addEventListener('keydown', function(e){ if(e.key === 'Enter') run(); });

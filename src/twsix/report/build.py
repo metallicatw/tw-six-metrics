@@ -110,6 +110,36 @@ MONITOR_REPORT = "monitor-report.html"
 TREND_PAGE = "trend.html"
 TREND_REPORT = "trend-report.html"
 
+def trend_rules_html(report: Path) -> str:
+    """從趨勢報告裡抽出〔預設篩選條件〕那一段，給〔趨勢X六大X報酬〕的燈泡用。
+
+    報告上原本有一顆〔💡 預設篩選條件〕按鈕和一個彈出視窗；使用者要的是把它
+    併進這一頁標題旁的燈泡、報告上那一顆拿掉（2026-09-23）。
+
+    內容**不在這裡另寫一份**。四道門檻的數字（股價 > 10、量比 ≥ 1.2、
+    3 × ATR……）只有 tw-trend-filter 知道，這邊寫死一份的話，那邊改了門檻之後
+    燈泡就會安靜地說錯話。所以報告把那一段放在一個不會被畫出來的
+    `<template id="tf-rules">` 裡，這裡原樣抽出來。
+
+    抽不到（報告是舊版、或檔案不在）就回空字串，樣板會退回一段不帶數字的說明
+    ——少一段清單，不是一顆壞掉的燈泡。
+    """
+    import re
+
+    try:
+        text = report.read_text("utf-8")
+    except OSError:
+        return ""
+    m = re.search(r'<template id="tf-rules">(.*?)</template>', text, re.S)
+    if not m:
+        return ""
+    body = m.group(1).strip()
+    # 它要被原樣塞進這個網站的頁面裡。帶腳本的話就不是「一段說明」了。
+    if "<script" in body.lower():
+        return ""
+    return body
+
+
 #: 舊的〔趨勢∩六大∩報酬〕。**現在只是一頁轉址。**
 #:
 #: 它和〔趨勢選股〕嵌的本來就是同一份 `trend-report.html`，差別只有網址後面那個
@@ -400,6 +430,72 @@ class Row:
     #: 股價已經低於下檔價：**沒有下檔風險**，不是算不出來。兩者的 `reward_risk`
     #: 都是 None，意思正好相反。見 `store.snapshots.VALUATION_COLUMNS`。
     risk_free: bool = False
+    #: 〔台股觀察清單〕上的收盤價與漲跌。只有那一頁畫（見 `price_views`）。
+    px: PriceView | None = None
+
+
+#: 〔台股觀察清單〕上的那四欄：收盤價、日漲跌、5 日漲跌、20 日漲跌。
+#:
+#: 「5 日」「20 日」是**交易日**，不是日曆天：拿第 0 筆收盤和往回第 5／第 20 筆
+#: 比。那也是看盤軟體的「週漲跌」「月漲跌」的算法。
+#:
+#: **沒有還原除權息。** 除息那一天的跳空會算進 5 日、20 日的跌幅裡——和 Yahoo
+#: 股市、券商軟體預設顯示的一樣，是「帳面上的價差」而不是「持有的報酬」。
+#: 這件事寫在欄位標題的說明裡，不然一檔配息 5% 的股票看起來像跌了 5%。
+PRICE_WINDOWS = (5, 20)
+#: 往回讀幾個每日檔。20 日漲跌要 21 個交易日，而兩個交易所不同步、偶爾缺一天，
+#: 所以多留一截。
+PRICE_LOOKBACK = 32
+
+
+@dataclass
+class PriceView:
+    close: float
+    date: str
+    #: 日漲跌（元）與漲跌幅（%）。來自交易所的「漲跌價差」——那是對**參考價**
+    #: 算的，除權息那一天也對，而拿前一天收盤去減就不對。
+    chg: float | None
+    chg_pct: float | None
+    #: `{5: %, 20: %}`；資料不夠長的就不在裡面。
+    window: dict[int, float]
+    #: Yahoo 股市那一檔的走勢圖。上市 `.TW`、上櫃 `.TWO`。
+    yahoo: str
+
+
+def yahoo_chart_url(code: str, market: str) -> str:
+    """Yahoo 股市的〔走勢圖〕分頁。上櫃要 `.TWO`，拿 `.TW` 去開是另一頁 404。"""
+    suffix = "TWO" if market == "上櫃" else "TW"
+    return f"https://tw.stock.yahoo.com/quote/{code}.{suffix}"
+
+
+def price_views(
+    rows: Iterable[Row], quotes: dict[str, Any], hist: dict[str, list[Any]]
+) -> dict[str, PriceView]:
+    """每一檔的收盤、日漲跌、5／20 日漲跌。算不出收盤的那一檔不在結果裡。"""
+    out: dict[str, PriceView] = {}
+    for r in rows:
+        series = hist.get(r.stock_id) or []
+        quote = quotes.get(r.stock_id)
+        if quote is None and not series:
+            continue
+        close = quote.close if quote is not None else series[0].close
+        date_ = quote.date if quote is not None else series[0].date
+        chg = quote.change if quote is not None else None
+        if chg is None and len(series) > 1 and series[0].date == date_:
+            chg = series[0].close - series[1].close
+        prev = close - chg if chg is not None else None
+        pct = (chg / prev * 100) if (chg is not None and prev and prev > 0) else None
+        window: dict[int, float] = {}
+        # 只有在這一段的第 0 筆就是今天的收盤時才算——否則比出來的是另一段區間。
+        if series and series[0].date == date_:
+            for n in PRICE_WINDOWS:
+                if len(series) > n and series[n].close > 0:
+                    window[n] = (close / series[n].close - 1) * 100
+        out[r.stock_id] = PriceView(
+            close=close, date=date_, chg=chg, chg_pct=pct, window=window,
+            yahoo=yahoo_chart_url(r.stock_id, r.market),
+        )
+    return out
 
 
 def rows_from_store(
@@ -886,6 +982,18 @@ def build_site(
     # 為什麼整張表都送過去、由瀏覽器自己篩：清單存在讀者的 localStorage 裡，
     # 建站的時候我們不知道他標了哪幾檔——也不該知道。這是一份靜態網站，沒有
     # 可以放私人清單的地方。
+    # 收盤價與漲跌只畫在〔觀察清單〕上。〔評等清單〕是同一張表，但它有 1,900 列、
+    # 而且那一頁在比的是體質，不是今天的價格——多四欄只會把它推到要橫向捲。
+    if sheets_dir is not None:
+        views = price_views(
+            live,
+            quotes,
+            close_history(
+                sheets_dir.parent, lookback=PRICE_LOOKBACK, days=max(PRICE_WINDOWS) + 1
+            ),
+        )
+        for r in live:
+            r.px = views.get(r.stock_id)
     env.get_template("watchlist.html.j2").stream(
         **base, page="watchlist", rel="", rows=live
     ).dump(str(out_dir / "watchlist.html"))
@@ -947,8 +1055,11 @@ def build_site(
 
     # 外殼那一頁。只有原始報告真的在的時候才畫——沒有報告的空框比沒有那一頁糟。
     if has_trend:
+        from markupsafe import Markup
+
         env.get_template("trend.html.j2").stream(
-            **base, page="trend", rel="", report=TREND_REPORT
+            **base, page="trend", rel="", report=TREND_REPORT,
+            rules_html=Markup(trend_rules_html(out_dir / TREND_REPORT)),
         ).dump(str(out_dir / TREND_PAGE))
         written["trend.html（趨勢選股）"] = 1
         # 舊網址。只剩一頁轉址——`page=` 不用給，它不在導覽列上。

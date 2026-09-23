@@ -779,6 +779,24 @@ table#t td.seq::before{content:counter(seq)}
    方」才會跟著能用。腳本沒跑的時候它也退回這個固定高度，仍然讀得到。 */
 iframe.embed{display:block;width:100%;height:78vh;min-height:480px;border:1px solid
   var(--rule);border-radius:5px;background:var(--surface);margin-bottom:14px}
+/* 〔趨勢X六大X報酬〕那一份在桌機上幾乎一整個視窗高。
+   78vh 的時候，1440×900 的桌機上報告裡的圖只拿到 880×431（約 4:1）：三個月的
+   K 線被壓成一條帶子，使用者說「壓太扁平了，看不出變化」。報告那一邊也給圖加了
+   一個跟著寬度走的下限（52cqw），兩邊一起才夠——iframe 不夠高的話，那個下限
+   只會讓報告裡面多一條捲軸。
+   捲到 iframe 的頂端時，整個視窗就是那份報告；上面的頁首和標題往上捲走。
+   窄版（容器查詢）回到 88vh，見下面那一段。 */
+iframe.embed.tall{height:calc(100vh - 16px);min-height:640px}
+/* 燈泡裡那份〔預設篩選條件〕。內容是從報告裡抽出來的（build.py 的
+   trend_rules_html），長這樣：<ol><li><b>①…</b><span>…</span></li>…</ol>
+   <p class="stop">停損：…</p>。 */
+.trend-rules{display:block;margin:8px 0 12px;padding:8px 10px;border-left:3px solid
+  var(--accent-2);background:var(--surface-2);border-radius:4px}
+.trend-rules .trh{display:block;margin-bottom:4px}
+.trend-rules ol{margin:0;padding:0;list-style:none;display:grid;gap:3px}
+.trend-rules li{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:baseline}
+.trend-rules li b{white-space:nowrap}
+.trend-rules .stop{margin:6px 0 0}
 .star-cell{width:1%;padding-left:8px;padding-right:2px;text-align:center}
 button.star{appearance:none;border:none;background:none;cursor:pointer;padding:2px 4px;
   font-size:15px;line-height:1;color:var(--muted);border-radius:3px}
@@ -864,6 +882,17 @@ details.methodology .note{margin:4px 0 0;font-size:12px;color:var(--muted);max-w
   font-size:clamp(11.5px,1.6vw,14px);
   font-variant-numeric:tabular-nums;min-width:0;width:100%}
 .calc-inputs input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+/* 進場成本價位：一格輸入框、一顆〔回到現價〕、一行說明現在拿誰比。 */
+.calc-cost{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin:0 0 12px;
+  font-size:12.5px;color:var(--ink-2)}
+.calc-cost label{font-weight:600}
+.calc-cost input{width:9em;padding:6px 8px;border:1px solid var(--rule);border-radius:5px;
+  background:var(--ground);color:var(--ink);font:inherit;font-size:14px;
+  font-variant-numeric:tabular-nums}
+.calc-cost input:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+.calc .calc-cost .linkish{margin-left:0}
+/* 矩陣說明那一行：基準換成成本的時候上色，一眼看得出「這些百分比不是對現價」。 */
+.mlegend .bycost{color:var(--accent-2);font-weight:600}
 /* 窄版的規則全部集中在檔案最後那一段 @container 裡——寫成 @container 而不是
    @media，是為了讓「切換手機版」那顆按鈕真的有用：那顆按鈕只是把 .wrap 的寬度
    釘窄，容器查詢就跟著生效，於是大螢幕上看到的窄版和手機上看到的是同一份版面，
@@ -1064,7 +1093,10 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
      而 78vh 只有 658px——於是 iframe 內部自己再長出一個捲軸，手機上變成兩層
      捲軸疊在一起，捲哪一層要看手指落在哪裡。
      拉到 88vh（743px）把內層要捲的距離從 145px 壓到 60px。 */
-  iframe.embed{height:88vh;min-height:520px}
+  iframe.embed,iframe.embed.tall{height:88vh;min-height:520px}
+  /* 燈泡在窄版只有三百出頭寬：關卡名稱和說明上下排，不並排硬擠。 */
+  .trend-rules li{display:block}
+  .trend-rules li b{margin-right:6px}
 }
 @container page (max-width:480px){
   .calc-inputs{grid-template-columns:1fr;gap:12px}
@@ -1081,3 +1113,42 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 .asof{font-style:normal;font-size:10.5px;color:var(--muted);font-weight:400;
   white-space:nowrap;margin-left:5px}
 .card .asof{margin-left:0}
+/* =========================================================================
+ * 〔台股觀察清單〕：比〔評等清單〕多四欄（收盤價、日漲跌、5 日、20 日漲跌），
+ * 目標仍然是 1280 以上的桌機**不必橫向捲**。
+ *
+ * 加欄之前量到 1,149px；照原本的留白直接加四欄是 1,580px（1366 的筆電要捲
+ * 232px）。收的是三樣東西，都不是資訊：
+ *
+ *   1. 留白。格子 4/5px → 3/4px，標題按鈕 5/10px → 4/5px（十個兩行標題各省
+ *      十像素，這一項最大）。
+ *   2. 次要資訊的字級。市場、產業、財報基準、兩行漲跌的第二行——掃一整欄時
+ *      眼睛不停在它們上面。代號、名稱、收盤價、等第維持原本的字級。
+ *   3. 產業折行。「電子零組件業」這種六個字的產業名讓整欄寬 114px，而這張表
+ *      每一列本來就有兩行高（財報基準、上移下移），折成兩行不多佔一分高度。
+ * ========================================================================= */
+#t.compact th,#t.compact td{padding:3px 4px}
+#t.compact th button.sortable{padding:4px 5px;font-size:11.5px}
+#t.compact td.muted{font-size:11.5px}
+#t.compact td.ind{white-space:normal;min-width:3.6em;max-width:4.6em;line-height:1.3}
+#t.compact .basis{font-size:10.5px}
+#t.compact .basis b{font-size:11px}
+#t.compact .pick{font-size:11px}
+#t.compact .g{min-width:24px;padding:1px 4px;font-size:11px}
+/* 收盤價：數字靠右，走勢圖圖示貼在數字右邊。 */
+#t td.px{font-weight:600;font-variant-numeric:tabular-nums}
+#t td.px .pxv.flat{color:var(--ink)}
+#t .yf{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+  margin-left:3px;vertical-align:-3px;border-radius:4px;color:var(--accent-2);
+  border:1px solid var(--rule);background:var(--surface-2);text-decoration:none}
+#t .yf:hover{border-color:var(--accent-2);background:var(--surface)}
+#t .yf:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+/* 日漲跌：上一行是元、下一行是 %，疊起來而不是並排——並排那一格 100px。 */
+#t td.chg span,#t td.chg small{display:block;line-height:1.25;font-variant-numeric:tabular-nums}
+#t td.chg small{font-size:10.5px}
+#t td.num span.up,#t td.num span.down,#t td.num span.flat{font-variant-numeric:tabular-nums}
+.flat{color:var(--muted)}
+/* 報酬風險比那一欄的燈泡：這一頁上縮成 22px。左邊那塊等寬的空白（讓標題落在
+   格子中心的那一塊，見上面的 .hdtip::before）跟著一起縮，所以兩邊仍然同軸。 */
+#t.compact thead th .hdtip{--bulb:22px;gap:3px}
+#t.compact thead th .hdtip .bulb{padding:1px 3px;font-size:12px}

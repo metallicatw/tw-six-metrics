@@ -241,7 +241,10 @@ def test_標題和數值站在同一條軸上():
     # 標題與資料列各一份。
     rows = _macro("row(r,")
     assert rows.count('class="mid"') + rows.count('mid"') >= 6, rows.count('mid"')
-    head = _macro("table_head()")
+    head = _macro("table_head(")
+    # 〔觀察清單〕那四欄（收盤價、日漲跌、5 日、20 日）包在 `{% if prices %}` 裡，
+    # 只有那一頁畫。這裡數的是兩張表共同的那十一欄，所以先把那一段拿掉。
+    head = re.sub(r"\{% if prices %\}.*?\{% endif %\}", "", head, flags=re.S)
     # 先算出來再放進訊息裡：f-string 的替換欄位裡不能有反斜線。
     n_mid = head.count('class="mid"') + head.count('class="num mid"')
     assert n_mid == 11, (
@@ -350,7 +353,7 @@ def test_窄版的嵌入報告要夠高():
 
     這一條守的是「窄版有一條自己的高度」，不是那個數字本身。
     """
-    rules = re.findall(r"(?m)^\s*iframe\.embed\s*\{([^}]*)\}", CSS)
+    rules = re.findall(r"(?m)^\s*iframe\.embed(?:,iframe\.embed\.tall)?\s*\{([^}]*)\}", CSS)
     assert len(rules) == 2, f"iframe.embed 有 {len(rules)} 條規則，預期基準一條＋窄版一條"
     base, narrow = (re.sub(r"\s+", " ", r) for r in rules)
     assert "78vh" in base, base
