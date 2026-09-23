@@ -790,7 +790,7 @@ table#t td.seq::before{content:counter(seq)}
    方」才會跟著能用。腳本沒跑的時候它也退回這個固定高度，仍然讀得到。 */
 iframe.embed{display:block;width:100%;height:78vh;min-height:480px;border:1px solid
   var(--rule);border-radius:5px;background:var(--surface);margin-bottom:14px}
-/* 〔趨勢X六大X報酬〕那一份在桌機上幾乎一整個視窗高。
+/* 〔趨勢×六大×報酬〕那一份在桌機上幾乎一整個視窗高。
    78vh 的時候，1440×900 的桌機上報告裡的圖只拿到 880×431（約 4:1）：三個月的
    K 線被壓成一條帶子，使用者說「壓太扁平了，看不出變化」。報告那一邊也給圖加了
    一個跟著寬度走的下限（52cqw），兩邊一起才夠——iframe 不夠高的話，那個下限

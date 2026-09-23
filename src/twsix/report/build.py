@@ -109,14 +109,14 @@ MONITOR_REPORT = "monitor-report.html"
 #: 技術面挑出來的標的，讀者的下一個問題一定是「這家公司體質怎麼樣」，而那個
 #: 答案就在這裡。兩個網站互相指，中間不必經過任何人的記憶。
 #:
-#: 這一頁現在叫〔趨勢X六大X報酬〕，而且預設就帶 `#cross`（六大 > 3、
+#: 這一頁現在叫〔趨勢×六大×報酬〕，而且預設就帶 `#cross`（六大 > 3、
 #: 報酬風險比 > 2）。想只看技術面四關的，把那兩個數字改成 0 即可——
 #: 那正是以前〔台股趨勢選股〕那一頁的全部內容。
 TREND_PAGE = "trend.html"
 TREND_REPORT = "trend-report.html"
 
 def trend_rules_html(report: Path) -> str:
-    """從趨勢報告裡抽出〔預設篩選條件〕那一段，給〔趨勢X六大X報酬〕的燈泡用。
+    """從趨勢報告裡抽出〔預設篩選條件〕那一段，給〔趨勢×六大×報酬〕的燈泡用。
 
     報告上原本有一顆〔💡 預設篩選條件〕按鈕和一個彈出視窗；使用者要的是把它
     併進這一頁標題旁的燈泡、報告上那一顆拿掉（2026-09-23）。
@@ -1096,7 +1096,7 @@ def build_site(
         env.get_template("cross.html.j2").stream(
             **base, target=TREND_PAGE
         ).dump(str(out_dir / CROSS_PAGE))
-        written["cross.html（轉址到趨勢X六大X報酬）"] = 1
+        written["cross.html（轉址到趨勢×六大×報酬）"] = 1
 
     if has_monitor:
         env.get_template("monitor.html.j2").stream(

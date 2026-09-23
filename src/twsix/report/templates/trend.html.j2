@@ -1,6 +1,6 @@
 {% extends "base.html.j2" %}
 {% from "_macros.html.j2" import tip %}
-{% block title %}趨勢X六大X報酬｜{{ site_title }}{% endblock %}
+{% block title %}趨勢×六大×報酬｜{{ site_title }}{% endblock %}
 {% block body %}
 {# 和〔市場監控〕同一套做法：報告本身是另一個 repo 每個交易日重新產生的一整份
    HTML（自己的 CSS、自己的版面、自己的 plotly），這裡用 iframe 把它嵌進來。
@@ -28,7 +28,7 @@
    報告上那一顆拿掉。內容由建站時從報告的 <template id="tf-rules"> 抽出來
    （build.py 的 trend_rules_html）——門檻數字只有 tw-trend-filter 知道，這裡
    不另寫一份。抽不到的時候退回下面那段不帶數字的說明。 #}
-<h2>趨勢X六大X報酬　{% call tip() %}
+<h2>趨勢×六大×報酬　{% call tip() %}
   <b>技術面四關全過，再加兩個基本面的條件。</b>全市場約 1,900 檔先過這四關：
   {% if rules_html %}
   <span class="trend-rules" role="group" aria-label="預設篩選條件">
@@ -75,5 +75,5 @@
 {# `.tall`：桌機上 iframe 幾乎一整個視窗高（見 site.css）。78vh 的時候圖被
    壓到約 4:1，使用者說「壓太扁平了，看不出變化」。 #}
 <iframe id="trend-frame" class="embed tall" src="{{ rel }}{{ report }}#cross"
-        title="趨勢X六大X報酬：技術面四關全過，再篩六大評分與報酬風險比"></iframe>
+        title="趨勢×六大×報酬：技術面四關全過，再篩六大評分與報酬風險比"></iframe>
 {% endblock %}

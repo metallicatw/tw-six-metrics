@@ -246,6 +246,17 @@ def test_股價健診資料不足時是空不是正常():
     assert rows[1]["ok"] is True, "三個月漲了 60% 以上，反彈那一項是正常"
 
 
+def test_總評分的圖從第一個有分數的那一天開始():
+    """2330 的〔全部〕：760 天裡前 239 天沒有年線，評分是空的，圖的左邊一大段留白。"""
+    assert _node({"first": [None, None, 3, None, 5]})["first"] == 2
+    assert _node({"first": [None, None]})["first"] == -1
+    js = (TPL / "site.js").read_text("utf-8")
+    block = js[js.index("TWSIXChart($('pxh-c2')") - 700:js.index("TWSIXChart($('pxh-c2')") + 80]
+    assert "pxFirstValid(score)" in block and "range: rng2" in block, (
+        "總評分那張圖的區間還是跟著上面那張，前面沒有分數的日子會畫成一段空白"
+    )
+
+
 def test_三年EPS逐年累乘():
     eps = _node({"y3": {"rev": 3809054, "sh": 259.32, "g": [36, 36, 36], "m": [56, 56, 56]}})["y3"]
     assert [round(v, 2) for v in eps] == [111.87, 152.14, 206.91], eps

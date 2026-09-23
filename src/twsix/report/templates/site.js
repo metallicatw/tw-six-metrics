@@ -1997,8 +1997,13 @@ function pxChecks(C, MA, i, P){
       {name: '季線(60MA)', color: '#ea7c0c', values: MA[60], width: 1.2},
       {name: '年線(240MA)', color: '#dc2626', values: MA[240], width: 1.2}
     ]});
-    /* 分數越高越健康；顏色沿用台股慣例，強（高分）是紅、弱（低分）是綠。 */
-    TWSIXChart($('pxh-c2'), {x: D, range: rng, yMin: 0, yMax: 6, height: 200,
+    /* 分數越高越健康；顏色沿用台股慣例，強（高分）是紅、弱（低分）是綠。
+       評分要六項都算得出來才有值——年線要 240 個交易日，所以最前面將近一年
+       是空的。這張圖的左端從第一個有分數的那一天開始，不跟著上面那張留白；
+       縮放到比那一天更早的區間時照原樣畫（那一段本來就沒有分數）。 */
+    var f0 = pxFirstValid(score);
+    var rng2 = (f0 >= 0 && f0 > rng[0] && f0 < rng[1]) ? [f0, rng[1]] : rng;
+    TWSIXChart($('pxh-c2'), {x: D, range: rng2, yMin: 0, yMax: 6, height: 200,
       fmt: function(v){ return v === null || v === undefined ? '資料不足' : String(v); },
       series: [{name: '總評分', color: '#e0582a', values: score, step: true, width: 1.6,
         area: [[0, '#ef4444', .32], [.5, '#f59e0b', .22], [1, '#10b981', .28]]}]});
@@ -2044,6 +2049,12 @@ function pxChecks(C, MA, i, P){
   setTimeout(first, 0);
 })();
 
+
+/* 第一個不是 null 的位置；全部是 null 回 -1。 */
+function pxFirstValid(a){
+  for(var i = 0; i < a.length; i++){ if(a[i] !== null && a[i] !== undefined) return i; }
+  return -1;
+}
 
 /* 三年 EPS：逐年累乘營收，乘該年淨利率，除以股數。
    rev 百萬元、sh 億股、g／m 是百分比的三元素陣列。百萬 ÷ 億股 ＝ 元 ÷ 100。 */

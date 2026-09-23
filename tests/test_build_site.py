@@ -1249,14 +1249,14 @@ def test_the_trend_tab_appears_only_when_the_report_is_really_there(tmp_path=Non
     sheets = _sheets(tmp)
 
     build_site(_records(), out, sheets_dir=sheets)
-    assert "趨勢X六大X報酬" not in (out / "index.html").read_text("utf-8")
+    assert "趨勢×六大×報酬" not in (out / "index.html").read_text("utf-8")
     assert not (out / TREND_PAGE).exists(), "沒有報告就不該畫一個空的框"
 
     out.mkdir(parents=True, exist_ok=True)
     (out / TREND_REPORT).write_text("<html>線圖</html>", encoding="utf-8")
     build_site(_records(), out, sheets_dir=sheets)
     listing = (out / "index.html").read_text("utf-8")
-    assert ">趨勢X六大X報酬</a>" in listing and "trend.html" in listing
+    assert ">趨勢×六大×報酬</a>" in listing and "trend.html" in listing
     # 個股頁在子目錄裡，連結要帶 ../。這一項本來漏掉過一次：完整版的個股頁
     # 自己組 context，不是 `**base`，所以導覽列多一項就要記得從那裡帶進去。
     assert '"../trend.html"' in (out / "stock" / "5439.html").read_text("utf-8")
@@ -1290,13 +1290,13 @@ def test_the_trend_report_is_embedded_not_linked(tmp_path=None):
 #: 名字帶著範圍，因為前四項全是台股、第五項根本不是，而原本那四個兩字詞
 #: （評等／觀察／趨勢／監控）看不出這件事。
 #:
-#: 〔趨勢X六大X報酬〕是原本的〔台股趨勢選股〕和〔趨勢∩六大∩報酬〕併起來的一項。
+#: 〔趨勢×六大×報酬〕是原本的〔台股趨勢選股〕和〔趨勢∩六大∩報酬〕併起來的一項。
 #: 兩頁嵌的本來就是同一份報告，差別只有兩個輸入框的預設值——而那兩個門檻就攤在
 #: 報告最上面那一列，隨時可以改成 0。兩個導覽項買到的只有那個預設值。
 NAV_EXPECTED = [
     ("nav-list",  "台股評等清單"),
     ("nav-watch", "台股觀察清單"),
-    ("nav-trend", "趨勢X六大X報酬"),
+    ("nav-trend", "趨勢×六大×報酬"),
     ("nav-mon",   "全球市場監控＋日股觀察"),
 ]
 
@@ -1915,8 +1915,8 @@ def test_那一頁預設就帶_cross(tmp_path=None):
     # 分頁標題（瀏覽器分頁上、加書籤時看到的那個字）也要跟著改。
     # 漏掉的症狀很安靜：頁面上寫著新名字，書籤和分頁上還是舊的。
     title = page.split("<title>")[1].split("</title>")[0]
-    assert title.startswith("趨勢X六大X報酬"), f"分頁標題還是舊的：{title}"
-    assert "<h2>趨勢X六大X報酬" in page, "頁面上的標題沒改"
+    assert title.startswith("趨勢×六大×報酬"), f"分頁標題還是舊的：{title}"
+    assert "<h2>趨勢×六大×報酬" in page, "頁面上的標題沒改"
     # 兩個門檻預設是 0（＝不啟用），而這一頁的名字寫著六大和報酬——不說清楚的話
     # 讀者會以為名單已經篩過那兩關了。
     assert "只顯示、不篩" in page, "燈泡沒有說那兩個數字預設不拿來篩"
@@ -1978,7 +1978,7 @@ def test_每一種頁面的導覽列都有那一項(tmp_path=None):
                 "——多半是某個 context 漏了帶那個參數"
             )
     first = seen["index.html"]
-    assert "趨勢X六大X報酬" in first, first
+    assert "趨勢×六大×報酬" in first, first
     for name, items in seen.items():
         assert items == first, (
             f"{name} 的導覽列和〔評等清單〕不一樣：\n  {items}\n  {first}"
@@ -1997,7 +1997,7 @@ def test_沒有趨勢報告就整項不出現(tmp_path=None):
     assert not (out / "trend.html").exists(), "沒有上游報告卻畫了那一頁"
     assert not (out / "cross.html").exists(), "沒有上游報告卻畫了轉址頁"
     nav = (out / "index.html").read_text("utf-8").split("<nav>")[1].split("</nav>")[0]
-    assert "趨勢X六大X報酬" not in nav
+    assert "趨勢×六大×報酬" not in nav
 
 
 def test_觀察清單那一頁才有上移下移(tmp_path=None):
