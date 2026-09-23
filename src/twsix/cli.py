@@ -3296,6 +3296,18 @@ def cmd_backfill_statements(args: argparse.Namespace) -> int:
                     failed += 1
                     print(f"  {period} {MARKETS[market]} {kind}：沒有資料（可能還沒公告）")
                     continue
+                # 「最新的那一期永遠重抓」的另一面：重抓回來的那一份**可能是半份**。
+                #
+                # 2026-09-23 那一趟就是這樣：MOPS 回了一頁只剩銀行業那張表的回應
+                # （13 列），而這裡照寫——1,084 列的 115Q2 損益表被換成 13 列，
+                # 2330 從全市場財報裡消失，CI 的 test_endpoint_contract 紅了兩條。
+                # `cmd_fetch` 早就有 `_shrank` 擋這件事，這條路漏了。
+                shrink = _shrank(store, table, len(rows))
+                if shrink:
+                    failed += 1
+                    print(f"  {period} {MARKETS[market]} {kind}：跳過，{shrink}",
+                          file=sys.stderr)
+                    continue
                 columns = sorted({k for r in rows for k in r})
                 n = store.write(table, rows, columns, sort_by=("公司代號",))
                 wrote += 1

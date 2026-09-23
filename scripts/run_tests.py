@@ -9,7 +9,9 @@ a CI job that has not restored its cache yet.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import os
 import sys
 import time
@@ -108,14 +110,26 @@ def main() -> int:
             fn = getattr(module, name)
             if not callable(fn):
                 continue
+            # 測試自己印的東西先收起來，只有失敗時才放出來。
+            #
+            # 心跳那幾條測試會把**假資料**的報告整份印出來（「心跳 2026-09-15」
+            # 「❌ 停了或少了（2）：每日收盤最新的一天是 2026-09-01」）。它們是
+            # 夾具，不是這個 repo 現在的狀態——但出現在 CI 的 log 裡，長得跟真的
+            # 警報一模一樣，而且就在真正的失敗旁邊。讀 log 的人沒有理由分得出來。
+            out = io.StringIO()
             try:
-                fn()
+                with contextlib.redirect_stdout(out):
+                    fn()
             except optional as exc:  # type: ignore[misc]
                 skipped += 1
                 print(f"  {YELLOW}skip{RESET} {name} — {exc}")
             except Exception:
                 failed += 1
-                failures.append((f"{path.name}::{name}", traceback.format_exc()))
+                said = out.getvalue()
+                tb = traceback.format_exc()
+                if said.strip():
+                    tb = "（測試印出的內容）\n" + said.rstrip() + "\n\n" + tb
+                failures.append((f"{path.name}::{name}", tb))
                 print(f"  {RED}FAIL{RESET} {name}")
             else:
                 passed += 1

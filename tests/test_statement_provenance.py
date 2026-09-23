@@ -286,3 +286,37 @@ def test_最新的那一期永遠重抓():
     assert "not is_newest" in body and "is_summary_rows(existing)" in body, (
         "跳過的條件沒有把最新那一期排除掉——現金流量表會永遠停在第一份"
     )
+
+
+def test_回補重抓回來半份的時候不覆蓋():
+    """2026-09-23：MOPS 回了一頁只剩銀行業那張表的回應，最新那一期被整個換掉。
+
+    `data/market/twse_income/115Q2.csv` 從 1,084 列變成 13 列（只有金融股），
+    2330 從全市場財報消失。最新那一期**每天重抓**（上一條），所以只要有一天回應
+    是半份，完整的那一份就沒了——這裡要擋的就是那一天。
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        store = Store(root)
+        full = [dict(r, 公司代號=f"{1000 + i}") for i, r in
+                enumerate(_summary_rows() * 10)]
+        columns = sorted({k for r in full for k in r})
+        table = market_path("twse_income", "115Q2")
+        store.write(table, full, columns)
+        _backfill(root)                    # 假的 MOPS 只回 2 列
+        after = store.read(table)
+        assert len(after) == len(full), (
+            f"既有 {len(full)} 列被回補的 {len(after)} 列半份蓋掉了"
+        )
+
+
+def test_回補重抓回來比較多的時候照寫():
+    """反方向：擋半份不能擋到正常的成長（同一季裡公司陸續申報）。"""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        store = Store(root)
+        rows = _summary_rows()[:1]
+        table = market_path("twse_income", "115Q2")
+        store.write(table, rows, sorted({k for r in rows for k in r}))
+        _backfill(root)
+        assert len(store.read(table)) == 2, "新的一份比較完整，卻沒有寫回去"
