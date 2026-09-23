@@ -261,6 +261,10 @@ p{margin:0 0 10px;max-width:78ch}
    左讀的那幾欄（代號／財報基準／名稱／產業）**不置中**：名稱和產業長度差很多，
    置中會讓每一列的起點都不一樣，掃一整欄會比現在累。 */
 #t th.mid,#t td.mid{text-align:center}
+/* 置中欄的標題文字也要真的置中。`th.num button.sortable{text-align:right}` 比
+   `#t th.mid` 晚、而且直接寫在按鈕上，於是〔綜合評分〕〔5日漲跌〕這種「數字＋
+   置中」的欄，數值置中、標題卻靠右（量到偏 9～11px）。 */
+#t th.mid button.sortable{text-align:center}
 /* 報酬風險比那 −38px 是燈泡造成的：標題和燈泡並排，所以標題被往左推了半顆
    燈泡。左邊補一塊一樣寬的空白，標題才真的落在格子的中心上——也就是數值的
    那條軸上。`--bulb` 兩邊共用，改一個地方就好。 */
@@ -301,6 +305,13 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;
    第三行去——整列標題被撐高一截，而那顆燈泡看起來像是下一欄的東西。
    `align-items:center` 讓它對齊兩行標題的中線，不是最後一行的基線。 */
 thead th .hdtip{--bulb:30px;display:inline-flex;align-items:center;gap:5px}
+/* 標題文字要和同一列其他標題站在同一條線上（2026-09-23 量到〔報酬風險比〕高了
+   6px）。原因是 inline-flex 的基線：沒有任何子項參與基線對齊時，容器拿「最前面
+   那一個子項」的基線——而最前面那一個是左邊那塊空白（::before），它沒有文字，
+   基線是合成出來的盒子中線。整顆標題因此以中線對齊別人的第一行文字，往上跑。
+   讓標題按鈕自己參與基線對齊，容器的基線就是它第一行字的基線；燈泡和那塊空白
+   照舊置中。 */
+thead th .hdtip>button.sortable{align-self:baseline}
 .rrguide{list-style:none;margin:6px 0;padding:0;font-size:12px}
 .rrguide li{display:grid;grid-template-columns:5.5em 7em 1fr;gap:2px 8px;
   padding:4px 0;border-top:1px solid var(--rule)}
@@ -1135,12 +1146,25 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 #t.compact .basis b{font-size:11px}
 #t.compact .pick{font-size:11px}
 #t.compact .g{min-width:24px;padding:1px 4px;font-size:11px}
+/* 「數據不足」「不評分」這種字的徽章：六個等第欄的寬度是被它們撐開的（62px，
+   字母徽章只要 54）。縮小字，不改字——改成「—」會和「沒有資料」混在一起。 */
+#t.compact .g.g-na{padding:1px 2px;font-size:9.5px;letter-spacing:-.02em}
 /* 收盤價：數字靠右，走勢圖圖示貼在數字右邊。 */
 #t td.px{font-weight:600;font-variant-numeric:tabular-nums}
 #t td.px .pxv.flat{color:var(--ink)}
+/* 收盤日期和標題那一天不同（停牌、剛恢復交易）：數字淡一點，滑鼠停上去看得到日期。 */
+#t td.px.pxold .pxv{opacity:.55}
 #t .yf{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
   margin-left:3px;vertical-align:-3px;border-radius:4px;color:var(--accent-2);
   border:1px solid var(--rule);background:var(--surface-2);text-decoration:none}
+/* 走勢圖的小圖示：一條往右上的折線加箭頭。用 mask 畫，顏色跟著 currentColor
+   （深色模式也對），而且整張表只有這一份——每一列只剩一個空的 <a>。 */
+#t .yf::before{content:'';width:13px;height:13px;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 14.5h13' stroke-width='1.3' opacity='.55'/%3E%3Cpath d='M2 11.5l3.6-4 2.8 2.6L14 3.6M10.4 3.4H14v3.6' stroke-width='1.7'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 14.5h13' stroke-width='1.3' opacity='.55'/%3E%3Cpath d='M2 11.5l3.6-4 2.8 2.6L14 3.6M10.4 3.4H14v3.6' stroke-width='1.7'/%3E%3C/svg%3E") center/contain no-repeat}
+/* 〔收盤價〕標題底下那一行日期：小、淡、自己一行。 */
+thead th .hsub{display:block;margin-top:1px;font-size:10px;font-weight:400;
+  color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:0}
 #t .yf:hover{border-color:var(--accent-2);background:var(--surface)}
 #t .yf:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
 /* 日漲跌：上一行是元、下一行是 %，疊起來而不是並排——並排那一格 100px。 */
@@ -1150,5 +1174,9 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 .flat{color:var(--muted)}
 /* 報酬風險比那一欄的燈泡：這一頁上縮成 22px。左邊那塊等寬的空白（讓標題落在
    格子中心的那一塊，見上面的 .hdtip::before）跟著一起縮，所以兩邊仍然同軸。 */
-#t.compact thead th .hdtip{--bulb:22px;gap:3px}
-#t.compact thead th .hdtip .bulb{padding:1px 3px;font-size:12px}
+#t.compact thead th .hdtip{--bulb:18px;gap:2px}
+/* 寬度寫死（不是 min-width）：左邊那塊空白也是 --bulb 寬，兩邊一樣寬標題才真的
+   落在格子中心——燈泡實際比 --bulb 寬的話，標題會被往左推（量到偏 5px）。 */
+#t.compact thead th .hdtip .bulb{width:var(--bulb);min-width:0;height:var(--bulb);
+  padding:0;font-size:11px;box-sizing:border-box;display:inline-flex;
+  align-items:center;justify-content:center}

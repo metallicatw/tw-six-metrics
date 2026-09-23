@@ -44,7 +44,7 @@
    「+0.50」「—」「AA」照字串排會排出胡說，而把「怎麼比大小」放進 JS 去猜每一欄
    的型別，等於在兩個地方各寫一次規則。這裡一次寫好：數字就是數字，等第換成
    0~4，沒有值一律是最小的 -999——排序時沉到底，而不是插在中間。 #}
-{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False) -%}
+{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False, price_date='') -%}
 {% set when = (fetched_at or {}).get(r.stock_id) %}
 {% set has_full = when or (rich_ids and r.stock_id in rich_ids) %}
 <tr data-code="{{ r.stock_id }}">
@@ -103,7 +103,7 @@
       {%- if when %} title="報表更新於 {{ when }}　完整報告：河流圖、季節性、外資投信、個股新聞（大戶／董監持股另由每週排程更新）"
       {%- elif has_full %} title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞"{% endif %}>
     {{ basis(r) }}</td>
-  {% if prices %}{{ price_cells(r) }}{% endif %}
+  {% if prices %}{{ price_cells(r, price_date) }}{% endif %}
   {% for key in ('revenue_yoy','operating_margin','net_income_yoy','eps','inventory_turnover','free_cash_flow') %}
   <td class="mid" data-s="{{ {'AA':4,'A':3,'BB':2,'B':1,'C':0}.get(r.grades[key], -999) }}">{{ grade(r.grades[key]) }}</td>
   {% endfor %}
@@ -213,6 +213,9 @@
    1,900 列、比的是體質；多四欄會把它推到要橫向捲。
 
    收盤價那一格右邊是一顆走勢圖的小圖示，連到 Yahoo 股市那一檔的〔走勢圖〕。
+   圖示是 CSS 畫的（site.css 的 `.yf::before`，一個 mask），不是每一列一份 <svg>：
+   〔評等清單〕有 1,900 列，每列 450 位元組的 svg 就是 850 KB，而那 850 KB 每一列
+   都一模一樣。
    放在同一格而不是另開一欄：它是那個價格的「看圖」，不是另一個數字——多一欄
    就多一條欄線和一組留白。
 
@@ -233,24 +236,26 @@
 {%- if big -%}{{ '{:,.0f}'.format(v) }}{%- else -%}{{ '{:,.2f}'.format(v) }}{%- endif -%}
 {%- endmacro %}
 
-{% macro price_cells(r) -%}
+{% macro price_cells(r, price_date='') -%}
 {%- set p = r.px -%}
 {%- set big = p is not none and p.close >= 1000 -%}
 {%- if p is none -%}
 <td class="num px muted" data-s="-999">—</td><td class="num mid" data-s="-999"><span class="muted">—</span></td><td class="num mid" data-s="-999"><span class="muted">—</span></td><td class="num mid" data-s="-999"><span class="muted">—</span></td>
 {%- else -%}
-<td class="num px" data-s="{{ '%.4f'|format(p.close) }}" title="{{ p.date }} 收盤"><span class="pxv {{ chg_class(p.chg) }}">{{ money(p.close, big) }}</span><a class="yf" href="{{ p.yahoo }}" target="_blank" rel="noopener" title="到 Yahoo股市看 {{ r.stock_id }} 的走勢圖" aria-label="{{ r.stock_id }} Yahoo股市走勢圖"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M1.5 14.5h13" fill="none" stroke="currentColor" stroke-width="1.3" opacity=".55"/><path d="M2 11.5l3.6-4 2.8 2.6L14 3.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.4 3.4H14v3.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></a></td>
-<td class="num mid chg" data-s="{{ '%.4f'|format(p.chg_pct) if p.chg_pct is not none else -999 }}">
+{#- 和標題那一天同一天的就不再寫一次（1,900 列各寫一次是 50 KB）；不同天的——
+    停牌、剛恢復交易——才在格子上標出它自己的日期。 -#}
+<td class="num px{{ ' pxold' if p.date.replace('-', '/') != price_date else '' }}" data-s="{{ '%.2f'|format(p.close) }}"{% if p.date.replace('-', '/') != price_date %} title="{{ p.date }} 收盤"{% endif %}><span class="pxv {{ chg_class(p.chg) }}">{{ money(p.close, big) }}</span><a class="yf" href="{{ p.yahoo }}" target="_blank" rel="noopener" title="Yahoo股市走勢圖" aria-label="{{ r.stock_id }} 走勢圖"></a></td>
+<td class="num mid chg" data-s="{{ '%.2f'|format(p.chg_pct) if p.chg_pct is not none else -999 }}">
 {%- if p.chg is none -%}<span class="muted">—</span>
 {%- else -%}<span class="{{ chg_class(p.chg) }}">{{ ('+' if p.chg > 0 else '') ~ money(p.chg, big) }}</span><small class="{{ chg_class(p.chg) }}">{{ pct_text(p.chg_pct) }}</small>{%- endif -%}</td>
 {%- for n in (5, 20) %}
 {%- set v = p.window.get(n) %}
-<td class="num mid" data-s="{{ '%.4f'|format(v) if v is not none else -999 }}"><span class="{{ chg_class(v) }}">{{ pct_text(v) }}</span></td>
+<td class="num mid" data-s="{{ '%.2f'|format(v) if v is not none else -999 }}"><span class="{{ chg_class(v) }}">{{ pct_text(v) }}</span></td>
 {%- endfor -%}
 {%- endif -%}
 {%- endmacro %}
 
-{% macro table_head(prices=False) -%}
+{% macro table_head(prices=False, price_date='') -%}
 {# 觀察清單多了四欄（產業右邊），後面每一欄的欄號都往後推四格。欄號就是 site.js
    排序時去讀的 `tr.cells[欄號]`，差一格就是「點 EPS 排出來的是營收」。 #}
 {%- set o = 4 if prices else 0 -%}
@@ -262,9 +267,10 @@
   <th><button type="button" class="sortable" data-col="3">名稱</button></th>
   <th class="mid"><button type="button" class="sortable" data-col="4">市場</button></th>
   <th><button type="button" class="sortable" data-col="5">產業</button></th>
-  <th><button type="button" class="sortable" data-col="6">財報<br>基準</button></th>
+  <th><button type="button" class="sortable" data-col="6">財報基準</button></th>
   {% if prices %}
-  <th class="num px"><button type="button" class="sortable" data-col="7">收盤價</button></th>
+  {# 標題底下一行小字寫是哪一天的收盤：一個沒有日期的價格看起來永遠像今天的。 #}
+  <th class="num px"><button type="button" class="sortable" data-col="7">收盤價{% if price_date %}<span class="hsub">{{ price_date }}</span>{% endif %}</button></th>
   <th class="num mid"><button type="button" class="sortable" data-col="8">日漲跌</button></th>
   <th class="num mid"><button type="button" class="sortable" data-col="9">5日<br>漲跌</button></th>
   {# 這四欄的說明（沒有還原除權息、日漲跌對參考價）放在頁面上方那一段的燈泡裡，
@@ -331,4 +337,17 @@
 <span class="tip"><button type="button" class="bulb" aria-expanded="false"
   title="說明"><span aria-hidden="true">💡</span><span class="sr">說明</span></button
   ><span class="tipbox" role="note">{{ caller() }}</span></span>
+{%- endmacro %}
+
+{# 收盤價那四欄的說明。〔評等清單〕與〔觀察清單〕兩頁的燈泡共用這一段。 #}
+{% macro price_note() -%}
+  <b>收盤價、日漲跌、5 日、20 日漲跌</b>每個交易日收盤後更新；收盤價標題底下那一行
+  小字是哪一天的收盤。<b>5 日、20 日</b>是最新收盤和往回第 5、第 20 個<b>交易日</b>的
+  收盤相比。
+  <br><br><b>沒有還原除權息。</b>除息那一天的跳空會算進去——和 Yahoo 股市、
+  券商軟體預設顯示的一樣，是帳面上的價差，不是持有的報酬。一檔剛配息 5% 的
+  股票，在這裡看起來會像跌了 5%。
+  <br><br><b>日漲跌</b>用的是交易所公布的漲跌價差（對參考價），除權息那一天也對；
+  上面一行是元、下面一行是 %。點欄位標題排序時看的是 %。
+  <br><br>收盤價右邊那顆 <b>↗ 圖示</b>開 Yahoo 股市那一檔的走勢圖（新分頁）。
 {%- endmacro %}

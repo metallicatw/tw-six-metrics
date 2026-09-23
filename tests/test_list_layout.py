@@ -242,14 +242,12 @@ def test_標題和數值站在同一條軸上():
     rows = _macro("row(r,")
     assert rows.count('class="mid"') + rows.count('mid"') >= 6, rows.count('mid"')
     head = _macro("table_head(")
-    # 〔觀察清單〕那四欄（收盤價、日漲跌、5 日、20 日）包在 `{% if prices %}` 裡，
-    # 只有那一頁畫。這裡數的是兩張表共同的那十一欄，所以先把那一段拿掉。
-    head = re.sub(r"\{% if prices %\}.*?\{% endif %\}", "", head, flags=re.S)
     # 先算出來再放進訊息裡：f-string 的替換欄位裡不能有反斜線。
     n_mid = head.count('class="mid"') + head.count('class="num mid"')
-    assert n_mid == 11, (
-        f"標題只有 {n_mid} 欄置中，應該是 11 欄"
-        "（六個等第＋市場＋具投資價值＋綜合評分＋評分變化＋報酬風險比）"
+    assert n_mid == 14, (
+        f"標題只有 {n_mid} 欄置中，應該是 14 欄"
+        "（六個等第＋市場＋具投資價值＋綜合評分＋評分變化＋報酬風險比"
+        "＋日漲跌、5 日、20 日漲跌）"
     )
 
 
