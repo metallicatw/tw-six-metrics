@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import csv
+import functools
 import gzip
 import io
 import json
@@ -103,7 +104,14 @@ def _prices_dir(tmp: Path) -> None:
         (folder / f"{day}.csv.gz").write_bytes(gzip.compress(buf.getvalue().encode()))
 
 
+@functools.cache
 def _built() -> tuple[str, str]:
+    """建一次站，兩張清單頁給這一檔的每一條測試共用。
+
+    **不能在模組載入時就建。** CI 的〔零相依測試〕那一步刻意不裝 jinja2，建站會
+    丟 `MissingOptional`——在測試函式裡丟，runner 記成「跳過」；在 import 的時候
+    丟，runner 記成「這個檔案載入失敗」，整步變紅（2026-09-23 就是這樣紅的）。
+    """
     tmp = _tmp()
     out = tmp / "site"
     sheets = _sheets(tmp)
@@ -112,7 +120,12 @@ def _built() -> tuple[str, str]:
     return (out / "watchlist.html").read_text("utf-8"), (out / "index.html").read_text("utf-8")
 
 
-WATCH, LISTING = _built()
+def _watch() -> str:
+    return _built()[0]
+
+
+def _listing() -> str:
+    return _built()[1]
 
 
 def _heads(page):
@@ -122,13 +135,13 @@ def _heads(page):
 
 
 def test_觀察清單的欄位順序():
-    names, _ = _heads(WATCH)
+    names, _ = _heads(_watch())
     i = names.index("產業")
     assert names[i + 1:i + 6] == ["財報基準", "收盤價", "日漲跌", "5日漲跌", "20日漲跌"], names
 
 
 def test_評等清單的財報基準在產業右邊_而且沒有價格欄():
-    names, _ = _heads(LISTING)
+    names, _ = _heads(_listing())
     i = names.index("產業")
     assert names[i + 1] == "財報基準", names
     assert names[:i] == ["", "★", "代號", "名稱", "市場"], names
@@ -137,7 +150,7 @@ def test_評等清單的財報基準在產業右邊_而且沒有價格欄():
 
 def test_兩張表的欄號都對得上位置():
     """`data-col` 是 `tr.cells[col]` 的索引。觀察清單多四欄，後面每一欄都要往後推。"""
-    for page in (WATCH, LISTING):
+    for page in (_watch(), _listing()):
         _, ths = _heads(page)
         for i, th in enumerate(ths):
             m = re.search(r'data-col="(\d+)"', th)
@@ -147,21 +160,21 @@ def test_兩張表的欄號都對得上位置():
 
 
 def test_觀察清單上真的畫出價格與走勢圖連結():
-    row = WATCH.split('<tr data-code="2330"')[1].split("</tr>")[0]
+    row = _watch().split('<tr data-code="2330"')[1].split("</tr>")[0]
     assert "1,200" in row, "收盤價不在那一列上（千元以上不印小數）"
     assert 'href="https://tw.stock.yahoo.com/quote/2330.TW"' in row
     assert 'target="_blank"' in row and 'class="yf"' in row
     assert "+0.84%" in row, "日漲跌幅：10 ÷ 1,190"
     assert "+4.35%" in row, "5 日：1,200 ÷ 1,150"
     assert "+20.00%" in row, "20 日：1,200 ÷ 1,000"
-    down = WATCH.split('<tr data-code="5439"')[1].split("</tr>")[0]
+    down = _watch().split('<tr data-code="5439"')[1].split("</tr>")[0]
     assert "quote/5439.TWO" in down, "上櫃要連 .TWO"
     assert 'class="down"' in down, "跌要是綠色（down）"
 
 
 def test_觀察清單收緊了_評等清單沒動():
-    assert '<table id="t" class="compact" data-watchlist="1">' in WATCH
-    assert 'class="compact"' not in LISTING
+    assert '<table id="t" class="compact" data-watchlist="1">' in _watch()
+    assert 'class="compact"' not in _listing()
     assert "#t.compact th,#t.compact td{padding:3px 4px}" in CSS
     assert re.search(r"#t\.compact td\.ind\{[^}]*white-space:normal", CSS), "產業不會折行"
 
