@@ -131,7 +131,11 @@ jobs:
         uses: ./.github/actions/push-with-retry
 
       # 和「加一檔個股」一樣：建站就在這個 job 裡做，不叫醒第二台 runner。
+      # 有新資料才建站發布（2026-09-23 起）。以前是「一定建」，於是週四那一班
+      # ——大多數週都只是確認週一那次沒漏——每一次都把一模一樣的網站再發布一次。
+      # 手動觸發照舊一定建：那是有人想「順便更新網站」的時候按的。
       - name: 建站
+        if: steps.commit.outputs.changed != 'no' || github.event_name == 'workflow_dispatch'
         uses: ./.github/actions/build-site
         with:
           incremental: "true"
@@ -139,5 +143,6 @@ jobs:
           setup: "false"
 
       - name: 發布
+        if: steps.commit.outputs.changed != 'no' || github.event_name == 'workflow_dispatch'
         id: deployment
         uses: actions/deploy-pages@v4

@@ -1,41 +1,37 @@
 name: 全市場官方資料（月營收／季財報）
 
-# 每天抓一次全市場的月營收與季財報，依期別存檔累積。
+# 抓全市場的月營收與季財報，依期別存檔累積；月營收會折回每一檔的〔營收〕分頁
+# 並**重算那幾檔的評等**（cli._fold_revenue），所以有新資料的時候網站上的等第
+# 會跟著變——這一條因此在有變動的時候建站發布。
 #
-# 為什麼是「每天」而不是照申報截止日排：
+# ## 什麼時候跑（2026-09-23 從「每天」改成「有資料會出來的日子」）
 #
-#   月營收 10 日前申報、季報 5/15、8/14、11/14、年報 3/31——把這些日子寫成 cron
-#   要算五條規則，而算錯的代價是整整一期永遠拿不到（官方端點只給最新一期，沒有
-#   日期參數）。每天跑一次不必算：期別沒變的時候寫出來的位元組一模一樣，
-#   `git diff --cached --quiet` 就會判定沒有差異、直接結束，不留空 commit。
+# 官方端點只給**最新一期**、沒有日期參數，錯過就拿不回來——所以以前選擇每天跑，
+# 用不必算日子換可靠。代價是一個月裡有十五、六天，它抓回來的東西和前一天一模
+# 一樣（`changed=no`）。現在照申報時程排，而每一段都留了餘裕：
 #
-#   成本是每天 8 次請求（上市／上櫃 × 公司／營收／損益／資產負債），全部是政府
-#   開放資料。用可靠性換這 8 次請求，划算得不必猶豫。
+#   * 每月 1～15 日每天：月營收 10 日前申報，11～15 日接更正與晚交的；
+#     Q1（5/15）、Q2（8/14）、Q3（11/14）的截止日也都落在這一段裡。
+#   * 3 月 16～31 日每天：年報截止 3/31，申報集中在月底。
+#   * 每月 18、25 日：保險。接零星的更正與晚交，也接住上面哪一天被 GitHub 丟掉
+#     的那一次——端點給的是「最新一期」，晚幾天抓到的還是同一期。
 #
-# 為什麼這件事重要：
-#
-#   在把期別放進檔名之前，每一季抓回來的財報都寫進同一個 data/twse_income.csv，
-#   下一季直接覆蓋。於是六大指標需要的九期，永遠只有不斷被換掉的那一期——
-#   〔評等清單〕停在一年前的活頁簿快照，原因不是官方端點給不出資料，是我們把它
-#   丟掉了。
-#
-#   歷史只能往前累積：今天不開始，第二個資料點就要再等三個月。
-#
-# 這條排程**還不會改變網站上的任何數字**。它只負責把資料存下來；把這些檔案接進
-# 評等引擎是下一階段的事（見〈架構檢討：每天自動最新的資料庫方案〉階段一）。
-# 所以這裡不建站、不發布——沒有東西可發布。
+# 期別沒變的時候寫出來的位元組一模一樣，`git diff --cached --quiet` 會直接結束，
+# 不留空 commit、不建站。
 
 on:
   schedule:
-    # 台北時間每天 09:17。營收與財報都在盤前就已經公告，不必等收盤。
-    #
-    # `:20` → `:17`：圓整分鐘是 GitHub 排程最擠的位置，而擠到一定程度排程會被
-    # 直接丟掉，不通知也不記錄。挑一個沒有人選的數字，成本是零。
-    - cron: "17 1 * * *"
+    # 台北 09:17（前一天申報的，官方彙總隔天早上就有）。三條的分鐘錯開：
+    # test_schedule 不准同一分鐘兩條，也避免同一天被觸發兩次。
+    - cron: "17 1 1-15 * *"
+    - cron: "19 1 16-31 3 *"
+    - cron: "21 1 18,25 * *"
   workflow_dispatch:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: market
@@ -44,6 +40,9 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,8 +51,13 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      # 抓取本身不需要 jinja2——這條排程不建站。
-      - run: pip install -e .
+      # 建站要 jinja2（有新資料的時候建）。
+      - run: pip install -e ".[report]"
+
+      # 抓回來的東西會 commit 進 repo、而且（有新的一期時）發布網站：先確認引擎
+      # 是好的。bot 的 push 不觸發 ci.yml，這條路上沒有第二次機會。
+      - name: 測試
+        run: python scripts/run_tests.py
 
       - name: 抓取
         run: twsix fetch --all
@@ -111,3 +115,18 @@ jobs:
       - name: 推送
         if: steps.commit.outputs.changed != 'no'
         uses: ./.github/actions/push-with-retry
+
+      # 有新的一期才建站：月營收折進去之後，那幾檔的等第與〔營收〕分頁都變了。
+      # 以前這一條不建站，週末交的月營收要等到週一 16:10 的每日排程才上網站。
+      - name: 建站
+        if: steps.commit.outputs.changed != 'no'
+        uses: ./.github/actions/build-site
+        with:
+          incremental: "true"
+          test: "false"
+          setup: "false"
+
+      - name: 發布
+        if: steps.commit.outputs.changed != 'no'
+        id: deployment
+        uses: actions/deploy-pages@v4

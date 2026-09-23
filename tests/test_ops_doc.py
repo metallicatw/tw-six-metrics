@@ -110,7 +110,7 @@ def test_會寫資料的排程都要跑測試():
     的那條路上不會被執行。
     """
     missing = []
-    for name in ("daily", "refresh", "ownership", "stock"):
+    for name in ("daily", "refresh", "ownership", "stock", "market", "history"):
         text = (WF / f"{name}.yml").read_text("utf-8")
         if "run_tests.py" not in text:
             missing.append(name)
