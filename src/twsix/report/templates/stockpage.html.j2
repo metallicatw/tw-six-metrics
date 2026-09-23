@@ -34,6 +34,10 @@
   <button type="button" role="tab" id="tab-summary" class="tab" aria-controls="panel-summary" aria-selected="true">評價簡表</button>
   <button type="button" role="tab" id="tab-six" class="tab" aria-controls="panel-six" aria-selected="false" tabindex="-1">六大財務指標評等</button>
   <button type="button" role="tab" id="tab-eps" class="tab" aria-controls="panel-eps" aria-selected="false" tabindex="-1">EPS預估與估價</button>
+  {# 〔財務健診〕〔股價健診〕緊接在〔EPS預估與估價〕右邊（2026-09-23）：看完「值
+     多少」，下一個問題是「體質有沒有正在出事」與「股價現在是強是弱」。 #}
+  <button type="button" role="tab" id="tab-health" class="tab" aria-controls="panel-health" aria-selected="false" tabindex="-1">財務健診</button>
+  <button type="button" role="tab" id="tab-pxhealth" class="tab" aria-controls="panel-pxhealth" aria-selected="false" tabindex="-1">股價健診</button>
   <button type="button" role="tab" id="tab-yield" class="tab" aria-controls="panel-yield" aria-selected="false" tabindex="-1">殖利率估價</button>
   <button type="button" role="tab" id="tab-river" class="tab" aria-controls="panel-river" aria-selected="false" tabindex="-1">河流圖</button>
   <button type="button" role="tab" id="tab-season" class="tab" aria-controls="panel-season" aria-selected="false" tabindex="-1">季節性</button>
@@ -66,6 +70,11 @@
 <p class="stale">{{ p.excluded }}——這一檔不適用六大指標。</p>
 {% endif %}
 
+{% if p.history and p.history.c %}
+{# 每日收盤：〔股價健診〕與〔推估三年目標價〕的圖共用。壓縮格式見 report/health.py
+   的 encode_history，還原見 site.js 的 pxDecode。 #}
+<script type="application/json" id="px-hist">{{ p.history|tojson }}</script>
+{% endif %}
 <section class="panel" id="panel-summary" role="tabpanel" aria-labelledby="tab-summary">
 <h3 id="summary">評價簡表</h3>
 
@@ -541,6 +550,37 @@
 </section>
 {% endif %}
 
+{% if p.three_year %}
+{# ================= 推估三年目標價 =================
+   〔估值方式二〕只推一年；這一區逐年累乘三年：今年營收 ＝ 去年全年 ×（1＋今年
+   成長率），明年 ＝ 今年 ×（1＋明年成長率）……每一年的 EPS ＝ 該年營收 × 該年
+   淨利率 ÷ 股數，目標價 ＝ EPS × 本益比。三張圖把三年的目標價畫在股價走勢上。
+   全部在瀏覽器裡算（site.js 的 threeYear）。 #}
+<section class="way way3" id="y3" data-code="{{ p.stock_id }}" data-seed='{{ p.three_year|tojson }}'>
+<h4 class="way-h"><span class="n">推估三年目標價</span>逐年累乘三年
+  <span class="sub">年營收基準採 {{ p.three_year.base_year }} 全年；成長率、淨利率預設為最近一季（{{ p.three_year.basis.quarter }}）的數字，三年相同——請務必自行調整</span></h4>
+  <div class="calc-inputs y3-in">
+    <label><span class="lab"><span class="t">年營收（百萬，可改）</span></span>
+      <input type="number" id="y3-rev" step="any"></label>
+    <label><span class="lab"><span class="t">股數（億股，可改）</span></span>
+      <input type="number" id="y3-sh" step="any"></label>
+  </div>
+  <div class="y3-rows">
+    <label>【預估未來三年營收成長率（%）】今年, 明年, 後年
+      <input type="text" id="y3-g" inputmode="decimal"></label>
+    <label>【預估未來三年淨利率（歸母）（%）】今年, 明年, 後年
+      <input type="text" id="y3-m" inputmode="decimal"></label>
+    <label>【預估本益比 PE】每個 PE 一列目標價
+      <input type="text" id="y3-pe" inputmode="decimal"></label>
+  </div>
+  <button type="button" class="btn-grab" id="y3-run">📊 計算三年〔預估EPS〕與〔預估目標價〕</button>
+  <button type="button" class="linkish" id="y3-reset">還原預設值</button>
+  <p class="calc-formula">逐年累乘：今年營收 ＝ 年營收 ×（1＋今年成長率），明年 ＝ 今年 ×（1＋明年成長率），後年同理；
+    該年 EPS ＝ 該年營收 × 該年淨利率 ÷ 股數　│　目標價 ＝ 該年 EPS × 預估本益比</p>
+  <div id="y3-out"></div>
+</section>
+{% endif %}
+
 {# 兩種估價法都以「報酬風險比」收尾，所以這一段留在底部，兩邊共用。 #}
 <div class="criteria">
   <h4>報酬風險比判斷準則<span class="muted">　總大EPS、PER 動態調整推估法</span></h4>
@@ -558,6 +598,103 @@
 </div>
 
 {# ================= 4. 殖利率估價 ================= #}
+</section>
+
+{# ================= 財務健診 =================
+   兩個子分頁：財務地雷（七個機械式檢查）、成長力分析（QoQ／YoY）。
+   數字全部在建站時算好（report/health.py），這裡只負責排版。 #}
+<section class="panel" id="panel-health" role="tabpanel" aria-labelledby="tab-health" hidden>
+<div class="hl">
+  <div class="hl-head">
+    <b>{{ p.stock_id }} {{ p.name }}</b>
+    {% if p.health.quarter %}<span>財報:<b>{{ p.health.quarter }}</b></span>{% endif %}
+    {% if p.revenue_month %}<span>營收:<b>{{ p.revenue_month }}</b></span>{% endif %}
+    {% if p.health.rows %}
+    <span class="hl-badge hl-{{ p.health.level_class }}">{{ p.health.level }}　{{ p.health.hits }}/{{ p.health.total }} 項地雷</span>
+    {% endif %}
+  </div>
+  <div class="subtabs" role="tablist" aria-label="財務健診">
+    <button type="button" role="tab" class="subtab" data-sub="hl-mines" aria-selected="true">財務地雷</button>
+    <button type="button" role="tab" class="subtab" data-sub="hl-growth" aria-selected="false">成長力分析</button>
+  </div>
+  <div class="subpanel" id="hl-mines" role="tabpanel">
+  {% if p.health.rows %}
+    <div class="scroll"><table class="hl-t">
+      <thead><tr><th>財務地雷指標</th><th class="st">狀態</th><th>說明</th></tr></thead>
+      <tbody>
+      {% for r in p.health.rows %}
+        <tr><td>{{ r.label }}</td>
+          <td class="st">{% if r.hit is none %}<span class="hl-na">— 不適用</span>{% elif r.hit %}<span class="hl-hit">⚠️ 命中</span>{% else %}<span class="hl-ok">✅ 正常</span>{% endif %}</td>
+          <td>{{ r.text }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <p class="note-s">註：命中越多代表財務體質越需留意（0 項＝健康、1～2 項＝留意、3 項以上＝高風險）；
+      本健診僅為機械式指標篩檢，非投資建議。</p>
+  {% else %}
+    <p class="stale">這一檔還沒有季報資料，無法健診。</p>
+  {% endif %}
+  </div>
+  <div class="subpanel" id="hl-growth" role="tabpanel" hidden>
+  {% if p.growth_q.rows %}
+    <p class="hl-sub">最近一季 <b>{{ p.growth_q.quarter }}</b>　｜　QoQ＝對上一季 {{ p.growth_q.prev }}　｜　YoY＝對去年同季 {{ p.growth_q.ly }}</p>
+    <div class="scroll"><table class="hl-t hl-g">
+      <thead><tr><th>項目</th><th class="num">最近一季</th><th class="num">QoQ</th><th class="num">YoY</th></tr></thead>
+      <tbody>
+      {% for r in p.growth_q.rows %}
+        <tr><td>{{ r.label }}</td>
+          <td class="num">{% if r.value is none %}—{% elif r.fmt == 'money' %}{{ '{:,.0f}'.format(r.value) }}{% elif r.fmt == 'pct' %}{{ '%.2f'|format(r.value) }}%{% else %}{{ '%.2f'|format(r.value) }}{% endif %}</td>
+          {% for v in (r.qoq, r.yoy) %}
+          <td class="num">{% if v is none %}<span class="muted">—</span>{% else %}<span class="{{ 'up' if v > 0 else ('down' if v < 0 else 'flat') }}">{{ '▲' if v > 0 else ('▼' if v < 0 else '') }} {{ '%+.2f'|format(v) if r.unit == 'pp' else '%+.1f'|format(v) }}{{ ' pp' if r.unit == 'pp' else '%' }}</span>{% endif %}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <p class="note-s">利益率／淨利率以百分點（pp）變化表示，營收／EPS 以百分比變化表示；<span class="up">紅 ▲ 成長</span>、<span class="down">綠 ▼ 衰退</span>（台股慣例）。
+      EPS 為負時變化率的分母取絕對值（−0.45 → −0.08 是改善）。<br>
+      註：淨利率（歸母）＝ 歸屬母公司稅後淨利 ÷ 營收；營收成長率優先用三個月的月營收加總計算。</p>
+  {% else %}
+    <p class="stale">這一檔還沒有季報資料。</p>
+  {% endif %}
+  </div>
+</div>
+</section>
+
+{# ================= 股價健診 =================
+   全部在瀏覽器裡算（site.js 的 pxHealth）：條件是讀者可以改的，改一次就要重算
+   六條均線與幾百天的評分，建站時算好只能給一組預設值。
+   資料是嵌在下面那段 JSON 裡的每日收盤（最多 760 個交易日）。 #}
+<section class="panel" id="panel-pxhealth" role="tabpanel" aria-labelledby="tab-pxhealth" hidden>
+{% if p.history and p.history.c %}
+<div class="pxh" id="pxh">
+  <div class="pxh-form">
+    <label>條件一：股價在 <input type="number" id="pxh-m1" min="1" max="12" step="1" value="3"> 月內從高檔下跌幅度超過 <input type="number" id="pxh-p1" min="1" max="90" step="1" value="20"> %</label>
+    <label>條件二：股價在 <input type="number" id="pxh-m2" min="1" max="12" step="1" value="3"> 月內從低檔上漲幅度超過 <input type="number" id="pxh-p2" min="1" max="300" step="1" value="20"> %</label>
+    <label>條件三：股價跌破前 <input type="number" id="pxh-d3" min="5" max="240" step="1" value="60"> 個交易日低點</label>
+    <div class="pxh-btns">
+      <button type="button" class="btn-grab" id="pxh-run">重新健診</button>
+      <button type="button" class="btn-grab alt" id="pxh-short">短期預設值</button>
+      <button type="button" class="btn-grab alt" id="pxh-mid">中期預設值</button>
+    </div>
+    <p class="note-s">短期 ＝ 1 月內 10%／1 月內 10%／前 20 日低點；中期 ＝ 3 月內 20%／3 月內 20%／前 60 日低點。按下即帶入條件並重新健診。
+      一個月以 21 個交易日計。本頁股價皆使用「收盤價」計算（含高低點、回檔幅度與月線／季線／年線），<b>未還原除權息</b>。</p>
+  </div>
+  <div id="pxh-out"></div>
+  <h4 class="pxh-h">股價與月／季／年線</h4>
+  <div class="pxc" id="pxh-c1"></div>
+  <h4 class="pxh-h">股價健診總評分（每日各項檢查「正常」的數目，越高越健康）</h4>
+  <div class="pxc" id="pxh-c2"></div>
+  <div class="pxh-zoom">
+    <span>縮放區間：</span>
+    <button type="button" data-zoom="21">近1月</button><button type="button" data-zoom="63">近3月</button><button type="button" data-zoom="126">近半年</button><button type="button" data-zoom="252">近1年</button><button type="button" data-zoom="0" class="on">全部</button>
+  </div>
+  <div class="pxh-range"><input type="range" id="pxh-r0" min="0" value="0" aria-label="區間起點"><input type="range" id="pxh-r1" min="0" value="0" aria-label="區間終點"></div>
+  <p class="note-s" id="pxh-span"></p>
+</div>
+{% else %}
+<p class="stale">這一檔還沒有每日收盤資料，無法做股價健診。</p>
+{% endif %}
 </section>
 
 <section class="panel" id="panel-yield" role="tabpanel" aria-labelledby="tab-yield" hidden>
@@ -955,7 +1092,9 @@
  * 個分頁；也讓舊的 #river 錨點連結仍然有效。
  */
 (function(){
-  var tabs=[].slice.call(document.querySelectorAll('[role=tab]'));
+  /* 只抓頁首那一排。〔財務健診〕裡面有自己的子分頁（也是 role=tab）——全頁抓的
+     話它們會被當成主分頁：點〔成長力分析〕會把整頁每一個分頁都藏起來。 */
+  var tabs=[].slice.call(document.querySelectorAll('.tabs [role=tab]'));
   if(!tabs.length) return;
   /* 切過去之後要停在那一頁的頁首。
      不捲的話，從第八個分頁切到第二個，畫面留在原來的捲動位置——那個位置在新的

@@ -52,6 +52,13 @@ class FinancialData:
     #: 數字，但券商手上是未四捨五入的原始數。見 grade_inventory_turnover。
     inventory_turnover_frq: dict[Quarter, float] = field(default_factory=dict)
     free_cash_flow: dict[Quarter, float] = field(default_factory=dict)
+    #: 單季營業收入（百萬元）。**不評分**——個股頁〔財務健診〕的成長力分析與
+    #: 季營收年增率要用。
+    revenue: dict[Quarter, float] = field(default_factory=dict)
+    #: 月營收金額（仟元），``{"115/08": …}``，一月**不**併進二月。季營收年增率
+    #: 用三個月加總算：財報上的單季營收是百萬元、四捨五入過，營收很小的公司
+    #: （2509 一季 62 百萬）兩季相比會差出零點幾個百分點。
+    revenue_monthly: dict[str, float] = field(default_factory=dict)
 
     #: Newest first, with January folded into February as ``115/01-02`` and no
     #: standalone January entry.  This is 〔營收〕's AD column and it is the

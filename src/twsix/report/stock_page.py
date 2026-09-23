@@ -253,6 +253,12 @@ class StockPage:
     revenue_season: Seasonal | None = None
     profit_season: Seasonal | None = None
     unbuilt: list[dict[str, str]] = field(default_factory=list)
+    #: 〔財務健診〕兩個子分頁與〔股價健診〕、〔推估三年目標價〕。見 report/health.py。
+    health: dict[str, Any] = field(default_factory=dict)
+    growth_q: dict[str, Any] = field(default_factory=dict)
+    three_year: dict[str, Any] = field(default_factory=dict)
+    #: 長的每日收盤（`health.encode_history` 壓過的），給兩張要畫股價的圖。
+    history: dict[str, Any] = field(default_factory=dict)
 
     @property
     def worth_researching(self) -> bool:
@@ -584,6 +590,8 @@ def build_page(
     #: 〔外資投信〕那兩張圖下面接的股價走勢用它；沒有就不畫那一格。
     closes: Any = None,
     news_items: Any = None,
+    #: `store.daily.price_history` 的一檔：(日期, 收盤)，舊的在前。
+    history: Any = None,
 ) -> StockPage:
     """Assemble the four sections from one rating and one valuation.
 
@@ -846,6 +854,15 @@ def build_page(
         }
         page.methodology = _methodology(valuation, settings)
     page.calc = _calc_seed(reader, page.stock_id, valuation)
+
+    # -- 財務健診／股價健診／推估三年目標價 --------------------------------
+    from .health import encode_history, financial_health, growth_analysis, three_year_seed
+
+    page.health = financial_health(data, page.fiscal_quarter)
+    page.growth_q = growth_analysis(data, page.fiscal_quarter)
+    page.three_year = three_year_seed(data, page.calc, page.fiscal_quarter)
+    if history:
+        page.history = encode_history(list(history[0]), list(history[1]))
 
     if valuation.pe_view is not None and valuation.band is not None:
         view = valuation.pe_view

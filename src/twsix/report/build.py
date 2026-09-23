@@ -20,7 +20,12 @@ from typing import Any
 
 from ..models import INDICATOR_LABELS, INDICATOR_ORDER
 from ..store import news as news_store
-from ..store.daily import close_history, institutional_history, latest_quotes
+from ..store.daily import (
+    close_history,
+    institutional_history,
+    latest_quotes,
+    price_history,
+)
 
 #: 台北時區。
 #:
@@ -302,6 +307,7 @@ def stock_signature(
     inst: Any = None,
     news: Any = None,
     closes: Any = None,
+    history: Any = None,
 ) -> str:
     """一檔股票的「內容指紋」——分頁的位元組加上它在評等表裡的那幾列。
 
@@ -335,6 +341,10 @@ def stock_signature(
     # 多了一天。長度加上最舊那一天，兩者至少會變一個。
     if closes:
         h.update(f"px|{len(closes)}|{closes[-1].date}".encode())
+    # 〔股價健診〕那一段長的歷史也一樣：回補歷史股價（history.yml）補進來的是
+    # **舊的**日子，最新一筆不會變——只看上面那一行，回補完頁面不會重畫。
+    if history:
+        h.update(f"hist|{len(history[0])}|{history[0][0]}".encode())
     for row in rows:
         h.update(("\x1f".join(f"{k}={row.get(k, '')}" for k in sorted(row))).encode())
         h.update(b"\x1e")
@@ -774,6 +784,8 @@ def build_site(
     close_hist = (
         close_history(sheets_dir.parent) if sheets_dir is not None else {}
     )
+    # 〔股價健診〕〔推估三年目標價〕要的長歷史（最多 760 個交易日）。
+    long_hist = price_history(sheets_dir.parent) if sheets_dir is not None else {}
     # 全市場新聞，同樣一次讀進來。六十幾個壓縮檔翻一遍給 1,769 頁共用。
     news_history = (
         news_store.history(sheets_dir.parent) if sheets_dir is not None else {}
@@ -841,6 +853,7 @@ def build_site(
             inst_history.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
             news_history.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
             close_hist.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
+            long_hist.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
         )
         for code, group in grouped.items()
     }
@@ -907,6 +920,7 @@ def build_site(
                 inst_days=inst_history.get(stock_id),
                 closes=close_hist.get(stock_id),
                 news_items=news_history.get(stock_id),
+                history=long_hist.get(stock_id),
             )
             if full:
                 count += 1
@@ -1389,6 +1403,7 @@ def _full_stock_page(
     inst_days: Any = None,
     closes: Any = None,
     news_items: Any = None,
+    history: Any = None,
 ) -> bool:
     """Render the ten-section page for one stock, if its sheets are on disk.
 
@@ -1456,6 +1471,7 @@ def _full_stock_page(
             inst_days=inst_days,
             closes=closes,
             news_items=news_items,
+            history=history,
         )
     except Exception:  # noqa: BLE001 - a bad cache must not fail the build
         return False

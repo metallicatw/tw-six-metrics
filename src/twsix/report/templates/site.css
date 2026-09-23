@@ -1180,3 +1180,92 @@ thead th .hsub{display:block;margin-top:1px;font-size:10px;font-weight:400;
 #t.compact thead th .hdtip .bulb{width:var(--bulb);min-width:0;height:var(--bulb);
   padding:0;font-size:11px;box-sizing:border-box;display:inline-flex;
   align-items:center;justify-content:center}
+/* =========================================================================
+ * 〔財務健診〕〔股價健診〕〔推估三年目標價〕
+ * ========================================================================= */
+.hl-head{display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;margin:4px 0 10px;
+  font-size:15px}
+.hl-head b{font-weight:700}
+.hl-badge{margin-left:auto;padding:4px 12px;border-radius:999px;font-size:12.5px;
+  font-weight:700;color:#fff;white-space:nowrap}
+.hl-badge.hl-ok{background:var(--g4)}
+.hl-badge.hl-warn{background:#e07b12}
+.hl-badge.hl-bad{background:#dc2626}
+.subtabs{display:flex;gap:4px;border-bottom:1px solid var(--rule);margin:0 0 12px}
+.subtab{appearance:none;border:none;background:none;font:inherit;font-size:14px;
+  padding:8px 14px;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;
+  margin-bottom:-1px}
+.subtab[aria-selected=true]{color:var(--accent-2);border-bottom-color:var(--accent-2);font-weight:700}
+.subtab:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+table.hl-t{font-size:13px}
+table.hl-t th,table.hl-t td{padding:8px 12px;white-space:normal;vertical-align:middle}
+table.hl-t .st{white-space:nowrap;width:1%}
+table.hl-t th.num,table.hl-t td.num{text-align:right;font-variant-numeric:tabular-nums}
+.hl-hit{color:#dc2626;font-weight:600}
+.hl-ok{color:var(--g4);font-weight:600}
+.hl-na{color:var(--muted)}
+.hl-sub{margin:0 0 8px;font-size:12.5px;color:var(--muted);max-width:none}
+.note-s{margin:6px 0 0;font-size:11.5px;color:var(--muted);max-width:none;line-height:1.65}
+/* 股價健診 */
+.pxh-form label{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0 0 8px;
+  font-size:13.5px;color:var(--ink-2)}
+.pxh-form input{width:4.6em;padding:5px 7px;border:1px solid var(--rule);border-radius:5px;
+  background:var(--ground);color:var(--ink);font:inherit;font-variant-numeric:tabular-nums}
+.pxh-btns{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+.btn-grab.alt{background:var(--accent-2)}
+.pxh-sum{display:flex;flex-wrap:wrap;gap:4px 18px;align-items:baseline;margin:16px 0 8px;
+  padding:8px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--surface-2);
+  font-size:12.5px;color:var(--muted)}
+.pxh-sum>b{color:var(--accent-2);font-size:14px}
+.pxh-sum span b{color:var(--ink)}
+.pxh-h,.y3-h{margin:22px 0 8px;font-size:15px;color:var(--ink)}
+.pxc{position:relative;border:1px solid var(--rule);border-radius:6px;background:var(--surface);
+  padding:6px 4px 4px}
+.pxsvg{display:block;width:100%;height:auto;overflow:visible}
+.pxsvg .pxa{font-size:10.5px;fill:var(--muted);font-variant-numeric:tabular-nums}
+.pxsvg .pxt{font-size:12.5px;font-weight:700;fill:var(--ink-2)}
+.pxtip{position:absolute;z-index:5;pointer-events:none;min-width:150px;padding:7px 9px;
+  border-radius:6px;background:#1f2937;color:#f3f4f6;font-size:11.5px;line-height:1.55;
+  box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.pxtip b{display:block;margin-bottom:2px}
+.pxtip span{display:flex;align-items:center;gap:6px}
+.pxtip i{width:9px;height:9px;border-radius:2px;flex:0 0 auto}
+.pxtip em{margin-left:auto;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums}
+.pxlegend{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;padding:4px 6px 2px;
+  font-size:11.5px;color:var(--muted)}
+.pxlegend span{display:inline-flex;align-items:center;gap:5px}
+.pxlegend i{width:22px;height:0;border-top:2.5px solid;display:inline-block}
+.pxlegend i.dash{border-top-style:dashed}
+.pxh-zoom{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:12px 0 4px;font-size:12.5px;
+  color:var(--muted)}
+.pxh-zoom button{appearance:none;border:1px solid var(--rule);background:var(--surface);
+  color:var(--ink-2);border-radius:999px;padding:4px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+.pxh-zoom button.on{background:var(--accent-2);border-color:var(--accent-2);color:#fff}
+/* 兩個 range 疊在同一條軌道上：只有把手接得到滑鼠，軌道本身讓給下面那一條。 */
+.pxh-range{position:relative;height:26px;margin:4px 0}
+.pxh-range input{position:absolute;left:0;right:0;top:0;width:100%;margin:0;height:26px;
+  background:none;pointer-events:none;-webkit-appearance:none;appearance:none;accent-color:var(--accent-2)}
+.pxh-range input::-webkit-slider-thumb{pointer-events:auto;-webkit-appearance:none;width:16px;height:16px;
+  border-radius:50%;background:#fff;border:3px solid var(--accent-2);cursor:pointer}
+.pxh-range input::-moz-range-thumb{pointer-events:auto;width:12px;height:12px;border-radius:50%;
+  background:#fff;border:3px solid var(--accent-2);cursor:pointer}
+.pxh-range input::-webkit-slider-runnable-track{height:4px;background:var(--accent-2);border-radius:2px}
+.pxh-range input+input::-webkit-slider-runnable-track{background:transparent}
+/* 推估三年目標價：第三個色系（紫），和估值方式一（綠）、二（藍綠）分得開。 */
+.way3{border-left-color:#7c3aed}
+.way3 .way-h .n{background:#7c3aed}
+.y3-in{grid-template-columns:repeat(2,minmax(0,16em))}
+.y3-rows{display:grid;gap:8px;margin:4px 0 12px}
+.y3-rows label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.y3-rows input{padding:7px 8px;border:1px solid var(--rule);border-radius:5px;background:var(--ground);
+  color:var(--ink);font:inherit;font-size:14px;font-variant-numeric:tabular-nums}
+table.y3-t{font-size:13px;min-width:420px}
+table.y3-t th,table.y3-t td{text-align:center;padding:7px 10px;font-variant-numeric:tabular-nums}
+table.y3-t tr.eps td{font-weight:700}
+table.y3-t tr.tp td{color:#fff;font-weight:600;text-shadow:0 1px 1px rgba(0,0,0,.35)}
+/* 健診那兩張表在手機上不橫捲：三欄各自折行（全站表格預設 min-width:560px）。 */
+table.hl-t{min-width:0}
+@container page (max-width:760px){
+  table.hl-t th,table.hl-t td{padding:7px 8px;font-size:12.5px}
+  table.hl-t td:first-child{min-width:7.5em}
+}
