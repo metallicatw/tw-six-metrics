@@ -854,7 +854,7 @@ def test_the_watchlist_page_is_the_same_table_filtered_in_the_browser(tmp_path=N
     build_site(_records(), out, sheets_dir=_sheets(tmp))
 
     page = (out / "watchlist.html").read_text("utf-8")
-    assert '<table id="t" data-watchlist="1">' in page
+    assert '<table id="t" class="compact" data-watchlist="1">' in page
     assert '<tr data-code="5439"' in page and '<tr data-code="2330"' in page
     assert 'id="watch-empty"' in page          # 一檔都沒加時要說話
     js = (out / "assets" / "site.js").read_text("utf-8")

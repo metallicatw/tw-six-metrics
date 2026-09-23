@@ -44,7 +44,7 @@
    「+0.50」「—」「AA」照字串排會排出胡說，而把「怎麼比大小」放進 JS 去猜每一欄
    的型別，等於在兩個地方各寫一次規則。這裡一次寫好：數字就是數字，等第換成
    0~4，沒有值一律是最小的 -999——排序時沉到底，而不是插在中間。 #}
-{% macro row(r, rel, rich_ids=None, fetched_at=None) -%}
+{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False) -%}
 {% set when = (fetched_at or {}).get(r.stock_id) %}
 {% set has_full = when or (rich_ids and r.stock_id in rich_ids) %}
 <tr data-code="{{ r.stock_id }}">
@@ -80,6 +80,18 @@
               aria-label="把 {{ r.stock_id }} 往下移" title="往下移">▼</button>
     </span></td>
   <td data-s="{{ r.stock_id }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a></td>
+  {# 名稱也連過去。原本只有代號可點——而讀者掃清單時眼睛落在名稱上，
+     卻要把游標移回四位數字才點得到，那是每一列都要付一次的小摩擦。 #}
+  <td data-s="{{ r.name }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.name }}</a></td>
+  {# 上市／上櫃。「這一檔在哪個市場」是掃清單時會分開看的一件事——上櫃的流動性、
+     法人參與度、本益比水準都和上市不一樣。資料本來就在評等表的 `market` 欄裡，
+     只是一直沒有被畫出來。 #}
+  <td class="muted mid" data-s="{{ r.market }}">{{ r.market }}</td>
+  <td class="muted ind" data-s="{{ r.industry }}">{{ r.industry }}</td>
+  {# 〔財報基準〕排在〔產業〕右邊（2026-09-23 使用者要求）：代號、名稱、市場、
+     產業是「這是哪一家」，財報基準是「底下這些等第是哪一期算的」——它是等第
+     的前言，所以貼著等第那一段，而不是夾在代號和名稱中間把「哪一家」切成兩半。
+     觀察清單上，收盤價那四欄接在它後面。 #}
   {# 這一欄原本是〔最後更新日〕——「那一檔的報表最後一次抓回來是哪一天」。
      那回答的是**抓取**的新舊，而讀者在清單上想知道的是**資料**的新舊：這一列的
      六個等第是哪一季算出來的、營收年增率數到哪一個月。抓取日期和資料期別不是
@@ -91,14 +103,7 @@
       {%- if when %} title="報表更新於 {{ when }}　完整報告：河流圖、季節性、外資投信、個股新聞（大戶／董監持股另由每週排程更新）"
       {%- elif has_full %} title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞"{% endif %}>
     {{ basis(r) }}</td>
-  {# 名稱也連過去。原本只有代號可點——而讀者掃清單時眼睛落在名稱上，
-     卻要把游標移回四位數字才點得到，那是每一列都要付一次的小摩擦。 #}
-  <td data-s="{{ r.name }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.name }}</a></td>
-  {# 上市／上櫃。「這一檔在哪個市場」是掃清單時會分開看的一件事——上櫃的流動性、
-     法人參與度、本益比水準都和上市不一樣。資料本來就在評等表的 `market` 欄裡，
-     只是一直沒有被畫出來。 #}
-  <td class="muted mid" data-s="{{ r.market }}">{{ r.market }}</td>
-  <td class="muted" data-s="{{ r.industry }}">{{ r.industry }}</td>
+  {% if prices %}{{ price_cells(r) }}{% endif %}
   {% for key in ('revenue_yoy','operating_margin','net_income_yoy','eps','inventory_turnover','free_cash_flow') %}
   <td class="mid" data-s="{{ {'AA':4,'A':3,'BB':2,'B':1,'C':0}.get(r.grades[key], -999) }}">{{ grade(r.grades[key]) }}</td>
   {% endfor %}
@@ -202,29 +207,84 @@
 {%- else -%}{{ rm }}{%- endif -%}
 {%- endmacro %}
 
-{% macro table_head() -%}
+{# ── 〔觀察清單〕的四欄：收盤價、日漲跌、5 日漲跌、20 日漲跌 ──────────────
+
+   只有〔觀察清單〕畫（`prices=True`）。〔評等清單〕是同一個 macro，但那一頁有
+   1,900 列、比的是體質；多四欄會把它推到要橫向捲。
+
+   收盤價那一格右邊是一顆走勢圖的小圖示，連到 Yahoo 股市那一檔的〔走勢圖〕。
+   放在同一格而不是另開一欄：它是那個價格的「看圖」，不是另一個數字——多一欄
+   就多一條欄線和一組留白。
+
+   漲紅跌綠（台股慣例），平盤不上色。排序鍵是漲跌幅（%），不是漲跌（元）：
+   一檔 1,000 元的股票漲 10 元和一檔 20 元的股票漲 10 元不是同一件事。
+   算不出來的一律 -999，排序時沉到底。 #}
+{% macro chg_class(v) -%}
+{%- if v is none -%}muted{%- elif v > 0 -%}up{%- elif v < 0 -%}down{%- else -%}flat{%- endif -%}
+{%- endmacro %}
+
+{% macro pct_text(v) -%}
+{%- if v is none -%}—{%- else -%}{{ '%+.2f'|format(v) }}%{%- endif -%}
+{%- endmacro %}
+
+{# 千元以上的股票，升降單位是 5 元——小數點後兩位永遠是 .00，只佔寬度。
+   收盤價與日漲跌（元）在那個價位不印小數。 #}
+{% macro money(v, big) -%}
+{%- if big -%}{{ '{:,.0f}'.format(v) }}{%- else -%}{{ '{:,.2f}'.format(v) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro price_cells(r) -%}
+{%- set p = r.px -%}
+{%- set big = p is not none and p.close >= 1000 -%}
+{%- if p is none -%}
+<td class="num px muted" data-s="-999">—</td><td class="num mid" data-s="-999"><span class="muted">—</span></td><td class="num mid" data-s="-999"><span class="muted">—</span></td><td class="num mid" data-s="-999"><span class="muted">—</span></td>
+{%- else -%}
+<td class="num px" data-s="{{ '%.4f'|format(p.close) }}" title="{{ p.date }} 收盤"><span class="pxv {{ chg_class(p.chg) }}">{{ money(p.close, big) }}</span><a class="yf" href="{{ p.yahoo }}" target="_blank" rel="noopener" title="到 Yahoo股市看 {{ r.stock_id }} 的走勢圖" aria-label="{{ r.stock_id }} Yahoo股市走勢圖"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M1.5 14.5h13" fill="none" stroke="currentColor" stroke-width="1.3" opacity=".55"/><path d="M2 11.5l3.6-4 2.8 2.6L14 3.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.4 3.4H14v3.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></a></td>
+<td class="num mid chg" data-s="{{ '%.4f'|format(p.chg_pct) if p.chg_pct is not none else -999 }}">
+{%- if p.chg is none -%}<span class="muted">—</span>
+{%- else -%}<span class="{{ chg_class(p.chg) }}">{{ ('+' if p.chg > 0 else '') ~ money(p.chg, big) }}</span><small class="{{ chg_class(p.chg) }}">{{ pct_text(p.chg_pct) }}</small>{%- endif -%}</td>
+{%- for n in (5, 20) %}
+{%- set v = p.window.get(n) %}
+<td class="num mid" data-s="{{ '%.4f'|format(v) if v is not none else -999 }}"><span class="{{ chg_class(v) }}">{{ pct_text(v) }}</span></td>
+{%- endfor -%}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro table_head(prices=False) -%}
+{# 觀察清單多了四欄（產業右邊），後面每一欄的欄號都往後推四格。欄號就是 site.js
+   排序時去讀的 `tr.cells[欄號]`，差一格就是「點 EPS 排出來的是營收」。 #}
+{%- set o = 4 if prices else 0 -%}
 <thead><tr>
   {# 流水號那一欄不排序：它就是「現在第幾列」，點它沒有意義。 #}
   <th class="seq" aria-label="序號"></th>
   <th class="star-cell" title="觀察清單"><button type="button" class="sortable" data-col="1" aria-label="依觀察清單排序">★</button></th>
   <th><button type="button" class="sortable" data-col="2">代號</button></th>
-  <th><button type="button" class="sortable" data-col="3">財報<br>基準</button></th>
-  <th><button type="button" class="sortable" data-col="4">名稱</button></th>
-  <th class="mid"><button type="button" class="sortable" data-col="5">市場</button></th>
-  <th><button type="button" class="sortable" data-col="6">產業</button></th>
-  <th class="mid"><button type="button" class="sortable" data-col="7">營收<br>年增率</button></th>
-  <th class="mid"><button type="button" class="sortable" data-col="8">營業<br>利益率</button></th>
-  <th class="mid"><button type="button" class="sortable" data-col="9">稅後淨利<br>年增率</button></th>
-  <th class="mid"><button type="button" class="sortable" data-col="10">EPS</button></th>
-  <th class="mid"><button type="button" class="sortable" data-col="11">存貨<br>周轉率</button></th>
-  <th class="mid"><button type="button" class="sortable" data-col="12">自由<br>現金流</button></th>
-  <th class="num mid"><button type="button" class="sortable" data-col="13">綜合<br>評分</button></th>
-  <th class="num mid"><button type="button" class="sortable" data-col="14">評分<br>變化</button></th>
-  <th class="mid"><button type="button" class="sortable" data-col="15">具投資<br>價值</button></th>
+  <th><button type="button" class="sortable" data-col="3">名稱</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="4">市場</button></th>
+  <th><button type="button" class="sortable" data-col="5">產業</button></th>
+  <th><button type="button" class="sortable" data-col="6">財報<br>基準</button></th>
+  {% if prices %}
+  <th class="num px"><button type="button" class="sortable" data-col="7">收盤價</button></th>
+  <th class="num mid"><button type="button" class="sortable" data-col="8">日漲跌</button></th>
+  <th class="num mid"><button type="button" class="sortable" data-col="9">5日<br>漲跌</button></th>
+  {# 這四欄的說明（沒有還原除權息、日漲跌對參考價）放在頁面上方那一段的燈泡裡，
+     不放在標題上：標題上的燈泡會把那一欄撐寬三十幾像素，而這一頁的目標是
+     1280 的筆電不必橫向捲。 #}
+  <th class="num mid"><button type="button" class="sortable" data-col="10">20日<br>漲跌</button></th>
+  {% endif %}
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 7 + o }}">營收<br>年增率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 8 + o }}">營業<br>利益率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 9 + o }}">稅後淨利<br>年增率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 10 + o }}">EPS</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 11 + o }}">存貨<br>周轉率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 12 + o }}">自由<br>現金流</button></th>
+  <th class="num mid"><button type="button" class="sortable" data-col="{{ 13 + o }}">綜合<br>評分</button></th>
+  <th class="num mid"><button type="button" class="sortable" data-col="{{ 14 + o }}">評分<br>變化</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 15 + o }}">具投資<br>價值</button></th>
   {# 燈泡包在 `.hdtip` 裡和標題**並排**。不包的話它接在
      `報酬<br>風險比` 後面，自己掉到第三行去——整列標題被撐高一截，而且那顆
      燈泡看起來像是下一欄的東西。 #}
-  <th class="num mid"><span class="hdtip"><button type="button" class="sortable" data-col="16">報酬<br>風險比</button>{% call tip() %}
+  <th class="num mid"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 16 + o }}">報酬<br>風險比</button>{% call tip() %}
   <b>報酬風險比 ＝ ｜預期報酬 ÷ 預期風險｜</b>，來自〔EPS預估與估價〕。
   它回答的是一件很具體的事：<b>這一筆要對幾次才不會賠</b>。
   {# 這裡刻意**不用 <table>**。它住在一個 <th> 裡面，而表格裡再包一張表格有兩個

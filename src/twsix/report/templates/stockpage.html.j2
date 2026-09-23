@@ -479,7 +479,7 @@
 <section class="way way2">
 <h4 class="way-h"><span class="n">估值方式二</span>自訂假設試算
   <span class="sub">同一條公式，參數由你決定；改動不影響上面記錄的引擎結果</span></h4>
-<section class="calc" id="calc"
+<section class="calc" id="calc" data-code="{{ p.stock_id }}"
          data-seed='{{ p.calc|tojson }}' data-price="{{ p.market_price or '' }}"
          data-price-date="{{ p.price_date }}">
   <h4>目標價試算盤<span class="muted">　改任何一格，下面的矩陣立刻重算</span></h4>
@@ -522,6 +522,17 @@
     預估 EPS ＝ 年營收 × (1 ＋ 營收成長率) × 淨利率 ÷ 股數　│　
     預估目標價 ＝ 預估 EPS × 預估本益比
   </p>
+  {# 〔進場成本價位〕：矩陣每一格第二行的「預期報酬／預期風險」拿誰當基準。
+     預設是現價（最近一個交易日的收盤）；已經買了的人要看的是**相對自己的
+     成本**還有多少空間、會賠多少，那是另一個基準。留空＝用現價。
+     填過的數字記在這台瀏覽器裡（每一檔各記一個），〔回到現價〕清掉它。 #}
+  <div class="calc-cost">
+    <label for="c-cost">進場成本價位（元）</label>
+    <input type="number" id="c-cost" step="any" min="0" inputmode="decimal"
+           placeholder="{{ '%.2f'|format(p.market_price) if p.market_price else '' }}">
+    <button type="button" class="linkish" id="c-cost-reset" hidden>回到現價</button>
+    <span class="muted" id="c-cost-note"></span>
+  </div>
   <button type="button" class="btn-grab" id="c-run">重新計算</button>
   <button type="button" class="linkish" id="c-reset">還原預設值</button>
 

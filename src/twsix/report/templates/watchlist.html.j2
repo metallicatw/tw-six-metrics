@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% from "_macros.html.j2" import row, table_head %}
+{% from "_macros.html.j2" import row, table_head, tip %}
 {% block title %}台股觀察清單 — {{ site_title }}{% endblock %}
 {% block body %}
 <h2>台股觀察清單</h2>
@@ -10,6 +10,16 @@
   你在這台瀏覽器上標記的股票，共 <span id="tally">0 檔</span>。
   清單只存在本機（localStorage），不會上傳，也不會進到這個網站的原始碼裡——
   換一台電腦要重新加。
+  {% call tip() %}
+  <b>收盤價、日漲跌、5 日、20 日漲跌</b>每個交易日收盤後更新。
+  <b>5 日、20 日</b>是最新收盤和往回第 5、第 20 個<b>交易日</b>的收盤相比。
+  <br><br><b>沒有還原除權息。</b>除息那一天的跳空會算進去——和 Yahoo 股市、
+  券商軟體預設顯示的一樣，是帳面上的價差，不是持有的報酬。一檔剛配息 5% 的
+  股票，在這裡看起來會像跌了 5%。
+  <br><br><b>日漲跌</b>用的是交易所公布的漲跌價差（對參考價），除權息那一天也對；
+  上面一行是元、下面一行是 %。點欄位標題排序時看的是 %。
+  <br><br>收盤價右邊那顆 <b>↗ 圖示</b>開 Yahoo 股市那一檔的走勢圖（新分頁）。
+  {% endcall %}
 </p>
 <div class="filters">
   <input id="q" type="search" placeholder="在觀察清單裡篩選" aria-label="篩選">
@@ -18,8 +28,11 @@
   還沒有標記任何股票。到<a href="{{ rel }}index.html">評等清單</a>，
   按每一列最左邊的 ☆ 就會加進來。
 </p>
-<div class="scroll wide"><table id="t" data-watchlist="1">
-{{ table_head() }}
-<tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at) }}{% endfor %}</tbody>
+{# `prices=True`：收盤價、日漲跌、5 日、20 日漲跌四欄（產業右邊）只在這一頁。
+   `compact`：這一頁的欄位比〔評等清單〕多四欄，留白與次要資訊的字級收小，
+   讓 1280 以上的桌機不必橫向捲（見 site.css 的 #t.compact）。 #}
+<div class="scroll wide"><table id="t" class="compact" data-watchlist="1">
+{{ table_head(prices=True) }}
+<tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at, prices=True) }}{% endfor %}</tbody>
 </table></div>
 {% endblock %}
