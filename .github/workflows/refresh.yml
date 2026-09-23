@@ -35,15 +35,28 @@ name: 評等補課（清單上過期的那些）
 
 on:
   schedule:
-    # 台北時間 02:23 / 08:23 / 14:23 / 20:23。避開整點，也避開盤中最忙的時段。
+    # ## 什麼時候有事做（2026-09-23 重排）
     #
-    # `:10` → `:23`：`:10` 雖然不是整點，但它一樣是「圓整分鐘」，而 GitHub 的
-    # 排程就是擠在那些數字上。晚十三分鐘什麼都不影響——這四班沒有任何人在等它，
-    # 但它們每一班都會重新建站發布（所以也是上游那兩頁的備援路徑）。
+    # 佇列只有在**有公司交出新一季財報、而券商鏡像跟上了**的時候才會長出來：
     #
-    # 20:23 那一班特別有用：完成大約 20:55，剛好讓台灣使用者的睡前時段
-    # （20:00–24:00）一開始就是新的。
-    - cron: "23 18,0,6,12 * * *"
+    #   年報 3/31、Q1 5/15、Q2 8/14、Q3 11/14 截止，鏡像再晚幾天到幾週跟上
+    #   → 3～6 月、8～9 月、11～12 月是旺季（一季 1,800 多檔要補）
+    #   → 1、2、7、10 月幾乎只有新上市的那幾檔
+    #
+    # 以前一年到頭一天四班，而 2026-09-11～20 的 17 班裡 16 班是「評等補課：0 列」
+    # ——每一班都裝相依、跑測試、抓零檔。現在：
+    #
+    #   * 旺季一天四班（台北 02:23／08:23／14:23／20:23），100 檔一批，
+    #     1,800 檔約五天排乾。
+    #   * 淡季一天一班（台北 20:29），接新上市與零星晚交的。
+    #   * 每一班開頭先問 `twsix refresh --pending`（不連網）：佇列是空的就到此為止，
+    #     不跑測試、不抓、不 commit、不建站。
+    #
+    # 月份欄位是 UTC 的月份：旺季那一條的 18:23 UTC 是台北隔天 02:23，月底
+    # 最後一天那一班會算在下個月的頭上——差一天，無所謂。
+    - cron: "23 18,0,6,12 * 3,4,5,6,8,9,11,12 *"
+    # 淡季。分鐘和上面那一條錯開（test_schedule 不准同一分鐘兩條）。
+    - cron: "29 12 * 1,2,7,10 *"
   workflow_dispatch:
     inputs:
       limit:
@@ -83,11 +96,25 @@ jobs:
 
       - run: pip install -e ".[report]"
 
+      # 有沒有事做。佇列是空的、也沒有舊名字的記號要換，這一班就到此為止：
+      # 下面每一步都掛著 `steps.gate.outputs.skip != 'yes'`。手動觸發一律照跑。
+      - name: 有沒有要補的
+        id: gate
+        run: |
+          n="$(twsix refresh --pending | tail -1)"
+          legacy="$(ls data/sheets/*/_stuck.json 2>/dev/null | wc -l)"
+          echo "待補 $n 檔；舊名字的記號 $legacy 個"
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "$n" = "0" ] && [ "$legacy" = "0" ]; then
+            echo "::notice::佇列是空的，這一班不必跑"
+            echo "skip=yes" >> "$GITHUB_OUTPUT"
+          fi
+
       # 舊版把「補過但沒進步」的記號寫成 `_stuck.json`，而 data/sheets 底下的
       # .json 會被當成分頁、也會讓下一步的測試紅掉。這一步必須排在測試**前面**：
       # 排在後面的話，測試先紅、job 停下，修它的這一步永遠走不到。
       # 只改記號的檔名，不連網、不動任何分頁。換下來的檔案由下面的 git add data/sheets 帶走。
       - name: 換掉舊名字的記號
+        if: steps.gate.outputs.skip != 'yes'
         run: python -c "from pathlib import Path; from twsix.cli import migrate_stuck_marks; print('換掉', migrate_stuck_marks(Path('data')), '個舊記號')"
 
       # 抓回來的東西要 commit 進 repo，先確認引擎是好的。
@@ -99,11 +126,13 @@ jobs:
       #
       # 87 秒，零相依（`ownership.yml` 早就這樣做了）。
       - name: 測試
+        if: steps.gate.outputs.skip != 'yes'
         run: python scripts/run_tests.py
 
 
       # 每檔 15 個請求（十三張鏡像分頁 + 證交所與櫃買的年度交易資訊）。
       - name: 補課
+        if: steps.gate.outputs.skip != 'yes'
         env:
           # 手動觸發時是使用者填的自由文字；走 env 才不會被當成 shell 程式碼。
           IN_LIMIT: ${{ inputs.limit || 100 }}
@@ -116,6 +145,7 @@ jobs:
           twsix refresh --limit "$IN_LIMIT"
 
       - name: Commit
+        if: steps.gate.outputs.skip != 'yes'
         id: commit
         run: |
           git config user.name  "github-actions[bot]"
@@ -209,7 +239,7 @@ jobs:
       # 資料進了 repo，網站還沒重建。這兩步讓補好的那一批當天就出現在清單上。
       # 沒有任何一列改變的時候不重建：那是一次沒有內容差異的發布。
       - name: 建站
-        if: steps.commit.outputs.changed == 'yes'
+        if: steps.gate.outputs.skip != 'yes' && steps.commit.outputs.changed == 'yes'
         uses: ./.github/actions/build-site
         with:
           test: "false"
@@ -219,5 +249,5 @@ jobs:
 
       - name: 發布
         id: deployment
-        if: steps.commit.outputs.changed == 'yes'
+        if: steps.gate.outputs.skip != 'yes' && steps.commit.outputs.changed == 'yes'
         uses: actions/deploy-pages@v4

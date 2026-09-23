@@ -99,14 +99,37 @@ def test_there_is_a_schedule_that_actually_accumulates():
     在這個改動之前，`twsix fetch` 沒有任何排程在跑：repo 裡那份 115Q2 是手動跑
     一次留下的。所以檔名改對了，第二個資料點還是不會出現。
 
-    每天跑一次而不是照申報截止日排：期別沒變的時候寫出來的位元組一模一樣，
-    workflow 自己會判定沒有差異而結束；照日子排則要算五條規則，而算錯的代價是
-    整整一期永遠拿不到——官方端點只給最新一期，沒有日期參數。
+    2026-09-23 起從「每天」改成照申報時程排（每月 1～15 日每天、3/16～31 每天、
+    每月 18／25 日保險）。算錯的代價是整整一期永遠拿不到——官方端點只給最新一期，
+    沒有日期參數——所以這裡守的是**每一種申報的截止日前後都有排到**：
+    月營收（10 日）、Q1（5/15）、Q2（8/14）、Q3（11/14）、年報（3/31）。
     """
+    import re
+
     wf = Path(__file__).resolve().parents[1] / ".github/workflows/market.yml"
     text = wf.read_text("utf-8")
     assert "twsix fetch --all" in text
-    assert "cron:" in text and "* * *" in text, "不是每天跑"
+    crons = re.findall(r'cron:\s*"([^"]+)"', text)
+    assert crons, "沒有排程"
+
+    def runs_on(month, day):
+        for c in crons:
+            _m, _h, dom, mon, dow = c.split()
+            if dow != "*":
+                continue
+            months = range(1, 13) if mon == "*" else [int(x) for x in mon.split(",")]
+            if month not in months:
+                continue
+            for part in dom.split(","):
+                lo, _, hi = part.partition("-")
+                if part == "*" or int(lo) <= day <= int(hi or lo):
+                    return True
+        return False
+
+    for month, day, what in ((9, 10, "月營收"), (5, 15, "Q1"), (8, 14, "Q2"),
+                             (11, 14, "Q3"), (3, 31, "年報"), (3, 20, "年報前")):
+        assert runs_on(month, day), f"{month}/{day}（{what}截止前後）沒有排到"
+    assert runs_on(7, 18) and runs_on(7, 25), "下半月的保險那兩天不見了"
     # 白名單式的 git add 漏檔案的症狀，是下一行 pull 失敗而且不提檔名。踩過兩次。
     add = text[text.index("git add ") : text.index("if git diff --cached --quiet")]
     assert "data/market" in add

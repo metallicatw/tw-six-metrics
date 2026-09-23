@@ -273,3 +273,63 @@ def test_接上游那兩班要留夠緩衝():
             f"{label} 大約 {runtime} 分鐘跑完，而 pages 只等了 {gap} 分鐘就去抓。"
             "抓到的會是昨天那一份，而且不會有任何錯誤。"
         )
+
+
+# ── 2026-09-23：排程只在「來源有新資料」的時候跑 ────────────────────────
+
+def _wf(name: str) -> str:
+    return (WORKFLOWS / f"{name}.yml").read_text("utf-8")
+
+
+def test_補課佇列是空的就不往下跑():
+    """一年裡大半時間佇列是空的；以前 17 班有 16 班是「評等補課：0 列」。"""
+    text = _wf("refresh")
+    assert "twsix refresh --pending" in text, "refresh.yml 沒有先問有沒有事做"
+    gate = text.index("id: gate")
+    later = text[gate:].split("\n      - ")[1:]
+    missing = [s.splitlines()[0] for s in later if "steps.gate.outputs.skip != 'yes'" not in s]
+    assert not missing, f"這幾步沒有掛上 gate，佇列空的時候照樣會跑：{missing}"
+    # 手動觸發一律照跑。
+    assert '"$GITHUB_EVENT_NAME" = "schedule"' in text
+
+
+def test_補課旺季四班淡季一班():
+    crons = _crons(_wf("refresh"))
+    months = [c.split()[3] for c in crons]
+    busy = next(c for c in crons if len(c.split()[1].split(",")) == 4)
+    assert set(busy.split()[3].split(",")) == {"3", "4", "5", "6", "8", "9", "11", "12"}
+    covered = {int(m) for f in months for m in f.split(",")}
+    assert covered == set(range(1, 13)), f"有月份沒有任何一班：{sorted(set(range(1, 13)) - covered)}"
+
+
+def test_官方資料只在申報期間跑():
+    crons = _crons(_wf("market"))
+    days = {c.split()[2] for c in crons}
+    assert "1-15" in days, "每月 1～15 日（月營收、三個季報截止日）沒有排到"
+    assert any(c.split()[2] == "16-31" and c.split()[3] == "3" for c in crons), "年報 3/31 前半個月沒有排到"
+    assert not any(c.split()[2] == "*" and c.split()[4] == "*" for c in crons), "又變回每天跑了"
+
+
+def test_官方資料有新的一期才建站而且先跑測試():
+    text = _wf("market")
+    assert "run_tests.py" in text
+    build = text[text.index("name: 建站"):]
+    assert "steps.commit.outputs.changed != 'no'" in build.split("uses:")[0]
+
+
+def test_股權資料沒有新資料就不發布():
+    text = _wf("ownership")
+    for step in ("name: 建站", "name: 發布"):
+        head = text[text.index(step):].split("uses:")[0]
+        assert "steps.commit.outputs.changed != 'no'" in head, f"{step} 沒有看有沒有新資料"
+
+
+def test_心跳週日不跑():
+    for c in _crons(_wf("heartbeat")):
+        assert c.split()[4] == "1-6", f"心跳的星期欄是 {c.split()[4]}（週日沒有任何資料會動）"
+
+
+def test_pages早上那班跟著市場監控週二到週六():
+    crons = _crons(_wf("pages"))
+    morning = next(c for c in crons if c.split()[1] == "23")
+    assert morning.split()[4] == "1-5", "市場監控改成台北週二～週六了，這裡要跟著改"

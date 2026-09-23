@@ -2029,6 +2029,11 @@ def cmd_refresh(args: argparse.Namespace) -> int:
             queue += [(code, "新上市") for code in new_listings(root, market)]
     known = {r.get("stock_id", "") for r in Store(root).read("ratings")}
     total = len(queue)
+    # `--pending`：只回答「有沒有事做」，不連網。refresh.yml 用它決定這一班要不要
+    # 往下跑——佇列是空的時候（一年裡大半時間），裝相依、跑測試、建站都是白做。
+    if getattr(args, "pending", False):
+        print(total)
+        return EXIT_OK
     if args.limit:
         queue = queue[: args.limit]
     if not queue:
@@ -3727,6 +3732,10 @@ def build_parser() -> argparse.ArgumentParser:
     rf.add_argument(
         "--any-code", dest="any_code", action="store_true",
         help="不先跟官方名單交集（預設會跳過已下市的代號）",
+    )
+    rf.add_argument(
+        "--pending", action="store_true",
+        help="只印出待補幾檔（不連網、不抓），給排程判斷這一班要不要跑",
     )
     rf.set_defaults(func=cmd_refresh)
 

@@ -40,24 +40,41 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 
 ## 每天的時序（台北時間）
 
+2026-09-23 重排的原則：**來源有新資料的時候才跑**；會被 GitHub 丟掉而且丟了
+就拿不回來（或當天就看不到）的那幾條，加一班「保險」——保險那一班開頭先確認
+主班有沒有做完，做完了就直接結束，不會重做一次。
+
 | 時間 | 排程 | repo | 做什麼 | 發布網站？ |
 | --- | --- | --- | --- | --- |
-| 02:23 | 評等補課 | tw-six-metrics | `twsix refresh --limit 100` | ✅ 有變動才 |
-| **06:30**（一–五） | 每日更新報告 | **market-monitor** | 抓資料＋產生 `index.html` | ❌ 只 commit 自己 |
-| **07:37**（一–五） | pages | tw-six-metrics | 全站重建，順手抓兩個衛星 | ✅ |
-| 08:23 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
-| 09:17（每天） | 全市場官方資料 | tw-six-metrics | `twsix fetch --all` | ❌ **只存資料** |
-| 09:37（一、四） | 股權資料 | tw-six-metrics | `twsix fetch-ownership` ＋補齊歷史 | ✅ 一定建 |
-| 10:13（每天） | 心跳 | tw-six-metrics | `scripts/heartbeat.py`，只讀不寫 | ❌ |
-| 14:23 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
-| **15:07**（一–五） | 每日篩選 | **tw-trend-filter** | 掃全市場約 1,900 檔 → `report` 分支 | ❌ 只推自己 |
-| 15:41（一–五） | 每日全市場 | tw-six-metrics | `twsix fetch-daily` | ✅ 有變動才 |
-| **16:47**（一–五） | pages | tw-six-metrics | 全站重建，順手抓兩個衛星 | ✅ |
-| 20:23 | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
-| 21:47（一–五） | 每日全市場（第二次） | tw-six-metrics | 同上 | ✅ 有變動才 |
+| 02:23（旺季） | 評等補課 | tw-six-metrics | `twsix refresh --limit 100`；佇列空就不跑 | ✅ 有變動才 |
+| **06:23**（二–六） | 每日更新報告 | **market-monitor** | 美／日／台股與總經，產生報告 | ✅ 自己的 Pages |
+| **07:03**（二–六） | 每日更新報告（保險） | **market-monitor** | 06:23 那班今天已發布就直接結束 | ✅ 自己的 Pages |
+| **07:37**（二–六） | pages | tw-six-metrics | 全站重建，帶進市場監控 | ✅ |
+| 08:23（旺季） | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
+| 09:17（每月 1–15 日） | 全市場官方資料 | tw-six-metrics | `twsix fetch --all`：月營收、季財報 | ✅ 有新一期才 |
+| 09:19（3/16–3/31） | 全市場官方資料 | tw-six-metrics | 同上（年報截止 3/31） | ✅ 有新一期才 |
+| 09:21（每月 18、25 日） | 全市場官方資料 | tw-six-metrics | 同上（保險、更正與晚交） | ✅ 有新一期才 |
+| 09:37（一、四） | 股權資料 | tw-six-metrics | 集保股權分散（週）＋董監持股（月） | ✅ 有新資料才 |
+| 10:13（一–六） | 心跳 | tw-six-metrics | `scripts/heartbeat.py`，只讀不寫 | ❌ |
+| 14:23（旺季） | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
+| **15:07**（一–五） | 每日篩選 | **tw-trend-filter** | 掃全市場約 1,900 檔 | ✅ 自己的 Pages |
+| 15:41（一–五） | 每日全市場 | tw-six-metrics | `twsix fetch-daily`：收盤＋三大法人 | ✅ 有變動才 |
+| **16:47**（一–五） | pages | tw-six-metrics | 全站重建，帶進趨勢報告 | ✅ |
+| **18:17**（一–五） | 每日篩選（保險） | **tw-trend-filter** | 15:07 那班今天已發布就直接結束 | ✅ 自己的 Pages |
+| 20:23（旺季） | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
+| 20:29（淡季） | 評等補課 | tw-six-metrics | 同上，一天一班 | ✅ 有變動才 |
+| 21:47（一–五） | 每日全市場（第二次） | tw-six-metrics | 同上；三大法人晚上才齊，也是 15:41 的保險 | ✅ 有變動才 |
 
-排程順序是刻意排的：**衛星先產、pages 後收**。market-monitor 06:30 產完，
-07:10 的 pages 接走；tw-trend-filter 15:10 產完，16:00 的 pages 接走。
+**旺季**＝ 3～6、8～9、11～12 月（財報截止日之後、券商鏡像跟上的那幾週），
+一天四班；**淡季**＝ 1、2、7、10 月，一天一班。任何一班開頭先問
+`twsix refresh --pending`，佇列是空的就到此為止。
+
+手動才跑的：〔回補歷史股價〕（history.yml，只需要一次）、〔加一檔個股〕、
+〔存一份真實回應〕、兩個衛星 repo 的手動按鈕。
+
+排程順序是刻意排的：**衛星先產、pages 後收**。market-monitor 06:23（保險 07:03）
+產完，07:37 的 pages 接走；tw-trend-filter 15:07 產完，16:47 的 pages 接走——
+保險那一班（18:17）產出的，由 21:47 那一班每日全市場建站時帶進來。
 
 除了排程，**推任何東西到 `main` 也會觸發 pages**（`**.md` 與 `reference/**` 除外）。
 
