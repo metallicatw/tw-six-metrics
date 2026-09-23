@@ -196,7 +196,7 @@ def test_the_listing_no_longer_offers_a_filter_that_filters_nothing():
     assert "onlyFull" not in js, "腳本裡還在找一個不存在的元素"
     # 那一欄本身要留著：它才是現在回答「算到哪裡」的地方。
     macros = (ROOT / "src/twsix/report/templates/_macros.html.j2").read_text("utf-8")
-    assert "when-cell" in macros and "財報<br>基準" in macros
+    assert "when-cell" in macros and ">財報基準</button>" in macros
 
 
 def test_the_filter_row_does_not_stretch_across_the_whole_screen():

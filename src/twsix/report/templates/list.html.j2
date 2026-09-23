@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% from "_macros.html.j2" import row, table_head, tip, basis %}
+{% from "_macros.html.j2" import row, table_head, tip, basis, price_note %}
 {% block title %}台股評等清單 — {{ site_title }}{% endblock %}
 {% block body %}
 <h2>台股評等清單</h2>
@@ -30,7 +30,10 @@
   {% if fresh_count %}
   其中 <b>{{ fresh_count }} 檔</b>已經是下一季了，這張表正在換季途中。
   {% endif %}
-  股價與三大法人每個交易日收盤後更新，但那是<b>個股頁</b>上的東西，不會改變這張表。
+  收盤價那四欄每個交易日收盤後更新，但它們不會改變等第與綜合評分——那些由季報與
+  月營收算出來。
+  <br><br>{{ price_note() }}
+  <br><br>
   {% if delisted_count %}
   已下市的 {{ delisted_count }} 檔不在這張表上，用上方搜尋仍然找得到。
   {% endif %}
@@ -68,8 +71,11 @@
   （4）上一期要算得出綜合評分——上一期缺資料的話不算，這是活頁簿 IFERROR 的行為。
   {% endcall %}
 </div>
-<div class="scroll wide"><table id="t">
-{{ table_head() }}
-<tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at) }}{% endfor %}</tbody>
+{# 欄位與〔觀察清單〕一致（2026-09-23 使用者要求）：產業 → 財報基準 → 收盤價 →
+   日漲跌 → 5 日 → 20 日 → 六個等第 …。只少了觀察清單那兩顆置頂／上移下移
+   ——那是「自訂順序」，這一頁的順序是綜合評分。 #}
+<div class="scroll wide"><table id="t" class="compact">
+{{ table_head(prices=True, price_date=price_date) }}
+<tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at, prices=True, price_date=price_date) }}{% endfor %}</tbody>
 </table></div>
 {% endblock %}

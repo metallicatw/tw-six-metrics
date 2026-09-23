@@ -462,6 +462,20 @@ class PriceView:
     yahoo: str
 
 
+def common_price_date(views: dict[str, PriceView]) -> str:
+    """〔收盤價〕標題底下那一行小字：這一欄是哪一天的收盤（`2026/09/22`）。
+
+    取**最多檔**的那一天，不是最大的那一天：停牌、剛下市的那幾檔停在更早的
+    日子，而某一檔若多了一筆明天的（不會發生，但資料錯的時候會），最大值會
+    讓整欄標成一個幾乎沒有人是的日期。個別不同日的那幾檔，滑鼠停在那一格上
+    看得到它自己的日期。
+    """
+    if not views:
+        return ""
+    day, _n = Counter(v.date for v in views.values()).most_common(1)[0]
+    return day.replace("-", "/")
+
+
 def yahoo_chart_url(code: str, market: str) -> str:
     """Yahoo 股市的〔走勢圖〕分頁。上櫃要 `.TWO`，拿 `.TW` 去開是另一頁 404。"""
     suffix = "TWO" if market == "上櫃" else "TW"
@@ -967,8 +981,22 @@ def build_site(
     from ..ingest.cadence import next_filing  # noqa: PLC0415
 
     deadline, next_q = next_filing(_today_tw())
+    # 收盤價、日漲跌、5 日、20 日漲跌：〔評等清單〕與〔觀察清單〕兩張表都畫
+    # （2026-09-23 起兩張表的欄位一致；只有觀察清單多置頂／上移下移那兩顆鈕）。
+    views: dict[str, PriceView] = {}
+    if sheets_dir is not None:
+        views = price_views(
+            live,
+            quotes,
+            close_history(
+                sheets_dir.parent, lookback=PRICE_LOOKBACK, days=max(PRICE_WINDOWS) + 1
+            ),
+        )
+        for r in live:
+            r.px = views.get(r.stock_id)
+    price_date = common_price_date(views)
     env.get_template("list.html.j2").stream(
-        **base, page="list", rel="", rows=live,
+        **base, page="list", rel="", rows=live, price_date=price_date,
         fresh_count=fresher_than(live, quarter),
         coverage=fetch_coverage(live, fetched_at),
         delisted_count=len(rows) - len(live),
@@ -982,20 +1010,8 @@ def build_site(
     # 為什麼整張表都送過去、由瀏覽器自己篩：清單存在讀者的 localStorage 裡，
     # 建站的時候我們不知道他標了哪幾檔——也不該知道。這是一份靜態網站，沒有
     # 可以放私人清單的地方。
-    # 收盤價與漲跌只畫在〔觀察清單〕上。〔評等清單〕是同一張表，但它有 1,900 列、
-    # 而且那一頁在比的是體質，不是今天的價格——多四欄只會把它推到要橫向捲。
-    if sheets_dir is not None:
-        views = price_views(
-            live,
-            quotes,
-            close_history(
-                sheets_dir.parent, lookback=PRICE_LOOKBACK, days=max(PRICE_WINDOWS) + 1
-            ),
-        )
-        for r in live:
-            r.px = views.get(r.stock_id)
     env.get_template("watchlist.html.j2").stream(
-        **base, page="watchlist", rel="", rows=live
+        **base, page="watchlist", rel="", rows=live, price_date=price_date
     ).dump(str(out_dir / "watchlist.html"))
     written["watchlist.html（觀察清單）"] = 1
 

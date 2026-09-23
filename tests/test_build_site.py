@@ -791,7 +791,8 @@ def test_every_column_can_be_sorted_and_sorts_by_a_key_not_by_the_printed_text(t
     # 第 0 欄是流水號，它不排序（點「現在第幾列」沒有意義），所以可排序的欄
     # 從 1 開始。這一串一旦和 `tr.cells[col]` 對不起來，排序會整排錯開一格。
     cols = re.findall(r'class="sortable" data-col="(\d+)"', listing)
-    assert [int(c) for c in cols] == list(range(1, 17))
+    # 2026-09-23 起多了收盤價、日漲跌、5 日、20 日四欄（第 7～10 欄）。
+    assert [int(c) for c in cols] == list(range(1, 21))
 
     # 數個數還不夠。`data-col` 是 `tr.cells[col]` 的索引，而它是手寫的：中間插
     # 一欄卻忘了把後面的號碼往後推，排序會整排錯開一格——畫面上完全正常，只是
@@ -832,7 +833,7 @@ def test_the_update_date_is_its_own_column_with_a_header(tmp_path=None):
     build_site(_records(), out, sheets_dir=sheets)
     listing = (out / "index.html").read_text("utf-8")
 
-    assert "財報<br>基準" in listing
+    assert ">財報基準</button>" in listing   # 一行，不斷行（2026-09-23）
     row = listing.split('<tr data-code="5439"')[1].split("</tr>")[0]
     # 排序鍵是「季別|月份」，所以照字串排就是照期別排。畫面上的字是換算成西元
     # 的兩個標籤，排序鍵留的是原始寫法（民國）——換算只做在顯示這一層。

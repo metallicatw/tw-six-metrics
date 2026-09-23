@@ -29,6 +29,7 @@ from twsix.report.build import (
     PriceView,
     Row,
     build_site,
+    common_price_date,
     price_views,
     trend_rules_html,
     yahoo_chart_url,
@@ -131,7 +132,9 @@ def _listing() -> str:
 def _heads(page):
     head = page.split("<thead>")[1].split("</thead>")[0]
     ths = re.findall(r"<th\b.*?</th>", head, re.S)
-    return [re.sub(r"<[^>]+>|\s+", "", th)[:8] for th in ths], ths
+    # 〔收盤價〕底下那行日期不算標題本身。
+    bare = [re.sub(r'<span class="hsub">.*?</span>', "", th) for th in ths]
+    return [re.sub(r"<[^>]+>|\s+", "", th)[:8] for th in bare], ths
 
 
 def test_觀察清單的欄位順序():
@@ -140,12 +143,28 @@ def test_觀察清單的欄位順序():
     assert names[i + 1:i + 6] == ["財報基準", "收盤價", "日漲跌", "5日漲跌", "20日漲跌"], names
 
 
-def test_評等清單的財報基準在產業右邊_而且沒有價格欄():
-    names, _ = _heads(_listing())
-    i = names.index("產業")
-    assert names[i + 1] == "財報基準", names
-    assert names[:i] == ["", "★", "代號", "名稱", "市場"], names
-    assert "收盤價" not in names, "〔評等清單〕不畫價格那四欄"
+def test_評等清單的欄位和觀察清單一致():
+    """2026-09-23 起兩張表同一組欄位；觀察清單只多了置頂／上移下移那兩顆鈕。"""
+    list_names, _ = _heads(_listing())
+    watch_names, _ = _heads(_watch())
+    assert list_names == watch_names, (list_names, watch_names)
+    assert list_names[:5] == ["", "★", "代號", "名稱", "市場"], list_names
+
+
+def test_評等清單沒有置頂與排序鈕():
+    """那兩顆鈕是「自訂順序」，只有觀察清單有意義；清單頁由 site.js 看
+    `data-watchlist` 才會把它們打開，所以 HTML 裡的 hidden 一定要在。"""
+    assert 'data-watchlist' not in _listing().split('<table id="t"')[1].split(">")[0]
+    row = _listing().split('<tr data-code="2330"')[1].split("</tr>")[0]
+    assert '<span class="mv" hidden>' in row
+
+
+def test_財報基準標題一行_收盤價標題底下有日期():
+    head = _listing().split("<thead>")[1].split("</thead>")[0]
+    assert ">財報基準</button>" in head, "財報基準又被斷成兩行了"
+    assert '收盤價<span class="hsub">2026/08/21</span>' in head, (
+        "收盤價標題底下沒有寫是哪一天的收盤（測資最後一天是 2026-08-21）"
+    )
 
 
 def test_兩張表的欄號都對得上位置():
@@ -164,6 +183,9 @@ def test_觀察清單上真的畫出價格與走勢圖連結():
     assert "1,200" in row, "收盤價不在那一列上（千元以上不印小數）"
     assert 'href="https://tw.stock.yahoo.com/quote/2330.TW"' in row
     assert 'target="_blank"' in row and 'class="yf"' in row
+    # 圖示由 CSS 畫，每一列不帶 <svg>——1,900 列各一份是 850 KB。
+    assert "<svg" not in row, "走勢圖圖示又變回每一列一份 svg"
+    assert re.search(r"#t \.yf::before\{[^}]*mask:url", CSS), "圖示的 CSS 不見了"
     assert "+0.84%" in row, "日漲跌幅：10 ÷ 1,190"
     assert "+4.35%" in row, "5 日：1,200 ÷ 1,150"
     assert "+20.00%" in row, "20 日：1,200 ÷ 1,000"
@@ -172,9 +194,9 @@ def test_觀察清單上真的畫出價格與走勢圖連結():
     assert 'class="down"' in down, "跌要是綠色（down）"
 
 
-def test_觀察清單收緊了_評等清單沒動():
+def test_兩張表都收緊了():
     assert '<table id="t" class="compact" data-watchlist="1">' in _watch()
-    assert 'class="compact"' not in _listing()
+    assert '<table id="t" class="compact">' in _listing()
     assert "#t.compact th,#t.compact td{padding:3px 4px}" in CSS
     assert re.search(r"#t\.compact td\.ind\{[^}]*white-space:normal", CSS), "產業不會折行"
 
@@ -265,3 +287,24 @@ def test_price_view_是一個資料類別():
     """模板讀的是屬性；少一個欄位，那一格會變成空白而不是報錯。"""
     fields = set(PriceView.__dataclass_fields__)
     assert {"close", "date", "chg", "chg_pct", "window", "yahoo"} <= fields
+
+
+
+def test_標題按鈕自己參與基線對齊():
+    """〔報酬風險比〕旁邊有燈泡，包在 inline-flex 裡；沒有這一條，容器的基線取自
+    左邊那塊空白（合成的中線），整顆標題比同一列的其他標題高 6px。"""
+    assert "thead th .hdtip>button.sortable{align-self:baseline}" in CSS
+    assert "#t th.mid button.sortable{text-align:center}" in CSS, (
+        "置中欄的標題文字沒有置中（數字欄的按鈕預設靠右）"
+    )
+
+
+def test_標題的收盤日期取最多檔的那一天():
+    """不是最大的那一天：一筆錯的日期（或明天的資料）會讓整欄標成一個幾乎沒有人
+    是的日期；停牌的那幾檔停在更早，也不該把標題拉回去。"""
+    def v(day):
+        return PriceView(close=1, date=day, chg=None, chg_pct=None, window={}, yahoo="")
+    views = {"a": v("2026-09-22"), "b": v("2026-09-22"), "c": v("2026-09-19"),
+             "d": v("2026-09-23")}
+    assert common_price_date(views) == "2026/09/22"
+    assert common_price_date({}) == ""
