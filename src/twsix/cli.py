@@ -2185,6 +2185,28 @@ def cmd_delist(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_aipick(args: argparse.Namespace) -> int:
+    """〔AI 選股〕每天那一趟：市場狀態、品質否決、籌碼共振、影子帳戶、回測。
+
+    不連網——除了 `--sync-macro`：把 market-monitor 的四份總經資料（加權指數、
+    VIX、PMI、市值貨幣比）抓一份快取進 `data/aipick/macro/`。抓不到就用上一次的
+    快取，市場狀態晚一天，但不會讓整趟失敗。
+    """
+    settings = Settings.load(args.config)
+    from .aipick import data as ai_data  # noqa: PLC0415
+    from .aipick.run import run_all  # noqa: PLC0415
+
+    root = Path(args.data or settings.data_dir)
+    if args.sync_macro:
+        missed = ai_data.sync_macro(root)
+        if missed:
+            print(f"::warning::市場監控的總經資料有 {len(missed)} 份沒抓到，沿用上一次的快取："
+                  + "、".join(missed))
+    summary = run_all(root, with_backtest=not args.no_backtest)
+    print("AI 選股：" + "、".join(f"{k} {v}" for k, v in summary.items()))
+    return EXIT_OK
+
+
 def cmd_restate(args: argparse.Namespace) -> int:
     """用**本機已經有的**分頁重算評等、寫回清單。不連網、不建頁。
 
@@ -3766,6 +3788,17 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--data", help="資料目錄")
     rs.add_argument("--codes", help="只重算這些代號，逗號分隔（預設全部）")
     rs.set_defaults(func=cmd_restate)
+
+    ai = sub.add_parser(
+        "aipick",
+        help="AI 選股：市場狀態、財報品質否決、籌碼共振、影子帳戶與回測（寫進 data/aipick）",
+    )
+    ai.add_argument("--data", help="資料目錄")
+    ai.add_argument("--sync-macro", action="store_true",
+                    help="先把 market-monitor 的總經資料抓一份快取進來")
+    ai.add_argument("--no-backtest", action="store_true",
+                    help="不重跑回測（約一分鐘），只更新今天與影子帳戶")
+    ai.set_defaults(func=cmd_aipick)
 
     dl = sub.add_parser(
         "delist",

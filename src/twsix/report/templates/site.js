@@ -1773,7 +1773,9 @@ var TWSIXChart = (function(){
       var tx = el('text', {x: m.l - 6, y: Y(v) + 4, 'text-anchor': 'end', class: 'pxa'});
       tx.textContent = fmtNum(v); svg.appendChild(tx);
     });
-    var nx = W < 560 ? 4 : 7;
+    /* o.xTicks(W)：呼叫端可以依寬度指定日期標籤數（AI 選股頁的完整日期在手機上擺 4 個會疊在一起）。
+       沒給就是原本的 4／7，其他頁面不受影響。 */
+    var nx = (typeof o.xTicks === 'function' && o.xTicks(W)) || (W < 560 ? 4 : 7);
     for(var k = 0; k < nx; k++){
       var i = Math.round(i0 + (n - 1) * k / (nx - 1));
       var lx = el('text', {x: X(i), y: H - 8, 'text-anchor': k === 0 ? 'start' : (k === nx - 1 ? 'end' : 'middle'), class: 'pxa'});
@@ -2176,4 +2178,53 @@ function y3Eps(rev, sh, g, m){
     new ResizeObserver(function(){ first(); }).observe(box);
   }
   setTimeout(first, 0);
+})();
+
+
+/* =========================================================================
+ * 〔AI 選股〕的圖：資料在 <script id="ai-charts">（見 report/ai_page.py）。
+ * 四張：市場寬度、影子帳戶 vs 0050、D 回測、F 回測。都用 TWSIXChart。
+ * 包在 try 裡——圖畫不出來，表格與文字照樣在。
+ * ========================================================================= */
+(function(){
+  var el = document.getElementById('ai-charts');
+  if(!el || typeof TWSIXChart === 'undefined') return;
+  var C;
+  try{ C = JSON.parse(el.textContent); }catch(e){ return; }
+  function pct(v){ return v === null || v === undefined ? '—' : ((v - 1) * 100).toFixed(1) + '%'; }
+  function box(id){ return document.getElementById(id); }
+  function safe(fn){ try{ fn(); }catch(e){ if(window.console) console.warn('AI 選股圖表', e); } }
+  function xt(W){ return W < 440 ? 3 : 0; }
+  safe(function(){
+    var b = C.breadth || {};
+    if(box('ai-breadth-chart') && (b.dates || []).length > 1)
+      TWSIXChart(box('ai-breadth-chart'), {x: b.dates, xTicks: xt, height: 200,
+        title: '市場寬度（站上 60 日線的比例，近一年）',
+        fmt: function(v){ return v === null || v === undefined ? '—' : v.toFixed(0) + '%'; },
+        hlines: [{value: 50, color: '#cf3327', label: '50% 擴張'}, {value: 20, color: '#0d7c4f', label: '20% 恐慌'}],
+        series: [{name: '市場寬度', color: '#1c62b8', values: b.values, width: 1.6}]});
+  });
+  safe(function(){
+    var p = C.port || {};
+    if(box('ai-paper-chart') && (p.x || []).length > 1)
+      TWSIXChart(box('ai-paper-chart'), {x: p.x, xTicks: xt, height: 220,
+        series: [{name: '影子帳戶', color: '#0e7c6f', values: p.equity, width: 2},
+                 {name: '0050', color: 'ink', values: p.bench, width: 1.2, dash: '4 3'}]});
+  });
+  safe(function(){
+    var d = C.d || {};
+    if(box('ai-d-chart') && (d.x || []).length > 1)
+      TWSIXChart(box('ai-d-chart'), {x: d.x, xTicks: xt, fmt: pct,
+        series: [{name: '籌碼共振（週期對齊版）', color: '#6d3fd1', values: d.horizon, width: 2},
+                 {name: '籌碼共振（規劃版）', color: '#9b84e0', values: d.plan, width: 1.3, dash: '5 3'},
+                 {name: '0050＋市場狀態', color: '#0e7c6f', values: d.bench_f, width: 1.3},
+                 {name: '0050', color: 'ink', values: d.bench, width: 1.2, dash: '4 3'}]});
+  });
+  safe(function(){
+    var f = C.f || {};
+    if(box('ai-f-chart') && (f.x || []).length > 1)
+      TWSIXChart(box('ai-f-chart'), {x: f.x, xTicks: xt, fmt: pct,
+        series: [{name: '0050＋市場狀態', color: '#0e7c6f', values: f.timed, width: 2},
+                 {name: '0050 買進持有', color: 'ink', values: f.bench, width: 1.2, dash: '4 3'}]});
+  });
 })();

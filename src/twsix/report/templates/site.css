@@ -113,6 +113,7 @@
 :root:not([data-theme=light]) nav a.nav-watch{--nav-c:#f0a72a}
 :root:not([data-theme=light]) nav a.nav-trend{--nav-c:#f07ab0}
 :root:not([data-theme=light]) nav a.nav-mon  {--nav-c:#6fb0f5}
+:root:not([data-theme=light]) nav a.nav-ai   {--nav-c:#b39cff}
 :root:not([data-theme=light]) nav a.nav-more {--nav-c:#98a6b4}
 :root:not([data-theme=light]) .tabs #tab-summary{--tc:#4fd6c4}
 :root:not([data-theme=light]) .tabs #tab-six{--tc:#5fd38a}
@@ -134,6 +135,7 @@
 :root[data-theme=dark] nav a.nav-watch{--nav-c:#f0a72a}
 :root[data-theme=dark] nav a.nav-trend{--nav-c:#f07ab0}
 :root[data-theme=dark] nav a.nav-mon  {--nav-c:#6fb0f5}
+:root[data-theme=dark] nav a.nav-ai   {--nav-c:#b39cff}
 :root[data-theme=dark] nav a.nav-more {--nav-c:#98a6b4}
 :root[data-theme=dark] .tabs #tab-summary{--tc:#4fd6c4}
 :root[data-theme=dark] .tabs #tab-six{--tc:#5fd38a}
@@ -230,6 +232,7 @@ nav a.nav-trend{--nav-c:#a3306b}   /* 台股趨勢選股 —— 洋紅 */
 /* 趨勢∩六大∩報酬 —— 紫。刻意排在洋紅（趨勢）和藍（監控）中間：它是趨勢那一頁
    再加兩個條件，顏色上也該是它的鄰居，而不是另一個色系。 */
 nav a.nav-mon  {--nav-c:#1c62b8}   /* 全球市場監控 —— 藍 */
+nav a.nav-ai   {--nav-c:#6d3fd1}   /* AI 選股 —— 紫 */
 nav a.nav-more {--nav-c:#5f6b78}   /* 那三個預設隱藏的 */
 .stamp{font-size:11.5px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
 .stamp:empty{display:none}
@@ -1329,4 +1332,65 @@ table.hl-t{min-width:0}
 @container page (max-width:760px){
   table.hl-t th,table.hl-t td{padding:7px 8px;font-size:12.5px}
   table.hl-t td:first-child{min-width:7.5em}
+}
+
+/* =========================================================================
+ * 〔AI 選股〕（ai.html）
+ * 五個區塊各一個識別色小方塊（F 市場狀態、D 籌碼共振、影子帳戶、回測、E 否決），
+ * 顏色只當「認位置」用；漲跌仍然是 --up／--down（紅漲綠跌）。
+ * ========================================================================= */
+.ai-beta{display:inline-block;vertical-align:middle;font-size:11px;font-weight:700;
+  padding:2px 8px;border-radius:999px;margin-left:4px;color:#fff;background:#6d3fd1}
+.ai-asof{margin:-4px 0 12px}
+.ai-block{background:var(--surface);border:1px solid var(--rule);border-radius:8px;
+  padding:14px 16px 16px;margin:0 0 16px}
+.ai-h{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;margin:0 0 10px;font-size:16px}
+.ai-h .muted{font-weight:400}
+.ai-tag{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
+  border-radius:6px;font-size:13px;font-weight:800;color:#fff;flex:0 0 auto}
+.ai-tag-f{background:#1c62b8}.ai-tag-d{background:#6d3fd1}.ai-tag-p{background:#0e7c6f}
+.ai-tag-b{background:#b25a00}.ai-tag-e{background:#a3306b}.ai-tag-j{background:#5f6b78}
+.ai-lead{max-width:none;color:var(--ink-2);font-size:13.5px}
+.ai-regime{border-radius:8px;padding:12px 14px;border:1px solid var(--rule);background:var(--surface-2)}
+.ai-regime-main{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 14px}
+.ai-state{font-size:26px;font-weight:800;letter-spacing:.04em}
+.ai-cap{font-size:14px;color:var(--ink-2)}
+.ai-tone-up .ai-state{color:var(--up)}.ai-tone-warm .ai-state{color:#c2410c}
+.ai-tone-flat .ai-state{color:var(--ink)}.ai-tone-down .ai-state,.ai-tone-down2 .ai-state{color:var(--down)}
+.ai-why{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--ink-2)}
+.ai-note{font-size:12.5px;color:var(--muted);margin:8px 0 0;max-width:none}
+.ai-gauges,.ai-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0}
+.ai-gauges>div,.ai-kpis>div{border:1px solid var(--rule);border-radius:6px;padding:8px 10px;
+  display:flex;flex-direction:column;gap:2px;background:var(--surface)}
+.ai-gauges span,.ai-kpis span{font-size:12px;color:var(--muted)}
+.ai-gauges b,.ai-kpis b{font-size:19px;font-variant-numeric:tabular-nums}
+.ai-gauges em{font-style:normal;font-size:11.5px;color:var(--muted)}
+.ai-chart{margin:8px 0 12px;min-height:230px}
+.ai-t{width:100%;border-collapse:collapse;font-size:13px}
+.ai-t th,.ai-t td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top;white-space:nowrap}
+.ai-t thead th{font-size:12px;color:var(--muted);font-weight:600;background:var(--surface-2)}
+.ai-t .num{text-align:right;font-variant-numeric:tabular-nums}
+.ai-t td.ai-reasons{white-space:normal;min-width:240px;color:var(--ink-2);font-size:12.5px}
+.ai-stats tbody th{font-weight:600}
+.ai-stats tr.ai-d th{color:#6d3fd1}.ai-stats tr.ai-dp th{color:#9b84e0}
+.ai-stats tr.ai-f th{color:var(--accent)}
+.ai-verdict{border-left:3px solid #6d3fd1;background:var(--surface-2);border-radius:0 6px 6px 0;
+  padding:8px 12px;margin:10px 0 14px;font-size:13.5px}
+.ai-verdict p{max-width:none;margin:0 0 6px}.ai-verdict p:last-child{margin:0}
+.ai-block h4{margin:18px 0 6px;font-size:14.5px}
+.ai-block h4 .muted{font-weight:400}
+.ai-more{margin:10px 0 0}
+.ai-more>summary{cursor:pointer;font-size:13px;color:var(--accent-2);font-weight:600}
+.ai-bars{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:4px;max-width:520px}
+.ai-bars li{display:grid;grid-template-columns:11em 1fr 3em;align-items:center;gap:8px;font-size:12.5px}
+.ai-bars i{height:8px;border-radius:4px;background:linear-gradient(90deg,#6d3fd1 var(--w),var(--surface-2) var(--w))}
+.ai-bars b{text-align:right;font-variant-numeric:tabular-nums}
+.ai-ic{list-style:none;padding:0;margin:8px 0;display:grid;gap:3px;max-width:420px}
+.ai-ic li{display:grid;grid-template-columns:11em 5em 1fr;gap:8px;font-size:12.5px}
+.ai-ic em{font-style:normal;color:var(--muted)}
+@media (max-width:640px){
+  .ai-block{padding:12px 12px 14px}
+  .ai-state{font-size:22px}
+  .ai-gauges,.ai-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ai-bars li,.ai-ic li{grid-template-columns:9em 1fr 3em}
 }

@@ -61,6 +61,9 @@
     {% if monitor_page %}
     <a class="nav-mon" href="{{ rel }}{{ monitor_page }}"{% if page=='monitor' %} aria-current="page"{% endif %}>全球市場監控＋日股觀察</a>
     {% endif %}
+    {# 〔AI 選股〕一律出現：頁面在資料還沒產生時也會畫（寫「還沒有資料」）。
+       它不像上面那兩項要看檔案在不在——那兩項的檔案來自別的 repo，這一頁是自己畫的。 #}
+    <a class="nav-ai" href="{{ rel }}ai.html"{% if page=='ai' %} aria-current="page"{% endif %}>AI 選股</a>
     {% if 'picks' not in hidden_pages %}
     <a class="nav-more" href="{{ rel }}picks.html"{% if page=='picks' %} aria-current="page"{% endif %}>具投資價值</a>
     {% endif %}

@@ -95,6 +95,8 @@ GRADE_KEYS = ["AA", "A", "BB", "B", "C", "不評分", "數據不足"]
 #: 放進來。報告一個位元組都沒有被改到（它每天重新產生，改它遲早會壞），而讀者
 #: 從頭到尾沒有離開過這個網站。
 MONITOR_PAGE = "monitor.html"
+#: 〔AI 選股〕（見 report/ai_page.py）。
+AI_PAGE = "ai.html"
 MONITOR_REPORT = "monitor-report.html"
 
 #: 〔趨勢選股〕。metallicatw/tw-trend-filter 每個交易日台北 15:10 掃過全市場
@@ -1104,6 +1106,14 @@ def build_site(
         ).dump(str(out_dir / MONITOR_PAGE))
         written["monitor.html（市場監控）"] = 1
 
+    # 〔AI 選股〕。資料是 `twsix aipick` 寫在 data/aipick/ 的；這裡只讀。
+    #
+    # **這一頁出任何錯都不准拖垮整站**：它是新的、試行中的東西，而它旁邊是
+    # 1,900 多頁運作良好的個股頁。所以包起來——壞了只畫一頁「暫時無法顯示」，
+    # 並在 log 留一行 error 註記。導覽列那一項照樣在（見 base.html.j2）。
+    written[f"{AI_PAGE}（AI 選股）"] = _write_ai_page(
+        env, base, out_dir, sheets_dir.parent if sheets_dir is not None else None)
+
 
     _write_search_index(out_dir, rows, rich_ids, fetched_at, fetched_ts)
     written["search.json"] = 1
@@ -1498,6 +1508,25 @@ def _full_stock_page(
         trend_page=base.get("trend_page", ""),
     )
     return True
+
+
+def _write_ai_page(env: Any, base: dict[str, Any], out_dir: Path,
+                   data_dir: Path | None) -> int:
+    """畫〔AI 選股〕。任何例外都吞掉、改畫一頁「暫時無法顯示」，回傳 0。"""
+    from .ai_page import load_ai  # noqa: PLC0415
+
+    try:
+        ai = load_ai(data_dir)
+        env.get_template("ai.html.j2").stream(
+            **base, page="ai", rel="", ai=ai
+        ).dump(str(out_dir / AI_PAGE))
+        return 1
+    except Exception as exc:  # noqa: BLE001 - 試行中的一頁不能讓整站建不起來
+        print(f"::error::AI 選股頁面畫不出來（其他頁面不受影響）：{exc!r}")
+        env.get_template("ai.html.j2").stream(
+            **base, page="ai", rel="", ai={"ready": False, "error": True}
+        ).dump(str(out_dir / AI_PAGE))
+        return 0
 
 
 def build_stock_page(
