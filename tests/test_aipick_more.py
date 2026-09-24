@@ -758,3 +758,13 @@ def test_抓取整趟有硬上限_到了自己停並存下進度():
     finally:
         FT.fetch_all = orig
     assert (root / "aipick" / "fetch_status.json").exists()
+
+
+def test_圖的浮動資訊窗以圖為原點_AI標題垂直置中():
+    """.pxtip 是 absolute：圖的容器沒有 position:relative，資訊窗會飄到頁首（2026-09-24）。"""
+    import re
+
+    css = (ROOT / "src/twsix/report/templates/site.css").read_text("utf-8")
+    rule = re.search(r"^\.ai-chart\{([^}]*)\}", css, re.M).group(1)
+    assert "position:relative" in rule, rule
+    assert "#t thead th.ai-cell{vertical-align:middle}" in css

@@ -1368,7 +1368,9 @@ table.hl-t{min-width:0}
 .ai-gauges span,.ai-kpis span{font-size:12px;color:var(--muted)}
 .ai-gauges b,.ai-kpis b{font-size:19px;font-variant-numeric:tabular-nums}
 .ai-gauges em{font-style:normal;font-size:11.5px;color:var(--muted)}
-.ai-chart{margin:8px 0 12px;min-height:230px}
+/* position:relative：浮動資訊窗（.pxtip）是 absolute，要以圖本身為座標原點。
+   少了這一行，它會以更外層的定位元素為準，在手機上飄到頁首去（2026-09-24）。 */
+.ai-chart{margin:8px 0 12px;min-height:230px;position:relative}
 .ai-t{width:100%;border-collapse:collapse;font-size:13px}
 .ai-t th,.ai-t td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top;white-space:nowrap}
 .ai-t thead th{font-size:12px;color:var(--muted);font-weight:600;background:var(--surface-2)}
@@ -1424,6 +1426,10 @@ table.hl-t{min-width:0}
 /* 分頁裡那張月份表只有三欄：不套全站表格的 560px 下限，手機上不必橫捲 */
 .ai-stock .ai-t{min-width:0}
 /* 清單最右邊的〔AI〕欄（_macros.html.j2 的 row） */
+/* 標題只有一行「AI」，其他標題多半兩行：照全站的 baseline 對齊會貼在上緣。
+   垂直置中，和左邊〔報酬風險比〕兩行字的中線對齊（2026-09-24）。 */
+#t thead th.ai-cell{vertical-align:middle}
+#t thead th.ai-cell .hdtip{justify-content:center}
 .ai-mk{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11.5px;font-weight:700;
   line-height:18px;white-space:nowrap;color:#fff;background:#7d2ae8}
 .ai-mk-held{background:#c2255c}
