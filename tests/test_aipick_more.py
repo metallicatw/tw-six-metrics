@@ -732,3 +732,29 @@ def test_抓取被中斷也留下狀態():
                      list_post=boom)
     st = json.loads((root / "aipick" / "fetch_status.json").read_text(encoding="utf-8"))
     assert "news" in st and "llm" in st
+
+
+def test_抓取整趟有硬上限_到了自己停並存下進度():
+    import argparse
+    import time as _t
+
+    from twsix import cli
+    from twsix.aipick import fetch as FT
+
+    root = _tmp()
+    orig = FT.fetch_all
+
+    def slow(data_dir, **kw):
+        FT._save_status(data_dir, {"news": {"added": 1}})
+        _t.sleep(5)
+        return {}
+
+    FT.fetch_all = slow
+    try:
+        args = argparse.Namespace(config=None, data=str(root), max_pdf=1, max_seconds=1)
+        t0 = _t.monotonic()
+        assert cli.cmd_aipick_fetch(args) == cli.EXIT_OK
+        assert _t.monotonic() - t0 < 4, "時間到了沒有停"
+    finally:
+        FT.fetch_all = orig
+    assert (root / "aipick" / "fetch_status.json").exists()

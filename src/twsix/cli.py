@@ -2217,7 +2217,25 @@ def cmd_aipick_fetch(args: argparse.Namespace) -> int:
     from .aipick.fetch import fetch_all  # noqa: PLC0415
 
     root = Path(args.data or settings.data_dir)
-    status = fetch_all(root, max_pdf=args.max_pdf)
+    # 自己先停：排程那一步的逾時是 15 分鐘，被 GitHub 砍掉的話什麼都不會印、
+    # 狀態也來不及存（2026-09-24 第一次上線就是這樣）。12 分鐘時自己丟一個例外，
+    # fetch_all 的 finally 會把做到哪裡存下來，這裡印一行警告後正常結束。
+    import signal  # noqa: PLC0415
+
+    def _stop(signum, frame):  # noqa: ARG001
+        raise TimeoutError("AI 抓取超過 12 分鐘，自己先停")
+
+    if args.max_seconds and hasattr(signal, "SIGALRM"):
+        signal.signal(signal.SIGALRM, _stop)
+        signal.alarm(args.max_seconds)
+    try:
+        status = fetch_all(root, max_pdf=args.max_pdf)
+    except TimeoutError as exc:
+        print(f"::warning::{exc}；已經讀完的簡報都存下來了，剩下的下一趟接著讀")
+        return EXIT_OK
+    finally:
+        if args.max_seconds and hasattr(signal, "SIGALRM"):
+            signal.alarm(0)
     llm = status.get("llm") or {}
     print("AI 選股（抓取）：" + "、".join(
         f"{k} {v}" for k, v in status.items() if k in ("news", "talks_list", "talks", "relations")))
@@ -3830,6 +3848,8 @@ def build_parser() -> argparse.ArgumentParser:
     aif.add_argument("--data", help="資料目錄（預設 data/）")
     aif.add_argument("--max-pdf", type=int, default=25,
                      help="這一趟最多下載幾份法說簡報（預設 25；另有 7 分鐘的時間上限）")
+    aif.add_argument("--max-seconds", type=int, default=720,
+                     help="整趟最多幾秒，到了自己停並存下進度（預設 720；0＝不限）")
     aif.set_defaults(func=cmd_aipick_fetch)
 
     dl = sub.add_parser(
