@@ -24,7 +24,8 @@
     <span>財報 <b>{{ p.fiscal_quarter or "—" }}</b></span>
     <span>營收 <b>{{ p.revenue_month or "—" }}</b></span>
     {%- if p.market_price %}<span>股價 <b>{{ "%.2f"|format(p.market_price) }}</b>
-      {%- if p.price_date %}<i class="asof">{{ p.price_date }} 收盤</i>{% endif %}</span>{% endif %}
+      {%- if p.price_date %}<i class="asof">{{ p.price_date }} 收盤</i>{% endif %}
+      {%- if yahoo_ta is defined %}<a class="yf" href="{{ yahoo_ta(p.stock_id, p.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ p.stock_id }} Yahoo 技術分析"></a>{% endif %}</span>{% endif %}
     {%- if p.latest_composite is not none %}
     <span>綜合 <b>{{ "%.2f"|format(p.latest_composite) }}</b></span>
     {%- endif %}

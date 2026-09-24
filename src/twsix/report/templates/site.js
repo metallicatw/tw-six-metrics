@@ -2197,43 +2197,93 @@ function y3Eps(rev, sh, g, m){
   function box(id){ return document.getElementById(id); }
   function safe(fn){ try{ fn(); }catch(e){ if(window.console) console.warn('AI 選股圖表', e); } }
   function xt(W){ return W < 440 ? 3 : 0; }
-  safe(function(){
-    var b = C.breadth || {};
-    if(box('ai-breadth-chart') && (b.dates || []).length > 1)
-      TWSIXChart(box('ai-breadth-chart'), {x: b.dates, xTicks: xt, height: 200,
-        title: '市場寬度（站上 60 日線的比例，近一年）',
-        fmt: function(v){ return v === null || v === undefined ? '—' : v.toFixed(0) + '%'; },
-        hlines: [{value: 50, color: '#cf3327', label: '50% 擴張'}, {value: 20, color: '#0d7c4f', label: '20% 恐慌'}],
-        series: [{name: '市場寬度', color: '#1c62b8', values: b.values, width: 1.6}]});
-  });
-  safe(function(){
-    var p = C.port || {};
-    if(box('ai-paper-chart') && (p.x || []).length > 1)
-      TWSIXChart(box('ai-paper-chart'), {x: p.x, xTicks: xt, height: 220,
-        series: [{name: '影子帳戶', color: '#c2255c', values: p.equity, width: 2},
-                 {name: '0050', color: 'ink', values: p.bench, width: 1.2, dash: '4 3'}]});
-  });
+  /* 等圖真的看得到才畫：收在沒選中的分頁、或收起來的 <details> 裡的圖，寬度是 0，
+     畫出來會是預設的 600px，在手機上撐破版面。分頁一切過來、<details> 一打開就畫。 */
+  function whenShown(el, fn){
+    function shown(){ return el.getClientRects().length > 0; }
+    if(shown()){ fn(); return; }
+    var done = false, obs = null;
+    function check(){
+      if(done || !shown()) return;
+      done = true;
+      if(obs) obs.disconnect();
+      fn();
+    }
+    if(window.MutationObserver) obs = new MutationObserver(check);
+    for(var p = el.parentElement; p; p = p.parentElement){
+      if(obs && p.getAttribute('role') === 'tabpanel')
+        obs.observe(p, {attributes: true, attributeFilter: ['hidden']});
+      if(p.tagName === 'DETAILS') p.addEventListener('toggle', check);
+    }
+  }
+  var bEl = box('ai-breadth-chart'), b = C.breadth || {};
+  if(bEl && (b.dates || []).length > 1) whenShown(bEl, function(){ safe(function(){
+    TWSIXChart(bEl, {x: b.dates, xTicks: xt, height: 200,
+      title: '市場寬度（站上 60 日線的比例，近一年）',
+      fmt: function(v){ return v === null || v === undefined ? '—' : v.toFixed(0) + '%'; },
+      hlines: [{value: 50, color: '#cf3327', label: '50% 擴張'}, {value: 20, color: '#0d7c4f', label: '20% 恐慌'}],
+      series: [{name: '市場寬度', color: '#1c62b8', values: b.values, width: 1.6}]});
+  }); });
+  var pEl = box('ai-paper-chart'), pp = C.port || {};
+  if(pEl && (pp.x || []).length > 1) whenShown(pEl, function(){ safe(function(){
+    TWSIXChart(pEl, {x: pp.x, xTicks: xt, height: 220,
+      series: [{name: '影子帳戶', color: '#c2255c', values: pp.equity, width: 2},
+               {name: '0050', color: 'ink', values: pp.bench, width: 1.2, dash: '4 3'}]});
+  }); });
   // 回測的淨值圖：一張一個設定（見 report/ai_page.py 的 _chart），這裡照著畫
   (C.list || []).forEach(function(ch){
     var el2 = box(ch.id);
     if(!el2 || (ch.x || []).length < 2) return;
-    function draw(){
-      safe(function(){
-        TWSIXChart(el2, {x: ch.x, fmt: pct, xTicks: xt, title: ch.title,
-          series: ch.series.map(function(s){
-            return {name: s.name, color: s.color, values: s.values, width: s.width || 1.4, dash: s.dash};
-          })});
-      });
-    }
-    var fold = el2.closest ? el2.closest('details') : null;
-    if(fold && !fold.open){
-      fold.addEventListener('toggle', function once(){
-        if(!fold.open) return;
-        fold.removeEventListener('toggle', once);
-        draw();
-      });
-    } else draw();
+    whenShown(el2, function(){ safe(function(){
+      TWSIXChart(el2, {x: ch.x, fmt: pct, xTicks: xt, title: ch.title,
+        series: ch.series.map(function(s){
+          return {name: s.name, color: s.color, values: s.values, width: s.width || 1.4, dash: s.dash};
+        })});
+    }); });
   });
+})();
+
+/* =========================================================================
+ * 〔AI 選股〕頁的分頁（2026-09-24）：一次只顯示一段。網址 #regime、#backtest…
+ * 直接開到那一段；方向鍵左右切換。和個股頁的分頁同一套行為。
+ * ========================================================================= */
+(function(){
+  var bar = document.querySelector('.ai-tabs');
+  if(!bar) return;
+  var tabs = [].slice.call(bar.querySelectorAll('[role=tab]'));
+  function key(t){ return t.id.replace(/^aitab-/, ''); }
+  function show(name, push, scroll){
+    tabs.forEach(function(t){
+      var on = key(t) === name;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      var panel = document.getElementById(t.getAttribute('aria-controls'));
+      if(panel) panel.hidden = !on;
+    });
+    if(push && history.replaceState) history.replaceState(null, '', '#' + name);
+    // 手機上分頁列是橫向捲的：選中的那一顆要捲進畫面（網址 #journal 直接開的時候它在最右邊）
+    var cur = document.getElementById('aitab-' + name);
+    if(cur && (cur.offsetLeft < bar.scrollLeft || cur.offsetLeft + cur.offsetWidth > bar.scrollLeft + bar.clientWidth))
+      bar.scrollLeft = cur.offsetLeft - 8;
+    // 切過去之後停在分頁列上，不是停在上一段捲到的位置（那個位置在新的一段裡沒有意義）
+    if(scroll && bar.getBoundingClientRect().top < 0)
+      window.scrollTo({top: window.pageYOffset + bar.getBoundingClientRect().top - 8, behavior: 'auto'});
+  }
+  tabs.forEach(function(t){
+    t.addEventListener('click', function(){ show(key(t), true, true); t.focus(); });
+    t.addEventListener('keydown', function(e){
+      var i = tabs.indexOf(t), n = tabs.length, j = null;
+      if(e.key === 'ArrowRight') j = (i + 1) % n;
+      else if(e.key === 'ArrowLeft') j = (i + n - 1) % n;
+      else if(e.key === 'Home') j = 0;
+      else if(e.key === 'End') j = n - 1;
+      if(j === null) return;
+      e.preventDefault();
+      tabs[j].focus(); show(key(tabs[j]), true, true);
+    });
+  });
+  var want = (location.hash || '').slice(1).replace(/^ai-/, '');
+  if(want && document.getElementById('aitab-' + want)) show(want, false, false);
 })();
 
 /* =========================================================================

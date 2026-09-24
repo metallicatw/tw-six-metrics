@@ -18,6 +18,7 @@ import gzip
 import io
 import json
 import math
+import re
 import tempfile
 import urllib.error
 from datetime import date, timedelta
@@ -768,3 +769,30 @@ def test_圖的浮動資訊窗以圖為原點_AI標題垂直置中():
     rule = re.search(r"^\.ai-chart\{([^}]*)\}", css, re.M).group(1)
     assert "position:relative" in rule, rule
     assert "#t thead th.ai-cell{vertical-align:middle}" in css
+
+
+def test_AI頁各段是獨立分頁_不是定位點():
+    tpl = (ROOT / "src/twsix/report/templates/ai.html.j2").read_text("utf-8")
+    assert '<nav class="ai-jump"' not in tpl and 'href="#ai-' not in tpl
+    tabs = re.findall(r'role="tab" id="aitab-(\w+)"', tpl)
+    panels = re.findall(r'id="ai-(\w+)" role="tabpanel"', tpl)
+    assert tabs == panels == ["regime", "paper", "picks", "talks", "backtest", "veto", "journal"]
+    # 只有第一段一開始是打開的
+    assert tpl.count('role="tabpanel" aria-labelledby="aitab-regime">') == 1
+    assert tpl.count('role="tabpanel"') - 1 == tpl.count('role="tabpanel" aria-labelledby') - 1
+    assert len(re.findall(r'role="tabpanel" aria-labelledby="aitab-\w+" hidden>', tpl)) == 6
+    css = (ROOT / "src/twsix/report/templates/site.css").read_text("utf-8")
+    assert "html:not(.js) .ai-panel[hidden]{display:block}" in css, "沒有 JavaScript 時要全部攤開"
+    js = (ROOT / "src/twsix/report/templates/site.js").read_text("utf-8")
+    assert "function whenShown(" in js, "藏在沒選中分頁裡的圖要等看得到才畫"
+
+
+def test_收盤價旁邊的圖示連到Yahoo技術分析():
+    from twsix.report.build import yahoo_chart_url
+
+    assert yahoo_chart_url("2330", "上市").endswith("/2330.TW/technical-analysis")
+    assert yahoo_chart_url("6488", "上櫃").endswith("/6488.TWO/technical-analysis")
+    T = ROOT / "src/twsix/report/templates"
+    for f in ("stockpage.html.j2", "stock.html.j2", "ai.html.j2"):
+        assert "yahoo_ta(" in (T / f).read_text("utf-8"), f
+    assert "Yahoo股市走勢圖" not in (T / "_macros.html.j2").read_text("utf-8")

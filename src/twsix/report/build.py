@@ -218,6 +218,8 @@ def _env(assets: bool = False):  # type: ignore[no-untyped-def]
     # 那個 macro 是被 `{% from ... import %}` 匯入的——匯入的 macro 看不到匯入
     # 它的那一頁的 context。傳參數也可以，但那會讓三個呼叫端各記一次同一件事。
     env.globals["reward_risk_notes"] = list(REWARD_RISK_NOTES)
+    # 收盤價旁邊那顆 Yahoo 技術分析圖示：個股頁頁首、AI 選股頁的表格也要用。
+    env.globals["yahoo_ta"] = yahoo_chart_url
     if not assets:
         from markupsafe import Markup
 
@@ -489,9 +491,13 @@ def common_price_date(views: dict[str, PriceView]) -> str:
 
 
 def yahoo_chart_url(code: str, market: str) -> str:
-    """Yahoo 股市的〔走勢圖〕分頁。上櫃要 `.TWO`，拿 `.TW` 去開是另一頁 404。"""
+    """Yahoo 股市的〔技術分析〕分頁（2026-09-24 起；原本是〔走勢圖〕首頁）。
+
+    上櫃要 `.TWO`，拿 `.TW` 去開是另一頁 404。清單、個股頁頁首、AI 選股頁的收盤價
+    旁邊那顆圖示都指到這裡——同一件事只有一個網址。
+    """
     suffix = "TWO" if market == "上櫃" else "TW"
-    return f"https://tw.stock.yahoo.com/quote/{code}.{suffix}"
+    return f"https://tw.stock.yahoo.com/quote/{code}.{suffix}/technical-analysis"
 
 
 def price_views(
