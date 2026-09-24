@@ -27,9 +27,9 @@ def _colours(prefix):
     return dict(re.findall(pat, css))
 
 
-def test_十二顆分頁都在():
+def test_十三顆分頁都在():
     ids = _tab_ids()
-    assert len(ids) == 13, ids                     # 十二個內容分頁＋〔尚未建置〕
+    assert len(ids) == 14, ids                     # 十三個內容分頁（含〔AI 選股〕）＋〔尚未建置〕
     assert ids[:5] == ["summary", "six", "eps", "health", "pxhealth"], ids
 
 

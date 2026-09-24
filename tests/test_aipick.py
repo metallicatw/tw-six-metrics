@@ -239,22 +239,21 @@ def test_全部都負的時候等權():
 class _FakeModel:
     """週五給一個訊號、之後第 3 天出場（now）或第 3 天決定隔天出場（next）。"""
 
-    STOP_ATR = 3.0
-    NEW_PER_WEEK = 5
+    new_per_signal = 5
 
     def __init__(self, panel, when="now"):
-        from array import array
-
         self.p = panel
         self.when = when
-        self.weeks = [panel.dates[4]]
-        self.atr14 = {"1111": array("d", [1.0] * len(panel.dates))}
+        self.signal_days = [panel.dates[4]]
 
     def signal(self, week):
         cand = C.Candidate("1111", "測試", "測試業", 0.99, {}, ["理由"], 100.0, 0.0, 0.0)
         return C.WeekSignal(week, 4, {}, {}, [cand], 1)
 
-    def exit_check(self, code, i, entry_i, stop, regime):
+    def entry_stop(self, code, i, price, strategy=""):
+        return price - 3.0
+
+    def exit_check(self, code, i, entry_i, stop, regime, strategy=""):
         if i - entry_i == 3:
             return self.when, "測試出場", stop
         return "", "", stop

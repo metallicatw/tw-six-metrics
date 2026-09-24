@@ -71,15 +71,14 @@ from .data import (
     HolderWeek,
     Meta,
     Panel,
-    atr,
     forward_return,
     isnan,
     percentile_rank,
-    sma,
     spearman,
 )
 from .quality import QualityBook
 from .regime import Reading
+from .tech import Tech
 
 FEATURES = ("big4z", "holders4", "trust20", "trust5", "foreign20", "dir3m")
 FEATURE_TEXT = {
@@ -114,6 +113,11 @@ class Candidate:
     close: float
     ret20: float
     industry_ret20: float
+    strategy: str = "D"
+
+    @property
+    def note(self) -> str:
+        return f"共振分數第 {self.score:.0%} 百分位｜" + "、".join(self.reasons)
 
 
 @dataclass
@@ -124,6 +128,8 @@ class WeekSignal:
     ic: dict[str, float]
     candidates: list[Candidate] = field(default_factory=list)
     universe: int = 0
+    #: 每一檔的共振分數百分位（個股頁用）
+    scores: dict[str, float] = field(default_factory=dict)
 
 
 def learn_weights(past: list[WeekSignal], i: int) -> dict[str, float]:
@@ -150,12 +156,15 @@ def learn_weights(past: list[WeekSignal], i: int) -> dict[str, float]:
 
 
 class ChipsModel:
+    name = "D"
+    label = "籌碼共振"
     STOP_ATR = STOP_ATR
     NEW_PER_WEEK = NEW_PER_WEEK
+    new_per_signal = NEW_PER_WEEK
 
     def __init__(self, panel: Panel, inst: dict, holders: dict[str, list[HolderWeek]],
                  directors: dict, meta: dict[str, Meta], quality: QualityBook,
-                 exit_style: str = "horizon"):
+                 exit_style: str = "horizon", tech: Tech | None = None):
         self.p = panel
         self.exit_style = exit_style
         self.inst = inst
@@ -164,25 +173,18 @@ class ChipsModel:
         self.directors = directors
         self.holders = holders
         self._hidx = {c: {w.date: k for k, w in enumerate(ws)} for c, ws in holders.items()}
-        self.ma20: dict[str, array] = {}
-        self.ma60: dict[str, array] = {}
-        self.atr14: dict[str, array] = {}
-        self.value20: dict[str, array] = {}
-        for code in meta:
-            if code not in panel.close:
-                continue
-            cl = panel.close[code]
-            self.ma20[code] = sma(cl, 20)
-            self.ma60[code] = sma(cl, 60)
-            self.atr14[code] = atr(panel, code)
-            vol = panel.volume[code]
-            self.value20[code] = sma(array("d", (cl[i] * vol[i] for i in range(len(cl)))), 20)
+        tech = tech or Tech(panel, meta)
+        self.ma20: dict[str, array] = {c: v for c, v in tech.ma20.items() if c in meta}
+        self.ma60 = tech.ma60
+        self.atr14 = tech.atr14
+        self.value20 = tech.value20
         counts: dict[str, int] = {}
         for ws in holders.values():
             for w in ws:
                 counts[w.date] = counts.get(w.date, 0) + 1
         #: 全市場都有資料的那幾週（逐檔回補的零星日期不算）
         self.weeks = sorted(d for d, n in counts.items() if n >= 1000)
+        self.signal_days = self.weeks
         self._signals: dict[str, WeekSignal] = {}
 
     # -- 特徵 -------------------------------------------------------------
@@ -280,7 +282,7 @@ class ChipsModel:
         score = percentile_rank(composite)
         # 這一週各特徵的 IC（之後的週拿去算權重；20 日報酬此刻還不知道，
         # 所以這裡只存「之後才算得出來」的那一份——見 `ic`）
-        sig = WeekSignal(week, i, weights, {}, universe=len(score))
+        sig = WeekSignal(week, i, weights, {}, universe=len(score), scores=score)
         sig.ic = self._ic(feats, i)
         sig.candidates = self._candidates(week, i, feats, score, weights)
         return sig
@@ -347,8 +349,12 @@ class ChipsModel:
 
     # -- 出場 -------------------------------------------------------------
 
+    def entry_stop(self, code: str, i: int, price: float, strategy: str = "") -> float:
+        a = self.atr14[code][i]
+        return price - STOP_ATR * a if not isnan(a) else price * 0.85
+
     def exit_check(self, code: str, i: int, entry_i: int, stop: float,
-                   regime: Reading | None) -> tuple[str, str, float]:
+                   regime: Reading | None, strategy: str = "") -> tuple[str, str, float]:
         """回傳 (時機, 理由, 新的停損價)。時機是 ""（不出場）、"now"（今天收盤）
         或 "next"（隔一個交易日收盤）。"""
         p = self.p

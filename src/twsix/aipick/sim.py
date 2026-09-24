@@ -43,6 +43,7 @@ class Position:
     cost_basis: float
     reason: str
     pending_exit: str = ""
+    strategy: str = ""
 
 
 @dataclass
@@ -57,6 +58,7 @@ class Trade:
     ret: float                 # 扣成本後的報酬
     reason_in: str
     reason_out: str
+    strategy: str = ""
 
 
 @dataclass
@@ -67,6 +69,7 @@ class Event:
     name: str
     price: float
     note: str
+    strategy: str = ""
 
 
 @dataclass
@@ -97,13 +100,20 @@ def cap_for(reading: Reading | None) -> int:
 
 def run(panel: Panel, model, regimes: list[Reading | None], start_i: int, end_i: int,
         equity0: float = 1_000_000.0) -> Result:
-    """跑一段模擬。`model` 是 :class:`.chips.ChipsModel`（或同介面的東西）。"""
+    """跑一段模擬。
+
+    `model` 要有：`signal_days`（有訊號的日子）、`signal(day).candidates`（依優先順序
+    排好）、`new_per_signal`、`entry_stop(code, i, price, strategy)`、
+    `exit_check(code, i, entry_i, stop, regime, strategy=...)`。單一方案（A、B、D）
+    與合併帳戶（:class:`.combo.Combined`）都是這個介面。
+    """
     res = Result()
     cash = equity0
     positions: dict[str, Position] = {}
     pending_buys: list = []
-    weeks = [w for w in model.weeks if panel.dates[start_i] <= w <= panel.dates[end_i]]
-    week_at = {panel.index(w): w for w in weeks}
+    days = [w for w in model.signal_days if panel.dates[start_i] <= w <= panel.dates[end_i]]
+    week_at = {panel.index(w): w for w in days}
+    new_per = model.new_per_signal
 
     for i in range(start_i, end_i + 1):
         day = panel.dates[i]
@@ -119,7 +129,8 @@ def run(panel: Panel, model, regimes: list[Reading | None], start_i: int, end_i:
         # 3. 今天的出場條件
         for code in list(positions):
             pos = positions[code]
-            when, why, stop = model.exit_check(code, i, pos.entry_i, pos.stop, reading)
+            when, why, stop = model.exit_check(code, i, pos.entry_i, pos.stop, reading,
+                                               strategy=pos.strategy)
             pos.stop = stop
             if when == "now":
                 pos.pending_exit = why
@@ -138,24 +149,24 @@ def run(panel: Panel, model, regimes: list[Reading | None], start_i: int, end_i:
             alloc = min(equity / MAX_POSITIONS, cash)
             if alloc < equity / MAX_POSITIONS * 0.5:
                 break
-            a = model.atr14[cand.code][i]
-            stop = price - model.STOP_ATR * a if not isnan(a) else price * 0.85
+            strat = getattr(cand, "strategy", "")
+            stop = model.entry_stop(cand.code, i, price, strat)
             invest = alloc / (1 + BUY_COST)
             cash -= alloc
             why = "、".join(cand.reasons)
             positions[cand.code] = Position(cand.code, cand.name, day, i, price, stop,
-                                            invest, alloc, why)
+                                            invest, alloc, why, strategy=strat)
             res.events.append(Event(day, "進場", cand.code, cand.name, price,
-                                    f"{why}｜停損 {stop:.2f}"))
+                                    f"{why}｜停損 {stop:.2f}", strat))
         pending_buys = []
         # 5. 今天收盤後的新訊號（集保週資料日）
         if i in week_at and i < end_i:
             sig = model.signal(week_at[i])
-            picks = [c for c in sig.candidates if c.code not in positions][: model.NEW_PER_WEEK]
+            picks = [c for c in sig.candidates if c.code not in positions][:new_per]
             pending_buys = picks
-            for c in sig.candidates[: model.NEW_PER_WEEK * 2]:
-                res.events.append(Event(day, "候選", c.code, c.name, c.close,
-                                        f"共振分數第 {c.score:.0%} 百分位｜" + "、".join(c.reasons)))
+            for c in sig.candidates[: new_per * 2]:
+                res.events.append(Event(day, "候選", c.code, c.name, c.close, c.note,
+                                        getattr(c, "strategy", "")))
         res.dates.append(day)
         res.equity.append(cash + sum(p.value for p in positions.values()))
         res.exposure.append(1 - cash / res.equity[-1] if res.equity[-1] else 0.0)
@@ -170,9 +181,9 @@ def _sell(panel: Panel, pos: Position, i: int, res: Result) -> float:
     day = panel.dates[i]
     res.trades.append(Trade(pos.code, pos.name, pos.entry_date, pos.entry_price, day,
                             price if not isnan(price) else NAN, i - pos.entry_i, ret,
-                            pos.reason, pos.pending_exit))
+                            pos.reason, pos.pending_exit, pos.strategy))
     res.events.append(Event(day, "出場", pos.code, pos.name, price,
-                            f"{pos.pending_exit}｜報酬 {ret:+.1%}（扣成本）"))
+                            f"{pos.pending_exit}｜報酬 {ret:+.1%}（扣成本）", pos.strategy))
     return proceeds
 
 
@@ -198,6 +209,33 @@ def benchmark(panel: Panel, code: str, start_i: int, end_i: int,
             w = target
         if i > start_i:
             g *= 1 + w * r
+        out.append(g)
+    return out
+
+
+def benchmark_ew(panel: Panel, tech, start_i: int, end_i: int,
+                 min_price: float = 10.0, min_value: float = 50_000_000.0) -> list[float]:
+    """全市場等權（只算前一天股價 > 10 元、20 日均額 > 5,000 萬的那些），不含成本。
+
+    A、B、D 挑的多半是中小型股；拿它們和 0050（台積電占一半）比，比到的有一大部分
+    是「大型股 vs 中小型股」而不是選股本身。這條線回答的是：從**同一群**股票裡
+    隨便買，會是多少。起點 1.0。
+    """
+    out, g = [], 1.0
+    codes = list(tech.codes())
+    for i in range(start_i, end_i + 1):
+        if i > start_i:
+            rs = []
+            for c in codes:
+                r = panel.ret[c][i]
+                if isnan(r):
+                    continue
+                cl, v = panel.close[c][i - 1], tech.value20[c][i - 1]
+                if isnan(cl) or cl <= min_price or isnan(v) or v <= min_value:
+                    continue
+                rs.append(r)
+            if rs:
+                g *= 1 + sum(rs) / len(rs)
         out.append(g)
     return out
 

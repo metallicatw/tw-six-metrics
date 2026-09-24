@@ -295,8 +295,9 @@ def test_the_stock_page_is_tabs_rather_than_one_long_scroll():
     tabs = page.count('role="tab" id="tab-')
     assert tabs == page.count('class="panel"')
     # 〔財報圖表〕併進〔六大財務指標評等〕之後少一個；2026-09-23 多了〔財務健診〕
-    # 〔股價健診〕兩個。
-    assert tabs == 11
+    # 〔股價健診〕兩個；2026-09-24 多了〔AI 選股〕（內容點開才抓）。
+    assert tabs == 12
+    assert 'id="tab-ai"' in page
     assert 'id="tab-statements"' not in page
     # Exactly one panel open on arrival, and it is the first.
     assert page.count('role="tabpanel" aria-labelledby="tab-summary">') == 1

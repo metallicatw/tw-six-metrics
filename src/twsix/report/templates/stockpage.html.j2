@@ -54,6 +54,10 @@
      長什麼樣」讀到「最近發生什麼」。新聞插在〔外資投信〕和〔大戶持股〕
      中間的時候，等於把兩張講籌碼的表拆開了。 #}
   <button type="button" role="tab" id="tab-news" class="tab" aria-controls="panel-news" aria-selected="false" tabindex="-1">個股新聞</button>
+  {# 〔AI 選股〕（2026-09-24）：這一檔在六套方案裡的樣子。內容**不在這一頁裡**——點開
+     時才去抓 ai/stock/<代號>.json（見 report/ai_page.py 的 write_stock_json）。AI
+     的資料每天都在變，放進頁面的話，1,900 張個股頁每天都要重畫。 #}
+  <button type="button" role="tab" id="tab-ai" class="tab" aria-controls="panel-ai" aria-selected="false" tabindex="-1">AI 選股</button>
   {% if p.unbuilt %}
   <button type="button" role="tab" id="tab-unbuilt" class="tab" aria-controls="panel-unbuilt" aria-selected="false" tabindex="-1">尚未建置</button>
   {% endif %}
@@ -951,6 +955,13 @@
 {% endif %}
 
 {# ================= 大戶持股 ================= #}
+</section>
+
+<section class="panel" id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" hidden
+         data-src="{{ rel }}ai/stock/{{ p.stock_id }}.json" data-ai-page="{{ rel }}ai.html">
+<h3 id="ai">AI 選股</h3>
+<div class="ai-stock" aria-live="polite"><p class="muted">讀取中……</p></div>
+<noscript><p class="stale">這一個分頁要開啟 JavaScript 才看得到。</p></noscript>
 </section>
 
 {% if p.holders %}

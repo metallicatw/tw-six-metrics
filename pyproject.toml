@@ -18,6 +18,8 @@ dependencies = []
 
 [project.optional-dependencies]
 report = ["jinja2>=3.1"]
+# 〔AI 選股〕讀法說會簡報（PDF）用。沒裝的話法說只讀「擇要訊息」那一欄。
+ai = ["pypdf>=4"]
 charts = ["matplotlib>=3.8"]
 # ruff 釘在一個次版本區間，不是 >=。它每個小版本都會加新規則，於是 CI 會在
 # 沒有人動過任何一行程式碼的時候突然變紅——那不是品質訊號，是雜訊，而雜訊
