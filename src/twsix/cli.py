@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import csv
 import json
 import re
 import sys
@@ -3524,6 +3525,27 @@ def _yearly_missing(data_dir: Path, *, include_too_young: bool = False) -> list[
     return out
 
 
+def _listing_dates(data_dir: Path) -> dict[str, str]:
+    """代號 → 上市（櫃）日期 `YYYYMMDD`，取自兩個交易所的公司基本資料快照。
+
+    讀不到就回空的——呼叫端只拿它來「少問幾次」：沒有日期的照常去問。
+    """
+    out: dict[str, str] = {}
+    for name, code_col, date_col in (("twse_companies.csv", "公司代號", "上市日期"),
+                                     ("tpex_companies.csv", "SecuritiesCompanyCode",
+                                      "DateOfListing")):
+        try:
+            with (data_dir / name).open(encoding="utf-8-sig", newline="") as fh:
+                for row in csv.DictReader(fh):
+                    code = (row.get(code_col) or "").strip()
+                    day = (row.get(date_col) or "").strip()
+                    if code and len(day) == 8 and day.isdigit():
+                        out[code] = day
+        except (OSError, csv.Error):
+            continue
+    return out
+
+
 def cmd_backfill_yearly(args: argparse.Namespace) -> int:
     """把還沒有〔年度交易資訊〕的股票一次補完。
 
@@ -3549,6 +3571,23 @@ def cmd_backfill_yearly(args: argparse.Namespace) -> int:
     limit = getattr(args, "limit", 0) or 0
     print(f"缺〔年度交易資訊〕的股票：{len(codes):,} 檔"
           + (f"（這一輪最多補 {limit} 檔）" if limit else ""))
+
+    # 今年才上市（櫃）的，交易所那邊還沒有任何一個「完整年度」：證交所的年度表
+    # 只列已結束的年度，於是兩個交易所都回「查無資料」——這不是抓取失敗，而且在
+    # 下一個年結之前問幾次都一樣。不花請求去問，直接記下明年一月再問。
+    #
+    # 為什麼不能讓它們進迴圈：代號排序的前面剛好整排都是今年的新股（1623 大東電、
+    # 2072 世紀風電、2237 華德動能……），頭 8 檔全部「兩個交易所都沒有這檔」，
+    # 於是下面那道「parser 壞了」的剎車被踩下去，後面真的補得到的一檔都沒輪到。
+    this_year = date.today().strftime("%Y")
+    listed = _listing_dates(data_dir)
+    fresh = [c for c in codes if listed.get(c, "")[:4] == this_year]
+    if fresh:
+        for code in fresh:
+            _mark_yearly_too_young(data_dir / "sheets" / code, 0, date.today().isoformat())
+        print(f"  今年才上市（櫃）、交易所還沒有完整年度：{len(fresh)} 檔，記下明年一月再問"
+              f"（{', '.join(fresh[:12])}{' …' if len(fresh) > 12 else ''}）")
+        codes = [c for c in codes if c not in set(fresh)]
 
     ok = 0
     retryable: list[str] = []

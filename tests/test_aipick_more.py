@@ -796,3 +796,63 @@ def test_收盤價旁邊的圖示連到Yahoo技術分析():
     for f in ("stockpage.html.j2", "stock.html.j2", "ai.html.j2"):
         assert "yahoo_ta(" in (T / f).read_text("utf-8"), f
     assert "Yahoo股市走勢圖" not in (T / "_macros.html.j2").read_text("utf-8")
+
+
+def test_Google那邊忙_換另一個型號再試_之後這一趟就用它():
+    """第一次上線那晚 flash-lite 一直回 503 high demand：40 次額度 29 次花在錯誤上。"""
+    urls, waits = [], []
+
+    def post(url, body, headers, timeout):
+        urls.append(url)
+        if "lite" in url:
+            raise _http_error(503, "This model is currently experiencing high demand.")
+        return _ok('{"a": 1}')
+
+    g = LL.Gemini("k", models=["m-lite", "m-full"], post=post, sleep=waits.append)
+    assert g.ask_json("1") == {"a": 1} and g.model_used == "m-full"
+    assert g.busy == 1 and LL.BUSY_WAIT in waits, "換型號之前要等一下"
+    urls.clear()
+    assert g.ask_json("2") == {"a": 1}
+    assert len(urls) == 1 and "m-full" in urls[0], "換過去之後就不要每次先撞一次忙碌的型號"
+    assert g.status()["busy"] == 1 and g.enabled
+
+
+def test_每個型號都忙_連續幾次就整趟停_不把額度燒光():
+    n = []
+
+    def post(url, body, headers, timeout):
+        n.append(url)
+        raise _http_error(503, "high demand")
+
+    g = LL.Gemini("k", models=["a", "b"], max_calls=40, post=post, sleep=lambda s: None)
+    for _ in range(10):
+        if not g.enabled:
+            break
+        assert g.ask_json("x") is None
+    assert not g.enabled and "忙" in g.stopped
+    assert len(n) == LL.BUSY_STOP * 2, f"每個提示每個型號只試一次，實際打了 {len(n)} 次"
+    # 中間成功一次就重新計算
+    flip = iter([True, True, False, True, True, True, True])
+
+    def post2(url, body, headers, timeout):
+        if next(flip):
+            raise _http_error(503, "busy")
+        return _ok("{}")
+
+    g2 = LL.Gemini("k", models=["a"], post=post2, sleep=lambda s: None)
+    g2.ask_json("1"), g2.ask_json("2"), g2.ask_json("3"), g2.ask_json("4")
+    assert g2.enabled, "成功過一次，連續忙碌的計數就要歸零"
+    g2.ask_json("5")
+    assert g2.enabled
+    g2.ask_json("6")
+    assert not g2.enabled
+
+
+def test_逾時也算忙碌_不是整個提示直接放棄():
+    def post(url, body, headers, timeout):
+        if url.count("slow"):
+            raise TimeoutError()
+        return _ok('{"ok": true}')
+
+    g = LL.Gemini("k", models=["slow", "fast"], post=post, sleep=lambda s: None)
+    assert g.ask_json("x") == {"ok": True} and g.model_used == "fast"
