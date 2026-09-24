@@ -87,8 +87,8 @@ def test_歷史不是從今天開始的就不拿來比():
 
 
 def test_走勢圖連結上市上櫃分得出來():
-    assert yahoo_chart_url("2330", "上市") == "https://tw.stock.yahoo.com/quote/2330.TW"
-    assert yahoo_chart_url("6488", "上櫃") == "https://tw.stock.yahoo.com/quote/6488.TWO"
+    assert yahoo_chart_url("2330", "上市") == "https://tw.stock.yahoo.com/quote/2330.TW/technical-analysis"
+    assert yahoo_chart_url("6488", "上櫃") == "https://tw.stock.yahoo.com/quote/6488.TWO/technical-analysis"
 
 
 def _prices_dir(tmp: Path) -> None:
@@ -181,11 +181,11 @@ def test_兩張表的欄號都對得上位置():
 def test_觀察清單上真的畫出價格與走勢圖連結():
     row = _watch().split('<tr data-code="2330"')[1].split("</tr>")[0]
     assert "1,200" in row, "收盤價不在那一列上（千元以上不印小數）"
-    assert 'href="https://tw.stock.yahoo.com/quote/2330.TW"' in row
+    assert 'href="https://tw.stock.yahoo.com/quote/2330.TW/technical-analysis"' in row
     assert 'target="_blank"' in row and 'class="yf"' in row
     # 圖示由 CSS 畫，每一列不帶 <svg>——1,900 列各一份是 850 KB。
     assert "<svg" not in row, "走勢圖圖示又變回每一列一份 svg"
-    assert re.search(r"#t \.yf::before\{[^}]*mask:url", CSS), "圖示的 CSS 不見了"
+    assert re.search(r"(?m)^\.yf::before\{[^}]*mask:url", CSS), "圖示的 CSS 不見了"
     assert "+0.84%" in row, "日漲跌幅：10 ÷ 1,190"
     assert "+4.35%" in row, "5 日：1,200 ÷ 1,150"
     assert "+20.00%" in row, "20 日：1,200 ÷ 1,000"
@@ -197,8 +197,11 @@ def test_觀察清單上真的畫出價格與走勢圖連結():
 def test_兩張表都收緊了():
     assert '<table id="t" class="compact" data-watchlist="1">' in _watch()
     assert '<table id="t" class="compact">' in _listing()
-    assert "#t.compact th,#t.compact td{padding:3px 4px}" in CSS
+    assert "#t.compact th,#t.compact td{padding:3px 3px}" in CSS
     assert re.search(r"#t\.compact td\.ind\{[^}]*white-space:normal", CSS), "產業不會折行"
+    # 2026-09-24：名稱也折行（多了〔AI〕欄之後，1280 寬又要橫捲）
+    assert re.search(r"#t\.compact td\.nm\{[^}]*white-space:normal", CSS), "名稱不會折行"
+    assert '<td class="nm" data-s=' in _listing()
 
 
 # ── 3. 趨勢頁：燈泡與 iframe ─────────────────────────────────────

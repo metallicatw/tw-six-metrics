@@ -24,6 +24,7 @@
 </h3>
 <p class="muted">
   股價 {{ n(valuation.market_price) }} 元
+  {%- if yahoo_ta is defined %}<a class="yf" href="{{ yahoo_ta(stock.stock_id, stock.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ stock.stock_id }} Yahoo 技術分析"></a>{% endif %}
   {%- if valuation.as_of %}　·　評估日 {{ valuation.as_of }}{% endif %}
   {%- if valuation.revenue_month %}　·　營收基準 {{ valuation.revenue_month }}{% endif %}
 </p>

@@ -82,7 +82,7 @@
   <td data-s="{{ r.stock_id }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a></td>
   {# 名稱也連過去。原本只有代號可點——而讀者掃清單時眼睛落在名稱上，
      卻要把游標移回四位數字才點得到，那是每一列都要付一次的小摩擦。 #}
-  <td data-s="{{ r.name }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.name }}</a></td>
+  <td class="nm" data-s="{{ r.name }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.name }}</a></td>
   {# 上市／上櫃。「這一檔在哪個市場」是掃清單時會分開看的一件事——上櫃的流動性、
      法人參與度、本益比水準都和上市不一樣。資料本來就在評等表的 `market` 欄裡，
      只是一直沒有被畫出來。 #}
@@ -250,7 +250,7 @@
 {%- else -%}
 {#- 和標題那一天同一天的就不再寫一次（1,900 列各寫一次是 50 KB）；不同天的——
     停牌、剛恢復交易——才在格子上標出它自己的日期。 -#}
-<td class="num px{{ ' pxold' if p.date.replace('-', '/') != price_date else '' }}" data-s="{{ '%.2f'|format(p.close) }}"{% if p.date.replace('-', '/') != price_date %} title="{{ p.date }} 收盤"{% endif %}><span class="pxv {{ chg_class(p.chg) }}">{{ money(p.close, big) }}</span><a class="yf" href="{{ p.yahoo }}" target="_blank" rel="noopener" title="Yahoo股市走勢圖" aria-label="{{ r.stock_id }} 走勢圖"></a></td>
+<td class="num px{{ ' pxold' if p.date.replace('-', '/') != price_date else '' }}" data-s="{{ '%.2f'|format(p.close) }}"{% if p.date.replace('-', '/') != price_date %} title="{{ p.date }} 收盤"{% endif %}><span class="pxv {{ chg_class(p.chg) }}">{{ money(p.close, big) }}</span><a class="yf" href="{{ p.yahoo }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ r.stock_id }} Yahoo 技術分析"></a></td>
 <td class="num mid chg" data-s="{{ '%.2f'|format(p.chg_pct) if p.chg_pct is not none else -999 }}">
 {%- if p.chg is none -%}<span class="muted">—</span>
 {%- else -%}<span class="{{ chg_class(p.chg) }}">{{ ('+' if p.chg > 0 else '') ~ money(p.chg, big) }}</span><small class="{{ chg_class(p.chg) }}">{{ pct_text(p.chg_pct) }}</small>{%- endif -%}</td>

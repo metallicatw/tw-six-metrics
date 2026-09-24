@@ -32,18 +32,23 @@
 {% set rf = t.regime_in_force %}
 <p class="muted ai-asof">資料日 {{ t.asof }}｜產生於 {{ t.generated_at }}</p>
 
-<nav class="ai-jump" aria-label="本頁段落">
-  <a href="#ai-regime" class="ai-j-f">F 市場狀態</a>
-  <a href="#ai-paper" class="ai-j-p">影子帳戶</a>
-  <a href="#ai-picks" class="ai-j-c">今日候選</a>
-  <a href="#ai-talks" class="ai-j-t">C 法說轉折</a>
-  <a href="#ai-backtest" class="ai-j-b">回測</a>
-  <a href="#ai-veto" class="ai-j-e">E 否決</a>
-  <a href="#ai-journal" class="ai-j-j">日誌</a>
-</nav>
+{# 各段是**獨立的分頁**（2026-09-24），不是同一頁裡的定位點：一次只顯示一段，
+   網址 #regime、#backtest… 可以直接開到那一段。切換由 site.js 的 AI 分頁那一段負責；
+   沒有 JavaScript 的時候全部攤開（見 site.css 的 :not(.js)）。 #}
+<div class="ai-tabs" role="tablist" aria-label="AI 選股">
+  <button type="button" role="tab" id="aitab-regime" class="ai-tab ai-j-f" aria-controls="ai-regime" aria-selected="true">F 市場狀態</button>
+  <button type="button" role="tab" id="aitab-paper" class="ai-tab ai-j-p" aria-controls="ai-paper" aria-selected="false" tabindex="-1">影子帳戶</button>
+  <button type="button" role="tab" id="aitab-picks" class="ai-tab ai-j-c" aria-controls="ai-picks" aria-selected="false" tabindex="-1">今日候選</button>
+  <button type="button" role="tab" id="aitab-talks" class="ai-tab ai-j-t" aria-controls="ai-talks" aria-selected="false" tabindex="-1">C 法說轉折</button>
+  {% if ai.bt %}
+  <button type="button" role="tab" id="aitab-backtest" class="ai-tab ai-j-b" aria-controls="ai-backtest" aria-selected="false" tabindex="-1">回測</button>
+  {% endif %}
+  <button type="button" role="tab" id="aitab-veto" class="ai-tab ai-j-e" aria-controls="ai-veto" aria-selected="false" tabindex="-1">E 否決</button>
+  <button type="button" role="tab" id="aitab-journal" class="ai-tab ai-j-j" aria-controls="ai-journal" aria-selected="false" tabindex="-1">日誌</button>
+</div>
 
 {# ── F 市場狀態 ─────────────────────────────────────────────── #}
-<section class="ai-block" id="ai-regime">
+<section class="ai-block ai-panel" id="ai-regime" role="tabpanel" aria-labelledby="aitab-regime">
   <h3 class="ai-h"><span class="ai-tag ai-tag-f">F</span>市場狀態</h3>
   {% if rn %}
   <div class="ai-regime ai-tone-{{ rn.tone }}">
@@ -70,7 +75,7 @@
 </section>
 
 {# ── 合併影子帳戶 ─────────────────────────────────────────────── #}
-<section class="ai-block" id="ai-paper">
+<section class="ai-block ai-panel" id="ai-paper" role="tabpanel" aria-labelledby="aitab-paper" hidden>
   <h3 class="ai-h"><span class="ai-tag ai-tag-p">影</span>影子帳戶
     <span class="muted">（{{ ai.port.live_start }} 上線，虛擬 100 萬）</span></h3>
   <p class="ai-lead">{{ ai.port.rules }}。最多 12 檔、每檔 1/12；同一天有兩套以上出訊號時輪流挑，
@@ -90,7 +95,7 @@
     <tbody>{% for p in ai.port.positions %}
       <tr><td><a href="{{ rel }}stock/{{ p.code }}.html">{{ p.code }}</a></td><td>{{ p.name }}</td>
         <td><span class="ai-s ai-s-{{ p.strategy or 'D' }}">{{ p.label }}</span></td><td>{{ p.entry_date }}</td>
-        <td class="num">{{ p.entry_price }}</td><td class="num">{{ p.price }}</td>
+        <td class="num">{{ p.entry_price }}</td><td class="num">{{ p.price }}<a class="yf" href="{{ yahoo_ta(p.code, p.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ p.code }} Yahoo 技術分析"></a></td>
         <td class="num {{ p.ret_tone }}">{{ p.ret_txt }}</td><td class="num">{{ '%.2f'|format(p.stop) }}</td>
         <td>{% if p.turn %}{{ p.turn.kind }}（{{ '%+.1f'|format(p.turn.score) }}）{% else %}<span class="muted">—</span>{% endif %}</td>
         <td class="ai-reasons">{{ p.reason }}</td></tr>
@@ -114,7 +119,7 @@
 </section>
 
 {# ── 今日候選 ─────────────────────────────────────────────── #}
-<section class="ai-block" id="ai-picks">
+<section class="ai-block ai-panel" id="ai-picks" role="tabpanel" aria-labelledby="aitab-picks" hidden>
   <h3 class="ai-h"><span class="ai-tag ai-tag-c">選</span>最新一次訊號的候選</h3>
   <p class="ai-lead">三套各有節奏：A 每月一次、B 與 D 每週一次。下面是各自最近一次的名單——已經過了財報品質否決（E）。
     「法說」一欄是那一檔最近一次法說的轉折（C）；負轉折的不會進影子帳戶。</p>
@@ -129,7 +134,7 @@
       <tr><td><a href="{{ rel }}stock/{{ c.code }}.html">{{ c.code }}</a></td><td>{{ c.name }}</td><td class="muted">{{ c.industry }}</td>
         <td class="num"><b>{{ '%+.1f'|format(c.extra.sue) }}</b></td>
         <td class="num {{ 'up' if c.extra.yoy > 0 else 'down' }}">{{ '%+.0f'|format(c.extra.yoy * 100) }}%</td>
-        <td class="num">{{ c.close }}</td><td class="num">{{ c.six_txt }}</td>
+        <td class="num">{{ c.close }}<a class="yf" href="{{ yahoo_ta(c.code, c.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ c.code }} Yahoo 技術分析"></a></td><td class="num">{{ c.six_txt }}</td>
         <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td>
         <td class="ai-reasons ai-hide-m">{{ c.reasons|join('；') }}</td></tr>
     {% endfor %}</tbody></table></div>
@@ -163,7 +168,7 @@
     <tbody>{% for c in ai.d_cands %}
       <tr><td><a href="{{ rel }}stock/{{ c.code }}.html">{{ c.code }}</a></td><td>{{ c.name }}</td>
         <td class="muted">{{ c.industry }}</td><td class="num"><b>{{ c.score_txt }}</b></td>
-        <td class="num">{{ c.close }}</td><td class="num {{ c.ret20_tone }}">{{ c.ret20_txt }}</td>
+        <td class="num">{{ c.close }}<a class="yf" href="{{ yahoo_ta(c.code, c.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ c.code }} Yahoo 技術分析"></a></td><td class="num {{ c.ret20_tone }}">{{ c.ret20_txt }}</td>
         <td class="num muted">{{ c.ind_txt }}</td><td class="num">{{ c.six_txt }}</td>
         <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td>
         <td class="ai-reasons">{{ c.reasons|join('；') }}</td></tr>
@@ -180,7 +185,7 @@
 </section>
 
 {# ── C 法說轉折 ─────────────────────────────────────────────── #}
-<section class="ai-block" id="ai-talks">
+<section class="ai-block ai-panel" id="ai-talks" role="tabpanel" aria-labelledby="aitab-talks" hidden>
   <h3 class="ai-h"><span class="ai-tag ai-tag-t">C</span>法說轉折
     <span class="muted">（近 90 天，{{ ai.turns|length }} 家；累計讀過 {{ t.talks_count or 0 }} 份簡報）</span></h3>
   <p class="ai-lead">同一家公司這一次法說和上一次的<b>差異</b>：營收方向、毛利率方向、整體口氣。
@@ -205,7 +210,7 @@
 
 {# ── 回測 ─────────────────────────────────────────────── #}
 {% if ai.bt %}
-<section class="ai-block" id="ai-backtest">
+<section class="ai-block ai-panel" id="ai-backtest" role="tabpanel" aria-labelledby="aitab-backtest" hidden>
   <h3 class="ai-h"><span class="ai-tag ai-tag-b">驗</span>回測</h3>
   <p class="ai-lead">成本：買 0.1425%、賣 0.1425% ＋ 0.3% 證交稅（一買一賣 0.585%，未算折扣與滑價）。
     除權息日當天報酬記 0；已下市的公司放回母體（不做倖存者偏差）。財報在法定公告期限之後、營收在次月 10 日之後才算看得到。
@@ -280,7 +285,7 @@
 {% endif %}
 
 {# ── E 否決名單 ─────────────────────────────────────────────── #}
-<section class="ai-block" id="ai-veto">
+<section class="ai-block ai-panel" id="ai-veto" role="tabpanel" aria-labelledby="aitab-veto" hidden>
   <h3 class="ai-h"><span class="ai-tag ai-tag-e">E</span>財報品質否決名單
     <span class="muted">（{{ t.veto_count }} / {{ t.rated }} 檔，紅旗三面以上）</span></h3>
   <p class="ai-lead">財報八面：本業虧損、連兩季虧損、獲利靠業外、獲利沒有變成現金、應計比率偏高、負債快速上升、營收大幅衰退、董監高質押。
@@ -310,7 +315,7 @@
 </section>
 
 {# ── 訊號日誌 ─────────────────────────────────────────────── #}
-<section class="ai-block" id="ai-journal">
+<section class="ai-block ai-panel" id="ai-journal" role="tabpanel" aria-labelledby="aitab-journal" hidden>
   <h3 class="ai-h"><span class="ai-tag ai-tag-j">誌</span>訊號日誌 <span class="muted">（最近 {{ ai.journal|length }} 筆，只往後加、不改寫）</span></h3>
   {% if ai.journal %}
   <div class="scroll"><table class="ai-t">

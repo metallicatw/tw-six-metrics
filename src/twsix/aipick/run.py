@@ -205,6 +205,7 @@ def _pick_json(ctx: Context, c, day: str) -> dict:
         "code": c.code, "name": c.name, "industry": c.industry, "score": c.score,
         "close": c.close, "reasons": list(c.reasons), "strategy": getattr(c, "strategy", "D"),
         "six": m.six if m else None,
+        "market": m.market if m else "",
         "flags": list(v.flags) if v else [],
         "turn": _turn_json(ctx.talks.latest(c.code, day)),
     }
@@ -348,7 +349,8 @@ def portfolio(ctx: Context, model=None, start: str = "") -> tuple[dict, S.Result
     positions = []
     for pos in res.positions:
         price = p.close[pos.code][end]
-        positions.append({**asdict(pos), "price": price,
+        m = ctx.meta.get(pos.code)
+        positions.append({**asdict(pos), "price": price, "market": m.market if m else "",
                           "ret": pos.value * (1 - S.SELL_COST) / pos.cost_basis - 1,
                           "turn": _turn_json(ctx.talks.latest(pos.code, p.dates[end]))})
     out = {
