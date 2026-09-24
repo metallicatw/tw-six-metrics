@@ -76,6 +76,6 @@
    ——那是「自訂順序」，這一頁的順序是綜合評分。 #}
 <div class="scroll wide"><table id="t" class="compact">
 {{ table_head(prices=True, price_date=price_date) }}
-<tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at, prices=True, price_date=price_date) }}{% endfor %}</tbody>
+<tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at, prices=True, price_date=price_date, ai=ai_marks) }}{% endfor %}</tbody>
 </table></div>
 {% endblock %}

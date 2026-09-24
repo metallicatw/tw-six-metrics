@@ -3828,8 +3828,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="AI 選股（連網的那一半）：重大訊息、法說會簡報、LLM 註解（寫進 data/aipick）",
     )
     aif.add_argument("--data", help="資料目錄（預設 data/）")
-    aif.add_argument("--max-pdf", type=int, default=60,
-                     help="這一趟最多下載幾份法說簡報（預設 60）")
+    aif.add_argument("--max-pdf", type=int, default=25,
+                     help="這一趟最多下載幾份法說簡報（預設 25；另有 7 分鐘的時間上限）")
     aif.set_defaults(func=cmd_aipick_fetch)
 
     dl = sub.add_parser(

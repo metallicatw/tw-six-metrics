@@ -795,8 +795,9 @@ def test_every_column_can_be_sorted_and_sorts_by_a_key_not_by_the_printed_text(t
     # 第 0 欄是流水號，它不排序（點「現在第幾列」沒有意義），所以可排序的欄
     # 從 1 開始。這一串一旦和 `tr.cells[col]` 對不起來，排序會整排錯開一格。
     cols = re.findall(r'class="sortable" data-col="(\d+)"', listing)
-    # 2026-09-23 起多了收盤價、日漲跌、5 日、20 日四欄（第 7～10 欄）。
-    assert [int(c) for c in cols] == list(range(1, 21))
+    # 2026-09-23 起多了收盤價、日漲跌、5 日、20 日四欄（第 7～10 欄）；
+    # 2026-09-24 最右邊多了〔AI〕（第 21 欄）。
+    assert [int(c) for c in cols] == list(range(1, 22))
 
     # 數個數還不夠。`data-col` 是 `tr.cells[col]` 的索引，而它是手寫的：中間插
     # 一欄卻忘了把後面的號碼往後推，排序會整排錯開一格——畫面上完全正常，只是
@@ -1806,7 +1807,8 @@ def test_算不出報酬風險比的顯示破折號而不是零(tmp_path=None):
     build_site(_records(), out, sheets_dir=_sheets(tmp), valuations=[])
     row = (out / "index.html").read_text("utf-8") \
         .split('<tr data-code="5439"')[1].split("</tr>")[0]
-    last = row.rsplit("<td", 1)[1]
+    # 倒數第二格：最右邊那一格是〔AI〕（2026-09-24）
+    last = row.rsplit("<td", 2)[1]
     assert "—" in last and "0.00" not in last, last
     assert 'data-s="-999"' in last, "算不出來的排序鍵要沉到底"
 

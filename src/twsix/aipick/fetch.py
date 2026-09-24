@@ -67,19 +67,37 @@ def priority_codes(data_dir: Path) -> tuple[list[str], list[tuple[str, str]], di
     return codes, pairs, names
 
 
+def _save_status(data_dir: Path, status: dict) -> None:
+    path = data_dir / "aipick" / "fetch_status.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(status, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+
+
 def fetch_all(data_dir: Path, *, today: date | None = None, llm: Gemini | None = None,
-              news_get=None, list_post=None, pdf_get=None, max_pdf: int = 60) -> dict:
+              news_get=None, list_post=None, pdf_get=None, max_pdf: int = 25) -> dict:
     today = today or datetime.now(TAIPEI).date()
     llm = llm if llm is not None else Gemini()
     status: dict = {"ran_at": datetime.now(TAIPEI).strftime("%Y-%m-%d %H:%M")}
     try:
+        return _fetch_all(data_dir, today, llm, status, news_get, list_post, pdf_get, max_pdf)
+    finally:
+        # 每一段做完都存一次，這裡再存最後一次：就算整步被逾時砍掉，頁面上也看得到
+        # 做到哪一段。（第一次上線那一趟就是被砍掉、什麼狀態都沒留下。）
+        status["llm"] = llm.status()
+        _save_status(data_dir, status)
+
+
+def _fetch_all(data_dir, today, llm, status, news_get, list_post, pdf_get, max_pdf) -> dict:
+    try:
         status["news"] = NW.fetch(data_dir, get=news_get)
     except Exception as exc:  # noqa: BLE001 - 每一段各自失敗
         status["news"] = {"error": type(exc).__name__}
+    _save_status(data_dir, status)
     try:
         status["talks_list"] = TK.fetch_list(data_dir, today, post=list_post)
     except Exception as exc:  # noqa: BLE001
         status["talks_list"] = {"error": type(exc).__name__}
+    _save_status(data_dir, status)
     codes, pairs, names = priority_codes(data_dir)
     try:
         status["talks"] = TK.process(data_dir, llm, priority=codes, today=today,
@@ -90,9 +108,5 @@ def fetch_all(data_dir: Path, *, today: date | None = None, llm: Gemini | None =
         status["relations"] = RL.label_pairs(data_dir, llm, pairs, names, today)
     except Exception as exc:  # noqa: BLE001
         status["relations"] = {"error": type(exc).__name__}
-    status["llm"] = llm.status()
     status["priority"] = len(codes)
-    path = data_dir / "aipick" / "fetch_status.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(status, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     return status

@@ -987,6 +987,14 @@ def build_site(
     # delivers is the one thing worse than the plain page.
     base["rich_ids"] = rich_ids
     base["fetched_at"] = fetched_at
+    # 〔AI〕那一欄（評等清單、觀察清單）。讀不到或壞掉就是一欄空白，不影響清單本身。
+    try:
+        from .ai_page import load_marks  # noqa: PLC0415
+
+        base["ai_marks"] = load_marks(sheets_dir.parent if sheets_dir is not None else None)
+    except Exception as exc:  # noqa: BLE001 - 試行中的一欄不能讓清單畫不出來
+        print(f"::warning::清單的 AI 欄讀不到（那一欄會是空白）：{exc!r}")
+        base["ai_marks"] = {}
 
 
     # 〔評等清單〕 is the front door.  It used to be 〔具投資價值〕, which ranks

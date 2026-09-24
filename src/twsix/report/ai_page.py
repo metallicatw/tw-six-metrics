@@ -297,7 +297,6 @@ def write_stock_json(data_dir: Path | None, out_dir: Path) -> int:
     common = {"asof": data.get("asof"), "strategy_text": data.get("strategy_text"),
               "feature_text": data.get("feature_text")}
     n = 0
-    marks: dict[str, str] = {}
     for code, rec in data["stocks"].items():
         if not code.replace("-", "").isalnum():
             continue
@@ -305,24 +304,38 @@ def write_stock_json(data_dir: Path | None, out_dir: Path) -> int:
             json.dumps({**common, "code": code, **rec}, ensure_ascii=False, separators=(",", ":")),
             encoding="utf-8")
         n += 1
-        mark = _mark(rec)
-        if mark:
-            marks[code] = mark
-    # 〔評等清單〕〔觀察清單〕名稱旁邊那個小標籤（見 site.js）。只列有標籤的那幾檔。
-    (out_dir / "ai" / "marks.json").write_text(
-        json.dumps({"asof": data.get("asof"), "marks": marks}, ensure_ascii=False,
-                   separators=(",", ":")), encoding="utf-8")
     return n
 
 
-def _mark(rec: dict) -> str:
-    """清單上的小標籤：持有中 > 候選 > 否決。"""
+def load_marks(data_dir: Path | None) -> dict[str, dict]:
+    """〔評等清單〕〔觀察清單〕的〔AI〕那一欄：每一檔一個標籤（沒有的不列）。
+
+    建站時讀 `data/aipick/stocks.json.gz` 算好，直接畫進表格——所以那一欄可以
+    排序（`key`），也不必等瀏覽器再抓一次。優先順序：持有中 > 候選 > 財報否決。
+    """
+    data = _read(data_dir / "aipick" / "stocks.json.gz") if data_dir else None
+    if not isinstance(data, dict) or not isinstance(data.get("stocks"), dict):
+        return {}
+    out: dict[str, dict] = {}
+    for code, rec in data["stocks"].items():
+        m = _mark(rec)
+        if m:
+            out[code] = m
+    return out
+
+
+def _mark(rec: dict) -> dict | None:
     held = rec.get("held")
     if held:
-        return f"AI 持有・{held.get('strategy') or 'D'}"
+        s = held.get("strategy") or "D"
+        return {"label": f"持有 {s}", "kind": "held", "key": 3,
+                "title": f"影子帳戶持有中（{s} 買進，{held.get('entry_date', '')}）"}
     cand = rec.get("candidate") or []
     if cand:
-        return "AI 候選・" + "".join(cand)
-    if (rec.get("e") or {}).get("veto"):
-        return "財報否決"
-    return ""
+        return {"label": "候選 " + "·".join(cand), "kind": "cand", "key": 2 + len(cand) / 10,
+                "title": "最近一次訊號的候選：" + "、".join(cand)}
+    e = rec.get("e") or {}
+    if e.get("veto"):
+        return {"label": "財報否決", "kind": "veto", "key": -1,
+                "title": f"財報品質紅旗 {e.get('score')} 面（三面以上否決）"}
+    return None

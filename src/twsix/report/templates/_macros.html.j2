@@ -44,7 +44,7 @@
    「+0.50」「—」「AA」照字串排會排出胡說，而把「怎麼比大小」放進 JS 去猜每一欄
    的型別，等於在兩個地方各寫一次規則。這裡一次寫好：數字就是數字，等第換成
    0~4，沒有值一律是最小的 -999——排序時沉到底，而不是插在中間。 #}
-{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False, price_date='') -%}
+{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False, price_date='', ai=None) -%}
 {% set when = (fetched_at or {}).get(r.stock_id) %}
 {% set has_full = when or (rich_ids and r.stock_id in rich_ids) %}
 <tr data-code="{{ r.stock_id }}">
@@ -111,6 +111,12 @@
   <td class="num mid" data-s="{{ r.composite_delta if r.composite_delta is not none else -999 }}">{{ delta(r.composite_delta) }}</td>
   <td class="pick-cell mid" data-s="{{ 1 if r.value_pick else 0 }}">{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
   <td class="num mid" data-s="{{ reward_key(r) }}">{{ reward(r) }}</td>
+  {# 〔AI〕：影子帳戶持有中／最近一次的候選／財報否決（見 report/ai_page.py 的
+     load_marks）。排在最右邊：它是「另一套系統的意見」，不是評等的一部分，
+     而且放最後才不會讓前面每一欄的欄號都往後推一格。 #}
+  {%- set mk = (ai or {}).get(r.stock_id) %}
+  <td class="ai-cell mid" data-s="{{ mk.key if mk else 0 }}"
+      {%- if mk %} title="{{ mk.title }}"{% endif %}>{% if mk %}<span class="ai-mk ai-mk-{{ mk.kind }}">{{ mk.label }}</span>{% endif %}</td>
 </tr>
 {%- endmacro %}
 
@@ -312,6 +318,21 @@
   <b>—</b>＝算不出來：多半是還沒回補到〔年度交易資訊〕（沒有本益比區間），
   也可能是預估 EPS 為負、本益比估價不適用。<b>三者不是同一件事</b>。</p>
   <p class="stop">{% for note in reward_risk_notes %}{{ note }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{% endcall %}</span></th>
+  <th class="mid ai-cell"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 17 + o }}">AI</button>{% call tip() %}
+  <b>AI 選股</b>的判斷（每天收盤後更新，詳見〔AI 選股〕頁與個股頁的〔AI 選股〕分頁）：
+  <ul class="rrguide">
+    <li><b>持有 A／B／D</b><em>影子帳戶</em>
+        <span>虛擬帳戶照規則<b>目前持有中</b>；字母是哪一套買進的。</span></li>
+    <li><b>候選 A·B·D</b><em>最近一次訊號</em>
+        <span>符合那一套的全部條件。A＝營收驚喜、B＝供應鏈連動、D＝籌碼共振。</span></li>
+    <li><b>財報否決</b><em>方案 E</em>
+        <span>財報與重大訊息的紅旗三面以上，任何一套都不會買它。</span></li>
+    <li><b>空白</b><em>—</em>
+        <span>不在任何名單上。</span></li>
+  </ul>
+  <p class="stop">點標題排序：持有 → 候選（同時符合越多套越前面）→ 空白 → 財報否決。</p>
+  <p class="stop">⚠️ 試行中。這是一組規則的輸出，不是投資建議；回測與影子帳戶的成績見〔AI 選股〕頁。</p>
 {% endcall %}</span></th>
 </tr></thead>
 {%- endmacro %}

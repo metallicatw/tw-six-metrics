@@ -44,6 +44,7 @@ import html
 import io
 import json
 import re
+import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -54,7 +55,13 @@ LIST_URL = "https://mopsov.twse.com.tw/mops/web/ajax_t100sb02_1"
 LIST_REFERER = "https://mopsov.twse.com.tw/mops/web/t100sb02_1"
 PDF_URL = "https://mopsov.twse.com.tw/nas/STR/{file}"
 INDEX_FIELDS = ("code", "name", "date", "time", "summary", "file", "file_en", "first_seen")
-MAX_PDF_BYTES = 20_000_000
+MAX_PDF_BYTES = 8_000_000
+#: 一份簡報最多讀幾頁、最多花幾秒。法說簡報偶爾是一百多頁的年報型文件，
+#: pypdf 讀一份要好幾分鐘——第一次上線那一趟就是這樣把整步拖到逾時的。
+MAX_PAGES = 40
+PDF_SECONDS = 20
+#: 這一趟讀簡報最多花幾秒（整步的逾時是 15 分鐘，留一半給其他事）。
+TIME_BUDGET = 420
 LLM_CHARS = 9000
 NEG_TURN = -2.0
 POS_TURN = 2.0
@@ -183,11 +190,17 @@ def pdf_pages(data: bytes) -> list[str]:
         from pypdf import PdfReader  # noqa: PLC0415 - 選用相依
     except ImportError:
         return []
+    deadline = time.monotonic() + PDF_SECONDS
+    out: list[str] = []
     try:
         reader = PdfReader(io.BytesIO(data))
-        return [(p.extract_text() or "") for p in reader.pages]
+        for k, page in enumerate(reader.pages):
+            if k >= MAX_PAGES or time.monotonic() > deadline:
+                break
+            out.append(page.extract_text() or "")
     except Exception:  # noqa: BLE001 - 壞掉的 PDF 不能拖垮整趟
-        return []
+        return out
+    return out
 
 
 def focus_text(pages: list[str], limit: int = LLM_CHARS) -> str:
@@ -289,12 +302,16 @@ def _append_features(data_dir: Path, recs: list[dict]) -> None:
             fh.write(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
-def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: int = 60,
-            get=None, since_days: int = 400) -> dict:
+def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: int = 25,
+            get=None, since_days: int = 400, budget: float = TIME_BUDGET, clock=None) -> dict:
     """還沒讀過的簡報：下載、取文字、規則特徵；有 LLM 額度就再問 LLM。
 
     順序：優先名單（持股、候選）上的先，其餘依日期由新到舊。只看 since_days 天內的
     場次——太舊的沒有用，也不值得花流量。
+
+    **每讀完一份就寫一列**，而且整趟有時間上限（`budget` 秒）：第一次上線那一趟
+    一次想讀 60 份、又全部讀完才寫檔，結果整步逾時被砍，一份都沒留下。現在沒讀完
+    的明天接著讀，讀過的不會白費。
     """
     from .llm import QuotaExhausted  # noqa: PLC0415
 
@@ -309,7 +326,10 @@ def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: i
         uniq.setdefault(r["file"], r)
     todo = sorted(uniq.values(), key=lambda r: r["date"], reverse=True)
     todo.sort(key=lambda r: rank.get(r["code"], 10**6))       # 穩定排序：同一級裡新的在前
+    clock = clock or time.monotonic
+    t0 = clock()
     new, fetched, llm_done, errors = [], 0, 0, []
+    stopped = ""
     for r in todo:
         have = feats.get(r["file"])
         need_rules = have is None
@@ -318,6 +338,10 @@ def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: i
         if not need_rules and not need_llm:
             continue
         if fetched >= max_pdf:
+            stopped = f"這一趟最多讀 {max_pdf} 份"
+            break
+        if clock() - t0 > budget:
+            stopped = f"超過 {budget:.0f} 秒，剩下的下一趟再讀"
             break
         try:
             pages = pdf_pages(get(PDF_URL.format(file=r["file"])))
@@ -342,8 +366,10 @@ def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: i
         if need_rules or rec["llm"] != (have or {}).get("llm"):
             new.append(rec)
             feats[r["file"]] = rec
-    _append_features(data_dir, new)
-    return {"processed": len(new), "pdf": fetched, "llm": llm_done, "errors": errors[-5:]}
+            _append_features(data_dir, [rec])
+    left = sum(1 for r in todo if r["file"] not in feats)
+    return {"processed": len(new), "pdf": fetched, "llm": llm_done, "left": left,
+            "stopped": stopped, "errors": errors[-5:]}
 
 
 # ---------------------------------------------------------------------------

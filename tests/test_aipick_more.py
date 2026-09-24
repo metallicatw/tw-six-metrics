@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import gzip
 import io
@@ -559,7 +560,7 @@ def test_法說負轉折_不買也提早出場():
 
 
 def test_個股摘要拆成一檔一個檔_清單標籤():
-    from twsix.report.ai_page import write_stock_json
+    from twsix.report.ai_page import load_marks, write_stock_json
 
     root = _tmp()
     (root / "aipick").mkdir(parents=True)
@@ -574,8 +575,12 @@ def test_個股摘要拆成一檔一個檔_清單標籤():
     assert write_stock_json(root, out) == 4
     one = json.loads((out / "ai" / "stock" / "1111.json").read_text(encoding="utf-8"))
     assert one["code"] == "1111" and one["asof"] == "2026-09-23"
-    marks = json.loads((out / "ai" / "marks.json").read_text(encoding="utf-8"))["marks"]
-    assert marks == {"1111": "AI 候選・AB", "2222": "AI 持有・D", "3333": "財報否決"}
+    marks = load_marks(root)
+    assert {c: m["label"] for c, m in marks.items()} == \
+        {"1111": "候選 A·B", "2222": "持有 D", "3333": "財報否決"}
+    # 排序：持有 > 候選（越多套越前面）> 空白（0）> 否決
+    assert marks["2222"]["key"] > marks["1111"]["key"] > 0 > marks["3333"]["key"]
+    assert load_marks(_tmp()) == {}
     assert not (out / "ai" / "x.json").exists()
     assert write_stock_json(_tmp(), _tmp()) == 0, "沒有資料就什麼都不寫"
 
@@ -593,15 +598,17 @@ def test_個股頁有AI分頁_內容是點開才抓():
         assert f"esc({field}" in block or field == "x)", field
 
 
-def test_清單的AI標籤不改變排序與搜尋():
-    js = (ROOT / "src/twsix/report/templates/site.js").read_text("utf-8")
-    block = js[js.index("fetch(rel + 'ai/marks.json'"):]
-    block = block[:block.index("})();")]
-    assert "setAttribute('data-ai'" in block
-    assert "textContent" not in block and "innerHTML" not in block, \
-        "標籤要畫在 ::after，不能塞進格子的文字裡"
-    css = (ROOT / "src/twsix/report/templates/site.css").read_text("utf-8")
-    assert "#t td[data-ai]::after{content:attr(data-ai)" in css
+def test_清單最右邊有AI欄_可排序_有燈泡_欄號不動():
+    tpl = (ROOT / "src/twsix/report/templates/_macros.html.j2").read_text("utf-8")
+    head = tpl[tpl.index("{% macro table_head"):tpl.index("{%- endmacro %}", tpl.index("{% macro table_head"))]
+    assert 'data-col="{{ 17 + o }}">AI</button>{% call tip() %}' in head
+    # 其他欄的欄號不能動（site.js 排序看 tr.cells[欄號]）
+    assert 'data-col="{{ 16 + o }}">報酬<br>風險比' in head
+    row = tpl[tpl.index("{% macro row("):tpl.index("{%- endmacro %}", tpl.index("{% macro row("))]
+    assert 'class="ai-cell mid" data-s=' in row
+    for f in ("list.html.j2", "watchlist.html.j2", "index.html.j2"):
+        t = (ROOT / "src/twsix/report/templates" / f).read_text("utf-8")
+        assert "ai=ai_marks" in t, f
 
 
 # ---------------------------------------------------------------------------
@@ -693,3 +700,35 @@ def test_AI頁面用新格式的資料畫得出來_讀法沒有寫死數字():
     assert "負轉折" in html and "客戶" in html
     for cid in ("ai-all-chart", "ai-a-chart", "ai-b-chart", "ai-d-chart", "ai-f-chart"):
         assert f'id="{cid}"' in html, cid
+
+
+def test_讀簡報有時間上限_每讀完一份就存():
+    """2026-09-24 第一次上線：一趟想讀 60 份、全部讀完才寫檔，整步逾時，一份都沒留。"""
+    root = _tmp()
+    TK.fetch_list(root, date(2026, 9, 24), post=lambda url, form: LIST_HTML.replace(
+        "<td></td><td></td><td></td><td></td><td></td><td></td>\n</tr>",
+        "<td>120220260817M001.pdf</td><td></td><td></td><td></td><td></td><td></td>\n</tr>"))
+    assert len([r for r in TK.read_index(root) if r["file"]]) == 2
+    ticks = iter([0, 0, 1000, 1000, 1000])
+    st = TK.process(root, None, priority=[], today=date(2026, 9, 24), get=lambda url: b"%PDF-x",
+                    budget=10, clock=lambda: next(ticks))
+    assert st["processed"] == 1 and st["left"] == 1 and "秒" in st["stopped"]
+    assert len(TK.read_features(root)) == 1, "讀完的那一份要已經存下來"
+    st2 = TK.process(root, None, priority=[], today=date(2026, 9, 25), get=lambda url: b"%PDF-x")
+    assert st2["processed"] == 1 and st2["left"] == 0, "下一趟接著讀剩下的"
+
+
+def test_抓取被中斷也留下狀態():
+    from twsix.aipick import fetch as FT
+
+    root = _tmp()
+
+    def boom(*a, **k):
+        raise KeyboardInterrupt  # 模擬整步被逾時砍掉
+
+    g = LL.Gemini("", models=["m"])
+    with contextlib.suppress(KeyboardInterrupt):
+        FT.fetch_all(root, today=date(2026, 9, 24), llm=g, news_get=lambda url: [],
+                     list_post=boom)
+    st = json.loads((root / "aipick" / "fetch_status.json").read_text(encoding="utf-8"))
+    assert "news" in st and "llm" in st

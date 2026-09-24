@@ -2350,32 +2350,3 @@ function y3Eps(rev, sh, g, m){
   if(tab) tab.addEventListener('click', load);
   if(!panel.hidden) load();
 })();
-
-/* =========================================================================
- * 〔評等清單〕〔觀察清單〕：名稱旁邊標出 AI 的狀態（持有中／本期候選／財報否決）。
- * 資料是 ai/marks.json（見 report/ai_page.py）。標籤寫在名稱那一格的 data-ai 屬性、
- * 由 CSS 的 ::after 畫出來——不是塞一段文字進去：排序看 data-s、搜尋看文字，
- * 兩者都不該被一個標籤改變。抓不到就什麼都不標。
- * ========================================================================= */
-(function(){
-  var table = document.getElementById('t');
-  var nav = document.querySelector('nav a.nav-ai');
-  if(!table || !nav || !window.fetch) return;
-  var rel = (nav.getAttribute('href') || '').replace(/ai\.html$/, '');
-  fetch(rel + 'ai/marks.json', {cache: 'no-cache'}).then(function(r){
-    if(!r.ok) throw new Error(r.status);
-    return r.json();
-  }).then(function(d){
-    var marks = (d && d.marks) || {};
-    [].forEach.call(table.querySelectorAll('tbody tr[data-code]'), function(tr){
-      var m = marks[tr.getAttribute('data-code')];
-      if(!m) return;
-      var links = tr.querySelectorAll('a[href*="stock/"]');
-      var cell = links.length > 1 ? links[1].closest('td') : null;
-      if(!cell) return;
-      cell.setAttribute('data-ai', m);
-      cell.setAttribute('data-ai-kind', m.indexOf('否決') >= 0 ? 'veto' : (m.indexOf('持有') >= 0 ? 'held' : 'cand'));
-      cell.title = m + '（詳見個股頁〔AI 選股〕分頁）';
-    });
-  }).catch(function(){});
-})();
