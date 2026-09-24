@@ -1,0 +1,1 @@
+{"ran_at":"2026-09-24 18:36","news":{"added":0,"seen":157,"errors":[]},"talks_list":{"new":0,"errors":[]},"talks":{"processed":8,"pdf":7,"llm":0,"left":757,"stopped":"超過 420 秒，剩下的下一趟再讀","errors":["260920260922M001.pdf：ValueError"]},"relations":{"labelled":0},"priority":22,"llm":{"enabled":false,"calls":0,"max_calls":40,"model":"","stopped":"","errors":[]}}

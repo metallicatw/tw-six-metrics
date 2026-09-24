@@ -1,0 +1,8 @@
+{"code":"6547","name":"高端疫苗","date":"2026-08-25","file":"654720260825M001.pdf","processed":"2026-09-24","source":"pdf","rules":{"pos":18,"neg":0,"tone":0.7826,"chars":3679},"llm":null,"model":""}
+{"code":"6672","name":"騰輝電子-KY","date":"2026-08-07","file":"667220260807M001.pdf","processed":"2026-09-24","source":"pdf","rules":{"pos":6,"neg":1,"tone":0.4167,"chars":4648},"llm":null,"model":""}
+{"code":"3661","name":"世芯-KY","date":"2026-08-14","file":"366120260814M001.pdf","processed":"2026-09-24","source":"pdf","rules":{"pos":10,"neg":1,"tone":0.5625,"chars":2787},"llm":null,"model":""}
+{"code":"3231","name":"緯創","date":"2026-08-04","file":"323120260804M003.pdf","processed":"2026-09-24","source":"pdf","rules":{"pos":8,"neg":0,"tone":0.6154,"chars":5952},"llm":null,"model":""}
+{"code":"2454","name":"聯發科","date":"2026-09-03","file":"245420260731M002.pdf","processed":"2026-09-24","source":"pdf","rules":{"pos":2,"neg":4,"tone":-0.1818,"chars":5985},"llm":null,"model":""}
+{"code":"6190","name":"萬泰科","date":"2026-09-01","file":"619020260901M001.pdf","processed":"2026-09-24","source":"pdf","rules":{"pos":48,"neg":1,"tone":0.8704,"chars":9034},"llm":null,"model":""}
+{"code":"2352","name":"佳世達","date":"2026-08-10","file":"235220260810M001.pdf","processed":"2026-09-24","source":"pdf","rules":{"pos":15,"neg":10,"tone":0.1667,"chars":9021},"llm":null,"model":""}
+{"code":"2609","name":"陽明","date":"2026-09-22","file":"260920260922M001.pdf","processed":"2026-09-24","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":52},"llm":null,"model":""}
