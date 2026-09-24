@@ -1,1 +1,21 @@
 {"a":"6442","b":"6118","asked":"2026-09-24","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"兩者皆為台股上市櫃公司，無直接供應鏈或集團關係，主要隨盤勢或熱門題材同步變動。"}
+{"a":"8039","b":"3105","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.3,"note":"兩者皆屬電子零組件或半導體相關之台股上市公司，但非直接供應鏈關係，主要受相同電子股題材影響而連動。"}
+{"a":"8039","b":"4977","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬台股 CPO（共同封裝光學）及高速傳輸概念股，常因題材同步連動。"}
+{"a":"8039","b":"3163","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬台股光通訊與PCB相關題材供應鏈，常因資金效應同步變動。"}
+{"a":"3504","b":"3441","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"兩者皆為台灣光學鏡頭廠，業務重疊，常因光學族群題材同步漲跌。"}
+{"a":"3504","b":"3357","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"兩者皆為台股掛牌之電子零組件相關企業，常因資金輪動或盤勢歸類被視為同一題材概念股。"}
+{"a":"3504","b":"6742","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.6,"note":"兩家公司皆主要從事光學元件、微型投影或光學鍍膜相關業務，在市場上有業務重疊性。"}
+{"a":"2465","b":"6150","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"麗臺與撼訊皆為台灣知名的顯示卡（VGA）與板卡廠，並同属AI題材，股價常同步變動。"}
+{"a":"2465","b":"8227","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.85,"note":"麗臺與巨有科技皆屬台股熱門的AI概念股與輝達（NVIDIA）合作夥伴題材，因此股價常同步變動。"}
+{"a":"2465","b":"8271","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆為記憶體模組與AI PC相關概念股，常因盤面資金輪動而同步變動。"}
+{"a":"5434","b":"3711","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"客戶","confidence":0.85,"note":"崇越為半導體材料與設備供應商，日月光為半導體封測大廠，向崇越採購相關製程材料。"}
+{"a":"5434","b":"2330","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"客戶","confidence":0.95,"note":"台積電（B）是崇越（A）的重要半導體材料與服務大客戶。"}
+{"a":"5434","b":"3042","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"崇越為半導體材料代理商，晶技為石英元件大廠，兩者同屬電子零組件與台股半導體供應鏈題材而常同步。"}
+{"a":"4908","b":"4977","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"兩者皆為台灣光通訊收發模組（Transceiver）廠，業務高度重疊。"}
+{"a":"4908","b":"4979","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"前鼎與華星光皆為台灣光通訊收發模組（Transceiver）廠，主要產品重疊性高，同屬光通訊族群。"}
+{"a":"4908","b":"6426","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"前鼎與統新皆為台灣光通訊收發模組及元件廠，屬於同業競爭關係並受相同題材驅動。"}
+{"a":"6533","b":"3443","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"晶心科與創意皆為台灣知名的矽智財(SIP)與特殊應用晶片(ASIC)設計服務公司。"}
+{"a":"6533","b":"6231","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"晶心科與系微皆為台灣知名的軟體矽智財(IP)與UEFI韌體廠商，同屬RISC-V與PC軟體題材。"}
+{"a":"6533","b":"3388","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"晶心科為矽智財廠，崇越電代理矽利光，業務無直接上下游關聯，股價同步多因同屬台股電子股。"}
+{"a":"6442","b":"2482","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬台股通訊網路族群或常被歸類於光通訊/網通題材，股價具連動性。"}
+{"a":"6442","b":"3508","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.6,"note":"兩者皆屬台股光通訊或電子零組件相關概念股，常隨盤勢與族群熱度同步變動。"}
