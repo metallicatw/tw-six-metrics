@@ -385,3 +385,51 @@ def test_一次壞回應不該換到四年封鎖():
             f"只回了 {years} 年就封到 {mark['retry_after']}"
         )
         assert mark["years"] == years
+
+
+def test_今年才上市的不去問_也不會踩到parser壞了的剎車():
+    """代號排序的前面整排是今年的新股（1623 大東電、2072 世紀風電……）。
+
+    證交所的年度表只列已結束的年度，今年上市的兩個交易所都回「查無資料」——
+    頭 8 檔全部失敗，剎車以為 parser 壞了，後面補得到的一檔都沒輪到。
+    """
+    import argparse
+    import tempfile
+    from datetime import date as _date
+
+    cli = _cli()
+    root = Path(tempfile.mkdtemp())
+    this_year = _date.today().strftime("%Y")
+    fresh = [f"10{i:02d}" for i in range(10)]
+    old = ["2330", "5439"]
+    for c in fresh + old:
+        (root / "sheets" / c).mkdir(parents=True)
+        (root / "sheets" / c / "_fetched.txt").write_text("x", encoding="utf-8")
+    (root / "twse_companies.csv").write_text(
+        "上市日期,公司代號,公司簡稱\n"
+        + "".join(f"{this_year}0301,{c},新股\n" for c in fresh[:6])
+        + "19940905,2330,台積電\n", encoding="utf-8")
+    (root / "tpex_companies.csv").write_text(
+        "SecuritiesCompanyCode,DateOfListing\n"
+        + "".join(f"{c},{this_year}0701\n" for c in fresh[6:])
+        + "5439,20010101\n", encoding="utf-8")
+
+    asked = []
+
+    def fake_fetch(ns):
+        asked.append(ns.stock)
+        return cli.EXIT_OK
+
+    real = cli.cmd_fetch_yearly
+    cli.cmd_fetch_yearly = fake_fetch
+    try:
+        rc = cli.cmd_backfill_yearly(argparse.Namespace(config=None, out=str(root), limit=0))
+    finally:
+        cli.cmd_fetch_yearly = real
+    assert rc == cli.EXIT_OK
+    assert asked == old, f"今年的新股不該花請求去問：{asked}"
+    for c in fresh:
+        assert cli._yearly_too_young(root / "sheets" / c, _date.today().isoformat()), c
+    assert not cli._yearly_too_young(root / "sheets" / fresh[0], f"{int(this_year) + 1}-02-01"), (
+        "明年一月之後要再問"
+    )
