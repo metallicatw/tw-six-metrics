@@ -1512,9 +1512,19 @@ def _full_stock_page(
 
 def _write_ai_page(env: Any, base: dict[str, Any], out_dir: Path,
                    data_dir: Path | None) -> int:
-    """畫〔AI 選股〕。任何例外都吞掉、改畫一頁「暫時無法顯示」，回傳 0。"""
-    from .ai_page import load_ai  # noqa: PLC0415
+    """畫〔AI 選股〕，並拆出個股頁〔AI 選股〕分頁要讀的 `ai/stock/<代號>.json`。
 
+    任何例外都吞掉、改畫一頁「暫時無法顯示」，回傳 0。個股的 JSON 另外包一層：
+    它壞了，個股頁那個分頁會說「還沒有 AI 資料」，AI 選股這一頁照畫。
+    """
+    from .ai_page import load_ai, write_stock_json  # noqa: PLC0415
+
+    try:
+        n = write_stock_json(data_dir, out_dir)
+        if n:
+            print(f"  ai/stock/*.json   {n}")
+    except Exception as exc:  # noqa: BLE001 - 同上
+        print(f"::error::個股的 AI 摘要拆不出來（個股頁那個分頁會顯示沒有資料）：{exc!r}")
     try:
         ai = load_ai(data_dir)
         env.get_template("ai.html.j2").stream(

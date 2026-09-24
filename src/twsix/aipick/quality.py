@@ -25,6 +25,12 @@
 
 應收帳款與存貨的暴增是更敏銳的訊號，但季報**彙總表**不帶這兩個科目（見
 `cmd_backfill_statements` 的說明），要逐檔問。等那兩個欄位進得來再加。
+
+## 重大訊息的警訊（2026-09-24 起）
+
+另外四面來自每天存下來的重大訊息（見 :mod:`.news`）：非例行更換簽證會計師、
+財務／會計主管異動、退票／重整／繼續經營疑慮（算兩面）、停工／災害。它們和上面
+八面一起數，一樣是三面以上否決。這份資料從開始存的那天才有，所以不影響回測。
 """
 
 from __future__ import annotations
@@ -55,6 +61,10 @@ FLAG_TEXT = {
     "leverage": "負債快速上升",
     "shrink": "營收大幅衰退",
     "pledge": "董監高質押",
+    "news_auditor": "非例行更換簽證會計師",
+    "news_cfo": "財務／會計主管異動",
+    "news_distress": "退票、重整或繼續經營疑慮",
+    "news_incident": "停工、火災或重大災害",
 }
 
 
@@ -65,10 +75,11 @@ class Verdict:
     quarter: str                 # 2026Q2（西元）
     flags: tuple[str, ...]
     details: tuple[str, ...]
+    extra: int = 0               # 超過「一面算一」的部分（退票、重整算兩面）
 
     @property
     def score(self) -> int:
-        return len(self.flags)
+        return len(self.flags) + self.extra
 
     @property
     def veto(self) -> bool:
@@ -158,9 +169,11 @@ def pledge_ratio_asof(directors: list[tuple[str, float, float]], day: str) -> tu
 class QualityBook:
     """全市場的品質判定，可以問「某一檔在某一天看得到的判定」。"""
 
-    def __init__(self, statements: dict, directors: dict):
+    def __init__(self, statements: dict, directors: dict, news=None):
         self.statements = statements
         self.directors = directors
+        #: :class:`.news.NewsBook`（沒有就不看重訊）
+        self.news = news
         #: {代號: [(可用日期, (年, 季)), ...]}，舊的在前
         self._timeline: dict[str, list[tuple[str, tuple[int, int]]]] = {}
         self._cache: dict[tuple[str, tuple[int, int]], tuple[list[str], list[str]]] = {}
@@ -188,7 +201,15 @@ class QualityBook:
         if not isnan(ratio) and ratio > PLEDGE_HIGH:
             flags.append("pledge")
             details.append(f"{month[:4]}/{month[4:]} 董監質押比 {ratio:.0%}")
-        return Verdict(f"{yq[0] + 1911}Q{yq[1]}", tuple(flags), tuple(details))
+        extra = 0
+        if self.news is not None:
+            from .news import FLAG_RULES  # noqa: PLC0415
+
+            for flag, d, subject in self.news.flags(code, day):
+                flags.append(f"news_{flag}")
+                details.append(f"{d} 重訊：{subject[:40]}")
+                extra += FLAG_RULES[flag]["weight"] - 1
+        return Verdict(f"{yq[0] + 1911}Q{yq[1]}", tuple(flags), tuple(details), extra)
 
     def vetoed(self, code: str, day: str) -> bool:
         v = self.verdict(code, day)

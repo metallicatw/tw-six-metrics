@@ -78,8 +78,9 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      # 建站要 jinja2，所以是 [report] 而不是裸的 .
-      - run: pip install -e ".[report]"
+      # 建站要 jinja2，所以是 [report] 而不是裸的 .；[ai] 是讀法說簡報用的 pypdf
+      # （沒裝也能跑，只是法說只剩「擇要訊息」那一欄可讀）。
+      - run: pip install -e ".[report,ai]"
 
       # 抓回來的東西要 commit 進 repo，先確認引擎是好的。
       #
@@ -151,15 +152,28 @@ jobs:
       - name: 全市場估值
         run: twsix value --all
 
-      # 〔AI 選股〕：市場狀態（F）、財報品質否決（E）、籌碼共振（D）、影子帳戶、
-      # 回測，全部寫進 data/aipick/。排在估值後面，吃的是上面幾步剛更新的收盤與
-      # 三大法人；`--sync-macro` 另外把 market-monitor 的四份總經資料抓一份快取。
+      # 〔AI 選股〕分兩步，失敗的方式不同，所以分開、各自不擋行情存檔。
+      #
+      # 第一步連網：重大訊息（兩個交易所）、法說會一覽與簡報、LLM。LLM 只在 repo
+      # secret `GEMINI_API_KEY` 存在時才用——金鑰只在這一步的環境變數裡，程式不會
+      # 把它寫進任何檔案或 log；沒有設定就用規則讀法說，其他照做。
+      - name: AI 選股：重大訊息、法說、LLM
+        timeout-minutes: 15
+        continue-on-error: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: twsix aipick-fetch || echo "::error::AI 選股的抓取失敗（行情照常存檔），看上面的 log"
+
+      # 第二步只算：A 營收驚喜、B 供應鏈連動、C 法說轉折、D 籌碼共振、E 財報品質、
+      # F 市場狀態、合併影子帳戶、回測、個股摘要，全部寫進 data/aipick/。排在估值
+      # 後面，吃的是上面幾步剛更新的收盤與三大法人；`--sync-macro` 另外把
+      # market-monitor 的四份總經資料抓一份快取。約兩分鐘。
       #
       # 失敗**不擋**今天的行情存檔（`||` 後面那一句）——它是在已經存好的資料上
       # 算東西，今天沒算到，明天會從頭再算一次；但行情少存一天是補不回來的。
       # 失敗會留一個 error 註記，不會安靜地消失。
       - name: AI 選股
-        timeout-minutes: 10
+        timeout-minutes: 15
         continue-on-error: true
         run: twsix aipick --sync-macro || echo "::error::AI 選股這一趟失敗（行情照常存檔），看上面的 log"
 

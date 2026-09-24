@@ -2183,8 +2183,10 @@ function y3Eps(rev, sh, g, m){
 
 /* =========================================================================
  * 〔AI 選股〕的圖：資料在 <script id="ai-charts">（見 report/ai_page.py）。
- * 四張：市場寬度、影子帳戶 vs 0050、D 回測、F 回測。都用 TWSIXChart。
+ * 市場寬度、影子帳戶 vs 0050，以及回測的每一張淨值圖（C.list）。都用 TWSIXChart。
  * 包在 try 裡——圖畫不出來，表格與文字照樣在。
+ * 收在 <details> 裡的圖等展開才畫：收起來時寬度是 0，畫出來會是預設的 600px，
+ * 在手機上撐破版面。
  * ========================================================================= */
 (function(){
   var el = document.getElementById('ai-charts');
@@ -2208,23 +2210,172 @@ function y3Eps(rev, sh, g, m){
     var p = C.port || {};
     if(box('ai-paper-chart') && (p.x || []).length > 1)
       TWSIXChart(box('ai-paper-chart'), {x: p.x, xTicks: xt, height: 220,
-        series: [{name: '影子帳戶', color: '#0e7c6f', values: p.equity, width: 2},
+        series: [{name: '影子帳戶', color: '#c2255c', values: p.equity, width: 2},
                  {name: '0050', color: 'ink', values: p.bench, width: 1.2, dash: '4 3'}]});
   });
-  safe(function(){
-    var d = C.d || {};
-    if(box('ai-d-chart') && (d.x || []).length > 1)
-      TWSIXChart(box('ai-d-chart'), {x: d.x, xTicks: xt, fmt: pct,
-        series: [{name: '籌碼共振（週期對齊版）', color: '#6d3fd1', values: d.horizon, width: 2},
-                 {name: '籌碼共振（規劃版）', color: '#9b84e0', values: d.plan, width: 1.3, dash: '5 3'},
-                 {name: '0050＋市場狀態', color: '#0e7c6f', values: d.bench_f, width: 1.3},
-                 {name: '0050', color: 'ink', values: d.bench, width: 1.2, dash: '4 3'}]});
+  // 回測的淨值圖：一張一個設定（見 report/ai_page.py 的 _chart），這裡照著畫
+  (C.list || []).forEach(function(ch){
+    var el2 = box(ch.id);
+    if(!el2 || (ch.x || []).length < 2) return;
+    function draw(){
+      safe(function(){
+        TWSIXChart(el2, {x: ch.x, fmt: pct, xTicks: xt, title: ch.title,
+          series: ch.series.map(function(s){
+            return {name: s.name, color: s.color, values: s.values, width: s.width || 1.4, dash: s.dash};
+          })});
+      });
+    }
+    var fold = el2.closest ? el2.closest('details') : null;
+    if(fold && !fold.open){
+      fold.addEventListener('toggle', function once(){
+        if(!fold.open) return;
+        fold.removeEventListener('toggle', once);
+        draw();
+      });
+    } else draw();
   });
-  safe(function(){
-    var f = C.f || {};
-    if(box('ai-f-chart') && (f.x || []).length > 1)
-      TWSIXChart(box('ai-f-chart'), {x: f.x, xTicks: xt, fmt: pct,
-        series: [{name: '0050＋市場狀態', color: '#0e7c6f', values: f.timed, width: 2},
-                 {name: '0050 買進持有', color: 'ink', values: f.bench, width: 1.2, dash: '4 3'}]});
-  });
+})();
+
+/* =========================================================================
+ * 個股頁〔AI 選股〕分頁：點開時才抓 ai/stock/<代號>.json（見 report/ai_page.py 的
+ * write_stock_json），畫成六個小區塊。抓不到（本機直接開檔、或 AI 還沒跑過）就寫
+ * 一句「還沒有 AI 資料」，不影響其他分頁。所有文字都經過 esc()——資料來自重大
+ * 訊息與 LLM 的摘要，不能直接當 HTML 塞進去。
+ * ========================================================================= */
+(function(){
+  var panel = document.getElementById('panel-ai');
+  if(!panel) return;
+  var box = panel.querySelector('.ai-stock');
+  var loaded = false;
+  function esc(s){
+    return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function pct(v, d){ return v === null || v === undefined ? '—' : (v > 0 ? '+' : '') + (v * 100).toFixed(d === undefined ? 1 : d) + '%'; }
+  function tone(v){ return v > 0 ? 'up' : (v < 0 ? 'down' : ''); }
+  var stockHref = function(code){ return esc(code) + '.html'; };
+  function card(tag, cls, title, body){
+    return '<div class="ai-card"><h4><span class="ai-tag ' + cls + '">' + tag + '</span>' + title + '</h4>' + body + '</div>';
+  }
+  function render(d){
+    var S = d.strategy_text || {};
+    var F = d.feature_text || {};
+    var out = [];
+    var chips = [];
+    if(d.held) chips.push('<span class="ai-chip ai-chip-held">影子帳戶持有中：' + esc(S[d.held.strategy] || d.held.strategy) +
+      '，' + esc(d.held.entry_date) + ' 以 ' + esc(d.held.entry_price) + ' 進場</span>');
+    (d.candidate || []).forEach(function(k){ chips.push('<span class="ai-s ai-s-' + esc(k) + '">本期候選：' + esc(S[k] || k) + '</span>'); });
+    if(d.e && d.e.veto) chips.push('<span class="ai-chip ai-chip-veto">財報品質否決（' + esc(d.e.score) + ' 面紅旗）</span>');
+    out.push('<p class="muted">資料日 ' + esc(d.asof) + '。' + (chips.length ? '' : '這一檔目前不在任何一套的候選名單上。') + '</p>');
+    if(chips.length) out.push('<p class="ai-chips">' + chips.join(' ') + '</p>');
+    // E
+    var e = d.e;
+    out.push(card('E', 'ai-tag-e', '財報品質',
+      e ? ('<p>' + esc(e.quarter) + ' 財報：紅旗 <b class="' + (e.veto ? 'down' : '') + '">' + esc(e.score) + '</b> 面' +
+           (e.veto ? '（三面以上，<b>否決</b>）' : '（三面以上才否決）') + '</p>' +
+           (e.details && e.details.length ? '<ul class="ai-list">' + e.details.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '<p class="muted">沒有紅旗。</p>'))
+        : '<p class="muted">沒有看得到的財報。</p>'));
+    // A
+    var a = d.a;
+    if(a && a.history && a.history.length){
+      var rows = a.history.slice().reverse().map(function(h){
+        return '<tr><td>' + esc(h.month) + '</td><td class="num ' + tone(h.sue) + '">' + (h.sue > 0 ? '+' : '') + h.sue.toFixed(1) +
+          '</td><td class="num ' + tone(h.yoy) + '">' + pct(h.yoy, 0) + '</td></tr>';
+      }).join('');
+      out.push(card('A', 'ai-tag-a', '營收驚喜',
+        '<p>' + (a.pct !== null && a.pct !== undefined ? esc(a.month) + ' 營收 SUE 位於全市場第 <b>' + Math.round(a.pct * 100) + '</b> 百分位（前 10% 才可能成為候選）。' : '最近一個月沒有評分。') +
+        '<span class="muted">SUE ＝ 比「去年同月 × 最近成長速度」多出來的部分，除以這家公司自己的預測誤差。</span></p>' +
+        '<div class="scroll"><table class="ai-t"><thead><tr><th>月份</th><th class="num">SUE</th><th class="num">年增</th></tr></thead><tbody>' + rows + '</tbody></table></div>'));
+    }
+    // B
+    var b = d.b;
+    if(b && b.neighbors && b.neighbors.length){
+      out.push(card('B', 'ai-tag-bb', '供應鏈連動：股價一起動的公司',
+        '<p class="muted">扣掉大盤之後，過去兩年週報酬相關最高的幾家（連動圖建於 ' + esc(b.graph_day) + '）。關係說明是 LLM 註解，只供參考。</p><ul class="ai-list">' +
+        b.neighbors.map(function(n){
+          return '<li><a href="' + stockHref(n.code) + '">' + esc(n.code) + ' ' + esc(n.name) + '</a> <span class="muted">相關 ' +
+            (n.corr === null || n.corr === undefined ? '—' : n.corr.toFixed(2)) + '</span>' +
+            (n.relation ? '　<b>' + esc(n.relation) + '</b>' + (n.note ? '：' + esc(n.note) : '') +
+              (n.confidence !== null && n.confidence !== undefined ? ' <span class="muted">（信心 ' + Math.round(n.confidence * 100) + '%）</span>' : '') : '') + '</li>';
+        }).join('') + '</ul>'));
+    }
+    // C
+    var c = d.c;
+    out.push(card('C', 'ai-tag-t', '法說轉折',
+      c && c.length ? '<ul class="ai-list">' + c.map(function(t){
+        var k = t.kind === '負轉折' ? 'down' : (t.kind === '正轉折' ? 'up' : 'muted');
+        return '<li><b>' + esc(t.date) + '</b> <span class="' + k + '">' + esc(t.kind) + '（' + (t.score > 0 ? '+' : '') + t.score.toFixed(1) + '）</span>' +
+          ' <span class="muted">' + (t.method === 'llm' ? 'LLM' : '規則') + (t.prev_date ? '，對比 ' + esc(t.prev_date) : '，第一次，沒有可比') + '</span>' +
+          (t.summary ? '<br>' + esc(t.summary) : '') +
+          (t.highlights && t.highlights.length ? '<br><span class="muted">重點：</span>' + t.highlights.map(esc).join('；') : '') +
+          (t.risks && t.risks.length ? '<br><span class="muted">風險：</span>' + t.risks.map(esc).join('；') : '') + '</li>';
+      }).join('') + '</ul>' : '<p class="muted">還沒有讀過這一檔的法說簡報（從上線那天起累積，持股與候選優先）。</p>'));
+    // D
+    var dd = d.d;
+    if(dd){
+      var fs = Object.keys(dd.features || {}).map(function(k){
+        var v = dd.features[k];
+        if(v === null || v === undefined) return '';
+        var txt = k === 'big4z' ? (v > 0 ? '+' : '') + v.toFixed(1) + ' σ' : pct(v, 2);
+        return '<li><span>' + esc(F[k] || k) + '</span><b class="' + tone(v) + '">' + txt + '</b></li>';
+      }).join('');
+      out.push(card('D', 'ai-tag-d', '籌碼共振',
+        '<p>集保 ' + esc(dd.week) + '：共振分數第 <b>' + Math.round(dd.pct * 100) + '</b> 百分位（前 5% 且股價還沒動才是候選）。</p>' +
+        (fs ? '<ul class="ai-ic">' + fs + '</ul>' : '')));
+    }
+    out.push('<p class="muted">市場狀態（F）、影子帳戶與回測見 <a href="' + esc(panel.getAttribute('data-ai-page')) + '">AI 選股</a> 頁。這不是投資建議。</p>');
+    box.innerHTML = out.join('');
+  }
+  function load(){
+    if(loaded) return;
+    loaded = true;
+    var src = panel.getAttribute('data-src');
+    if(!window.fetch){ box.innerHTML = '<p class="stale">這個瀏覽器不支援讀取 AI 資料。</p>'; return; }
+    fetch(src, {cache: 'no-cache'}).then(function(r){
+      if(!r.ok) throw new Error(r.status);
+      return r.json();
+    }).then(function(d){
+      try{ render(d); }catch(err){ box.innerHTML = '<p class="stale">AI 資料的格式看不懂，這一個分頁暫時無法顯示。</p>'; }
+    }).catch(function(){
+      box.innerHTML = '<p class="muted">還沒有這一檔的 AI 資料（每天的排程跑完之後才會有；已下市或太新的股票不會有）。</p>';
+    });
+  }
+  // 分頁可以用滑鼠點、也可以用方向鍵切或網址 #ai 直接開：看的是面板本身有沒有露出來
+  if(window.MutationObserver){
+    new MutationObserver(function(){ if(!panel.hidden) load(); })
+      .observe(panel, {attributes: true, attributeFilter: ['hidden']});
+  }
+  var tab = document.getElementById('tab-ai');
+  if(tab) tab.addEventListener('click', load);
+  if(!panel.hidden) load();
+})();
+
+/* =========================================================================
+ * 〔評等清單〕〔觀察清單〕：名稱旁邊標出 AI 的狀態（持有中／本期候選／財報否決）。
+ * 資料是 ai/marks.json（見 report/ai_page.py）。標籤寫在名稱那一格的 data-ai 屬性、
+ * 由 CSS 的 ::after 畫出來——不是塞一段文字進去：排序看 data-s、搜尋看文字，
+ * 兩者都不該被一個標籤改變。抓不到就什麼都不標。
+ * ========================================================================= */
+(function(){
+  var table = document.getElementById('t');
+  var nav = document.querySelector('nav a.nav-ai');
+  if(!table || !nav || !window.fetch) return;
+  var rel = (nav.getAttribute('href') || '').replace(/ai\.html$/, '');
+  fetch(rel + 'ai/marks.json', {cache: 'no-cache'}).then(function(r){
+    if(!r.ok) throw new Error(r.status);
+    return r.json();
+  }).then(function(d){
+    var marks = (d && d.marks) || {};
+    [].forEach.call(table.querySelectorAll('tbody tr[data-code]'), function(tr){
+      var m = marks[tr.getAttribute('data-code')];
+      if(!m) return;
+      var links = tr.querySelectorAll('a[href*="stock/"]');
+      var cell = links.length > 1 ? links[1].closest('td') : null;
+      if(!cell) return;
+      cell.setAttribute('data-ai', m);
+      cell.setAttribute('data-ai-kind', m.indexOf('否決') >= 0 ? 'veto' : (m.indexOf('持有') >= 0 ? 'held' : 'cand'));
+      cell.title = m + '（詳見個股頁〔AI 選股〕分頁）';
+    });
+  }).catch(function(){});
 })();

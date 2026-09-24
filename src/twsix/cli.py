@@ -2207,6 +2207,29 @@ def cmd_aipick(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_aipick_fetch(args: argparse.Namespace) -> int:
+    """〔AI 選股〕要連網的那一半：重大訊息、法說會一覽與簡報、LLM（有金鑰才用）。
+
+    LLM 金鑰只從環境變數 `GEMINI_API_KEY` 讀，不接受命令列參數——命令列會出現在
+    process 清單與 CI 的 log 裡。沒有金鑰時法說只用規則讀，其他照做。
+    """
+    settings = Settings.load(args.config)
+    from .aipick.fetch import fetch_all  # noqa: PLC0415
+
+    root = Path(args.data or settings.data_dir)
+    status = fetch_all(root, max_pdf=args.max_pdf)
+    llm = status.get("llm") or {}
+    print("AI 選股（抓取）：" + "、".join(
+        f"{k} {v}" for k, v in status.items() if k in ("news", "talks_list", "talks", "relations")))
+    print(f"LLM：{'啟用' if llm.get('enabled') else '沒有金鑰，只用規則'}，"
+          f"呼叫 {llm.get('calls', 0)} 次" + (f"，{llm['stopped']}" if llm.get("stopped") else ""))
+    for part in ("news", "talks_list", "talks"):
+        errs = (status.get(part) or {}).get("errors") or []
+        if errs:
+            print(f"::warning::{part}：" + "；".join(errs[:5]))
+    return EXIT_OK
+
+
 def cmd_restate(args: argparse.Namespace) -> int:
     """用**本機已經有的**分頁重算評等、寫回清單。不連網、不建頁。
 
@@ -3799,6 +3822,15 @@ def build_parser() -> argparse.ArgumentParser:
     ai.add_argument("--no-backtest", action="store_true",
                     help="不重跑回測（約一分鐘），只更新今天與影子帳戶")
     ai.set_defaults(func=cmd_aipick)
+
+    aif = sub.add_parser(
+        "aipick-fetch",
+        help="AI 選股（連網的那一半）：重大訊息、法說會簡報、LLM 註解（寫進 data/aipick）",
+    )
+    aif.add_argument("--data", help="資料目錄（預設 data/）")
+    aif.add_argument("--max-pdf", type=int, default=60,
+                     help="這一趟最多下載幾份法說簡報（預設 60）")
+    aif.set_defaults(func=cmd_aipick_fetch)
 
     dl = sub.add_parser(
         "delist",

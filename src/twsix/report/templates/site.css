@@ -127,6 +127,7 @@
 :root:not([data-theme=light]) .tabs #tab-holders{--tc:#4fc9ec}
 :root:not([data-theme=light]) .tabs #tab-directors{--tc:#8fb6d2}
 :root:not([data-theme=light]) .tabs #tab-news{--tc:#a3aebb}
+:root:not([data-theme=light]) .tabs #tab-ai{--tc:#c4a1ff}
 :root:not([data-theme=light]) .tabs #tab-unbuilt{--tc:#98a6b4}
 /* 深底上的按鈕色是調亮過的，白字壓不住——選中那一顆改用底色當字色。 */
 :root:not([data-theme=light]) .tab[aria-selected=true]{color:var(--ground)}
@@ -149,6 +150,7 @@
 :root[data-theme=dark] .tabs #tab-holders{--tc:#4fc9ec}
 :root[data-theme=dark] .tabs #tab-directors{--tc:#8fb6d2}
 :root[data-theme=dark] .tabs #tab-news{--tc:#a3aebb}
+:root[data-theme=dark] .tabs #tab-ai{--tc:#c4a1ff}
 :root[data-theme=dark] .tabs #tab-unbuilt{--tc:#98a6b4}
 :root[data-theme=dark] .tab[aria-selected=true]{color:var(--ground)}
 *{box-sizing:border-box}
@@ -549,6 +551,7 @@ td.pv .v{display:block;font-variant-numeric:tabular-nums;
 .tabs #tab-holders{--tc:#0b7ea3}
 .tabs #tab-directors{--tc:#3a6b8c}
 .tabs #tab-news{--tc:#5f6b78}
+.tabs #tab-ai{--tc:#7d2ae8}
 .tabs #tab-unbuilt{--tc:#7a8591}
 
 /* 分頁自己的標題和分頁標籤是同一句話，重複一次只是佔掉一行。 */
@@ -1388,9 +1391,49 @@ table.hl-t{min-width:0}
 .ai-ic{list-style:none;padding:0;margin:8px 0;display:grid;gap:3px;max-width:420px}
 .ai-ic li{display:grid;grid-template-columns:11em 5em 1fr;gap:8px;font-size:12.5px}
 .ai-ic em{font-style:normal;color:var(--muted)}
+.ai-tag-c{background:#c2255c}.ai-tag-t{background:#2b8a3e}
+/* 各方案的小標籤（A 橘、B 藍、D 紫），表格與標題共用 */
+.ai-s{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:700;
+  color:#fff;background:#5f6b78;white-space:nowrap}
+.ai-s-A{background:#e67700}.ai-s-B{background:#1c7ed6}.ai-s-D{background:#6d3fd1}
+.ai-stats tr.ai-all th{color:#c2255c}.ai-stats tr.ai-a th{color:#e67700}
+.ai-stats tr.ai-b2 th{color:#1c7ed6}.ai-stats tr.ai-bm th{color:var(--muted);font-weight:500}
+.ai-stats tr.ai-sub th{font-weight:400;padding-left:18px}
+.ai-stats tr.ai-bm td,.ai-stats tr.ai-bm th{background:var(--surface-2)}
+/* 頁內跳轉：一排按鈕，窄螢幕可以橫向捲 */
+.ai-jump{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin:0 0 6px;
+  -webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.ai-jump a{flex:0 0 auto;padding:4px 12px;border-radius:14px;border:1px solid var(--rule);
+  font-size:13px;font-weight:600;text-decoration:none;color:var(--ink-2);background:var(--surface)}
+.ai-jump a:hover{background:var(--surface-2)}
+.ai-block{scroll-margin-top:12px}
+.ai-llm code{font-size:12px}
+/* 個股頁〔AI 選股〕分頁 */
+.ai-stock .ai-card{background:var(--surface);border:1px solid var(--rule);border-radius:8px;
+  padding:10px 14px 12px;margin:0 0 12px}
+.ai-stock .ai-card h4{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:15px}
+.ai-stock .ai-card p{max-width:none;margin:0 0 6px}
+.ai-tag-a{background:#e67700}.ai-tag-bb{background:#1c7ed6}
+.ai-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ai-chip{display:inline-block;padding:2px 10px;border-radius:10px;font-size:12.5px;font-weight:700;
+  border:1px solid var(--rule);background:var(--surface-2)}
+.ai-chip-held{border-color:#c2255c;color:#c2255c}
+.ai-chip-veto{border-color:var(--down);color:var(--down)}
+.ai-list{margin:4px 0 0;padding-left:18px;font-size:13.5px}
+.ai-list li{margin:0 0 4px}
+/* 分頁裡那張月份表只有三欄：不套全站表格的 560px 下限，手機上不必橫捲 */
+.ai-stock .ai-t{min-width:0}
+/* 清單上名稱旁邊的 AI 標籤（site.js 寫 data-ai，這裡畫出來） */
+#t td[data-ai]::after{content:attr(data-ai);display:inline-block;margin-left:6px;padding:0 6px;
+  border-radius:8px;font-size:10.5px;font-weight:700;line-height:17px;vertical-align:1px;
+  color:#fff;background:#7d2ae8;white-space:nowrap}
+#t td[data-ai-kind=held]::after{background:#c2255c}
+#t td[data-ai-kind=veto]::after{background:transparent;color:var(--down);border:1px solid var(--down)}
 @media (max-width:640px){
   .ai-block{padding:12px 12px 14px}
   .ai-state{font-size:22px}
   .ai-gauges,.ai-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ai-bars li,.ai-ic li{grid-template-columns:9em 1fr 3em}
+  /* A 的「理由」和前面幾欄說的是同一件事；手機上收起來，一列不必長到五行 */
+  .ai-t .ai-hide-m{display:none}
 }
