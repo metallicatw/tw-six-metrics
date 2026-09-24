@@ -260,8 +260,17 @@ def check_daily(data_dir: Path, today: date, report: Report) -> None:
 
     # 兩套的日期集合必須一致。不一致代表其中一邊有一天單獨掉了，而那一天不會
     # 有任何人去補——每日排程只抓「今天」。
-    only_p = sorted(sets.get("prices", set()) - sets.get("institutional", set()))
-    only_i = sorted(sets.get("institutional", set()) - sets.get("prices", set()))
+    #
+    # 只比**兩邊都已經開始收的那一段**（2026-09-24 修）。收盤後來用
+    # `backfill-history` 回補到 2023-08，法人只從 2025-09 開始收——那 502 天
+    # 「只有收盤」不是掉了，是法人那一套本來就沒有那麼早的資料。上一版把它們
+    # 全算成洞，心跳因此每天紅。真正的洞（兩邊都開始收之後，某一天只有一邊）
+    # 照樣會叫。
+    p_days = sets.get("prices", set())
+    i_days = sets.get("institutional", set())
+    since = max(min(p_days), min(i_days)) if p_days and i_days else ""
+    only_p = sorted(d for d in p_days - i_days if d >= since)
+    only_i = sorted(d for d in i_days - p_days if d >= since)
     if only_p or only_i:
         report.bad(
             "每日資料對不齊",
