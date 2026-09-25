@@ -19,3 +19,6 @@
 {"a":"6533","b":"3388","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"晶心科為矽智財廠，崇越電代理矽利光，業務無直接上下游關聯，股價同步多因同屬台股電子股。"}
 {"a":"6442","b":"2482","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬台股通訊網路族群或常被歸類於光通訊/網通題材，股價具連動性。"}
 {"a":"6442","b":"3508","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.6,"note":"兩者皆屬台股光通訊或電子零組件相關概念股，常隨盤勢與族群熱度同步變動。"}
+{"a":"4949","b":"2468","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"兩者皆屬台股資訊服務與綠能/電子零組件相關題材，無直接供應鏈關係。"}
+{"a":"4949","b":"6874","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"兩者業務性質不同，有成精密屬綠能與精密零件，倍力為資訊服務軟體，股價同步可能僅因盤勢或特定資金炒作題材。"}
+{"a":"4949","b":"6499","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"兩者皆屬台股上市櫃公司，無直接業務往來，股價同步多因盤勢或市場資金歸類於相同題材。"}
