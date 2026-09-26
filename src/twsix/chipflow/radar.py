@@ -430,7 +430,7 @@ def build_today(engine: Engine, history: list[dict], vetoes: set[str],
         if c in val_rank and c in val_rank_b:
             row["vrd"] = val_rank_b[c] - val_rank[c]
         row["cap"] = _r(cap / 1e6, 0) if not isnan(cap) else None
-        # 大戶：最新一週的分佈 × 今天的收盤（bengo 每天用最新收盤重算級距）
+        # 大戶：最新一週的分佈 × 今天的收盤（BG 每天用最新收盤重算級距）
         pos = engine._week_pos(c, week) if week else None
         if pos is not None:
             w = engine.tiers[c][pos]
