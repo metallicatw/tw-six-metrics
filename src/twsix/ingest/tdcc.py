@@ -63,6 +63,8 @@ TIERS: tuple[tuple[str, tuple[int, ...]], ...] = (
 )
 #: 合計。等於 1..15，不含 16。
 TOTAL_BRACKET = 17
+#: 最後一個「真的級距」（＞1,000 張）。
+LAST_LEVEL = 15
 #: 差異數調整。在合計之外，所以任何加總都要跳過它。
 ADJUST_BRACKET = 16
 
@@ -110,6 +112,14 @@ class Snapshot:
     tiers: dict[str, int]
     #: 分級 16「差異數調整」。合計 = 級距相加 - 這個數。多半是 0。
     adjust: int = 0
+    #: 原始 15 級：``((分級, 人數, 股數), ...)``，分級 1..15。
+    #:
+    #: 八級（:attr:`tiers`）是 Goodinfo 的樣子，也是個股格線用的；但〔籌碼雷達〕
+    #: 的「持股市值 5,000 萬大戶」要依每天的收盤價動態換算張數門檻，八級會丟掉
+    #: 15／20／30／40／600 張這幾條邊界，而且**沒有人數**。所以另外把原始 15 級
+    #: 留著（只有全市場那一份開放資料會填，逐檔回補的查詢頁不填，是空的）。
+    #: 預設空的 tuple：既有的建構方式、既有的檔案格式都不受影響。
+    levels: tuple[tuple[int, int, int], ...] = ()
 
     @property
     def percents(self) -> dict[str, float]:
@@ -188,6 +198,9 @@ def parse(payload: str) -> dict[str, Snapshot]:
                 for name, brackets in TIERS
             },
             adjust=bag.get(ADJUST_BRACKET, (0, 0))[1],
+            levels=tuple(
+                (b, bag[b][0], bag[b][1]) for b in range(1, LAST_LEVEL + 1) if b in bag
+            ),
         )
     if not out:
         raise NotTdccData("整份沒有任何一檔有合計")

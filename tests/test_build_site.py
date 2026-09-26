@@ -274,7 +274,7 @@ def test_the_three_stale_pages_are_unlinked_but_still_built():
 
     nav = re.search(r"<nav>(.*?)</nav>", (out / "index.html").read_text("utf-8"), re.S)
     labels = re.findall(r">([^<>]+)</a>", nav.group(1))
-    assert labels == ["台股評等清單", "台股觀察清單", "AI 選股"]
+    assert labels == ["台股評等清單", "台股觀察清單", "AI 選股", "籌碼雷達"]
     for name in ("picks.html", "stats.html", "about.html"):
         assert (out / name).is_file(), f"{name} 不該被刪掉，只是不連過去"
     # 評等清單 is the front door now; the old URL still resolves.
@@ -1301,6 +1301,7 @@ NAV_EXPECTED = [
     ("nav-trend", "趨勢×六大×報酬"),
     ("nav-mon",   "全球市場監控＋日股觀察"),
     ("nav-ai",    "AI 選股"),
+    ("nav-radar", "籌碼雷達"),
 ]
 
 

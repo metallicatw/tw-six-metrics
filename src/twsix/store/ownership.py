@@ -40,7 +40,16 @@ STOCK_DIR = "stock"
 #: 有 year/month，而且直接給官方加總。同樣按股票存。
 DIRECTOR_STOCK_DIR = "directors_stock"
 
+#: 原始 15 級（人數與股數），給〔籌碼雷達〕的 5,000 萬大戶用。每週一個檔，
+#: 和 `holders/` 並排、互不干擾：個股格線與 AI 選股照舊只讀 `holders/`。
+LEVELS_DIR = "levels"
+
 _HOLDER_FIELDS = ("code", "holders", "shares", *[f"t{i}" for i in range(1, 9)])
+_LEVEL_FIELDS = (
+    "code", "holders", "shares",
+    *[f"p{i}" for i in range(1, 16)],
+    *[f"s{i}" for i in range(1, 16)],
+)
 _DIRECTOR_FIELDS = ("code", "name", "held", "pledged", "independent")
 _STOCK_FIELDS = ("date", "holders", "shares", *[f"t{i}" for i in range(1, 9)])
 _DIRECTOR_STOCK_FIELDS = ("month", "held", "pledged", "independent", "independent_pledged")
@@ -97,6 +106,33 @@ def save_holders(root: Path, market: dict[str, tdcc.Snapshot]) -> Path:
         for code, s in sorted(market.items())
     ]
     _write(path, _HOLDER_FIELDS, rows)
+    return path
+
+
+def save_levels(root: Path, market: dict[str, tdcc.Snapshot]) -> Path | None:
+    """同一週的原始 15 級（人數、股數）。沒有任何一檔帶 15 級就不寫、回 None。
+
+    只是**多存一份**：`holders/` 那一份照原樣寫，這裡失敗也不影響它（呼叫端包著）。
+    """
+    rows = []
+    for code, s in sorted(market.items()):
+        if not s.levels:
+            continue
+        people = dict.fromkeys(range(1, 16), 0)
+        shares = dict.fromkeys(range(1, 16), 0)
+        for b, n, sh in s.levels:
+            if 1 <= b <= 15:
+                people[b], shares[b] = n, sh
+        rows.append([
+            code, str(s.holders), str(s.shares),
+            *[str(people[i]) for i in range(1, 16)],
+            *[str(shares[i]) for i in range(1, 16)],
+        ])
+    if not rows:
+        return None
+    day = next(iter(market.values())).day
+    path = root / LEVELS_DIR / f"{day:%Y%m%d}.csv.gz"
+    _write(path, _LEVEL_FIELDS, rows)
     return path
 
 

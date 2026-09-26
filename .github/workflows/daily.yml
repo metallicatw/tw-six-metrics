@@ -177,6 +177,15 @@ jobs:
         continue-on-error: true
         run: twsix aipick --sync-macro || echo "::error::AI 選股這一趟失敗（行情照常存檔），看上面的 log"
 
+      # 〔籌碼雷達〕：法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面的每日
+      # 橫斷面、精選漏斗、每週回頭驗證，寫進 data/chipflow/（約 30 秒、不連網）。
+      # 讀 AI 選股剛寫好的 E 否決名單，所以排在它後面；但**不改** AI 選股的任何檔案。
+      # 和 AI 選股一樣：失敗不擋今天的行情存檔，只留一個 error 註記。
+      - name: 籌碼雷達
+        timeout-minutes: 10
+        continue-on-error: true
+        run: twsix chipflow || echo "::error::籌碼雷達這一趟失敗（行情照常存檔），看上面的 log"
+
       - name: Commit
         id: commit
         run: |
@@ -191,6 +200,8 @@ jobs:
           # 改到它（股價每天都在動）。漏掉它的話，那道檢查每天都會紅——而那正是
           # market.yml 的白名單漏掉 data/ratings.csv 時發生過的事。
           git add data/market data/sheets data/valuations.csv data/aipick
+          # 籌碼雷達的輸出。那一步失敗、目錄還不存在時不能讓 git add 報錯。
+          if [ -d data/chipflow ]; then git add data/chipflow; fi
           # ⚠️ **守門要在提早 exit 的上面。**
           #
           # 它防的是「引擎寫了一個白名單沒列的檔案」。而它以前排在

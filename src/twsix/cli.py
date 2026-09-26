@@ -2208,6 +2208,40 @@ def cmd_aipick(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_chipflow(args: argparse.Namespace) -> int:
+    """〔籌碼雷達〕每天那一趟：法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面。
+
+    不連網；只讀 `data/`、只寫 `data/chipflow/`。不動〔AI 選股〕與趨勢篩選的任何
+    東西。排程裡是獨立一步、失敗不擋行情存檔。
+    """
+    settings = Settings.load(args.config)
+    from .chipflow.radar import run  # noqa: PLC0415
+
+    root = Path(args.data or settings.data_dir)
+    summary = run(root)
+    print("籌碼雷達：" + "、".join(f"{k} {v}" for k, v in summary.items()))
+    return EXIT_OK
+
+
+def cmd_chipflow_site(args: argparse.Namespace) -> int:
+    """〔籌碼雷達〕網站要的個股序列與排名表，寫進 `site/chipflow/`（建站時跑）。
+
+    **永遠回 0**：它是網站上的一頁，壞了不能讓建站或部署失敗——錯誤只留一行
+    ::warning::，那一頁會顯示「暫時沒有資料」，其他頁面照常。
+    """
+    settings = Settings.load(args.config)
+    root = Path(args.data or settings.data_dir)
+    out = Path(args.out or "site")
+    try:
+        from .chipflow.site import export  # noqa: PLC0415
+
+        summary = export(root, out, force=args.force, repo_root=Path.cwd())
+        print("籌碼雷達（網站）：" + "、".join(f"{k} {v}" for k, v in summary.items()))
+    except Exception as exc:  # noqa: BLE001 - 一頁的資料不能拖垮建站
+        print(f"::warning::籌碼雷達的網站資料沒產生（其他頁面不受影響）：{exc!r}")
+    return EXIT_OK
+
+
 def cmd_aipick_fetch(args: argparse.Namespace) -> int:
     """〔AI 選股〕要連網的那一半：重大訊息、法說會一覽與簡報、LLM（有金鑰才用）。
 
@@ -3108,6 +3142,14 @@ def cmd_fetch_ownership(args: argparse.Namespace) -> int:
         path = own.save_holders(root, market)
         day = next(iter(market.values())).day
         wrote.append(f"  大戶持股　{len(market):,} 檔　{day:%Y-%m-%d}　-> {path}")
+        # 原始 15 級另存一份給〔籌碼雷達〕。這一步是附加的：失敗只留警告，
+        # 上面那一份（個股格線、AI 選股都靠它）已經寫好了，不受影響。
+        try:
+            lv = own.save_levels(root, market)
+            if lv:
+                wrote.append(f"  持股分級（15 級）　-> {lv}")
+        except Exception as exc:  # noqa: BLE001 - 附加的一份不能擋住本來那一份
+            print(f"::warning::原始 15 級沒存成（大戶持股照常）：{exc!r}")
     if args.what in ("all", "directors"):
         companies = Insiders(http).fetch()
         path = own.save_directors(root, companies)
@@ -3879,6 +3921,22 @@ def build_parser() -> argparse.ArgumentParser:
     ai.add_argument("--no-backtest", action="store_true",
                     help="不重跑回測（約一分鐘），只更新今天與影子帳戶")
     ai.set_defaults(func=cmd_aipick)
+
+    cf = sub.add_parser(
+        "chipflow",
+        help="籌碼雷達：法人×5,000 萬大戶×成交資金×買賣盤力道×基本面（寫進 data/chipflow）",
+    )
+    cf.add_argument("--data", help="資料目錄")
+    cf.set_defaults(func=cmd_chipflow)
+
+    cfs = sub.add_parser(
+        "chipflow-site",
+        help="籌碼雷達：建站用的個股序列與排名表（寫進 site/chipflow；失敗不擋建站）",
+    )
+    cfs.add_argument("--data", help="資料目錄")
+    cfs.add_argument("--out", help="網站目錄（預設 site）")
+    cfs.add_argument("--force", action="store_true", help="資料沒換也重算")
+    cfs.set_defaults(func=cmd_chipflow_site)
 
     aif = sub.add_parser(
         "aipick-fetch",

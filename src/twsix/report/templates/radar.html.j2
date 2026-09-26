@@ -1,0 +1,873 @@
+{% extends "base.html.j2" %}
+{% block title %}籌碼雷達｜{{ site_title }}{% endblock %}
+{% block body %}
+{# 〔籌碼雷達〕：十二項工具（①～⑫）＋精選漏斗＋指標驗證。
+   這一頁不帶任何數字：全部由瀏覽器讀 chipflow/*.json（`twsix chipflow` 與
+   `twsix chipflow-site` 產生，見 src/twsix/chipflow/）。樣式與程式都只在這一頁、
+   以 .cf 為前綴，不動 site.css / site.js——壞了只影響這一頁。 #}
+<style>
+.cf{--cf-hl:#ffe45c;--cf-hl-ink:#1b1b00}
+.cf h2 .cf-beta{font-size:12px;border:1px solid var(--rule);border-radius:999px;padding:1px 8px;margin-left:6px;color:var(--muted);vertical-align:middle}
+.cf-note{color:var(--muted);font-size:13px;line-height:1.6}
+.cf-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;margin:12px 0;padding-bottom:4px}
+.cf-tab{flex:0 0 auto;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:5px 12px;font-size:13.5px;cursor:pointer;white-space:nowrap}
+.cf-tab[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.cf-tab.cf-sep{margin-left:10px}
+.cf-panel{display:none}
+.cf-panel.on{display:block}
+.cf-card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:10px 12px;margin:10px 0}
+.cf-card h4{margin:0 0 4px;font-size:13.5px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.cf-card h4 .cf-tip{font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
+.cf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.cf-grid .cf-card{margin:0}
+.cf-grp{margin:14px 0 4px;font-size:14px;color:var(--ink-2);border-left:4px solid var(--accent);padding-left:8px}
+.cf svg{display:block;width:100%;height:auto;touch-action:none}
+.cf-trail svg{max-width:780px;margin:0 auto}
+.cf svg text{font-size:10px;fill:var(--muted)}
+.cf-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.cf input[type=text],.cf input[type=number],.cf select{border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:8px;padding:5px 8px;font-size:14px}
+.cf input[type=number]{width:90px}
+.cf button.cf-btn{border:1px solid var(--accent);background:var(--surface);color:var(--accent);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:14px}
+.cf button.cf-btn.pri{background:var(--accent);color:var(--surface)}
+.cf-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:6px 18px;margin:8px 0}
+.cf-form label{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:13.5px}
+.cf-form .cf-dis{opacity:.5}
+.cf-tbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.cf-tbl th,.cf-tbl td{border-bottom:1px solid var(--rule);padding:4px 6px;text-align:right;white-space:nowrap}
+.cf-tbl th{cursor:pointer;background:var(--surface-2);position:sticky;top:0}
+.cf-tbl td.l,.cf-tbl th.l{text-align:left}
+.cf-tbl a{cursor:pointer;color:var(--accent-2);text-decoration:underline}
+.cf-scroll{overflow:auto;max-height:70vh;border:1px solid var(--rule);border-radius:8px}
+.cf-badge{display:inline-block;border-radius:999px;padding:0 7px;font-size:11.5px;margin-left:3px;border:1px solid var(--rule)}
+.cf-badge.pick{background:var(--accent);color:var(--surface);border-color:var(--accent)}
+.cf-badge.l1{border-color:var(--accent-2);color:var(--accent-2)}
+.cf-badge.veto{border-color:var(--up);color:var(--up)}
+.cf-w-高風險{color:var(--up);font-weight:600}.cf-w-待觀察{color:#b25a00}.cf-w-相對安心{color:var(--down)}
+.cf-kpi{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0}
+.cf-kpi div{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:6px 12px;min-width:120px}
+.cf-kpi b{display:block;font-size:18px}
+.cf-rank td{min-width:64px;font-size:12px;text-align:left;cursor:pointer}
+.cf-rank td.hl{background:var(--cf-hl);color:var(--cf-hl-ink);font-weight:600}
+.cf-rank th.r,.cf-rank td.r{position:sticky;left:0;background:var(--surface-2);text-align:right;cursor:default}
+.cf-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:760px){.cf-two{grid-template-columns:1fr}}
+.cf-chips{display:flex;flex-wrap:wrap;gap:6px}
+.cf-chip{border:1px solid var(--rule);border-radius:999px;padding:2px 8px;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+.cf-chip i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.cf-chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px}
+.cf-quick{display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow:auto}
+.cf-quick button{border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:6px;padding:2px 6px;font-size:12px;cursor:pointer}
+.cf-inds{display:flex;flex-wrap:wrap;gap:4px 12px;max-height:130px;overflow:auto;border:1px solid var(--rule);border-radius:8px;padding:6px;font-size:13px}
+.cf-notes td{white-space:normal;text-align:left}
+.cf dl dt{font-weight:600;margin-top:8px}.cf dl dd{margin:2px 0 0 1em;color:var(--ink-2);font-size:13.5px;line-height:1.6}
+</style>
+
+<div class="cf" id="cf">
+<h2>籌碼雷達 <span class="cf-beta">試行</span></h2>
+<p class="cf-note">法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面。十二項工具的設計參考 bengo（財報笨狗哥）公開的方法，數字全部由本站用政府資料開放平臺（證交所、櫃買中心、集保結算所、公開資訊觀測站）自行計算。
+<span id="cf-asof"></span></p>
+<p class="cf-note" id="cf-msg">載入中…</p>
+
+<div class="cf-tabs" role="tablist" id="cf-tabs">
+  <button class="cf-tab" data-t="t1" role="tab">① 個股籌碼多圖</button>
+  <button class="cf-tab" data-t="t2" role="tab">② 大戶籌碼</button>
+  <button class="cf-tab" data-t="t3" role="tab">③ 基本面</button>
+  <button class="cf-tab cf-sep" data-t="t4" role="tab">④ 籌碼篩選</button>
+  <button class="cf-tab" data-t="t5" role="tab">⑤ 基本面篩選</button>
+  <button class="cf-tab" data-t="t6" role="tab">⑥ 籌碼×基本面</button>
+  <button class="cf-tab cf-sep" data-t="t7" role="tab">⑦ 排名軌跡</button>
+  <button class="cf-tab" data-t="t8" role="tab">⑧ 多檔排名軌跡</button>
+  <button class="cf-tab" data-t="t9" role="tab">⑨ 排名榜（單檔）</button>
+  <button class="cf-tab" data-t="t10" role="tab">⑩ 排名榜（多檔）</button>
+  <button class="cf-tab" data-t="t11" role="tab">⑪ 金額軌跡</button>
+  <button class="cf-tab" data-t="t12" role="tab">⑫ 多檔金額軌跡</button>
+  <button class="cf-tab cf-sep" data-t="picks" role="tab">精選漏斗</button>
+  <button class="cf-tab" data-t="val" role="tab">指標驗證</button>
+  <button class="cf-tab" data-t="about" role="tab">說明</button>
+</div>
+<datalist id="cf-codes"></datalist>
+
+<section class="cf-panel" id="cf-t1">
+  <div class="cf-row"><input type="text" id="cf-q1" list="cf-codes" placeholder="代號或名稱，例如 2330"><button class="cf-btn pri" data-go="1">查詢</button><span class="cf-note">近 120 個交易日。</span></div>
+  <div id="cf-o1"></div>
+</section>
+<section class="cf-panel" id="cf-t2">
+  <div class="cf-row"><input type="text" id="cf-q2" list="cf-codes" placeholder="代號或名稱"><button class="cf-btn pri" data-go="2">查詢</button></div>
+  <div id="cf-o2"></div>
+</section>
+<section class="cf-panel" id="cf-t3">
+  <div class="cf-row"><input type="text" id="cf-q3" list="cf-codes" placeholder="代號或名稱"><button class="cf-btn pri" data-go="3">查詢</button></div>
+  <div id="cf-o3"></div>
+</section>
+
+<section class="cf-panel" id="cf-t4">
+  <p class="cf-note">留空 ＝ 不套用。全部條件同時成立（AND）。「套用範例條件」只是示範操作方式，不是選股建議。</p>
+  <div class="cf-form" id="cf-f4"></div>
+  <div class="cf-row"><button class="cf-btn pri" data-run="4">開始篩選</button><button class="cf-btn" id="cf-sample">套用範例條件</button><button class="cf-btn" data-reset="4">重設</button></div>
+  <div id="cf-o4"></div>
+</section>
+<section class="cf-panel" id="cf-t5">
+  <p class="cf-note">留空 ＝ 不套用。合約負債、存貨、資本支出三項，官方的全市場彙總財報沒有提供，這一版不做（不拿別的數字硬湊）。金融保險業的損益科目不同，不在這些欄位裡。</p>
+  <div class="cf-row"><b>產業</b><button class="cf-btn" id="cf-ind-all">全選</button><button class="cf-btn" id="cf-ind-none">全部取消</button></div>
+  <div class="cf-inds" id="cf-inds"></div>
+  <div class="cf-form" id="cf-f5"></div>
+  <div class="cf-row"><b>動能訊號（創新高）</b></div>
+  <div class="cf-form" id="cf-f5b"></div>
+  <div class="cf-row"><button class="cf-btn pri" data-run="5">開始篩選</button><button class="cf-btn" data-reset="5">重設</button></div>
+  <div id="cf-o5"></div>
+</section>
+<section class="cf-panel" id="cf-t6">
+  <p class="cf-note">把 ④ 的籌碼條件與 ⑤ 的基本面條件（含產業）同時套用。要改條件，到 ④、⑤ 兩頁改完再回來按「交集篩選」。兩邊資料的日期不同：籌碼是每日、集保每週、營收每月、財報每季。</p>
+  <div class="cf-row"><button class="cf-btn pri" data-run="6">交集篩選</button><button class="cf-btn" id="cf-sample6">套用籌碼面範例條件</button></div>
+  <div id="cf-o6"></div>
+</section>
+
+<section class="cf-panel" id="cf-t7">
+  <div class="cf-row"><input type="text" id="cf-q7" list="cf-codes" placeholder="代號或名稱"><button class="cf-btn pri" data-go="7">查詢</button>
+    <label>刻度 <select id="cf-s7"><option value="log">對數（放大前段）</option><option value="lin">線性</option></select></label></div>
+  <div id="cf-o7"></div>
+  <p class="cf-note">X 軸：外資投信買賣超金額 60 日累計排名（第 1 名＝買超最多）；Y 軸：20 日成交金額佔全市場比重排名（第 1 名＝佔比最高）。越靠左上越強。點越新顏色越深，連線依交易日先後串接（近 60 個交易日）。</p>
+</section>
+<section class="cf-panel" id="cf-t8">
+  <div class="cf-row"><input type="text" id="cf-q8" list="cf-codes" placeholder="加入個股（最多 8 檔）"><button class="cf-btn pri" data-add="8">加入</button>
+    <label>刻度 <select id="cf-s8"><option value="log">對數（放大前段）</option><option value="lin">線性</option></select></label></div>
+  <div class="cf-chips" id="cf-c8"></div>
+  <div id="cf-o8"></div>
+</section>
+<section class="cf-panel" id="cf-t9">
+  <div class="cf-row"><input type="text" id="cf-q9" list="cf-codes" placeholder="標示一檔"><button class="cf-btn pri" data-go="9">標示</button><button class="cf-btn" id="cf-clear9">清除</button><label><input type="checkbox" id="cf-sync9" checked> 兩張表同步捲動</label></div>
+  <div id="cf-o9"></div>
+</section>
+<section class="cf-panel" id="cf-t10">
+  <div class="cf-row"><input type="text" id="cf-q10" list="cf-codes" placeholder="加入個股（最多 8 檔）"><button class="cf-btn pri" data-add="10">加入</button><button class="cf-btn" id="cf-clear10">全部清除</button><label><input type="checkbox" id="cf-sync10" checked> 兩張表同步捲動</label></div>
+  <div class="cf-chips" id="cf-c10"></div>
+  <div id="cf-o10"></div>
+</section>
+<section class="cf-panel" id="cf-t11">
+  <div class="cf-row"><b>法人買超前 50 名</b></div><div class="cf-quick" id="cf-qa"></div>
+  <div class="cf-row"><b>20 日成交金額前 50 名</b></div><div class="cf-quick" id="cf-qb"></div>
+  <div class="cf-row"><input type="text" id="cf-q11" list="cf-codes" placeholder="或輸入代號"><button class="cf-btn pri" data-go="11">查詢</button>
+    <label>刻度 <select id="cf-s11"><option value="log">對數（放大小金額）</option><option value="lin">線性</option></select></label></div>
+  <div id="cf-o11"></div>
+  <p class="cf-note">X 軸：外資投信買賣超金額 60 日累計（億元，右＝買超、左＝賣超）；Y 軸：20 日成交金額加總（億元）；水平虛線＝當天全市場平均每檔的 20 日成交金額。清單依最新一天的數值自動排出，不代表推薦。</p>
+</section>
+<section class="cf-panel" id="cf-t12">
+  <div class="cf-row"><input type="text" id="cf-q12" list="cf-codes" placeholder="加入個股（最多 8 檔）"><button class="cf-btn pri" data-add="12">加入</button>
+    <label>刻度 <select id="cf-s12"><option value="log">對數（放大小金額）</option><option value="lin">線性</option></select></label></div>
+  <div class="cf-chips" id="cf-c12"></div>
+  <div id="cf-o12"></div>
+</section>
+
+<section class="cf-panel" id="cf-picks"><div id="cf-opicks"></div></section>
+<section class="cf-panel" id="cf-val"><div id="cf-oval"></div></section>
+<section class="cf-panel" id="cf-about">
+<div class="cf-card"><dl>
+<dt>① 個股籌碼多圖（四組）</dt>
+<dd><b>外資法人</b>：外資＋投信買賣超 60 日累計 ÷ 資本額（倍）；60 日累計買超金額與排名；扣掉大戶之 20 日周轉率 ＝ 20 日成交金額 ÷（市值 ×（1 − 大戶比例））；有 15 級資料後另有「÷ 大戶人數」與其排名。<br>
+<b>大戶籌碼</b>：大戶 ＝ 持股市值 ≥ 5,000 萬元。每天用當天收盤價把 5,000 萬換算成張數，對應到最接近的集保級距（取對數距離），加總那一級以上的持股（與人數）。<br>
+<b>成交量能</b>：20 日成交金額佔全市場比重（%）；20 日成交金額 ÷ 資本額（倍）。<br>
+<b>貪婪恐懼</b>：把每根 K 線拆成往上（買盤）與往下（賣盤）的路徑，買盤比例的 20／60 日<b>加總</b>是貪婪指標、賣盤比例的加總是恐懼指標（兩者相加 ＝ 天數）。</dd>
+<dt>② 大戶籌碼看板</dt><dd>每日：收盤、大戶比例、大戶人數、總股東人數。每週（集保）：總集保張數，以及「N 張以上」的累計持股張數與人數。</dd>
+<dt>③ 個股基本面</dt><dd>近五年單季 EPS、近四季 EPS 與年增、營業利益與年增、營益率、（保留盈餘＋資本公積）÷ 股本、四季 ROA；近兩年月營收、單月／3 月／12 月累計年增、月營收公告日（次月 10 日）的收盤價、營收變動說明。</dd>
+<dt>④⑤⑥ 篩選器</dt><dd>籌碼條件、基本面條件、兩者交集。排名一律「第 1 名最大」。</dd>
+<dt>⑦⑧ 排名軌跡、⑨⑩ 排名榜、⑪⑫ 金額軌跡</dt><dd>法人 60 日累計買超與 20 日成交資金，在全市場的排名（或金額）怎麼一天一天移動。排名會隨市場溫度自動校準——大盤跌時某一檔的法人排名一路往前，才是資金真正的選擇。</dd>
+<dt>精選漏斗</dt><dd>L0 流動性（股價 &gt; 10、20 日均額 &gt; 5,000 萬、不在 AI 選股的 E 財報否決名單）→ L1 籌碼共振（七個特徵的加權百分位前 10%，且法人、大戶、股東三根柱子至少兩根同向）→ 精選再要求共振前 5%、兩面以上成長旗標、趨勢成立（收盤 &gt; 60 日線且 20 日線 &gt; 60 日線）。權重每週用過去已實現的 20 日報酬學（rank IC，負的歸零），不是人工拍板。</dd>
+<dt>已知限制</dt><dd>
+・大戶人數需要集保原始 15 級（含人數），2026-09 起才開始每週累積；在那之前只有八級持股比例（級距較粗，例如股價 2,450 元時 5,000 萬 ≈ 20 張，八級只能對到 10 張那一條）。<br>
+・交易所只給法人買賣超<b>股數</b>與成交<b>股數</b>，金額以 股數 × 收盤價 估算。法人的「預估成交額」「市值周轉率」需要買進、賣出分開的資料，這一版沒有。<br>
+・內外盤（逐筆主動買賣）開放資料沒有，以 K 線買賣盤比例代替。<br>
+・資本額用最新一期，增減資過的公司歷史比值有偏差。<br>
+・「指標驗證」的回測只涵蓋籌碼（L1）與趨勢（T1），不含財報與否決名單（它們沒有逐日的歷史版本，硬算會偷看答案）。</dd>
+<dt>免責</dt><dd>本頁僅為公開財務及籌碼數據之整理與自訂條件篩選輔助，不構成任何投資建議、推介、要約或招攬。各項排名與清單是過去交易資料的統計，不代表未來走勢；清單由數字自動產生，不代表推薦。</dd>
+</dl></div>
+</section>
+</div>
+
+<script>
+(function(){
+"use strict";
+var BASE = "chipflow/";
+var R = null, M = null, RK = null, V = null, ROWS = {}, BYNAME = {};
+var cache = {};
+var COLORS = ["#e4572e","#2563c9","#17a398","#a86a00","#8b3fd4","#c02a4e","#5a8f00","#0e7c6f"];
+
+function $(id){ return document.getElementById(id); }
+function el(tag, attrs){
+  var n = document.createElement(tag);
+  if (attrs) for (var k in attrs){
+    if (k === "text") n.textContent = attrs[k];
+    else if (k === "cls") n.className = attrs[k];
+    else if (k === "html") n.innerHTML = attrs[k];
+    else n.setAttribute(k, attrs[k]);
+  }
+  for (var i = 2; i < arguments.length; i++){
+    var c = arguments[i];
+    if (c == null) continue;
+    n.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+  }
+  return n;
+}
+function svgel(tag, attrs){
+  var n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (var k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+}
+function isnum(v){ return typeof v === "number" && isFinite(v); }
+function fmt(v, d){
+  if (!isnum(v)) return "—";
+  return v.toLocaleString("zh-TW", {minimumFractionDigits: d||0, maximumFractionDigits: d||0});
+}
+function getJSON(name){
+  if (cache[name]) return cache[name];
+  cache[name] = fetch(BASE + name, {cache: "no-cache"}).then(function(r){
+    if (!r.ok) throw new Error(name + " " + r.status);
+    return r.json();
+  });
+  return cache[name];
+}
+function resolve(q){
+  q = (q || "").trim();
+  if (!q) return null;
+  var m = q.match(/^\d{4}/);
+  if (m && ROWS[m[0]]) return m[0];
+  if (BYNAME[q]) return BYNAME[q];
+  for (var c in ROWS){ if ((ROWS[c].n || "").indexOf(q) >= 0) return c; }
+  return m ? m[0] : null;
+}
+function stock(code){ return getJSON("stock/" + code + ".json"); }
+function label(code){ var r = ROWS[code]; return code + " " + (r ? r.n : ""); }
+
+// ── 圖 ──────────────────────────────────────────────────────────────
+function chart(title, dates, series, opt){
+  opt = opt || {};
+  var W = opt.wide ? 1000 : 400, H = opt.wide ? 220 : 150, L = 46, Rr = 8, T = 8, B = 18;
+  var card = el("div", {cls: "cf-card"});
+  var tip = el("span", {cls: "cf-tip"});
+  card.appendChild(el("h4", null, el("span", {text: title}), tip));
+  var vals = [];
+  series.forEach(function(s){ s.v.forEach(function(v){ if (isnum(v)) vals.push(v); }); });
+  if (!vals.length){ card.appendChild(el("p", {cls: "cf-note", text: opt.empty || "沒有資料"})); return card; }
+  var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  if (opt.bar || opt.zero){ lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+  if (hi === lo){ hi = hi + 1; lo = lo - 1; }
+  var pad = (hi - lo) * 0.06; hi += pad; if (!(opt.bar && lo === 0)) lo -= pad;
+  var n = dates.length;
+  function X(i){ return L + (n <= 1 ? 0 : i * (W - L - Rr) / (n - 1)); }
+  function Y(v){ return T + (hi - v) * (H - T - B) / (hi - lo); }
+  var svg = svgel("svg", {viewBox: "0 0 " + W + " " + H});
+  [lo, (lo + hi) / 2, hi].forEach(function(v){
+    svg.appendChild(svgel("line", {x1: L, x2: W - Rr, y1: Y(v), y2: Y(v), stroke: "var(--rule)", "stroke-width": 1}));
+    var t = svgel("text", {x: L - 4, y: Y(v) + 3, "text-anchor": "end"});
+    t.textContent = fmt(v, opt.d != null ? opt.d : (Math.abs(hi) < 10 ? 2 : 0)); svg.appendChild(t);
+  });
+  if (lo < 0 && hi > 0) svg.appendChild(svgel("line", {x1: L, x2: W - Rr, y1: Y(0), y2: Y(0), stroke: "var(--muted)", "stroke-dasharray": "3 3"}));
+  var t1 = svgel("text", {x: L, y: H - 5}); t1.textContent = dates[0] || ""; svg.appendChild(t1);
+  var t2 = svgel("text", {x: W - Rr, y: H - 5, "text-anchor": "end"}); t2.textContent = dates[n - 1] || ""; svg.appendChild(t2);
+  series.forEach(function(s){
+    var col = s.c || "var(--accent)";
+    if (opt.bar){
+      var bw = Math.max(1, (W - L - Rr) / n * 0.8);
+      s.v.forEach(function(v, i){
+        if (!isnum(v)) return;
+        var y0 = Y(Math.max(0, lo)), y1 = Y(v);
+        svg.appendChild(svgel("rect", {x: X(i) - bw / 2, y: Math.min(y0, y1), width: bw, height: Math.max(1, Math.abs(y1 - y0)),
+          fill: opt.sign ? (v >= 0 ? "var(--up)" : "var(--down)") : col, opacity: .85}));
+      });
+    } else {
+      var d = "", pen = false;
+      s.v.forEach(function(v, i){
+        if (!isnum(v)){ pen = false; return; }
+        d += (pen ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); pen = true;
+      });
+      svg.appendChild(svgel("path", {d: d, fill: "none", stroke: col, "stroke-width": opt.thin ? 1.2 : 1.8}));
+    }
+  });
+  var cur = svgel("line", {x1: 0, x2: 0, y1: T, y2: H - B, stroke: "var(--muted)", opacity: 0});
+  svg.appendChild(cur);
+  var ov = svgel("rect", {x: L, y: 0, width: W - L - Rr, height: H, fill: "transparent"});
+  svg.appendChild(ov);
+  function show(ev){
+    var pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    var m = svg.getScreenCTM(); if (!m) return;
+    var p = pt.matrixTransform(m.inverse());
+    var i = Math.round((p.x - L) / (W - L - Rr) * (n - 1));
+    i = Math.max(0, Math.min(n - 1, i));
+    cur.setAttribute("x1", X(i)); cur.setAttribute("x2", X(i)); cur.setAttribute("opacity", .6);
+    tip.textContent = dates[i] + "　" + series.map(function(s){ return (s.n ? s.n + " " : "") + fmt(s.v[i], opt.d != null ? opt.d : 2); }).join("／");
+  }
+  ov.addEventListener("pointermove", show);
+  ov.addEventListener("pointerdown", show);
+  ov.addEventListener("pointerleave", function(){ cur.setAttribute("opacity", 0); lastTip(); });
+  function lastTip(){
+    var i = n - 1; while (i > 0 && series.every(function(s){ return !isnum(s.v[i]); })) i--;
+    tip.textContent = "最新 " + series.map(function(s){ return (s.n ? s.n + " " : "") + fmt(s.v[i], opt.d != null ? opt.d : 2); }).join("／");
+  }
+  lastTip();
+  card.appendChild(svg);
+  if (opt.note) card.appendChild(el("p", {cls: "cf-note", text: opt.note}));
+  return card;
+}
+function group(parent, title){ parent.appendChild(el("div", {cls: "cf-grp", text: title})); var g = el("div", {cls: "cf-grid"}); parent.appendChild(g); return g; }
+function sub(arr, f){ return (arr || []).map(f); }
+
+// ── 軌跡散佈圖（⑦⑧⑪⑫）──────────────────────────────────────────────
+function trail(host, items, opt){
+  host.innerHTML = "";
+  if (!items.length){ host.appendChild(el("p", {cls: "cf-note", text: "請先選擇個股。"})); return; }
+  var W = 620, H = 440, L = 56, Rr = 16, T = 14, B = 34;
+  var n = items[0].dates.length;
+  var slider = el("input", {type: "range", min: 0, max: n - 1, value: n - 1, style: "flex:1;min-width:160px"});
+  var play = el("button", {cls: "cf-btn", text: "▶ 播放"});
+  var speed = el("select", null, el("option", {value: 400, text: "慢"}), el("option", {value: 150, text: "中"}), el("option", {value: 50, text: "快"}));
+  speed.value = 150;
+  var dayl = el("span", {cls: "cf-note"});
+  host.appendChild(el("div", {cls: "cf-row"}, play, slider, speed, dayl));
+  var card = el("div", {cls: "cf-card cf-trail"}); host.appendChild(card);
+  var svg = svgel("svg", {viewBox: "0 0 " + W + " " + H}); card.appendChild(svg);
+  var tx = opt.tx, ty = opt.ty;
+  var xs = [], ys = [];
+  items.forEach(function(it){ it.xs.forEach(function(v){ if (isnum(v)) xs.push(tx(v)); }); it.ys.forEach(function(v){ if (isnum(v)) ys.push(ty(v)); }); });
+  if (opt.hline != null && isnum(opt.hline)) ys.push(ty(opt.hline));
+  if (opt.xzero){ xs.push(tx(0)); }
+  if (!xs.length || !ys.length){ card.appendChild(el("p", {cls: "cf-note", text: "這幾檔在期間內沒有可畫的點。"})); return; }
+  var x0 = Math.min.apply(null, xs), x1 = Math.max.apply(null, xs), y0 = Math.min.apply(null, ys), y1 = Math.max.apply(null, ys);
+  if (x1 === x0){ x1 += 1; x0 -= 1; } if (y1 === y0){ y1 += 1; y0 -= 1; }
+  var px = (x1 - x0) * .06, py = (y1 - y0) * .06; x0 -= px; x1 += px; y0 -= py; y1 += py;
+  function X(v){ var t = tx(v); return opt.xrev ? L + (x1 - t) * (W - L - Rr) / (x1 - x0) : L + (t - x0) * (W - L - Rr) / (x1 - x0); }
+  function Y(v){ var t = ty(v); return opt.yrev ? T + (t - y0) * (H - T - B) / (y1 - y0) : T + (y1 - t) * (H - T - B) / (y1 - y0); }
+  function draw(k){
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    svg.appendChild(svgel("rect", {x: L, y: T, width: W - L - Rr, height: H - T - B, fill: "none", stroke: "var(--rule)"}));
+    var ax = svgel("text", {x: (L + W - Rr) / 2, y: H - 6, "text-anchor": "middle"}); ax.textContent = opt.xlab; svg.appendChild(ax);
+    var ay = svgel("text", {x: 12, y: (T + H - B) / 2, transform: "rotate(-90 12 " + (T + H - B) / 2 + ")", "text-anchor": "middle"}); ay.textContent = opt.ylab; svg.appendChild(ay);
+    (opt.xticks || []).forEach(function(v){ var x = X(v); if (x < L || x > W - Rr) return; svg.appendChild(svgel("line", {x1: x, x2: x, y1: T, y2: H - B, stroke: "var(--rule)", "stroke-dasharray": v === 0 ? "4 3" : "1 3"})); var t = svgel("text", {x: x, y: H - B + 12, "text-anchor": "middle"}); t.textContent = fmt(v, opt.xd || 0); svg.appendChild(t); });
+    (opt.yticks || []).forEach(function(v){ var y = Y(v); if (y < T || y > H - B) return; svg.appendChild(svgel("line", {x1: L, x2: W - Rr, y1: y, y2: y, stroke: "var(--rule)", "stroke-dasharray": "1 3"})); var t = svgel("text", {x: L - 4, y: y + 3, "text-anchor": "end"}); t.textContent = fmt(v, opt.yd || 0); svg.appendChild(t); });
+    if (opt.hline != null && isnum(opt.hline)){ var hy = Y(opt.hline); svg.appendChild(svgel("line", {x1: L, x2: W - Rr, y1: hy, y2: hy, stroke: "var(--muted)", "stroke-dasharray": "5 4"})); }
+    items.forEach(function(it, si){
+      var col = it.color || COLORS[si % COLORS.length];
+      var pts = [];
+      for (var i = 0; i <= k; i++){ if (isnum(it.xs[i]) && isnum(it.ys[i])) pts.push([X(it.xs[i]), Y(it.ys[i]), i]); }
+      if (!pts.length) return;
+      svg.appendChild(svgel("path", {d: pts.map(function(p, j){ return (j ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1); }).join(""), fill: "none", stroke: col, "stroke-width": 1, opacity: .45}));
+      pts.forEach(function(p){ svg.appendChild(svgel("circle", {cx: p[0], cy: p[1], r: 3.2, fill: col, opacity: (0.15 + 0.85 * (p[2] + 1) / (k + 1)).toFixed(2)})); });
+      var last = pts[pts.length - 1];
+      var lb = svgel("text", {x: last[0] + 6, y: last[1] - 6, style: "fill:" + col + ";font-size:12px;font-weight:600"}); lb.textContent = it.name; svg.appendChild(lb);
+    });
+    var d = items[0].dates[k] || "";
+    dayl.textContent = d + "　" + items.map(function(it){ return it.name + "：" + opt.fmtx(it.xs[k]) + "／" + opt.fmty(it.ys[k]); }).join("　");
+  }
+  var timer = null;
+  function stop(){ if (timer){ clearInterval(timer); timer = null; play.textContent = "▶ 播放"; } }
+  play.addEventListener("click", function(){
+    if (timer){ stop(); return; }
+    var k = +slider.value >= n - 1 ? 0 : +slider.value;
+    play.textContent = "❚❚ 暫停";
+    timer = setInterval(function(){ slider.value = k; draw(k); k++; if (k >= n) stop(); }, +speed.value);
+  });
+  slider.addEventListener("input", function(){ stop(); draw(+slider.value); });
+  draw(n - 1);
+  if (opt.autoplay) play.click();
+}
+function logTicks(lo, hi){ var out = []; [1,2,3,5,10,20,30,50,100,200,300,500,1000,2000].forEach(function(v){ if (v >= lo && v <= hi) out.push(v); }); return out; }
+function symlog(v){ return v >= 0 ? Math.log10(1 + v) : -Math.log10(1 - v); }
+
+function rankTrail(host, codes, scale){
+  Promise.all([getJSON("market.json")].concat(codes.map(stock))).then(function(res){
+    var mk = res[0], docs = res.slice(1);
+    var n = 60, ds = mk.dates.slice(-n);
+    var items = docs.filter(function(d){ return d.d; }).map(function(d, i){
+      return {name: d.n, dates: ds, xs: (d.d.yr || []).slice(-n), ys: (d.d.vr || []).slice(-n), color: COLORS[codes.indexOf(d.c) % COLORS.length]};
+    });
+    var lg = scale === "log";
+    var f = function(v){ return lg ? Math.log10(Math.max(1, v)) : v; };
+    trail(host, items, {tx: f, ty: f, yrev: true, xlab: "法人 60 日買超排名（左＝第 1 名）", ylab: "成交資金佔比排名（上＝第 1 名）",
+      xticks: lg ? logTicks(1, 2000) : [1, 250, 500, 1000, 1500, 2000], yticks: lg ? logTicks(1, 2000) : [1, 250, 500, 1000, 1500, 2000],
+      fmtx: function(v){ return isnum(v) ? "法人第 " + v + " 名" : "—"; }, fmty: function(v){ return isnum(v) ? "資金第 " + v + " 名" : "—"; }});
+    if (docs.some(function(d){ return !d.d; })) host.appendChild(el("p", {cls: "cf-note", text: "有的個股流動性不足（20 日均額 ≤ 5,000 萬），沒有產生每日序列。"}));
+  }).catch(function(e){ host.textContent = "讀不到資料：" + e.message; });
+}
+function amountTrail(host, codes, scale, autoplay){
+  Promise.all([getJSON("market.json")].concat(codes.map(stock))).then(function(res){
+    var mk = res[0], docs = res.slice(1);
+    var n = 60, ds = mk.dates.slice(-n);
+    var items = docs.filter(function(d){ return d.d; }).map(function(d){
+      return {name: d.n, dates: ds, xs: (d.d.fa || []).slice(-n), ys: (d.d.va || []).slice(-n), color: COLORS[codes.indexOf(d.c) % COLORS.length]};
+    });
+    var lg = scale === "log";
+    var hl = mk.avg_va[mk.avg_va.length - 1];
+    trail(host, items, {tx: lg ? symlog : function(v){ return v; }, ty: lg ? function(v){ return Math.log10(Math.max(0.01, v)); } : function(v){ return v; },
+      xzero: true, hline: hl, xlab: "外資投信買賣超 60 日累計（億元）", ylab: "20 日成交金額（億元）",
+      xticks: lg ? [-1000,-300,-100,-30,-10,-3,0,3,10,30,100,300,1000] : null, yticks: lg ? [0.1,0.3,1,3,10,30,100,300,1000,3000] : null, xd: 0, yd: 1,
+      fmtx: function(v){ return isnum(v) ? fmt(v, 1) + " 億" : "—"; }, fmty: function(v){ return isnum(v) ? fmt(v, 1) + " 億" : "—"; }, autoplay: autoplay});
+    if (!lg){ /* 線性刻度時自動取刻度 */ }
+  }).catch(function(e){ host.textContent = "讀不到資料：" + e.message; });
+}
+
+// ── ① 多圖看板 ─────────────────────────────────────────────────────────
+function show1(code){
+  var o = $("cf-o1"); o.textContent = "載入中…";
+  Promise.all([getJSON("market.json"), stock(code)]).then(function(res){
+    var mk = res[0], s = res[1]; o.innerHTML = "";
+    o.appendChild(el("p", {cls: "cf-note", text: label(code) + "　資料日 " + s.asof}));
+    if (!s.d){ o.appendChild(el("p", {cls: "cf-note", text: "這一檔流動性不足（20 日均額 ≤ 5,000 萬），沒有產生每日序列；可改看 ② 大戶籌碼與 ③ 基本面。"})); return; }
+    var d = s.d, ds = mk.dates;
+    o.appendChild(chart("收盤價", ds, [{v: d.cl, c: "var(--price)"}], {wide: true}));
+    var g = group(o, "外資法人");
+    g.appendChild(chart("外資＋投信買賣超 ÷ 資本額 60 日累計（倍）", ds, [{v: d.z}], {zero: true, d: 3}));
+    g.appendChild(chart("外資＋投信買賣超金額 60 日累計（億）", ds, [{v: d.fa}], {bar: true, sign: true, d: 1}));
+    g.appendChild(chart("法人 60 日累計買超排名（越小越前面）", ds, [{v: d.yr}], {d: 0}));
+    g.appendChild(chart("扣掉大戶之 20 日周轉率（%）", ds, [{v: d.tex}], {d: 1}));
+    if (d.fpw) g.appendChild(chart("外資投信買賣超 ÷ 大戶人數 60 日（千元）", ds, [{v: d.fpw}], {zero: true, d: 0}));
+    if (d.wr) g.appendChild(chart("外資投信買賣超 ÷ 大戶人數 60 日排名", ds, [{v: d.wr}], {d: 0}));
+    g = group(o, "大戶籌碼");
+    g.appendChild(chart("大戶比例（持股市值 ≥ 5,000 萬，%）", ds, [{v: d.hp}], {d: 2}));
+    if (d.hc) g.appendChild(chart("大戶人數", ds, [{v: d.hc}], {d: 0}));
+    g.appendChild(chart("總股東人數", ds, [{v: d.sh}], {d: 0}));
+    g = group(o, "成交量能");
+    g.appendChild(chart("成交金額 20 日累計佔全市場比例（%）", ds, [{v: d.vs, c: "var(--m4)"}], {bar: true, d: 3}));
+    g.appendChild(chart("成交金額 ÷ 資本額 20 日累計（倍）", ds, [{v: d.vc, c: "var(--m4)"}], {bar: true, d: 2}));
+    g.appendChild(chart("成交資金佔比排名（越小越前面）", ds, [{v: d.vr, c: "var(--m4)"}], {d: 0}));
+    if (d.vpw) g.appendChild(chart("成交金額 ÷ 大戶人數 20 日（千元）", ds, [{v: d.vpw, c: "var(--m4)"}], {d: 0}));
+    if (d.xr) g.appendChild(chart("成交金額 ÷ 大戶人數 20 日排名", ds, [{v: d.xr, c: "var(--m4)"}], {d: 0}));
+    g = group(o, "貪婪恐懼（K 線買賣盤比例）");
+    var f20 = sub(d.g20, function(v){ return isnum(v) ? 20 - v : null; }), f60 = sub(d.g60, function(v){ return isnum(v) ? 60 - v : null; });
+    g.appendChild(chart("貪婪指標 1（買盤比例 20 日總和）", ds, [{v: d.g20, c: "var(--up)"}], {d: 2}));
+    g.appendChild(chart("恐懼指標 1（賣盤比例 20 日總和）", ds, [{v: f20, c: "var(--down)"}], {d: 2}));
+    g.appendChild(chart("紅：貪婪 1／綠：恐懼 1", ds, [{v: d.g20, c: "var(--up)", n: "貪婪"}, {v: f20, c: "var(--down)", n: "恐懼"}], {d: 2}));
+    g.appendChild(chart("貪婪指標 2（買盤比例 60 日總和）", ds, [{v: d.g60, c: "var(--up)"}], {d: 2}));
+    g.appendChild(chart("恐懼指標 2（賣盤比例 60 日總和）", ds, [{v: f60, c: "var(--down)"}], {d: 2}));
+    g.appendChild(chart("紅：貪婪 2／綠：恐懼 2", ds, [{v: d.g60, c: "var(--up)", n: "貪婪"}, {v: f60, c: "var(--down)", n: "恐懼"}], {d: 2}));
+    g.appendChild(chart("買盤比例 20 日 − 賣盤比例 20 日", ds, [{v: sub(d.g20, function(v){ return isnum(v) ? 2 * v - 20 : null; }), c: "var(--m2)"}], {zero: true, d: 2}));
+    g.appendChild(chart("買盤比例 60 日 − 賣盤比例 60 日", ds, [{v: sub(d.g60, function(v){ return isnum(v) ? 2 * v - 60 : null; }), c: "var(--m2)"}], {zero: true, d: 2}));
+    if (!d.hc) o.appendChild(el("p", {cls: "cf-note", text: "大戶人數與「÷ 大戶人數」兩項需要集保原始 15 級（含人數），累積足夠週數後自動出現。法人的預估成交額與市值周轉率需要買進、賣出分開的資料，這一版沒有。"}));
+  }).catch(function(e){ o.textContent = "讀不到 " + code + " 的資料：" + e.message; });
+}
+
+// ── ② 大戶籌碼看板 ─────────────────────────────────────────────────────
+function show2(code){
+  var o = $("cf-o2"); o.textContent = "載入中…";
+  Promise.all([getJSON("market.json"), stock(code)]).then(function(res){
+    var mk = res[0], s = res[1]; o.innerHTML = "";
+    o.appendChild(el("p", {cls: "cf-note", text: label(code) + "　資料日 " + s.asof}));
+    if (s.d){
+      var g = group(o, "每日大戶籌碼指標（每日）");
+      g.appendChild(chart("收盤價", mk.dates, [{v: s.d.cl, c: "var(--price)"}]));
+      g.appendChild(chart("大戶比例（持股市值 5,000 萬以上，%）", mk.dates, [{v: s.d.hp}], {d: 2}));
+      if (s.d.hc) g.appendChild(chart("大戶人數", mk.dates, [{v: s.d.hc}], {d: 0}));
+      g.appendChild(chart("總股東人數", mk.dates, [{v: s.d.sh}], {d: 0}));
+    }
+    var h = s.h || {};
+    if (!h.w){ o.appendChild(el("p", {cls: "cf-note", text: "沒有集保資料。"})); return; }
+    var g2 = group(o, "持股張數分級檢視（集保週報，張）");
+    g2.appendChild(chart("總集保張數", h.w, [{v: h.tot}], {d: 0}));
+    g2.appendChild(chart("收盤價（對應週）", h.w, [{v: h.cp, c: "var(--price)"}]));
+    Object.keys(h.lots).sort(function(a, b){ return a - b; }).forEach(function(t){ g2.appendChild(chart(t + " 張以上－持股合計（張）", h.w, [{v: h.lots[t]}], {d: 0})); });
+    var g3 = group(o, "持股人數分級檢視（集保週報，人）");
+    g3.appendChild(chart("總股東人數", h.w, [{v: h.sh}], {d: 0}));
+    g3.appendChild(chart("收盤價（對應週）", h.w, [{v: h.cp, c: "var(--price)"}]));
+    var ks = Object.keys(h.ppl || {});
+    if (!ks.length) g3.appendChild(el("p", {cls: "cf-note", text: "各級人數要集保原始 15 級，本站 2026-09 起開始每週存，累積後自動出現。"}));
+    ks.sort(function(a, b){ return a - b; }).forEach(function(t){ g3.appendChild(chart(t + " 張以上－股東人數", h.w, [{v: h.ppl[t]}], {d: 0})); });
+  }).catch(function(e){ o.textContent = "讀不到 " + code + " 的資料：" + e.message; });
+}
+
+// ── ③ 個股基本面 ───────────────────────────────────────────────────────
+function show3(code){
+  var o = $("cf-o3"); o.textContent = "載入中…";
+  stock(code).then(function(s){
+    o.innerHTML = "";
+    var r = ROWS[code] || {};
+    o.appendChild(el("p", {cls: "cf-note", text: label(code)}));
+    var k = el("div", {cls: "cf-kpi"});
+    [["最新收盤價", fmt(r.p, 2)], ["單月營收年增率", isnum(r.r1) ? fmt(r.r1, 1) + "%" : "—"], ["四季 EPS 年增率", isnum(r.e4y) ? fmt(r.e4y, 1) + "%" : "—"], ["最新營益率", isnum(r.om) ? fmt(r.om, 1) + "%" : "—"]].forEach(function(x){ k.appendChild(el("div", null, x[0], el("b", {text: x[1]}))); });
+    o.appendChild(k);
+    var q = s.fq || {}, m = s.fm || {};
+    if (q.q){
+      var g = group(o, "獲利能力（近五年）");
+      g.appendChild(chart("單季 EPS（元）", q.q, [{v: q.eps}], {bar: true, sign: true, d: 2}));
+      g.appendChild(chart("四季 EPS（元）", q.q, [{v: q.eps4}], {bar: true, sign: true, d: 2}));
+      g.appendChild(chart("四季 EPS 年增率（%）", q.q, [{v: q.eps4y}], {bar: true, sign: true, d: 1}));
+      g = group(o, "營運與獲利率（近五年）");
+      g.appendChild(chart("單季營業利益（百萬）", q.q, [{v: q.op}], {bar: true, sign: true, d: 0}));
+      g.appendChild(chart("營業利益年增率（%）", q.q, [{v: q.opy}], {bar: true, sign: true, d: 1}));
+      g.appendChild(chart("營益率（%）", q.q, [{v: q.opm}], {d: 1}));
+      g.appendChild(chart("稅後淨利率（%）", q.q, [{v: q.npm}], {d: 1}));
+      g = group(o, "資本結構與保留盈餘（近五年）");
+      g.appendChild(chart("（保留盈餘＋資本公積）÷ 股本（%）", q.q, [{v: q.rap}], {d: 0}));
+      g.appendChild(chart("保留盈餘（百萬）", q.q, [{v: q.retained}], {bar: true, sign: true, d: 0}));
+      g.appendChild(chart("資本公積（百萬）", q.q, [{v: q.apic}], {bar: true, d: 0}));
+      g.appendChild(chart("股本（百萬）", q.q, [{v: q.capital}], {bar: true, d: 0}));
+      g.appendChild(chart("四季 ROA（%）", q.q, [{v: q.roa}], {zero: true, d: 2}));
+      o.appendChild(el("p", {cls: "cf-note", text: "官方全市場彙總財報只保留近 12 季；存貨、合約負債、資本支出不在彙總表裡，這一版不畫。"}));
+    } else o.appendChild(el("p", {cls: "cf-note", text: "沒有損益表資料（金融保險業或尚無財報）。"}));
+    if (m.m){
+      var g4 = group(o, "月營收與股價（近兩年）");
+      g4.appendChild(chart("單月營收（百萬）", m.m, [{v: m.rev}], {bar: true, d: 0}));
+      g4.appendChild(chart("單月營收年增率（%）", m.m, [{v: m.yoy}], {zero: true, d: 1}));
+      g4.appendChild(chart("月營收公告日股價（次月 10 日，元）", m.m, [{v: m.price, c: "var(--price)"}], {d: 1}));
+      g4.appendChild(chart("3 月／12 月累計營收年增率（%）", m.m, [{v: m.yoy3, n: "3月"}, {v: m.yoy12, c: "var(--m1)", n: "12月"}], {zero: true, d: 1}));
+      var ns = Object.keys(m.notes || {});
+      if (ns.length){
+        var t = el("table", {cls: "cf-tbl cf-notes"}, el("tr", null, el("th", {cls: "l", text: "月份"}), el("th", {cls: "l", text: "月營收變動說明"})));
+        ns.sort().reverse().forEach(function(lb){ t.appendChild(el("tr", null, el("td", {text: lb}), el("td", {text: m.notes[lb]}))); });
+        o.appendChild(el("div", {cls: "cf-card"}, el("h4", {text: "月營收變動說明（公司公告）"}), t));
+      }
+    }
+  }).catch(function(e){ o.textContent = "讀不到 " + code + " 的資料：" + e.message; });
+}
+
+// ── ④⑤⑥ 篩選器 ─────────────────────────────────────────────────────────
+var F4 = [
+  {k: "hr", t: "大戶人數排名 ≤", note: "（1＝大戶人數最多；需 15 級資料）"},
+  {k: "z", t: "外資投信買賣超 ÷ 資本額 60 日（倍）≥"},
+  {k: "hp", t: "大戶比例本身 ≥（%）"},
+  {k: "hpd", t: "大戶比例較 N 週前增加 ≥（個百分點）", n: "hpn"},
+  {k: "shd", t: "總股東人數較 N 週前減少（填 N，1～" + 11 + "）", only: true},
+  {k: "wr", t: "外資投信買賣超 ÷ 大戶人數・60 日排名 ≤", note: "（需 15 級資料）"},
+  {k: "xr", t: "成交金額 ÷ 大戶人數・20 日排名 ≤", note: "（需 15 級資料）"},
+  {k: "yr", t: "外資投信買賣超金額・60 日累計排名 ≤"},
+  {k: "vr", t: "成交資金佔比（20 日）排名 ≤"},
+  {k: "vrd", t: "成交資金排名 20 日前進 ≥（名）"},
+  {k: "d20", t: "買盤 − 賣盤比例 20 日 ≥"}
+];
+var F5 = [
+  {g: "營收動能", k: "r1", t: "單月營收年增率（%）"}, {g: "營收動能", k: "r3", t: "3 月營收年增率（%）"}, {g: "營收動能", k: "r12", t: "12 月營收年增率（%）"},
+  {g: "獲利成長", k: "e4y", t: "四季 EPS 年增率（%）"}, {g: "獲利成長", k: "oy", t: "營業利益年增率（%）"}, {g: "獲利成長", k: "e4", t: "四季 EPS（元）"}, {g: "獲利成長", k: "eq", t: "單季 EPS（元）"},
+  {g: "獲利能力", k: "om", t: "營益率（%）"}, {g: "獲利能力", k: "nm", t: "稅後淨利率（%）"},
+  {g: "規模", k: "rv4", t: "四季營收（百萬）"}, {g: "規模", k: "cap", t: "股本（百萬）"}
+];
+var FLAGS = [["e4h4", "四季 EPS 創近 4 季新高"], ["e4h8", "四季 EPS 創近 8 季新高"], ["eqh4", "單季 EPS 創近 4 季新高"], ["eqh8", "單季 EPS 創近 8 季新高"],
+  ["omh4", "營益率創近 4 季新高"], ["omh8", "營益率創近 8 季新高"], ["nmh4", "稅後淨利率創近 4 季新高"], ["nmh8", "稅後淨利率創近 8 季新高"],
+  ["rh12", "月營收創近 12 個月新高"], ["rh24", "月營收創近 24 個月新高"]];
+var has15 = false;
+
+function num(id){ var e = $(id); if (!e || e.value === "") return null; var v = +e.value; return isFinite(v) ? v : null; }
+function buildForms(){
+  var f = $("cf-f4");
+  F4.forEach(function(x){
+    var lab = el("label", null, x.t);
+    if (x.only){
+      lab.appendChild(el("input", {type: "number", id: "cf4-" + x.k, min: 1, max: 11, step: 1}));
+    } else {
+      lab.appendChild(el("input", {type: "number", id: "cf4-" + x.k, step: "any"}));
+      if (x.n){ lab.appendChild(document.createTextNode("N＝")); lab.appendChild(el("input", {type: "number", id: "cf4-" + x.n, min: 1, max: 11, step: 1})); }
+    }
+    if (x.note){ lab.appendChild(el("span", {cls: "cf-note", text: x.note})); if (!has15) lab.className = "cf-dis"; }
+    f.appendChild(lab);
+  });
+  f.appendChild(el("label", null, el("input", {type: "checkbox", id: "cf4-liq", checked: "checked"}), "只看流動性母體（股價 > 10、20 日均額 > 5,000 萬）"));
+  f.appendChild(el("label", null, el("input", {type: "checkbox", id: "cf4-noveto"}), "排除 E 財報否決名單"));
+  var g5 = $("cf-f5"), cur = "";
+  F5.forEach(function(x){
+    if (x.g !== cur){ cur = x.g; g5.appendChild(el("div", {cls: "cf-grp", text: x.g})); }
+    g5.appendChild(el("label", null, x.t, el("input", {type: "number", id: "cf5-" + x.k + "-min", step: "any", placeholder: "最小"}), "～", el("input", {type: "number", id: "cf5-" + x.k + "-max", step: "any", placeholder: "最大"})));
+  });
+  ["合約負債佔四季營收比", "合約負債佔股本比", "資本支出佔股本比"].forEach(function(t){ g5.appendChild(el("label", {cls: "cf-dis"}, t + "（官方彙總資料沒有，這一版不提供）")); });
+  var fb = $("cf-f5b");
+  FLAGS.forEach(function(x){ fb.appendChild(el("label", null, el("input", {type: "checkbox", id: "cf5f-" + x[0]}), x[1])); });
+  var inds = {};
+  R.rows.forEach(function(r){ inds[r.ind || "其他"] = (inds[r.ind || "其他"] || 0) + 1; });
+  var box = $("cf-inds");
+  Object.keys(inds).sort().forEach(function(k){ box.appendChild(el("label", null, el("input", {type: "checkbox", "data-ind": k, checked: "checked"}), k + "（" + inds[k] + "）")); });
+  $("cf-ind-all").onclick = function(){ box.querySelectorAll("input").forEach(function(i){ i.checked = true; }); };
+  $("cf-ind-none").onclick = function(){ box.querySelectorAll("input").forEach(function(i){ i.checked = false; }); };
+}
+function pass4(r){
+  var v;
+  if (($("cf4-liq") || {}).checked && !r.liq) return false;
+  if (($("cf4-noveto") || {}).checked && r.veto) return false;
+  var lim = {hr: "le", wr: "le", xr: "le", yr: "le", vr: "le", z: "ge", hp: "ge", vrd: "ge", d20: "ge"};
+  for (var k in lim){
+    v = num("cf4-" + k); if (v === null) continue;
+    if (!isnum(r[k])) return false;
+    if (lim[k] === "le" ? r[k] > v : r[k] < v) return false;
+  }
+  var hpd = num("cf4-hpd"), hpn = num("cf4-hpn");
+  if (hpd !== null){
+    hpn = hpn || 4;
+    var a = (r.hps || [])[0], b = (r.hps || [])[hpn];
+    if (!isnum(a) || !isnum(b) || a - b < hpd) return false;
+  }
+  var shn = num("cf4-shd");
+  if (shn !== null){
+    var s0 = (r.shs || [])[0], s1 = (r.shs || [])[shn];
+    if (!isnum(s0) || !isnum(s1) || !(s0 < s1)) return false;
+  }
+  return true;
+}
+function pass5(r){
+  var box = $("cf-inds"), on = {};
+  box.querySelectorAll("input").forEach(function(i){ if (i.checked) on[i.getAttribute("data-ind")] = 1; });
+  if (!on[r.ind || "其他"]) return false;
+  for (var j = 0; j < F5.length; j++){
+    var k = F5[j].k, lo = num("cf5-" + k + "-min"), hi = num("cf5-" + k + "-max");
+    if (lo === null && hi === null) continue;
+    if (!isnum(r[k])) return false;
+    if (lo !== null && r[k] < lo) return false;
+    if (hi !== null && r[k] > hi) return false;
+  }
+  for (var f = 0; f < FLAGS.length; f++){ var cb = $("cf5f-" + FLAGS[f][0]); if (cb && cb.checked && !r[FLAGS[f][0]]) return false; }
+  return true;
+}
+var COLS4 = [["c", "代號", "l"], ["n", "名稱", "l"], ["p", "收盤價", 1], ["wr", "法人/大戶排名", 0], ["xr", "量/大戶排名", 0], ["yr", "法人60日排名", 0], ["vr", "資金排名", 0], ["hp", "大戶比例%", 2], ["sh", "總股東人數", 0], ["z", "買賣超/資本額", 3], ["hr", "大戶人數排名", 0]];
+var COLS5 = [["c", "代號", "l"], ["n", "名稱", "l"], ["ind", "產業", "l"], ["r1", "月營收YoY%", 1], ["r3", "3月營收YoY%", 1], ["e4y", "四季EPS YoY%", 1], ["eq", "單季EPS", 2], ["om", "營益率%", 1], ["nm", "淨利率%", 1], ["cap", "股本(百萬)", 0], ["rv4", "四季營收(百萬)", 0]];
+var COLS6 = [["c", "代號", "l"], ["n", "名稱", "l"], ["ind", "產業", "l"], ["p", "收盤價", 1], ["yr", "法人60日排名", 0], ["vr", "資金排名", 0], ["hp", "大戶比例%", 2], ["z", "買賣超/資本額", 3], ["r1", "月營收YoY%", 1], ["e4y", "四季EPS YoY%", 1], ["om", "營益率%", 1]];
+
+function table(host, rows, cols, opt){
+  opt = opt || {};
+  host.innerHTML = "";
+  var state = {key: opt.sort || null, dir: 1, page: 0}, size = 50;
+  var head = el("p", {cls: "cf-note"});
+  var wrap = el("div", {cls: "cf-scroll"});
+  var nav = el("div", {cls: "cf-row"});
+  host.appendChild(head); host.appendChild(wrap); host.appendChild(nav);
+  function render(){
+    var list = rows.slice();
+    if (state.key){
+      list.sort(function(a, b){
+        var x = a[state.key], y = b[state.key];
+        if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+        return (x < y ? -1 : x > y ? 1 : 0) * state.dir;
+      });
+    }
+    var pages = Math.max(1, Math.ceil(list.length / size));
+    if (state.page >= pages) state.page = pages - 1;
+    head.textContent = "符合條件：" + list.length.toLocaleString() + " / " + R.rows.length.toLocaleString() + " 檔" + (opt.extra || "");
+    var t = el("table", {cls: "cf-tbl"});
+    var tr = el("tr");
+    cols.forEach(function(c){
+      var th = el("th", {cls: c[2] === "l" ? "l" : "", text: c[1] + (state.key === c[0] ? (state.dir > 0 ? " ▲" : " ▼") : "")});
+      th.onclick = function(){ if (state.key === c[0]) state.dir = -state.dir; else { state.key = c[0]; state.dir = 1; } render(); };
+      tr.appendChild(th);
+    });
+    tr.appendChild(el("th", {cls: "l", text: "標記"}));
+    t.appendChild(tr);
+    list.slice(state.page * size, state.page * size + size).forEach(function(r){
+      var row = el("tr");
+      cols.forEach(function(c){
+        if (c[0] === "c"){ var a = el("a", {text: r.c}); a.onclick = function(){ open("t1", r.c); }; row.appendChild(el("td", {cls: "l"}, a)); }
+        else if (c[2] === "l") row.appendChild(el("td", {cls: "l", text: r[c[0]] == null ? "" : String(r[c[0]])}));
+        else row.appendChild(el("td", {text: fmt(r[c[0]], c[2])}));
+      });
+      var tags = el("td", {cls: "l"});
+      if (r.pick) tags.appendChild(el("span", {cls: "cf-badge pick", text: "精選"}));
+      else if (r.l1) tags.appendChild(el("span", {cls: "cf-badge l1", text: "共振"}));
+      if (r.veto) tags.appendChild(el("span", {cls: "cf-badge veto", text: "E否決"}));
+      row.appendChild(tags);
+      t.appendChild(row);
+    });
+    wrap.innerHTML = ""; wrap.appendChild(t);
+    nav.innerHTML = "";
+    var prev = el("button", {cls: "cf-btn", text: "‹ 上一頁"}), next = el("button", {cls: "cf-btn", text: "下一頁 ›"});
+    prev.disabled = state.page <= 0; next.disabled = state.page >= pages - 1;
+    prev.onclick = function(){ state.page--; render(); }; next.onclick = function(){ state.page++; render(); };
+    nav.appendChild(prev); nav.appendChild(el("span", {cls: "cf-note", text: "第 " + (state.page + 1) + " / " + pages + " 頁"})); nav.appendChild(next);
+  }
+  render();
+}
+function run4(){ table($("cf-o4"), R.rows.filter(pass4), COLS4, {sort: "yr"}); }
+function run5(){ table($("cf-o5"), R.rows.filter(pass5), COLS5, {sort: "c"}); }
+function run6(){ table($("cf-o6"), R.rows.filter(function(r){ return pass4(r) && pass5(r); }), COLS6, {sort: "yr"}); }
+function sample4(){
+  F4.forEach(function(x){ var e = $("cf4-" + x.k); if (e) e.value = ""; if (x.n) $("cf4-" + x.n).value = ""; });
+  if (has15) $("cf4-hr").value = 300;
+  $("cf4-z").value = 0.05; $("cf4-hpd").value = 0.5; $("cf4-hpn").value = 4; $("cf4-shd").value = 4;
+  $("cf4-yr").value = 700;
+  if (has15){ $("cf4-wr").value = 700; $("cf4-xr").value = 700; }
+}
+
+// ── ⑨⑩ 排名榜 ─────────────────────────────────────────────────────────
+var mark9 = {}, list10 = [];
+function rankTables(host, marks, syncId){
+  getJSON("ranks.json").then(function(rk){
+    host.innerHTML = "";
+    var two = el("div", {cls: "cf-two"});
+    var boxes = [];
+    [["val", "成交資金佔比排名（20 日）"], ["fi", "外資投信買賣超排名（60 日累計）"]].forEach(function(kind){
+      var t = el("table", {cls: "cf-tbl cf-rank"});
+      var tr = el("tr", null, el("th", {cls: "r", text: "名次"}));
+      rk.dates.forEach(function(d){ tr.appendChild(el("th", {text: d.slice(5)})); });
+      t.appendChild(tr);
+      for (var i = 0; i < 100; i++){
+        var row = el("tr", null, el("td", {cls: "r", text: String(i + 1)}));
+        rk.dates.forEach(function(d){
+          var c = (rk[kind[0]][d] || [])[i];
+          var td = el("td", {text: c ? (rk.names[c] || c) : "", title: c ? c + " " + (rk.names[c] || "") : ""});
+          if (c && marks[c]){ td.className = "hl"; td.style.background = marks[c]; td.style.color = "#fff"; }
+          if (c) td.onclick = (function(code){ return function(){ host.dispatchEvent(new CustomEvent("pick", {detail: code})); }; })(c);
+          row.appendChild(td);
+        });
+        t.appendChild(row);
+      }
+      var box = el("div", {cls: "cf-scroll"}, t);
+      boxes.push(box);
+      two.appendChild(el("div", null, el("div", {cls: "cf-grp", text: kind[1]}), box));
+    });
+    host.appendChild(two);
+    host.appendChild(el("p", {cls: "cf-note", text: "最左邊是最新的交易日，往右越舊；每一列是名次。只列每日前 100 名。點表格裡的名稱可以直接標示那一檔。表格顏色只是方便檢視，沒有其他意義。"}));
+    var lock = false;
+    boxes.forEach(function(b, i){
+      b.addEventListener("scroll", function(){
+        if (!$(syncId).checked || lock) return;
+        lock = true; var o = boxes[1 - i]; o.scrollTop = b.scrollTop; o.scrollLeft = b.scrollLeft; lock = false;
+      });
+    });
+  }).catch(function(e){ host.textContent = "讀不到排名資料：" + e.message; });
+}
+function draw9(){ var m = {}; Object.keys(mark9).forEach(function(c){ m[c] = "#c9a400"; }); rankTables($("cf-o9"), m, "cf-sync9"); }
+function draw10(){ var m = {}; list10.forEach(function(c, i){ m[c] = COLORS[i % COLORS.length]; }); chips($("cf-c10"), list10, draw10); rankTables($("cf-o10"), m, "cf-sync10"); }
+
+// ── 多檔清單 ───────────────────────────────────────────────────────────
+var multi = {"8": [], "10": list10, "12": []};
+function chips(host, list, redraw){
+  host.innerHTML = "";
+  list.forEach(function(c, i){
+    var x = el("button", {text: "×", title: "移除"});
+    x.onclick = function(){ list.splice(list.indexOf(c), 1); redraw(); };
+    host.appendChild(el("span", {cls: "cf-chip"}, el("i", {style: "background:" + COLORS[i % COLORS.length]}), label(c), x));
+  });
+}
+function redraw8(){ chips($("cf-c8"), multi["8"], redraw8); rankTrail($("cf-o8"), multi["8"], $("cf-s8").value); }
+function redraw12(){ chips($("cf-c12"), multi["12"], redraw12); amountTrail($("cf-o12"), multi["12"], $("cf-s12").value, false); }
+
+// ── 精選、驗證 ──────────────────────────────────────────────────────────
+function showPicks(){
+  var o = $("cf-opicks"); o.innerHTML = "";
+  var w = R.weights || {};
+  o.appendChild(el("p", {cls: "cf-note", text: "資料日 " + R.asof + "；集保週 " + R.week + "；流動性母體 " + R.universe + " 檔；E 否決名單 " + R.veto_count + " 檔（AI 選股 " + (R.veto_asof || "未取得") + "）。今天的特徵權重（過去已實現週的 rank IC，負的歸零）：" + Object.keys(w).map(function(k){ return (R.feature_text[k] || k) + " " + fmt(w[k], 3); }).join("、")}));
+  var cols = [["c", "代號", "l"], ["n", "名稱", "l"], ["ind", "產業", "l"], ["p", "收盤", 1], ["s", "共振分數", 3]];
+  function block(title, codes, desc){
+    var card = el("div", {cls: "cf-card"}, el("h4", {text: title + "（" + codes.length + " 檔）"}), el("p", {cls: "cf-note", text: desc}));
+    var t = el("table", {cls: "cf-tbl"});
+    var tr = el("tr"); cols.forEach(function(c){ tr.appendChild(el("th", {cls: c[2] === "l" ? "l" : "", text: c[1]})); });
+    ["柱子", "時機", "成長旗標", "回檔警戒", "理由"].forEach(function(h){ tr.appendChild(el("th", {cls: "l", text: h})); });
+    t.appendChild(tr);
+    codes.map(function(c){ return ROWS[c]; }).filter(Boolean).sort(function(a, b){ return (b.s || 0) - (a.s || 0); }).forEach(function(r){
+      var row = el("tr");
+      cols.forEach(function(c){
+        if (c[0] === "c"){ var a = el("a", {text: r.c}); a.onclick = function(){ open("t1", r.c); }; row.appendChild(el("td", {cls: "l"}, a)); }
+        else if (c[2] === "l") row.appendChild(el("td", {cls: "l", text: r[c[0]] || ""}));
+        else row.appendChild(el("td", {text: fmt(r[c[0]], c[2])}));
+      });
+      row.appendChild(el("td", {cls: "l", text: (r.pil || []).join("、")}));
+      row.appendChild(el("td", {cls: "l", text: [r.t1 ? "T1 趨勢" : "", r.t2 ? "T2 蓄勢" : ""].filter(Boolean).join("、") || "—"}));
+      row.appendChild(el("td", {cls: "l", text: (r.gfw || []).join("、") || "—"}));
+      row.appendChild(el("td", {cls: "l"}, el("span", {cls: "cf-w-" + (r.warn || ""), text: r.warn || ""})));
+      row.appendChild(el("td", {cls: "l", text: (r.why || []).join("；")}));
+      t.appendChild(row);
+    });
+    card.appendChild(el("div", {cls: "cf-scroll"}, t));
+    o.appendChild(card);
+  }
+  block("精選", R.picks || [], "L0 流動性、非 E 否決 ＋ 共振分數前 5% 且三根柱子至少兩根 ＋ 兩面以上成長旗標 ＋ 趨勢成立（T1）。");
+  block("籌碼共振（L1）", (R.l1 || []).filter(function(c){ return (R.picks || []).indexOf(c) < 0; }), "共振分數前 10% 且法人、大戶、股東三根柱子至少兩根同向，但沒有通過精選的其他條件。給人工複核用。");
+  var j = R.journal || [];
+  var card = el("div", {cls: "cf-card"}, el("h4", {text: "精選日誌（近 60 個交易日）"}), el("p", {cls: "cf-note", text: "每天的精選照實記下來（data/chipflow/journal.csv），之後對答案：報酬是入選當天收盤到今天的還原報酬，超額是減去同一天流動性母體的平均。這不是交易紀錄，沒有扣成本。"}));
+  var t = el("table", {cls: "cf-tbl"});
+  t.appendChild(el("tr", null, el("th", {cls: "l", text: "入選日"}), el("th", {cls: "l", text: "代號"}), el("th", {cls: "l", text: "名稱"}), el("th", {text: "入選價"}), el("th", {text: "天數"}), el("th", {text: "報酬%"}), el("th", {text: "超額%"}), el("th", {cls: "l", text: "今日警戒"})));
+  j.forEach(function(x){ t.appendChild(el("tr", null, el("td", {cls: "l", text: x.date}), el("td", {cls: "l", text: x.code}), el("td", {cls: "l", text: x.name}), el("td", {text: fmt(x.close, 2)}), el("td", {text: String(x.held)}), el("td", {text: fmt(x.ret, 2)}), el("td", {text: fmt(x.excess, 2)}), el("td", {cls: "l"}, el("span", {cls: "cf-w-" + x.warn, text: x.warn})))); });
+  if (!j.length) t.appendChild(el("tr", null, el("td", {cls: "l", colspan: 8, text: "還沒有紀錄。"})));
+  card.appendChild(el("div", {cls: "cf-scroll"}, t));
+  o.appendChild(card);
+}
+function showVal(){
+  var o = $("cf-oval"); o.textContent = "載入中…";
+  getJSON("validate.json").then(function(v){
+    o.innerHTML = "";
+    o.appendChild(el("p", {cls: "cf-note", text: "每一週回頭算一次：七個特徵和「之後 " + v.fwd_days + " 個交易日報酬」的等級相關（rank IC），以及那一週照規則選出來的 L1、L1＋趨勢候選，之後 " + v.fwd_days + " 日平均報酬減去同週流動性母體平均（超額）。基本面與 E 否決不在回測裡。週與週的持有期互相重疊，t 值會偏高；期間短、以多頭為主，只能當參考，真正的驗證看精選日誌。"}));
+    var t = el("table", {cls: "cf-tbl"});
+    t.appendChild(el("tr", null, el("th", {cls: "l", text: "特徵"}), el("th", {text: "平均 IC"}), el("th", {text: "t 值"}), el("th", {text: "IC>0 週比例"}), el("th", {text: "週數"}), el("th", {text: "今天權重"})));
+    Object.keys(v.features).forEach(function(k){ var f = v.features[k]; t.appendChild(el("tr", null, el("td", {cls: "l", text: f.text}), el("td", {text: fmt(f.mean, 4)}), el("td", {text: fmt(f.t, 2)}), el("td", {text: isnum(f.hit) ? fmt(f.hit * 100, 0) + "%" : "—"}), el("td", {text: String(f.n)}), el("td", {text: fmt(f.weight, 4)}))); });
+    o.appendChild(el("div", {cls: "cf-card"}, el("h4", {text: "特徵有效性"}), t));
+    var k = el("div", {cls: "cf-kpi"});
+    [["L1 共振", v.l1], ["L1＋趨勢（T1）", v.l1t]].forEach(function(x){ var s = x[1] || {}; k.appendChild(el("div", null, x[0], el("b", {text: isnum(s.mean) ? (s.mean >= 0 ? "+" : "") + fmt(s.mean, 2) + "%" : "—"}), el("span", {cls: "cf-note", text: "平均 20 日超額；" + (s.weeks || 0) + " 週、勝週 " + (isnum(s.win) ? fmt(s.win * 100, 0) + "%" : "—")}))); });
+    o.appendChild(k);
+    var w = el("table", {cls: "cf-tbl"});
+    w.appendChild(el("tr", null, el("th", {cls: "l", text: "集保週"}), el("th", {text: "母體"}), el("th", {text: "L1 檔數"}), el("th", {text: "L1 超額%"}), el("th", {text: "L1+T1 檔數"}), el("th", {text: "L1+T1 超額%"}), el("th", {text: "母體報酬%"})));
+    v.weekly.forEach(function(r){ w.appendChild(el("tr", null, el("td", {cls: "l", text: r.week + (r.realized ? "" : "（未實現）")}), el("td", {text: String(r.universe)}), el("td", {text: String(r.l1.n)}), el("td", {text: fmt(r.l1.excess, 2)}), el("td", {text: String(r.l1t.n)}), el("td", {text: fmt(r.l1t.excess, 2)}), el("td", {text: fmt(r.market, 2)}))); });
+    o.appendChild(el("div", {cls: "cf-card"}, el("h4", {text: "每週明細"}), el("div", {cls: "cf-scroll"}, w)));
+  }).catch(function(e){ o.textContent = "讀不到驗證資料：" + e.message; });
+}
+
+// ── 分頁與事件 ─────────────────────────────────────────────────────────
+var done = {};
+function open(tab, code){
+  document.querySelectorAll(".cf-tab").forEach(function(b){ b.setAttribute("aria-selected", b.getAttribute("data-t") === tab ? "true" : "false"); });
+  document.querySelectorAll(".cf-panel").forEach(function(p){ p.classList.toggle("on", p.id === "cf-" + tab); });
+  if (history.replaceState) history.replaceState(null, "", "#" + tab + (code ? "-" + code : ""));
+  var n = tab.replace("t", "");
+  if (code && $("cf-q" + n)){ $("cf-q" + n).value = label(code); go(n); }
+  if (!done[tab]){
+    done[tab] = 1;
+    if (tab === "picks") showPicks();
+    if (tab === "val") showVal();
+    if (tab === "t9") draw9();
+    if (tab === "t10") draw10();
+    if (tab === "t11") quick11();
+    if (!code && ["t1", "t2", "t3", "t7"].indexOf(tab) >= 0){ var q = $("cf-q" + n); if (!q.value){ q.value = label(R.picks && R.picks[0] || "2330"); go(n); } }
+  }
+}
+function go(n){
+  var code = resolve($("cf-q" + n).value);
+  if (!code) return;
+  if (n === "1") show1(code); else if (n === "2") show2(code); else if (n === "3") show3(code);
+  else if (n === "7") rankTrail($("cf-o7"), [code], $("cf-s7").value);
+  else if (n === "9"){ mark9 = {}; mark9[code] = 1; draw9(); }
+  else if (n === "11") amountTrail($("cf-o11"), [code], $("cf-s11").value, true);
+}
+function add(n){
+  var code = resolve($("cf-q" + n).value), list = multi[n];
+  if (!code || list.indexOf(code) >= 0) return;
+  if (list.length >= 8){ alert("最多 8 檔"); return; }
+  list.push(code); $("cf-q" + n).value = "";
+  if (n === "8") redraw8(); else if (n === "10") draw10(); else redraw12();
+}
+function quick11(){
+  var a = R.rows.filter(function(r){ return isnum(r.fa); }).sort(function(x, y){ return y.fa - x.fa; }).slice(0, 50);
+  var b = R.rows.filter(function(r){ return isnum(r.va); }).sort(function(x, y){ return y.va - x.va; }).slice(0, 50);
+  [[a, "cf-qa"], [b, "cf-qb"]].forEach(function(p){
+    var box = $(p[1]); box.innerHTML = "";
+    p[0].forEach(function(r, i){ var btn = el("button", {text: (i + 1) + ". " + r.n}); btn.onclick = function(){ $("cf-q11").value = label(r.c); go("11"); }; box.appendChild(btn); });
+  });
+}
+
+function init(){
+  document.querySelectorAll(".cf-tab").forEach(function(b){ b.addEventListener("click", function(){ open(b.getAttribute("data-t")); }); });
+  document.querySelectorAll("[data-go]").forEach(function(b){ b.addEventListener("click", function(){ go(b.getAttribute("data-go")); }); });
+  document.querySelectorAll("[data-add]").forEach(function(b){ b.addEventListener("click", function(){ add(b.getAttribute("data-add")); }); });
+  ["1", "2", "3", "7", "9", "11"].forEach(function(n){ $("cf-q" + n).addEventListener("keydown", function(e){ if (e.key === "Enter") go(n); }); });
+  ["8", "10", "12"].forEach(function(n){ $("cf-q" + n).addEventListener("keydown", function(e){ if (e.key === "Enter") add(n); }); });
+  document.querySelectorAll("[data-run]").forEach(function(b){ b.addEventListener("click", function(){ var n = b.getAttribute("data-run"); if (n === "4") run4(); else if (n === "5") run5(); else run6(); }); });
+  document.querySelectorAll("[data-reset]").forEach(function(b){ b.addEventListener("click", function(){ var n = b.getAttribute("data-reset"); document.querySelectorAll("#cf-t" + n + " input[type=number]").forEach(function(i){ i.value = ""; }); document.querySelectorAll("#cf-f5b input").forEach(function(i){ if (n === "5") i.checked = false; }); }); });
+  $("cf-sample").onclick = function(){ sample4(); run4(); };
+  $("cf-sample6").onclick = function(){ sample4(); run6(); };
+  $("cf-clear9").onclick = function(){ mark9 = {}; draw9(); };
+  $("cf-clear10").onclick = function(){ list10.length = 0; draw10(); };
+  $("cf-o9").addEventListener("pick", function(e){ mark9 = {}; mark9[e.detail] = 1; $("cf-q9").value = label(e.detail); draw9(); });
+  $("cf-o10").addEventListener("pick", function(e){ var i = list10.indexOf(e.detail); if (i >= 0) list10.splice(i, 1); else if (list10.length < 8) list10.push(e.detail); draw10(); });
+  $("cf-s7").onchange = function(){ go("7"); };
+  $("cf-s8").onchange = redraw8;
+  $("cf-s11").onchange = function(){ go("11"); };
+  $("cf-s12").onchange = redraw12;
+  var h = (location.hash || "").replace("#", "").split("-");
+  var tab = h[0] && document.querySelector('.cf-tab[data-t="' + h[0] + '"]') ? h[0] : "picks";
+  open(tab, h[1] && ROWS[h[1]] ? h[1] : null);
+}
+
+getJSON("radar.json").then(function(doc){
+  R = doc;
+  R.rows.forEach(function(r){ ROWS[r.c] = r; BYNAME[r.n] = r.c; if (isnum(r.hr)) has15 = true; });
+  var dl = $("cf-codes");
+  R.rows.forEach(function(r){ dl.appendChild(el("option", {value: r.c + " " + r.n})); });
+  $("cf-asof").textContent = "資料日 " + R.asof + "（產生於 " + R.generated_at + "）。";
+  $("cf-msg").textContent = "不構成任何投資建議；清單由公開資料自動產生，不代表推薦。";
+  buildForms();
+  init();
+}).catch(function(){
+  $("cf-msg").textContent = "還沒有資料：籌碼雷達的每日計算（twsix chipflow）尚未跑過，或這次建站沒有產生 chipflow/ 資料。下一次排程後會自動出現。";
+  document.querySelectorAll(".cf-tab").forEach(function(b){ b.disabled = true; });
+  $("cf-about").classList.add("on");
+});
+})();
+</script>
+{% endblock %}

@@ -171,6 +171,11 @@ runs:
         fi
       shell: bash
 
+    # 〔籌碼雷達〕網站要的個股序列與排名表（site/chipflow/）。資料沒換就一秒跳過；
+    # 指令本身永遠回 0（壞了只留 ::warning::），這一步不可能讓建站或部署失敗。
+    - name: 籌碼雷達（網站資料）
+      run: twsix chipflow-site || echo "::warning::籌碼雷達的網站資料沒產生"
+      shell: bash
     - if: inputs.incremental == 'true' && inputs.save_cache == 'true'
       uses: actions/cache/save@v4
       with:

@@ -97,6 +97,7 @@ GRADE_KEYS = ["AA", "A", "BB", "B", "C", "不評分", "數據不足"]
 MONITOR_PAGE = "monitor.html"
 #: 〔AI 選股〕（見 report/ai_page.py）。
 AI_PAGE = "ai.html"
+RADAR_PAGE = "radar.html"
 MONITOR_REPORT = "monitor-report.html"
 
 #: 〔趨勢選股〕。metallicatw/tw-trend-filter 每個交易日台北 15:10 掃過全市場
@@ -1128,6 +1129,10 @@ def build_site(
     written[f"{AI_PAGE}（AI 選股）"] = _write_ai_page(
         env, base, out_dir, sheets_dir.parent if sheets_dir is not None else None)
 
+    # 〔籌碼雷達〕。這一頁不帶數字：瀏覽器讀 site/chipflow/*.json（`twsix chipflow-site`
+    # 在建站之後寫）。同 AI 選股：畫不出來也不准拖垮整站。
+    written[f"{RADAR_PAGE}（籌碼雷達）"] = _write_radar_page(env, base, out_dir)
+
 
     _write_search_index(out_dir, rows, rich_ids, fetched_at, fetched_ts)
     written["search.json"] = 1
@@ -1550,6 +1555,18 @@ def _write_ai_page(env: Any, base: dict[str, Any], out_dir: Path,
         env.get_template("ai.html.j2").stream(
             **base, page="ai", rel="", ai={"ready": False, "error": True}
         ).dump(str(out_dir / AI_PAGE))
+        return 0
+
+
+def _write_radar_page(env: Any, base: dict[str, Any], out_dir: Path) -> int:
+    """畫〔籌碼雷達〕的外殼。任何例外都吞掉、只留一行 error 註記，回傳 0。"""
+    try:
+        env.get_template("radar.html.j2").stream(
+            **base, page="radar", rel=""
+        ).dump(str(out_dir / RADAR_PAGE))
+        return 1
+    except Exception as exc:  # noqa: BLE001 - 試行中的一頁不能讓整站建不起來
+        print(f"::error::籌碼雷達頁面畫不出來（其他頁面不受影響）：{exc!r}")
         return 0
 
 

@@ -114,6 +114,7 @@
 :root:not([data-theme=light]) nav a.nav-trend{--nav-c:#f07ab0}
 :root:not([data-theme=light]) nav a.nav-mon  {--nav-c:#6fb0f5}
 :root:not([data-theme=light]) nav a.nav-ai   {--nav-c:#b39cff}
+:root:not([data-theme=light]) nav a.nav-radar{--nav-c:#e3d35a}
 :root:not([data-theme=light]) nav a.nav-more {--nav-c:#98a6b4}
 :root:not([data-theme=light]) .tabs #tab-summary{--tc:#4fd6c4}
 :root:not([data-theme=light]) .tabs #tab-six{--tc:#5fd38a}
@@ -137,6 +138,7 @@
 :root[data-theme=dark] nav a.nav-trend{--nav-c:#f07ab0}
 :root[data-theme=dark] nav a.nav-mon  {--nav-c:#6fb0f5}
 :root[data-theme=dark] nav a.nav-ai   {--nav-c:#b39cff}
+:root[data-theme=dark] nav a.nav-radar{--nav-c:#e3d35a}
 :root[data-theme=dark] nav a.nav-more {--nav-c:#98a6b4}
 :root[data-theme=dark] .tabs #tab-summary{--tc:#4fd6c4}
 :root[data-theme=dark] .tabs #tab-six{--tc:#5fd38a}
@@ -235,6 +237,7 @@ nav a.nav-trend{--nav-c:#a3306b}   /* 台股趨勢選股 —— 洋紅 */
    再加兩個條件，顏色上也該是它的鄰居，而不是另一個色系。 */
 nav a.nav-mon  {--nav-c:#1c62b8}   /* 全球市場監控 —— 藍 */
 nav a.nav-ai   {--nav-c:#6d3fd1}   /* AI 選股 —— 紫 */
+nav a.nav-radar{--nav-c:#6f6400}   /* 籌碼雷達 —— 橄欖 */
 nav a.nav-more {--nav-c:#5f6b78}   /* 那三個預設隱藏的 */
 .stamp{font-size:11.5px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
 .stamp:empty{display:none}
