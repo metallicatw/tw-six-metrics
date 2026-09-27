@@ -47,7 +47,7 @@ def test_視窗加總_缺值太多就不算():
     assert I.isnan(p.window(1, 3)), "窗口比資料還長"
 
 
-def test_五千萬大戶_依股價挑最接近的級距():
+def test_五千萬大戶_依股價換算門檻_級距內對數內插():
     assert I.whale_lots(100) == 500
     # 500 張：15 級有 400、600 → 取對數後 600 比較近；八級只有 400、800 → 400
     assert I.LEVEL15_LOWER[I.pick_boundary(I.LEVEL15_LOWER, 500)] == 600
@@ -56,11 +56,21 @@ def test_五千萬大戶_依股價挑最接近的級距():
     assert I.TIER8_LOWER[I.pick_boundary(I.TIER8_LOWER, I.whale_lots(30))] == 1000
     # 等距時取較高的一條（寧可少算）：√(10×50) ≈ 22.36 張
     assert I.TIER8_LOWER[I.pick_boundary(I.TIER8_LOWER, math.sqrt(500))] == 50
+    # 股價 100 → 門檻 500 張，落在八級的 400～800 那一級：那一級只算對數比例
     ratio, count, lots = I.whale(I.TIER8_LOWER, [10, 10, 10, 10, 10, 10, 10, 30], 100, 100)
-    assert (round(ratio, 6), lots) == (0.5, 400), "400 張以上：t6+t7+t8 = 50/100"
+    frac = (math.log(800) - math.log(500)) / (math.log(800) - math.log(400))
+    assert abs(ratio - (40 + 10 * frac) / 100) < 1e-12 and lots == 500
     assert I.isnan(count), "八級沒有人數"
     ratio, count, _ = I.whale(I.LEVEL15_LOWER, [1] * 15, 15, 100, people=[2] * 15)
-    assert count == 2 * 3, "600 張以上：分級 13～15 共三級"
+    frac = (math.log(600) - math.log(500)) / (math.log(600) - math.log(400))
+    assert abs(count - (2 * 3 + 2 * frac)) < 1e-12, "600 張以上三級全算＋400～600 那一級的一部分"
+    # 連續：股價跨過兩條級距的中點，人數不會跳
+    pp = [5] * 15
+    a1 = I.whale(I.LEVEL15_LOWER, [1] * 15, 15, 5e7 / 1000 / 24.4, people=pp)[1]
+    a2 = I.whale(I.LEVEL15_LOWER, [1] * 15, 15, 5e7 / 1000 / 24.6, people=pp)[1]
+    assert abs(a1 - a2) < 0.2, "連續變動，不是跳一整級（一整級是 5 人）"
+    # 門檻超過 1,000 張：只能整級算最高一級
+    assert I.whale(I.TIER8_LOWER, [1] * 8, 8, 30)[0] == 1 / 8
 
 
 def test_排名與百分位():
@@ -297,3 +307,111 @@ def test_籌碼雷達頁面畫不出來也不拖垮建站():
 
 def test_E否決名單讀不到就是空的():
     assert L.load_vetoes(Path(tempfile.mkdtemp())) == (set(), "")
+
+
+# ---------------------------------------------------------------------------
+# 第二輪：成交金額與法人明細、15 級逐檔回補、個股季報、逐日可見的基本面
+
+
+def _sample(name: str):
+    from pathlib import Path as _P
+
+    root = _P(__file__).resolve().parents[1] / "reference" / "samples"
+    return json.loads(gzip.decompress((root / f"{name}.raw.gz").read_bytes()))
+
+
+def test_成交金額與法人買賣明細_真實樣本():
+    from twsix.ingest import daily as DL
+    from twsix.ingest import flows as FL
+
+    v = FL.parse_twse_value(_sample("twse_mi_index_dated"))
+    assert v["2330"] > 1e9, "台積電一天的成交金額是百億級"
+    assert FL.parse_tpex_value(_sample("tpex_daily_rwd_dated")), "上櫃也要讀得到"
+    tw = FL.parse_twse_flows(_sample("twse_t86_rwd_dated"))
+    net = {r["code"]: r["foreign"] for r in DL.parse_twse_institutional(_sample("twse_t86_rwd_dated"))}
+    r = next(x for x in tw if x["code"] == "2330")
+    assert r["f_buy"] - r["f_sell"] == net["2330"], "外資口徑要和既有的三大法人檔一致"
+    tp = FL.parse_tpex_flows(_sample("tpex_insti_rwd_dated"))
+    net2 = {r["code"]: r["foreign"] for r in DL.parse_tpex_institutional_dated(
+        _sample("tpex_insti_rwd_dated"))}
+    x = tp[0]
+    assert x["f_buy"] - x["f_sell"] == net2[x["code"]]
+
+
+def test_法人明細欄序錯了整批不收():
+    from twsix.ingest import flows as FL
+
+    bad = {"date": "20260901", "fields": ["證券代號", "外陸資買進股數(不含外資自營商)",
+                                          "外陸資賣出股數(不含外資自營商)",
+                                          "外陸資買賣超股數(不含外資自營商)", "投信買進股數",
+                                          "投信賣出股數", "投信買賣超股數"],
+           "data": [[f"{1100 + k}", "10", "3", "99", "0", "0", "0"] for k in range(20)]}
+    assert FL.parse_twse_flows(bad) == []
+
+
+def test_flows存檔_合併與是否齊全():
+    from twsix.store import flows as SF
+
+    root = Path(tempfile.mkdtemp())
+    SF.write_day(root, "2026-09-01", [{"date": "2026-09-01", "code": "2330", "market": "上市",
+                                        "value": 1.5e10, "f_buy": 10.0, "f_sell": 3.0,
+                                        "t_buy": 0.0, "t_sell": 0.0}])
+    assert not SF.complete(root, "2026-09-01"), "只有上市，不算齊"
+    SF.write_day(root, "2026-09-01", [{"date": "2026-09-01", "code": "5439", "market": "上櫃",
+                                        "value": 3e8, "f_buy": 1.0, "f_sell": 1.0,
+                                        "t_buy": 0.0, "t_sell": 0.0}])
+    rows = SF.read_day(root, "2026-09-01")
+    assert {r["code"] for r in rows} == {"2330", "5439"} and SF.complete(root, "2026-09-01")
+    assert rows[0]["value"] == "15000000000", "整數不要寫成 1.5e10"
+
+
+QRY_PAGE = """<table><tr><th>序</th><th>持股分級</th><th>人數</th><th>股數</th><th>占比</th></tr>
+<tr><td>1</td><td>1-999</td><td>100</td><td>50,000</td><td>0.05</td></tr>
+<tr><td>9</td><td>50,001-100,000</td><td>5</td><td>300,000</td><td>0.30</td></tr>
+<tr><td>15</td><td>1,000,001以上</td><td>3</td><td>99,650,000</td><td>99.65</td></tr>
+<tr><td>16</td><td>合　計</td><td>108</td><td>100,000,000</td><td>100.00</td></tr></table>"""
+
+
+def test_集保查詢頁也留下15級人數_逐檔存檔():
+    from twsix.ingest.tdcc_history import parse_week
+    from twsix.store import ownership as own
+
+    snap = parse_week(QRY_PAGE, "5439", date(2026, 9, 18))
+    assert (15, 3, 99_650_000) in snap.levels and (9, 5, 300_000) in snap.levels
+    assert snap.holders == 108, "合計那一列照舊是總人數"
+    data = Path(tempfile.mkdtemp())
+    root = data / "ownership"
+    own.save_level_history(root, "5439", [snap])
+    assert own.level_history_dates(root, "5439") == {date(2026, 9, 18)}
+    # 同一週的八級不能蓋掉 15 級
+    own.save_stock_history(root, "5439", [snap])
+    w = L.load_tiers(data)["5439"][-1]
+    assert w.source == "15" and w.people[14] == 3
+
+
+def test_基本面逐日可見_月營收次月10日_季報公告期限():
+    assert F.month_available(F.month_key(2026, 8)) == "2026-09-10"
+    assert F.roc_available((115, 2)) == "2026-08-14"
+    assert F.roc_available((114, 4)) == "2026-03-31"
+    series = {F.month_key(2026, m): 100.0 + m for m in range(1, 9)}
+    series.update({F.month_key(2025, m): 100.0 for m in range(1, 13)})
+    assert F.monthly(series, "2026-09-09")["rm"] == "2026-07", "8 月營收 9/10 才看得到"
+    assert F.monthly(series, "2026-09-10")["rm"] == "2026-08"
+
+
+def test_個股季報_合約負債與資本支出比例():
+    quarters = {f"{y}.{q}Q": {"inv": 100.0, "cl": 50.0 + (y - 2024) * 4 + q,
+                              "capital": 1000.0, "capex": 25.0}
+                for y in (2024, 2025, 2026) for q in (1, 2, 3, 4) if (y, q) <= (2026, 2)}
+    income = {}
+    for y in (113, 114, 115):
+        for q in (1, 2, 3, 4):
+            income[(y, q)] = {"rev": 1_000_000.0 * q, "cost": 600_000.0 * q}
+    m = F.sheet_metrics(quarters, income, asof="2026-09-01")
+    assert m["sq"] == "2026.2Q"
+    assert abs(m["cl_cap"] - (50 + 8 + 2) / 1000) < 1e-12
+    assert abs(m["cx_cap"] - 0.1) < 1e-12, "四季資本支出 100 ÷ 股本 1,000"
+    assert abs(m["cl_rev"] - 4 / 4000) < 1e-12, "合約負債年增 4 ÷ 四季營收 4,000 百萬"
+    assert F.sheet_metrics(quarters, income, asof="2026-08-13")["sq"] == "2026.1Q"
+    tl = L.capital_timeline(quarters)
+    assert tl[-1] == ("2026-08-14", 1e9)

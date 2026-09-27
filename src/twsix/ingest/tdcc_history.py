@@ -71,6 +71,7 @@ def parse_week(page: str, stock_id: str, day: date) -> Snapshot:
     錯不會丟例外，只會讓圖上多出一條假的線。
     """
     brackets: dict[int, int] = {}
+    people: dict[int, int] = {}
     total: int | None = None
     holders = 0
     for cells in _rows(page):
@@ -81,6 +82,7 @@ def parse_week(page: str, stock_id: str, day: date) -> Snapshot:
         if not cells[0].strip().isdigit():
             continue
         brackets[int(cells[0])] = _int(cells[3])
+        people[int(cells[0])] = _int(cells[2])
     if not total or not brackets:
         raise NoHistory(f"{stock_id} {day:%Y-%m-%d}：查詢頁沒有回傳分級表")
 
@@ -94,6 +96,9 @@ def parse_week(page: str, stock_id: str, day: date) -> Snapshot:
         shares=total,
         tiers=tiers,
         adjust=sum(tiers.values()) - total,
+        # 原始 15 級（人數、股數），給〔籌碼雷達〕的 5,000 萬大戶人數用。
+        # 查詢頁把「差異數調整」省掉，1..15 就是真的級距（見模組說明）。
+        levels=tuple((b, people.get(b, 0), brackets[b]) for b in sorted(brackets) if 1 <= b <= 15),
     )
 
 

@@ -177,6 +177,13 @@ jobs:
         continue-on-error: true
         run: twsix aipick --sync-macro || echo "::error::AI 選股這一趟失敗（行情照常存檔），看上面的 log"
 
+      # 〔籌碼雷達〕要的成交金額與法人買進／賣出股數（data/market/daily/flows/）。
+      # 補最近五個交易日裡還沒齊的（一天四個請求）；抓不到只留 warning，不擋存檔。
+      - name: 籌碼雷達：成交金額與法人明細
+        timeout-minutes: 10
+        continue-on-error: true
+        run: twsix fetch-flows --days 5 --pause 3 --minutes 8 || echo "::warning::成交金額與法人明細沒補到"
+
       # 〔籌碼雷達〕：法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面的每日
       # 橫斷面、精選漏斗、每週回頭驗證，寫進 data/chipflow/（約 30 秒、不連網）。
       # 讀 AI 選股剛寫好的 E 否決名單，所以排在它後面；但**不改** AI 選股的任何檔案。

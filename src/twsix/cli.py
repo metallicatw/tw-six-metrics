@@ -1450,6 +1450,16 @@ def _mops_interval() -> float:
     return _interval("TWSIX_MOPS_INTERVAL", 1.2)
 
 
+def _save_levels_quietly(root: Path, stock: str, snaps: list[Any]) -> None:
+    """順手把原始 15 級另存一份給〔籌碼雷達〕。附加的：失敗只印一行，不影響本來那份。"""
+    from .store import ownership as own  # noqa: PLC0415
+
+    try:
+        own.save_level_history(root, stock, snaps)
+    except Exception as exc:  # noqa: BLE001 - 附加的一份不能擋住本來那一份
+        print(f"    （原始 15 級沒存成：{exc}）", file=sys.stderr)
+
+
 def _backfill_holders(args: argparse.Namespace, stock: str) -> bool:
     """把這一檔缺的集保週資料補齊——一年 51 週。
 
@@ -1538,10 +1548,12 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> bool:
             # 而白跑的下一次會從同一個地方重新開始，永遠補不完。
             if ok and (i % 10 == 0 or i == len(days)):
                 own.save_stock_history(root, stock, ok)
+                _save_levels_quietly(root, stock, ok)
                 ok = []
                 print(f"    {label} {i}/{len(days)} 週")
         if ok:
             own.save_stock_history(root, stock, ok)
+            _save_levels_quietly(root, stock, ok)
         return ok, bad
 
     _, failed_days = sweep(missing, "第一輪")
@@ -2239,6 +2251,133 @@ def cmd_chipflow_site(args: argparse.Namespace) -> int:
         print("籌碼雷達（網站）：" + "、".join(f"{k} {v}" for k, v in summary.items()))
     except Exception as exc:  # noqa: BLE001 - 一頁的資料不能拖垮建站
         print(f"::warning::籌碼雷達的網站資料沒產生（其他頁面不受影響）：{exc!r}")
+    return EXIT_OK
+
+
+def cmd_fetch_flows(args: argparse.Namespace) -> int:
+    """〔籌碼雷達〕：每日的成交金額與法人買進／賣出股數 → `data/market/daily/flows/`。
+
+    從最近的交易日往回補 `--days` 天（交易日取自已經存好的每日行情檔），已經齊
+    的跳過。一天四個請求（兩個交易所 × 行情、法人）。`--minutes` 是時間預算，
+    到了就停、下次接著補。**永遠回 0**：這是附加的資料，抓不到只留 ::warning::。
+    """
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient  # noqa: PLC0415
+    from .ingest.flows import Flows  # noqa: PLC0415
+    from .store import flows as fl  # noqa: PLC0415
+
+    data_dir = Path(args.data or settings.data_dir)
+    days = sorted((p.name[:10] for p in
+                   (data_dir / "market" / "daily" / "prices").glob("*.csv.gz")), reverse=True)
+    days = days[: max(1, args.days)]
+    pause = args.pause or settings.ingest.min_interval_seconds
+    http = HttpClient(cache_dir=None, cache_ttl=0, min_interval=pause,
+                      retries=settings.ingest.retries, timeout=90.0)
+    src = Flows(http)
+    started = time.monotonic()
+    done = skipped = empty = 0
+    for day in days:
+        if args.minutes and time.monotonic() - started > args.minutes * 60:
+            print(f"  跑滿 {args.minutes} 分鐘，其餘下次再補")
+            break
+        if not args.force and fl.complete(data_dir, day):
+            skipped += 1
+            continue
+        try:
+            rows = src.on(day)
+        except Exception as exc:  # noqa: BLE001 - 一天抓不到不該讓整批停下
+            print(f"  {day} 沒拿到：{exc}")
+            continue
+        if not rows:
+            empty += 1
+            print(f"  {day} 沒有資料")
+            continue
+        fl.write_day(data_dir, day, rows)
+        done += 1
+        print(f"  {day} {len(rows)} 檔")
+    print(f"成交金額與法人明細：寫入 {done} 天、已齊跳過 {skipped} 天、沒資料 {empty} 天")
+    for p in src.problems[:5]:
+        print(f"::warning::{p}")
+    return EXIT_OK
+
+
+def cmd_backfill_levels(args: argparse.Namespace) -> int:
+    """〔籌碼雷達〕：逐檔回補集保原始 15 級（含人數）的一年週線 → `ownership/levels_stock/`。
+
+    開放資料只給最新一週，查詢頁保留 51 週，要一檔一週地問（約一分鐘一檔）。
+    佇列依流動性排序：成交金額大的先補，這樣最常被看的那幾百檔最先有「大戶人數」。
+    每週全市場那一份（`ownership/levels/`）已經有的週不再問。`--minutes` 到了就停、
+    下次接著補；連續六次失敗（多半是被擋）就整批停下。**永遠回 0。**
+    """
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient  # noqa: PLC0415
+    from .ingest.tdcc_history import History  # noqa: PLC0415
+    from .store import ownership as own  # noqa: PLC0415
+
+    data_dir = Path(args.data or settings.data_dir)
+    root = data_dir / "ownership"
+    prices = sorted((data_dir / "market" / "daily" / "prices").glob("*.csv.gz"))
+    liq: dict[str, float] = {}
+    import gzip as _gz  # noqa: PLC0415
+    import io as _io  # noqa: PLC0415
+
+    for path in prices[-20:]:
+        with contextlib.suppress(OSError, ValueError, EOFError):
+            text = _gz.decompress(path.read_bytes()).decode("utf-8")
+            for r in csv.DictReader(_io.StringIO(text)):
+                code = (r.get("code") or "").strip()
+                if len(code) == 4 and code.isdigit() and code[0] != "0":
+                    try:
+                        liq[code] = liq.get(code, 0.0) + float(r["close"]) * float(r["volume"])
+                    except (KeyError, ValueError):
+                        continue
+    codes = sorted(liq, key=lambda c: (-liq[c], c))
+    if args.stock:
+        codes = [args.stock]
+    codes = _shard(codes, args.shard or "")
+    http = HttpClient(cache_dir=None, cache_ttl=0, min_interval=_tdcc_interval(),
+                      timeout=60.0, retries=2, cookies=True)
+    history = History(http)
+    try:
+        available = history.dates()[:BACKFILL_WEEKS]
+    except Exception as exc:  # noqa: BLE001
+        print(f"::warning::集保查詢頁打不開，這次不補：{exc}")
+        return EXIT_OK
+    market = own.market_level_dates(root)
+    started = time.monotonic()
+    stocks = weeks_done = 0
+    streak = 0
+    for code in codes:
+        if args.minutes and time.monotonic() - started > args.minutes * 60:
+            print(f"  跑滿 {args.minutes} 分鐘，其餘下次再補")
+            break
+        have = own.level_history_dates(root, code) | market
+        missing = [d for d in available if d not in have]
+        if not missing:
+            continue
+        got: list[Any] = []
+        for day in missing:
+            try:
+                got.append(history.week(code, day))
+                streak = 0
+            except Exception as exc:  # noqa: BLE001
+                streak += 1
+                if streak >= 6:
+                    own.save_level_history(root, code, got)
+                    print(f"::warning::集保查詢頁連續六次失敗（多半是被擋），先停下：{exc}")
+                    print(f"原始 15 級：補了 {stocks} 檔、{weeks_done + len(got)} 週")
+                    return EXIT_OK
+            if len(got) >= 10:
+                own.save_level_history(root, code, got)
+                weeks_done += len(got)
+                got = []
+        own.save_level_history(root, code, got)
+        weeks_done += len(got)
+        stocks += 1
+        print(f"  {code}：補 {len(missing)} 週")
+        if args.limit and stocks >= args.limit:
+            break
+    print(f"原始 15 級：補了 {stocks} 檔、{weeks_done} 週")
     return EXIT_OK
 
 
@@ -3928,6 +4067,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cf.add_argument("--data", help="資料目錄")
     cf.set_defaults(func=cmd_chipflow)
+
+    ff = sub.add_parser(
+        "fetch-flows",
+        help="籌碼雷達：每日成交金額與法人買進／賣出股數（寫進 data/market/daily/flows）",
+    )
+    ff.add_argument("--data", help="資料目錄")
+    ff.add_argument("--days", type=int, default=5, help="往回補幾個交易日（預設 5）")
+    ff.add_argument("--pause", type=float, default=0.0, help="請求間隔秒數（回補建議 3）")
+    ff.add_argument("--minutes", type=float, default=0.0, help="時間預算（分鐘），0＝不限")
+    ff.add_argument("--force", action="store_true", help="已經齊的也重抓")
+    ff.set_defaults(func=cmd_fetch_flows)
+
+    bl = sub.add_parser(
+        "backfill-levels",
+        help="籌碼雷達：逐檔回補集保原始 15 級（含人數）一年（寫進 ownership/levels_stock）",
+    )
+    bl.add_argument("--data", help="資料目錄")
+    bl.add_argument("--stock", help="只補這一檔")
+    bl.add_argument("--limit", type=int, default=0, help="這一輪最多補幾檔")
+    bl.add_argument("--minutes", type=float, default=0.0, help="時間預算（分鐘），0＝不限")
+    bl.add_argument("--shard", default="", help="I/N：只跑佇列的第 I 份（共 N 份）")
+    bl.set_defaults(func=cmd_backfill_levels)
 
     cfs = sub.add_parser(
         "chipflow-site",

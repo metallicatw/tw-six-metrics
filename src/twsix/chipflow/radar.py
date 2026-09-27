@@ -25,17 +25,19 @@ L0 ∩（L1 且共振分數前 5%）∩ L2 ∩ T1 ＝ **精選**。L1 本身也�
 
 ## 驗證
 
-每一週都回頭算一次「如果那一週照這套規則選」：L1 與 L1＋T1 的候選，之後 20 日
-平均報酬減去同週流動性母體的平均（超額），以及每個特徵的每週 IC。**基本面（L2）
-與 E 否決不在回測裡**——財報與否決名單沒有逐日的歷史版本，硬算會偷看答案。
+每一週都回頭算一次「如果那一週照這套規則選」：L1、L1＋T1、以及整條漏斗（精選）
+的候選，之後 20 日平均報酬減去同週流動性母體的平均（超額），以及每個特徵的每週
+IC。財報、月營收、E 否決都用**那一週看得到的**版本（月營收次月 10 日、季報法定
+公告期限之後才算數；E 用 AI 選股的 QualityBook 逐日判定），不偷看答案。
 
-## 已知限制（頁面上也寫著）
+## 資料口徑
 
-* 大戶人數要原始 15 級（含人數），2026-09 起才開始每週累積；在那之前只有八級
-  持股比例，大戶人數與「÷大戶人數」兩個排名留空。
-* 法人買賣超金額 ＝ 股數 × 收盤價（交易所只給股數）；成交金額 ＝ 成交股數 × 收盤價。
-* 內外盤（逐筆主動買賣）開放資料沒有，不做；以 K 線買賣盤比例代替。
-* 資本額用最新一期（增減資過的公司，歷史比值有一點偏差）。
+* 成交金額：官方成交金額（`data/market/daily/flows/`）；還沒回補到的日子用
+  成交股數 × 收盤價。法人金額 ＝ 買賣超股數 × 當日均價（成交金額 ÷ 成交股數）。
+* 法人預估成交額 ＝（外資＋投信的買進＋賣出）÷ 2 × 均價。
+* 大戶：集保原始 15 級（每週全市場＋逐檔回補 51 週）；還沒補到的用八級。
+* 資本額：那一天看得到的季報股本（`data/sheets/<代號>/BSQ`）。
+* 內外盤（逐筆主動買賣）開放資料沒有，以 K 線買賣盤比例代替——唯一無法重現的一項。
 """
 
 from __future__ import annotations
@@ -65,8 +67,10 @@ from .indicators import (
 )
 from .load import (
     TierWeek,
+    capital_timeline,
     is_common_stock,
     load_capital,
+    load_flows,
     load_open,
     load_short_names,
     load_tiers,
@@ -96,6 +100,11 @@ MIN_WEEK_UNIVERSE = 100
 MIN_PRICE = 10.0
 MIN_VALUE = 50_000_000.0          # 20 日「平均」成交金額
 TOP_PCT = 0.90
+#: ④「近 N 日內曾符合」可以往回看幾天
+RECENT_DAYS = 20
+#: 基本面裡以百分比顯示的欄位（內部存的是比例）
+PCT_FIELDS = ("r1", "r3", "r12", "e4y", "oy", "om", "nm", "cl_cap", "cx_cap", "cl_rev",
+              "inv_rev")
 #: 精選比 L1 嚴：共振分數前 5%、至少兩面成長旗標、趨勢成立（T1）。T2 只標示。
 PICK_PCT = 0.95
 PICK_FLAGS = 2
@@ -114,6 +123,22 @@ def _r(v: float, nd: int) -> float | None:
     return None if isnan(v) else round(v, nd)
 
 
+def _quality_book(data_dir: Path):
+    """AI 選股的 E 財報品質否決（同一套規則，可以問「某一天看得到的判定」）。
+
+    讀不到就回 None：否決只是漏斗的一道門，不該讓整趟失敗。
+    """
+    try:
+        from ..aipick import news as NW  # noqa: PLC0415
+        from ..aipick import quality as Q  # noqa: PLC0415
+
+        return Q.QualityBook(D.load_statements(data_dir), D.load_directors(data_dir),
+                             NW.NewsBook(NW.load_all(data_dir)))
+    except Exception as exc:  # noqa: BLE001
+        print(f"::warning::E 財報品質否決載入失敗（漏斗改成不看否決）：{exc!r}")
+        return None
+
+
 class Engine:
     """一次把資料讀進來，之後任何一天、任何一週都可以算。"""
 
@@ -127,10 +152,18 @@ class Engine:
         self.inst = D.load_institutional(data_dir, p)
         self.capital = load_capital(data_dir)
         opens = load_open(data_dir, p, cs)
+        flows = load_flows(data_dir, p, cs)
+        #: 有沒有真的成交金額與法人買賣明細（沒有就用 股數 × 收盤價 估）
+        self.has_flows = bool(flows)
+        self.fund = F.FundBook(data_dir, cs)
+        #: 「那一天看得到的」資本額：個股季報的股本（公告期限之後才算數）
+        self.cap_tl = {c: capital_timeline(q) for c, q in self.fund.sheets.items()}
+        self.quality = _quality_book(data_dir)
         self.tiers = load_tiers(data_dir, cs)
         self.tier_at = {c: {w.date: k for k, w in enumerate(ws)} for c, ws in self.tiers.items()}
         n = len(p.dates)
         self.fi: dict[str, Prefix] = {}
+        self.fit: dict[str, Prefix] = {}    # 法人預估成交額 ＝（買進＋賣出）÷ 2 × 均價
         self.val: dict[str, Prefix] = {}
         self.bs: dict[str, Prefix] = {}     # 買盤比例 − 賣盤比例（＝ 2×買 − 1）
         self.buy: dict[str, Prefix] = {}
@@ -138,7 +171,20 @@ class Engine:
         self.ma60: dict[str, array] = {}
         for c in self.codes:
             cl, vol, hi, lo, op = p.close[c], p.volume[c], p.high[c], p.low[c], opens[c]
-            val = array("d", (cl[i] * vol[i] if not isnan(cl[i]) else NAN for i in range(n)))
+            fl = flows.get(c)
+            # 成交金額：有官方的成交金額就用，沒有才用 股數 × 收盤價
+            val = array("d", [NAN]) * n
+            avg = array("d", [NAN]) * n            # 當日均價 ＝ 成交金額 ÷ 成交股數
+            for i in range(n):
+                if isnan(cl[i]):
+                    continue
+                v = fl["value"][i] if fl is not None else NAN
+                if not isnan(v) and v > 0:
+                    val[i] = v
+                    avg[i] = v / vol[i] if not isnan(vol[i]) and vol[i] > 0 else cl[i]
+                else:
+                    val[i] = cl[i] * vol[i] if not isnan(vol[i]) else NAN
+                    avg[i] = cl[i]
             slot = self.inst.get(c)
             fi = array("d", [NAN]) * n
             if slot:
@@ -146,7 +192,14 @@ class Engine:
                 for i in range(n):
                     if not isnan(cl[i]) and not (isnan(f[i]) and isnan(t[i])):
                         fi[i] = ((0.0 if isnan(f[i]) else f[i])
-                                 + (0.0 if isnan(t[i]) else t[i])) * cl[i]
+                                 + (0.0 if isnan(t[i]) else t[i])) * avg[i]
+            fit = array("d", [NAN]) * n
+            if fl is not None:
+                for i in range(n):
+                    parts = (fl["fb"][i], fl["fs"][i], fl["tb"][i], fl["ts"][i])
+                    if not isnan(avg[i]) and not all(isnan(x) for x in parts):
+                        fit[i] = sum(0.0 if isnan(x) else x for x in parts) / 2 * avg[i]
+            self.fit[c] = Prefix(fit)
             br = array("d", [NAN]) * n
             prev = NAN
             for i in range(n):
@@ -170,6 +223,31 @@ class Engine:
         self._day_cache: dict[int, dict[str, dict[str, float]]] = {}
 
     # -- 基本量 -------------------------------------------------------------
+
+    def capital_at(self, code: str, i: int) -> float:
+        """第 i 天看得到的資本額（元）：季報股本（公告期限後），沒有就用最新一期。"""
+        tl = self.cap_tl.get(code)
+        if tl:
+            day = self.p.dates[i]
+            best = NAN
+            for avail, cap in tl:
+                if avail <= day:
+                    best = cap
+                else:
+                    break
+            if not isnan(best):
+                return best
+            return tl[0][1]           # 比最早一季還早：用最早那一季（最接近的已知值）
+        return self.capital.get(code, NAN)
+
+    def vetoed(self, code: str, day: str) -> bool:
+        """E 財報品質否決（那一天看得到的判定）。"""
+        if self.quality is None:
+            return False
+        try:
+            return self.quality.vetoed(code, day)
+        except Exception:  # noqa: BLE001 - 否決判定壞了不該讓整趟失敗
+            return False
 
     def close_near(self, code: str, i: int, back: int = 5) -> float:
         cl = self.p.close.get(code)
@@ -242,7 +320,7 @@ class Engine:
         out: dict[str, dict[str, float]] = {}
         for c in liquid:
             fe = dict.fromkeys(FEATURES, NAN)
-            cap = self.capital.get(c, NAN)
+            cap = self.capital_at(c, i)
             fi60, val20 = st["fi60"].get(c, NAN), st["val20"].get(c, NAN)
             if not isnan(cap) and cap > 0:
                 if not isnan(fi60):
@@ -328,13 +406,17 @@ class Engine:
             l1 = [c for c, s in score.items()
                   if s >= TOP_PCT and len(self.pillars(c, feats[c], st)) >= MIN_PILLARS]
             l1t = [c for c in l1 if self.trend_ok(c, i)]
+            # 精選（整條漏斗）：否決與基本面都用「那一週看得到的」版本，不偷看答案
+            pick = [c for c in l1t if score[c] >= PICK_PCT and not self.vetoed(c, week)
+                    and len(F.growth_flags(self.fund.at(c, week))) >= PICK_FLAGS]
             row = {"week": week, "i": i, "ic": ic, "weights": weights,
                    "universe": len(feats), "realized": realized,
-                   "l1": _basket(l1, fwd, realized), "l1t": _basket(l1t, fwd, realized)}
+                   "l1": _basket(l1, fwd, realized), "l1t": _basket(l1t, fwd, realized),
+                   "pick": _basket(pick, fwd, realized)}
             if realized:
                 base = [v for v in fwd.values() if not isnan(v)]
                 row["market"] = sum(base) / len(base) if base else NAN
-                for key in ("l1", "l1t"):
+                for key in ("l1", "l1t", "pick"):
                     b = row[key]
                     if b["n"] and not isnan(b["ret"]) and not isnan(row["market"]):
                         b["excess"] = b["ret"] - row["market"]
@@ -378,8 +460,9 @@ def _latest_week(engine: Engine, day: str) -> str:
     return got[-1] if got else ""
 
 
-def build_today(engine: Engine, history: list[dict], vetoes: set[str],
-                fundamentals: dict[str, dict]) -> dict:
+def build_today(engine: Engine, history: list[dict], vetoes: set[str] | None = None) -> dict:
+    """今天的橫斷面。否決優先用 E 的逐日判定；沒有才用 AI 選股寫好的名單。"""
+    vetoes = vetoes or set()
     p = engine.p
     ia = p.asof_index
     asof = p.asof
@@ -396,6 +479,10 @@ def build_today(engine: Engine, history: list[dict], vetoes: set[str],
     fi_rank_b = rank_desc(back["fi60"]) if back else {}
     val_rank_b = rank_desc(back["val20"]) if back else {}
     shown_weeks = [w for w in engine.weeks if w <= asof][-WEEKS_SHOWN:][::-1]
+    # ④ 的「近 N 日內曾符合」要近 20 日的排名與倍數（最新的在前）
+    recent = list(range(ia, max(-1, ia - RECENT_DAYS), -1))
+    recent_rank = {i: (rank_desc(engine.day_stats(i)["fi60"]),
+                       rank_desc(engine.day_stats(i)["val20"])) for i in recent}
 
     rows: list[dict] = []
     whale_n: dict[str, float] = {}
@@ -414,9 +501,10 @@ def build_today(engine: Engine, history: list[dict], vetoes: set[str],
             "mk": (m.market if m and m.market else mk),
             "p": cl,
             "liq": 1 if c in liquid else 0,
-            "veto": 1 if c in vetoes else 0,
+            "veto": 1 if (engine.vetoed(c, asof) if engine.quality is not None
+                          else c in vetoes) else 0,
         }
-        cap = engine.capital.get(c, NAN)
+        cap = engine.capital_at(c, ia)
         fi60, val20 = st["fi60"].get(c, NAN), st["val20"].get(c, NAN)
         row["yr"] = fi_rank.get(c)
         row["fa"] = _r(fi60 / 1e8, 2) if not isnan(fi60) else None
@@ -462,11 +550,43 @@ def build_today(engine: Engine, history: list[dict], vetoes: set[str],
         row["d20"] = _r(d20, 2)
         row["t1"] = 1 if engine.trend_ok(c, ia) else 0
         row["t2"] = 1 if (not isnan(d20) and not isnan(d20p) and d20 > 0 and d20 > d20p) else 0
-        fu = fundamentals.get(c, {})
+        # ── 法人預估成交額、周轉率與它們的 20 日增減（④ 原本隱藏的八組參數）──
+        mcap = cl * cap / 10 if cap > 0 else NAN
+        ratio_now = (row.get("hp") or NAN) / 100 if row.get("hp") is not None else NAN
+        fit20 = engine.fit[c].window(ia, 20)
+        if not isnan(fit20):
+            row["fa20"] = _r(fit20 / 1e8, 2)
+            if mcap > 0:
+                row["ft"] = _r(fit20 / mcap * 100, 2)
+                old = engine.fit[c].window(ia - 20, 20)
+                cl_old = engine.close_near(c, ia - 20)
+                mcap_old = cl_old * engine.capital_at(c, ia - 20) / 10
+                if not isnan(old) and mcap_old > 0:
+                    row["ftc"] = _r(fit20 / mcap * 100 - old / mcap_old * 100, 2)
+        if not isnan(val20) and mcap > 0 and not isnan(ratio_now) and ratio_now < 1:
+            tex = val20 / (mcap * (1 - ratio_now)) * 100
+            row["tex"] = _r(tex, 2)
+            v_old = back["val20"].get(c, NAN) if back else NAN
+            cl_old = engine.close_near(c, ia - 20)
+            mcap_old = cl_old * engine.capital_at(c, ia - 20) / 10
+            if not isnan(v_old) and mcap_old > 0:
+                row["texc"] = _r(tex - v_old / (mcap_old * (1 - ratio_now)) * 100, 2)
+        d60 = engine.bs[c].window(ia, 60)
+        row["d60"] = _r(d60, 2)
+        d20o, d60o = engine.bs[c].window(ia - 20, 20), engine.bs[c].window(ia - 20, 60)
+        if not isnan(d20) and not isnan(d20o):
+            row["d20c"] = _r(d20 - d20o, 2)
+        if not isnan(d60) and not isnan(d60o):
+            row["d60c"] = _r(d60 - d60o, 2)
+        if c in liquid:     # 只給流動性母體：全市場每檔都帶會讓 radar.json 大一倍
+            row["yrs"] = [recent_rank[i][0].get(c) for i in recent]
+            row["vrs"] = [recent_rank[i][1].get(c) for i in recent]
+            row["zs"] = [_r(engine.day_stats(i)["fi60"].get(c, NAN) / engine.capital_at(c, i),
+                            4) if engine.capital_at(c, i) > 0 else None for i in recent]
+        fu = engine.fund.at(c)
         for k, v in fu.items():
             if isinstance(v, float):
-                row[k] = _r(v * 100 if k in ("r1", "r3", "r12", "e4y", "oy", "om", "nm") else v,
-                            2)
+                row[k] = _r(v * 100 if k in PCT_FIELDS else v, 2)
             elif isinstance(v, bool):
                 row[k] = 1 if v else 0
             elif v is not None:
@@ -648,6 +768,8 @@ def build_validate(history: list[dict], weights_today: dict[str, float]) -> dict
                    "excess": _r(row["l1"]["excess"] * 100, 2)},
             "l1t": {"n": row["l1t"]["n"], "ret": _r(row["l1t"]["ret"] * 100, 2),
                     "excess": _r(row["l1t"]["excess"] * 100, 2)},
+            "pick": {"n": row["pick"]["n"], "ret": _r(row["pick"]["ret"] * 100, 2),
+                     "excess": _r(row["pick"]["excess"] * 100, 2)},
             "market": _r(row.get("market", NAN) * 100, 2),
         })
 
@@ -665,7 +787,7 @@ def build_validate(history: list[dict], weights_today: dict[str, float]) -> dict
                          "t": _r(s["t"], 2), "hit": _r(s["hit"], 3), "n": s["n"],
                          "weight": _r(weights_today.get(f, NAN), 4)}
                      for f, s in feats.items()},
-        "l1": agg("l1"), "l1t": agg("l1t"),
+        "l1": agg("l1"), "l1t": agg("l1t"), "pick": agg("pick"),
         "weekly": weekly[::-1],
         "fwd_days": FWD_DAYS,
     }
@@ -708,6 +830,11 @@ def _strip_nulls(row: dict) -> dict:
     return {k: v for k, v in row.items() if v is not None}
 
 
+def _flows_days(engine: Engine) -> int:
+    folder = engine.data_dir / "market" / "daily" / "flows"
+    return len(list(folder.glob("*.csv.gz"))) if folder.is_dir() else 0
+
+
 def run(data_dir: Path) -> dict[str, object]:
     """每天那一趟。回傳摘要（印在 log 上）。"""
     out = data_dir / OUT_DIR
@@ -715,9 +842,8 @@ def run(data_dir: Path) -> dict[str, object]:
     if not engine.p.dates:
         raise RuntimeError("沒有行情資料")
     vetoes, veto_asof = load_vetoes(data_dir)
-    fundamentals = F.load_fundamentals(data_dir)
     history = engine.weekly()
-    today = build_today(engine, history, vetoes, fundamentals)
+    today = build_today(engine, history, vetoes)
 
     journal = update_journal(out / JOURNAL_FILE, today)
     followed = follow_journal(engine, journal)
@@ -732,8 +858,9 @@ def run(data_dir: Path) -> dict[str, object]:
         "universe": today["universe"],
         "weights": {f: _r(v, 4) for f, v in today["weights"].items()},
         "feature_text": FEATURE_TEXT,
-        "veto_asof": veto_asof,
-        "veto_count": len(vetoes),
+        "veto_asof": today["asof"] if engine.quality is not None else veto_asof,
+        "veto_count": sum(1 for r in today["rows"] if r.get("veto")),
+        "flows_days": _flows_days(engine),
         "levels15": have15,
         "params": {"min_price": MIN_PRICE, "min_value": MIN_VALUE, "top_pct": TOP_PCT,
                    "min_pillars": MIN_PILLARS, "fwd_days": FWD_DAYS},

@@ -140,22 +140,50 @@ def pick_boundary(lower: Sequence[float], lots: float) -> int:
 
 def whale(lower: Sequence[float], shares: Sequence[float], total: float, price: float,
           people: Sequence[float] | None = None) -> tuple[float, float, float]:
-    """(大戶持股比例, 大戶人數, 使用的張數下限)。
+    """(大戶持股比例, 大戶人數, 門檻張數)。
 
     `lower`／`shares`／`people` 是同一週各級的下限、股數、人數（等長）。`total`
     是集保合計股數（分母用合計，不用級距相加——見 :mod:`twsix.ingest.tdcc`）。
     沒有人數（八級資料）時人數回 NaN。
+
+    ## 門檻落在級距中間時：對數內插，不跳格
+
+    「挑最接近的一條級距」（:func:`pick_boundary`）有個副作用：股價跨過兩條級距
+    的中點時，門檻從 30 張跳到 20 張，大戶人數一夜之間多三成——那不是籌碼變了，
+    是尺換了。所以門檻 L 落在 [下限 a, 下限 b) 那一級時，那一級只算
+    ``(ln b − ln L) ÷ (ln b − ln a)`` 的比例（持股分佈在級距內大致是對數均勻的），
+    其餘各級全算。股價連續變動時，大戶比例與人數也連續變動。
+
+    門檻超過集保最高一級（＞1,000 張，股價低於 50 元）時只能整級算進來——那是
+    集保分級的上限。
     """
     if isnan(total) or total <= 0:
         return NAN, NAN, NAN
-    k = pick_boundary(lower, whale_lots(price))
-    if k < 0:
+    lots = whale_lots(price)
+    if isnan(lots):
         return NAN, NAN, NAN
-    held = sum(s for s in shares[k:] if not isnan(s))
+    pos = [k for k, b in enumerate(lower) if b > 0]
+    if not pos:
+        return NAN, NAN, NAN
+    part = [0.0] * len(lower)            # 每一級算進來的比例
+    if lots >= lower[pos[-1]]:
+        part[pos[-1]] = 1.0
+    elif lots <= lower[pos[0]]:
+        for k in range(pos[0], len(lower)):
+            part[k] = 1.0
+    else:
+        for j in range(len(pos) - 1):
+            a, b = lower[pos[j]], lower[pos[j + 1]]
+            if a <= lots < b:
+                part[pos[j]] = (math.log(b) - math.log(lots)) / (math.log(b) - math.log(a))
+                for k in range(pos[j + 1], len(lower)):
+                    part[k] = 1.0
+                break
+    held = sum(f * s for f, s in zip(part, shares, strict=False) if f and not isnan(s))
     count = NAN
     if people is not None:
-        count = sum(p for p in people[k:] if not isnan(p))
-    return held / total, count, float(lower[k])
+        count = sum(f * n for f, n in zip(part, people, strict=False) if f and not isnan(n))
+    return held / total, count, lots
 
 
 # ---------------------------------------------------------------------------

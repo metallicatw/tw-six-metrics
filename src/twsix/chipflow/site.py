@@ -70,7 +70,7 @@ def _stamp_key(data_dir: Path) -> dict[str, str]:
         # 內容雜湊而不是修改時間：CI 每次 checkout，檔案時間都是「現在」。
         "radar": hashlib.sha1(radar.read_bytes()).hexdigest() if radar.exists() else "",
         "levels": str(len(list((data_dir / "ownership" / "levels").glob("*.csv.gz")))),
-        "version": "1",
+        "version": "2",
     }
 
 
@@ -142,6 +142,48 @@ def _single(st: dict, yq: tuple[int, int], key: str) -> float:
     return NAN if isnan(before) else cur - before
 
 
+def sheet_series(quarters: dict[str, dict[str, float]], income: dict) -> dict:
+    """③ 的存貨、合約負債、資本支出（個股季報，近八季，舊→新）。"""
+    labels = sorted(quarters)[-8:]
+    if not labels:
+        return {}
+
+    def g(lb: str, key: str) -> float:
+        return quarters.get(lb, {}).get(key, NAN)
+
+    def prev(lb: str, k: int) -> str:
+        y, q = int(lb[:4]), int(lb[5])
+        idx = y * 4 + q - 1 - k
+        return f"{idx // 4}.{idx % 4 + 1}Q"
+
+    out: dict[str, list] = {k: [] for k in ("inv", "inv_turn", "inv_rev", "cl", "cl_rev",
+                                             "cl_cap", "capex", "cx_cap")}
+    for lb in labels:
+        roc = (int(lb[:4]) - 1911, int(lb[5]))
+        rev_q = _single(income, roc, "rev") / 1000
+        cost_q = _single(income, roc, "cost") / 1000
+        rev4 = [_single(income, ((int(prev(lb, k)[:4]) - 1911), int(prev(lb, k)[5])), "rev")
+                for k in range(4)]
+        rev4v = sum(rev4) / 1000 if not any(isnan(v) for v in rev4) else NAN
+        inv, inv1, cl, cap = g(lb, "inv"), g(prev(lb, 1), "inv"), g(lb, "cl"), g(lb, "capital")
+        cx4 = [g(prev(lb, k), "capex") for k in range(4)]
+        out["inv"].append(_r(inv, 0))
+        out["inv_turn"].append(_r(cost_q / ((inv + inv1) / 2), 3)
+                               if not isnan(cost_q) and not isnan(inv1) and inv + inv1 > 0
+                               else None)
+        out["inv_rev"].append(_r(inv / rev_q * 100, 1) if rev_q > 0 and not isnan(inv)
+                              else None)
+        out["cl"].append(_r(cl, 0))
+        cl4 = g(prev(lb, 4), "cl")
+        out["cl_rev"].append(_r((cl - cl4) / rev4v * 100, 2)
+                             if not isnan(cl4) and not isnan(rev4v) and rev4v > 0 else None)
+        out["cl_cap"].append(_r(cl / cap * 100, 1) if cap > 0 and not isnan(cl) else None)
+        out["capex"].append(_r(g(lb, "capex"), 0))
+        out["cx_cap"].append(_r(sum(cx4) / cap * 100, 1)
+                             if cap > 0 and not any(isnan(v) for v in cx4) else None)
+    return {"q": [f"{lb[:4]}Q{lb[5]}" for lb in labels], **out}
+
+
 def fundamentals_series(income: dict, balance: dict) -> dict:
     """③ 的季序列（舊→新）。"""
     quarters = sorted(yq for yq, v in income.items() if "rev" in v)
@@ -174,6 +216,18 @@ def fundamentals_series(income: dict, balance: dict) -> dict:
                         if not isnan(cap) and cap > 0 and not isnan(re_) else NAN)
         assets = b.get("assets", NAN)
         roa.append(ni4[k] / assets * 100 if not isnan(ni4[k]) and assets > 0 else NAN)
+    # 前面整段沒有資料的季不畫（官方彙總只留 12 季，20 格裡前面會空一大段）
+    first = next((k for k, v in enumerate(rev) if not isnan(v)), 0)
+    seq, rev, op, ni, eps = seq[first:], rev[first:], op[first:], ni[first:], eps[first:]
+    eps4, ni4 = eps4[first:], ni4[first:]
+    bal = bal[first:]
+    ret_apic, roa = ret_apic[first:], roa[first:]
+
+    def yoy(vals, k):  # noqa: F811 - 截掉前段之後重新定義，索引才對得上
+        if k < 4 or isnan(vals[k]) or isnan(vals[k - 4]) or vals[k - 4] <= 0:
+            return NAN
+        return (vals[k] / vals[k - 4] - 1) * 100
+
     return {
         "q": [f"{y + 1911}Q{q}" for y, q in seq],
         "eps": [_r(v, 2) for v in eps],
@@ -266,12 +320,12 @@ def holders_series(engine: Engine, code: str) -> dict:
 def daily_series(engine: Engine, code: str, days: list[int], ranks: dict[int, dict]) -> dict:
     """① ⑦ ⑧ ⑪ ⑫ 的日序列（舊→新，和 market.json 的日期對齊）。"""
     p = engine.p
-    cap = engine.capital.get(code, NAN)
     ws = engine.tiers.get(code, [])
     out: dict[str, list] = {k: [] for k in (
         "cl", "fa", "z", "yr", "va", "vs", "vr", "vc", "hp", "hc", "sh",
-        "g20", "g60", "tex", "fpw", "vpw", "wr", "xr")}
+        "g20", "g60", "tex", "fpw", "vpw", "wr", "xr", "fa20", "ft", "hk")}
     for i in days:
+        cap = engine.capital_at(code, i)
         st = engine.day_stats(i)
         rk = ranks[i]
         cl = p.close[code][i]
@@ -295,6 +349,8 @@ def daily_series(engine: Engine, code: str, days: list[int], ranks: dict[int, di
         if w is not None and not isnan(cl):
             ratio, count, _ = engine.whale_week(code, w, cl)
         out["hp"].append(_r(ratio * 100, 2))
+        # 大戶庫存張數 ＝ 大戶比例 × 集保總股數 ÷ 1,000
+        out["hk"].append(None if w is None or isnan(ratio) else int(ratio * w.total / 1000))
         out["hc"].append(None if isnan(count) else int(count))
         out["sh"].append(None if w is None or isnan(w.holders) else int(w.holders))
         out["g20"].append(_r(engine.buy[code].window(i, 20), 2))
@@ -310,6 +366,11 @@ def daily_series(engine: Engine, code: str, days: list[int], ranks: dict[int, di
                           else None)
         out["wr"].append(rk["wr"].get(code))
         out["xr"].append(rk["xr"].get(code))
+        # 法人預估成交額 20 日 ＝（外資＋投信的買進＋賣出）÷ 2 × 均價；市值周轉率 ＝ 它 ÷ 市值
+        fit20 = engine.fit[code].window(i, 20)
+        out["fa20"].append(_r(fit20 / 1e8, 2))
+        out["ft"].append(_r(fit20 / mcap * 100, 2) if not isnan(fit20) and mcap and mcap > 0
+                         else None)
     return {k: v for k, v in out.items() if any(x is not None for x in v)}
 
 
@@ -376,9 +437,6 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
                     "val_total": sum(vals), "wr": rank_desc(per_fi),
                     "xr": rank_desc(per_val)}
         avg_va.append(_r(sum(vals) / len(vals) / 1e8, 3) if vals else None)
-    (out / "market.json").write_bytes(_dump({
-        "asof": p.asof, "dates": [p.dates[i] for i in days], "avg_va": avg_va,
-        "universe": len(engine.codes)}))
 
     # ⑨⑩：近 20 日兩張排名表的前 100 名（最新的在前）
     names = {r["c"]: r["n"] for r in radar_doc.get("rows", [])}
@@ -400,6 +458,23 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
     rich |= _watchlist(repo_root or data_dir.parent)
     rich &= set(engine.codes)
 
+    # ⑫「範圍：全部收錄個股」：近 60 日所有有日序列的個股，金額的上下限
+    ext_fa: list[float] = []
+    ext_va: list[float] = []
+    for i in days[-60:]:
+        st = engine.day_stats(i)
+        for c in rich:
+            fa, va = st["fi60"].get(c, NAN), st["val20"].get(c, NAN)
+            if not isnan(fa):
+                ext_fa.append(fa / 1e8)
+            if not isnan(va) and va > 0:
+                ext_va.append(va / 1e8)
+    (out / "market.json").write_bytes(_dump({
+        "asof": p.asof, "dates": [p.dates[i] for i in days], "avg_va": avg_va,
+        "universe": len(engine.codes), "flows": engine.has_flows,
+        "ext": {"fa": [_r(min(ext_fa), 2), _r(max(ext_fa), 2)] if ext_fa else None,
+                "va": [_r(min(ext_va), 3), _r(max(ext_va), 2)] if ext_va else None}}))
+
     income = load_income(data_dir)
     balance = load_balance(data_dir)
     from ..aipick.revenue import load_revenue  # noqa: PLC0415
@@ -417,6 +492,7 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
             doc["d"] = daily_series(engine, c, days, ranks)
         doc["h"] = holders_series(engine, c)
         doc["fq"] = fundamentals_series(income.get(c, {}), balance.get(c, {}))
+        doc["fs"] = sheet_series(engine.fund.sheets.get(c, {}), income.get(c, {}))
         doc["fm"] = revenue_series(engine, c, revenue.get(c, {}), notes.get(c, {}))
         (out / "stock" / f"{c}.json").write_bytes(_dump(doc))
         written += 1

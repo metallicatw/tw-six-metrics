@@ -157,9 +157,11 @@ def load_tiers(data_dir: Path, codes: set[str] | None = None) -> dict[str, list[
     """每一檔的集保週資料，舊的在前。三個來源，同一週後者蓋前者：
 
     1. `ownership/stock/<代號>.csv.gz`：逐檔回補的一年（八級）
-    2. `ownership/holders/<日期>.csv.gz`：每週全市場（八級）
-    3. `ownership/levels/<日期>.csv.gz`：每週全市場的原始 15 級（含人數；
-       2026-09 起才開始存）
+    2. `ownership/levels_stock/<代號>.csv.gz`：逐檔回補的一年（原始 15 級，含人數）
+    3. `ownership/holders/<日期>.csv.gz`：每週全市場（八級）
+    4. `ownership/levels/<日期>.csv.gz`：每週全市場的原始 15 級（含人數）
+
+    同一週 2 蓋 1、4 蓋 3；但 3（八級）不會蓋掉 2（15 級）——見下面的順序。
     """
     root = data_dir / "ownership"
     out: dict[str, dict[str, TierWeek]] = {}
@@ -175,6 +177,15 @@ def load_tiers(data_dir: Path, codes: set[str] | None = None) -> dict[str, list[
             w = _week8((r.get("date") or "").strip(), r)
             if w:
                 out.setdefault(code, {})[w.date] = w
+    # 逐檔回補的原始 15 級（有人數），蓋掉同一週的八級
+    for path in sorted((root / "levels_stock").glob("*.csv.gz")):
+        code = path.name.split(".")[0]
+        if not keep(code):
+            continue
+        for r in _gz_rows(path):
+            w = _week15((r.get("date") or "").strip(), r)
+            if w:
+                out.setdefault(code, {})[w.date] = w
     for sub, parse in (("holders", _week8), ("levels", _week15)):
         for path in sorted((root / sub).glob("*.csv.gz")):
             day = path.name[:8]
@@ -183,8 +194,13 @@ def load_tiers(data_dir: Path, codes: set[str] | None = None) -> dict[str, list[
                 if not code or not keep(code):
                     continue
                 w = parse(day, r)
-                if w:
-                    out.setdefault(code, {})[w.date] = w
+                if not w:
+                    continue
+                slot = out.setdefault(code, {})
+                old = slot.get(w.date)
+                if old is not None and old.source == "15" and w.source == "8":
+                    continue            # 八級不蓋掉同一週已經有的 15 級
+                slot[w.date] = w
     return {c: [ws[d] for d in sorted(ws)] for c, ws in out.items()}
 
 
@@ -201,3 +217,110 @@ def load_vetoes(data_dir: Path) -> tuple[set[str], str]:
         return set(), ""
     codes = {str(v.get("code", "")).strip() for v in doc.get("vetoes") or []}
     return {c for c in codes if c}, str(doc.get("asof") or "")
+
+
+# ---------------------------------------------------------------------------
+# 成交金額與法人買進／賣出（data/market/daily/flows，見 twsix.ingest.flows）
+
+
+def load_flows(data_dir: Path, panel: Panel, codes: set[str]) -> dict[str, dict[str, array]]:
+    """`{代號: {"value", "fb", "fs", "tb", "ts": array}}`，對齊 `panel.dates`，缺值 NaN。
+
+    沒有這個目錄（還沒回補）時回空 dict，呼叫端改用 股數 × 收盤價 估。
+    """
+    folder = data_dir / "market" / "daily" / "flows"
+    n = len(panel.dates)
+    pos = {d: i for i, d in enumerate(panel.dates)}
+    out: dict[str, dict[str, array]] = {}
+    keys = (("value", "value"), ("fb", "f_buy"), ("fs", "f_sell"), ("tb", "t_buy"),
+            ("ts", "t_sell"))
+    for path in sorted(folder.glob("*.csv.gz")):
+        i = pos.get(path.name[:10])
+        if i is None:
+            continue
+        for r in _gz_rows(path):
+            code = (r.get("code") or "").strip()
+            if code not in codes:
+                continue
+            slot = out.get(code)
+            if slot is None:
+                slot = out[code] = {k: array("d", [NAN]) * n for k, _ in keys}
+            for k, col in keys:
+                slot[k][i] = _num(r.get(col))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# 個股季報（data/sheets/<代號>/BSQ、CFQ：存貨、合約負債、股本、資本支出；單位百萬）
+
+#: 季報的法定公告期限——在這一天之後才「看得到」那一季（和 AI 選股同一套）。
+REPORT_DEADLINE = {1: "05-15", 2: "08-14", 3: "11-14", 4: "03-31"}
+
+
+def quarter_available(label: str) -> str:
+    """`2026.2Q` → 那一季最早可以用的日期（西元 YYYY-MM-DD）。"""
+    y, q = int(label[:4]), int(label[5])
+    return f"{y + (1 if q == 4 else 0):04d}-{REPORT_DEADLINE[q]}"
+
+
+def _sheet(path: Path) -> list[list[str]]:
+    try:
+        grid = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
+    except (OSError, ValueError, EOFError):
+        return []
+    return grid if isinstance(grid, list) else []
+
+
+def _sheet_rows(grid: list[list[str]], wanted: dict[str, tuple[str, ...]],
+                sign: float = 1.0) -> dict[str, dict[str, float]]:
+    head = next((r for r in grid if r and str(r[0]).strip() == "期別"), None)
+    if not head:
+        return {}
+    labels = [str(c).strip() for c in head[1:]]
+    out: dict[str, dict[str, float]] = {lb: {} for lb in labels if len(lb) == 7}
+    for row in grid:
+        if not row:
+            continue
+        name = str(row[0]).strip()
+        for key, names in wanted.items():
+            if name in names:
+                for lb, cell in zip(labels, row[1:], strict=False):
+                    v = _num(str(cell))
+                    if lb in out and not isnan(v):
+                        out[lb][key] = out[lb].get(key, 0.0) + sign * v
+    return out
+
+
+def load_sheet_quarters(data_dir: Path, codes: set[str]) -> dict[str, dict[str, dict[str, float]]]:
+    """`{代號: {"2026.2Q": {inv, cl, capital, capex}}}`（百萬元；capex 取正值、單季）。"""
+    root = data_dir / "sheets"
+    out: dict[str, dict[str, dict[str, float]]] = {}
+    if not root.is_dir():
+        return out
+    for code in codes:
+        bs = _sheet_rows(_sheet(root / code / "BSQ.json.gz"), {
+            "inv": ("存貨",),
+            "cl": ("合約負債－流動", "合約負債－非流動"),
+            "capital": ("股本",),
+        })
+        cf = _sheet_rows(_sheet(root / code / "CFQ.json.gz"), {
+            "capex": ("購置不動產廠房設備（含預付）－CFI",),
+        }, sign=-1.0)
+        merged: dict[str, dict[str, float]] = {}
+        for lb in set(bs) | set(cf):
+            d = {**bs.get(lb, {}), **cf.get(lb, {})}
+            if d:
+                merged[lb] = d
+        if merged:
+            out[code] = merged
+    return out
+
+
+def capital_timeline(quarters: dict[str, dict[str, float]]) -> list[tuple[str, float]]:
+    """`[(可用日期, 股本元), ...]`，舊的在前。給「那一天看得到的資本額」用。"""
+    out = []
+    for lb, d in quarters.items():
+        cap = d.get("capital")
+        if cap is not None and cap > 0:
+            out.append((quarter_available(lb), cap * 1e6))
+    return sorted(out)

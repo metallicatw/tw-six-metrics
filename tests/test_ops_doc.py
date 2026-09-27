@@ -38,6 +38,7 @@ ROW_TO_WORKFLOW = {
     "心跳": "heartbeat",
     "每日全市場": "daily",
     "每日全市場（第二次）": "daily",
+    "籌碼雷達回補": "chipflow-backfill",
 }
 
 

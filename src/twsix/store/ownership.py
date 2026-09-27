@@ -43,6 +43,8 @@ DIRECTOR_STOCK_DIR = "directors_stock"
 #: 原始 15 級（人數與股數），給〔籌碼雷達〕的 5,000 萬大戶用。每週一個檔，
 #: 和 `holders/` 並排、互不干擾：個股格線與 AI 選股照舊只讀 `holders/`。
 LEVELS_DIR = "levels"
+#: 逐檔回補的原始 15 級（一檔一個檔，週線），和 `stock/` 並排、互不干擾。
+LEVELS_STOCK_DIR = "levels_stock"
 
 _HOLDER_FIELDS = ("code", "holders", "shares", *[f"t{i}" for i in range(1, 9)])
 _LEVEL_FIELDS = (
@@ -114,26 +116,66 @@ def save_levels(root: Path, market: dict[str, tdcc.Snapshot]) -> Path | None:
 
     只是**多存一份**：`holders/` 那一份照原樣寫，這裡失敗也不影響它（呼叫端包著）。
     """
-    rows = []
-    for code, s in sorted(market.items()):
-        if not s.levels:
-            continue
-        people = dict.fromkeys(range(1, 16), 0)
-        shares = dict.fromkeys(range(1, 16), 0)
-        for b, n, sh in s.levels:
-            if 1 <= b <= 15:
-                people[b], shares[b] = n, sh
-        rows.append([
-            code, str(s.holders), str(s.shares),
-            *[str(people[i]) for i in range(1, 16)],
-            *[str(shares[i]) for i in range(1, 16)],
-        ])
+    rows = [_level_row(code, s) for code, s in sorted(market.items()) if s.levels]
     if not rows:
         return None
     day = next(iter(market.values())).day
     path = root / LEVELS_DIR / f"{day:%Y%m%d}.csv.gz"
     _write(path, _LEVEL_FIELDS, rows)
     return path
+
+
+_LEVEL_STOCK_FIELDS = ("date", *_LEVEL_FIELDS[1:])
+
+
+def _level_row(first: str, s: tdcc.Snapshot) -> list[str]:
+    people = dict.fromkeys(range(1, 16), 0)
+    shares = dict.fromkeys(range(1, 16), 0)
+    for b, n, sh in s.levels:
+        if 1 <= b <= 15:
+            people[b], shares[b] = n, sh
+    return [first, str(s.holders), str(s.shares),
+            *[str(people[i]) for i in range(1, 16)],
+            *[str(shares[i]) for i in range(1, 16)]]
+
+
+def save_level_history(root: Path, stock_id: str, snapshots: Iterable[tdcc.Snapshot]) -> int:
+    """逐檔回補的原始 15 級，和既有的合併（同一週以新的為準）。沒有 15 級的快照略過。"""
+    path = root / LEVELS_STOCK_DIR / f"{stock_id}.csv.gz"
+    have: dict[str, list[str]] = {}
+    if path.exists():
+        for row in _read(path):
+            have[row["date"]] = [row[f] for f in _LEVEL_STOCK_FIELDS]
+    added = 0
+    for snap in snapshots:
+        if not snap.levels:
+            continue
+        have[f"{snap.day:%Y%m%d}"] = _level_row(f"{snap.day:%Y%m%d}", snap)
+        added += 1
+    if not added and not path.exists():
+        return 0
+    rows = [have[k] for k in sorted(have)]
+    _write(path, _LEVEL_STOCK_FIELDS, rows)
+    return len(rows)
+
+
+def level_history_dates(root: Path, stock_id: str) -> set[date]:
+    """這一檔已經有原始 15 級的週（逐檔回補的＋每週全市場的）。"""
+    out: set[date] = set()
+    path = root / LEVELS_STOCK_DIR / f"{stock_id}.csv.gz"
+    if path.exists():
+        for row in _read(path):
+            t = row["date"]
+            out.add(date(int(t[:4]), int(t[4:6]), int(t[6:8])))
+    return out
+
+
+def market_level_dates(root: Path) -> set[date]:
+    """每週全市場那一份原始 15 級有哪幾週（那幾週不必逐檔問）。"""
+    out: set[date] = set()
+    for stamp, _path in _snapshots(root, LEVELS_DIR):
+        out.add(date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8])))
+    return out
 
 
 def save_directors(root: Path, market: dict[str, ins.Company]) -> Path:

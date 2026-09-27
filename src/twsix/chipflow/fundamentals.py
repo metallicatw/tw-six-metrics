@@ -15,9 +15,11 @@ from pathlib import Path
 
 from ..aipick.revenue import load_revenue, month_key
 from .indicators import NAN, isnan
+from .load import load_sheet_quarters, quarter_available
 
 INCOME_COLS = {
     "rev": ("營業收入",),
+    "cost": ("營業成本",),
     "op": ("營業利益（損失）", "營業利益"),
     "ni": ("本期淨利（淨損）",),
     "eps": ("基本每股盈餘（元）", "基本每股盈餘"),
@@ -90,9 +92,17 @@ def _is_high(series: list[float], n: int) -> bool | None:
     return series[-1] >= max(series[-n:])
 
 
-def quarterly(stmts: dict[tuple[int, int], dict[str, float]]) -> dict[str, object]:
-    """最新一季的 EPS、利潤率、成長與創新高旗標。沒有營收的回空 dict。"""
-    quarters = sorted(yq for yq, v in stmts.items() if "rev" in v)
+def roc_available(yq: tuple[int, int]) -> str:
+    """民國 (年, 季) 的財報最早可以用的日期（法定公告期限）。"""
+    y, q = yq
+    return quarter_available(f"{y + 1911}.{q}Q")
+
+
+def quarterly(stmts: dict[tuple[int, int], dict[str, float]],
+              asof: str | None = None) -> dict[str, object]:
+    """最新一季（`asof` 那天看得到的）的 EPS、利潤率、成長與創新高旗標。"""
+    quarters = sorted(yq for yq, v in stmts.items() if "rev" in v
+                      and (asof is None or roc_available(yq) <= asof))
     if not quarters:
         return {}
     last = quarters[-1]
@@ -129,8 +139,16 @@ def quarterly(stmts: dict[tuple[int, int], dict[str, float]]) -> dict[str, objec
     }
 
 
-def monthly(series: dict[int, float]) -> dict[str, object]:
-    """最新一個月的營收年增（單月、3 月累計、12 月累計）與創新高。"""
+def month_available(k: int) -> str:
+    """月營收（month_key）最早可以用的日期：次月 10 日（法定公告期限）。"""
+    y, m = (k + 1) // 12, (k + 1) % 12 + 1
+    return f"{y:04d}-{m:02d}-10"
+
+
+def monthly(series: dict[int, float], asof: str | None = None) -> dict[str, object]:
+    """最新一個月（`asof` 那天看得到的）的營收年增與創新高。"""
+    if asof is not None:
+        series = {k: v for k, v in series.items() if month_available(k) <= asof}
     if not series:
         return {}
     k = max(series)
@@ -168,18 +186,84 @@ def growth_flags(f: dict[str, object]) -> list[str]:
     return out
 
 
-def load_fundamentals(data_dir: Path) -> dict[str, dict[str, object]]:
-    """每一檔的基本面欄位（月＋季併成一個 dict）。"""
-    income = load_income(data_dir)
-    revenue = load_revenue(data_dir)
-    out: dict[str, dict[str, object]] = {}
-    for code in set(income) | set(revenue):
-        d: dict[str, object] = {}
-        d.update(quarterly(income.get(code, {})))
-        d.update(monthly(revenue.get(code, {})))
-        if d:
-            out[code] = d
+def sheet_metrics(quarters: dict[str, dict[str, float]],
+                  income: dict[tuple[int, int], dict[str, float]],
+                  asof: str | None = None) -> dict[str, object]:
+    """存貨、合約負債、資本支出（個股季報，百萬元）。`asof` 之前看得到的最新一季。
+
+    * 合約負債佔股本比 ＝ 合約負債 ÷ 股本
+    * 合約負債年增額佔四季營收比 ＝（本季 − 去年同季合約負債）÷ 近四季營收
+    * 資本支出（四季）佔股本比 ＝ 近四季購置不動產廠房設備 ÷ 股本
+    * 存貨營收比 ＝ 存貨 ÷ 單季營收；存貨周轉率 ＝ 單季營業成本 ÷ 平均存貨（次／季）
+    """
+    labels = sorted(lb for lb in quarters if asof is None or quarter_available(lb) <= asof)
+    if not labels:
+        return {}
+    last = labels[-1]
+    y, q = int(last[:4]), int(last[5])
+    idx = y * 4 + q - 1
+
+    def lab(k: int) -> str:
+        return f"{(idx - k) // 4}.{(idx - k) % 4 + 1}Q"
+
+    def get(k: int, key: str) -> float:
+        return quarters.get(lab(k), {}).get(key, NAN)
+
+    roc = (y - 1911, q)
+    rev_q = single(income, roc, "rev")
+    cost_q = single(income, roc, "cost")
+    rev4 = NAN
+    vals = [single(income, _prev(roc, k), "rev") for k in range(4)]
+    if not any(isnan(v) for v in vals):
+        rev4 = sum(vals) / 1000                     # 仟元 → 百萬
+    cap, cl, inv = get(0, "capital"), get(0, "cl"), get(0, "inv")
+    capex = [get(k, "capex") for k in range(4)]
+    out: dict[str, object] = {"sq": last}
+    if not isnan(cl) and not isnan(cap) and cap > 0:
+        out["cl_cap"] = cl / cap
+    if not any(isnan(v) for v in capex) and not isnan(cap) and cap > 0:
+        out["cx_cap"] = sum(capex) / cap
+    cl4 = get(4, "cl")
+    if not isnan(cl) and not isnan(cl4) and not isnan(rev4) and rev4 > 0:
+        out["cl_rev"] = (cl - cl4) / rev4
+    if not isnan(inv) and not isnan(rev_q) and rev_q > 0:
+        out["inv_rev"] = inv / (rev_q / 1000)
+    inv1 = get(1, "inv")
+    if not isnan(inv) and not isnan(inv1) and not isnan(cost_q) and inv + inv1 > 0:
+        out["inv_turn"] = (cost_q / 1000) / ((inv + inv1) / 2)
     return out
+
+
+class FundBook:
+    """全市場基本面，可以問「某一檔在某一天看得到的」欄位（回測不偷看答案）。"""
+
+    def __init__(self, data_dir: Path, codes: set[str] | None = None):
+        self.income = load_income(data_dir)
+        self.revenue = load_revenue(data_dir)
+        wanted = codes if codes is not None else set(self.income) | set(self.revenue)
+        self.sheets = load_sheet_quarters(data_dir, wanted)
+        self._cache: dict[tuple[str, str], dict[str, object]] = {}
+
+    def codes(self) -> set[str]:
+        return set(self.income) | set(self.revenue)
+
+    def at(self, code: str, asof: str | None = None) -> dict[str, object]:
+        key = (code, asof or "")
+        got = self._cache.get(key)
+        if got is None:
+            inc = self.income.get(code, {})
+            got = {}
+            got.update(quarterly(inc, asof))
+            got.update(monthly(self.revenue.get(code, {}), asof))
+            got.update(sheet_metrics(self.sheets.get(code, {}), inc, asof))
+            self._cache[key] = got
+        return got
+
+
+def load_fundamentals(data_dir: Path) -> dict[str, dict[str, object]]:
+    """每一檔「今天」看得到的基本面欄位（相容舊介面）。"""
+    book = FundBook(data_dir)
+    return {c: d for c in book.codes() if (d := book.at(c))}
 
 
 __all__ = ["load_fundamentals", "growth_flags", "quarterly", "monthly", "month_key"]
