@@ -267,3 +267,127 @@ class YearlyTrading:
         check(years)
         sources = [n for n, ys in parsed.items() if ys]
         return to_grid(years), sources
+
+
+# ---------------------------------------------------------------------------
+# 交易所沒有這一檔的年度表時：由股價週線與每日行情推算
+#
+# 〔年度交易資訊〕是估值的地基——本益比區間（自行計算）拿它的最高／最低價除以年度
+# EPS，殖利率估價拿它的最高／最低／收盤平均去除股利。沒有它，那一檔就沒有本益比
+# 河流圖的分區、沒有目標價與下檔價、沒有報酬風險比，也就進不了〔趨勢×六大×報酬〕。
+#
+# 交易所拿不到的原因幾乎都是「上市未滿五年」：證交所的年度表只列已結束的年度，
+# 而 `check()` 要至少五年才寫檔。但這三個數字不是只有交易所算得出來——
+#
+# * 每日行情（2024 起整年都在）：逐日算，和交易所的定義一模一樣。
+# * 〔股價(週)〕（1998 起）：最高＝各週最高的最高、最低＝各週最低的最低（實測 6,045
+#   個年度 97% 分毫不差，其餘是跨年那一週的歸屬）；收盤平均用週收盤平均近似
+#   （中位數誤差 0.15%、九成在 0.5% 以內）。
+#
+# 所以交易所那一份永遠優先；只有**完全沒有**那一份的股票才用推算的，格線第一列
+# 寫明「推算」，個股頁的資料來源會標出來。只算已經結束的年度（和證交所一致，
+# 當年度由 `yearly_prices` 的 anchor 留白），而且不早於上市（櫃）那一年。
+
+DERIVED_NOTE = "（推算：交易所沒有這一檔的年度資料，由股價週線與每日行情算出）"
+
+
+def is_derived(grid: Sequence[Sequence[str]]) -> bool:
+    return bool(grid) and bool(grid[0]) and str(grid[0][0]).startswith("（推算")
+
+
+_LISTED: dict[str, dict[str, str]] = {}
+
+
+def listing_dates(data_dir: Any) -> dict[str, str]:
+    """代號 → 上市（櫃）日期 `YYYYMMDD`，取自兩個交易所的公司基本資料快照。讀不到回空的。"""
+    import csv  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    root = Path(data_dir)
+    key = str(root.resolve())
+    if key in _LISTED:
+        return _LISTED[key]
+    out: dict[str, str] = {}
+    for name, code_col, date_col in (("twse_companies.csv", "公司代號", "上市日期"),
+                                     ("tpex_companies.csv", "SecuritiesCompanyCode",
+                                      "DateOfListing")):
+        try:
+            with (root / name).open(encoding="utf-8-sig", newline="") as fh:
+                for row in csv.DictReader(fh):
+                    code = (row.get(code_col) or "").strip()
+                    day = (row.get(date_col) or "").strip()
+                    if code and len(day) == 8 and day.isdigit():
+                        out[code] = day
+        except (OSError, csv.Error):
+            continue
+    _LISTED[key] = out
+    return out
+
+
+def derive(weekly_grid: Sequence[Sequence[str]], daily: dict[int, tuple[float, float, float]],
+           *, this_year: int, listed_year: int = 0) -> list[Year]:
+    """推算的年度表（民國年，新的在前）。每日行情有的年份用每日行情，其餘用週線。"""
+    weeks: dict[int, list[tuple[float, float, float]]] = {}
+    for row in list(weekly_grid)[1:]:
+        try:
+            y = int(str(row[1])[:4])
+            c, h, lo = float(row[2]), float(row[4]), float(row[5])
+        except (IndexError, ValueError):
+            continue
+        weeks.setdefault(y, []).append((c, h, lo))
+    out: list[Year] = []
+    for y in sorted(set(weeks) | set(daily), reverse=True):
+        if y >= this_year or y < listed_year:
+            continue
+        if y in daily:
+            hi, lo, avg = daily[y]
+        else:
+            ws = weeks[y]
+            hi = max(w[1] for w in ws)
+            lo = min(w[2] for w in ws)
+            avg = round(sum(w[0] for w in ws) / len(ws), 2)
+        out.append(Year(year=y - 1911, high=hi, low=lo, avg=avg))
+    return out
+
+
+def with_derived_yearly(grids: dict, data_dir: Any, stock: str, *, this_year: int | None = None) -> dict:
+    """沒有〔年度交易資訊〕的股票，補一份推算的（見上面的說明）。有的原樣回傳。"""
+    from datetime import date  # noqa: PLC0415
+
+    from ..store.daily import yearly_from_daily  # noqa: PLC0415
+
+    if grids.get(SHEET):
+        return grids
+    try:
+        listed = listing_dates(data_dir).get(stock, "")
+        years = derive(
+            grids.get("股價(週)") or [],
+            yearly_from_daily(data_dir).get(stock, {}),
+            this_year=this_year or date.today().year,
+            listed_year=int(listed[:4]) if listed else 0,
+        )
+    except Exception:  # noqa: BLE001 - 推算不出來就照舊（沒有這一張）
+        return grids
+    if not years:
+        return grids
+    grid = to_grid(years)
+    grid[0] = [DERIVED_NOTE] + [""] * (WIDTH - 1)
+    return {**grids, SHEET: grid}
+
+
+def absence_note(data_dir: Any, stock: str, *, this_year: int | None = None) -> str:
+    """推算也推不出來時，說一句為什麼（個股頁資料來源那一格用）。說不出來回空字串。"""
+    from datetime import date  # noqa: PLC0415
+
+    listed = listing_dates(data_dir).get(stock, "")
+    if listed[:4] == str(this_year or date.today().year):
+        return "今年才上市（櫃），還沒有任何一個完整年度"
+    return ""
+
+
+def annotate_sources(page: Any, data_dir: Any, stock: str) -> None:
+    """個股頁〔資料來源〕裡〔年度交易資訊〕那一格：沒有的話補上原因。"""
+    for src in getattr(page, "sources", None) or []:
+        if src.get("sheet") == SHEET and not src.get("ok") and not src.get("note"):
+            src["note"] = absence_note(data_dir, stock)
+

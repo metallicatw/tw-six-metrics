@@ -381,3 +381,44 @@ def weekly_bars(data_dir: Path) -> dict[str, list[tuple[str, float, float, float
     }
     _WEEKLY_CACHE[key] = out
     return out
+
+
+_YEARLY_CACHE: dict[str, dict[str, dict[int, tuple[float, float, float]]]] = {}
+
+
+def yearly_from_daily(data_dir: Path) -> dict[str, dict[int, tuple[float, float, float]]]:
+    """`{代號: {西元年: (最高, 最低, 收盤平均)}}`，由每日行情逐日算出（和交易所的年度表同一個定義）。
+
+    只算**整年都在**每日行情裡的年份：第一個檔案那一年（2023，從 08-09 才開始）不算。
+    最高／最低取盤中最高、最低；收盤平均是有成交那幾天收盤價的平均。
+    """
+    key = str(Path(data_dir).resolve())
+    if key in _YEARLY_CACHE:
+        return _YEARLY_CACHE[key]
+    folder = data_dir / "market" / "daily" / "prices"
+    files = sorted(folder.glob("*.csv.gz")) if folder.is_dir() else []
+    acc: dict[str, dict[int, list[float]]] = {}
+    first_year = int(files[0].name[:4]) if files else 0
+    for path in files:
+        year = int(path.name[:4])
+        if year == first_year:
+            continue
+        for row in _rows(path):
+            code = (row.get("code") or "").strip()
+            c = _num(row.get("close", ""))
+            if not code or c is None:
+                continue
+            h = _num(row.get("high", "")) or c
+            lo = _num(row.get("low", "")) or c
+            slot = acc.setdefault(code, {}).get(year)
+            if slot is None:
+                acc[code][year] = [h, lo, c, 1]
+            else:
+                slot[0] = max(slot[0], h)
+                slot[1] = min(slot[1], lo)
+                slot[2] += c
+                slot[3] += 1
+    out = {code: {y: (s[0], s[1], round(s[2] / s[3], 2)) for y, s in ys.items()}
+           for code, ys in acc.items()}
+    _YEARLY_CACHE[key] = out
+    return out

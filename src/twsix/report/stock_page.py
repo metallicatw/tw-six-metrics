@@ -974,8 +974,13 @@ def build_page(
         {"name": n, "why": w} for n, w in UNBUILT_PAGES if not have.get(n)
     ]
 
+    from ..ingest.yearly_trading import SHEET as YEARLY  # noqa: PLC0415
+    from ..ingest.yearly_trading import is_derived
+
+    derived = {YEARLY} if is_derived(grid(YEARLY) or []) else set()
     page.sources = [
-        {"sheet": name, "ok": name in set(sheets_present)}
+        {"sheet": name, "ok": name in set(sheets_present),
+         "note": "推算：由股價週線與每日行情算出" if name in derived else ""}
         for name in (
             "FRQ", "CFQ", "ISQ", "BSQ", "BASIC", "營收", "OPQ", "EPQ", "股利",
             "三大法人", "年財務比率", "年度交易資訊_上市櫃合併_",

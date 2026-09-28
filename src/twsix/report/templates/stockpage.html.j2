@@ -157,7 +157,7 @@
   <summary>資料來源（{{ p.sources|selectattr("ok")|list|length }}/{{ p.sources|length }}）</summary>
   <ul class="srclist">
     {% for s in p.sources %}
-    <li class="{{ 'ok' if s.ok else 'missing' }}">{{ s.sheet }}{% if not s.ok %}　未取得{% endif %}</li>
+    <li class="{{ 'ok' if s.ok else 'missing' }}"{% if s.note %} title="{{ s.note }}"{% endif %}>{{ s.sheet }}{% if s.note and s.ok %}（推算）{% endif %}{% if not s.ok %}　未取得{% if s.note %}（{{ s.note }}）{% endif %}{% endif %}</li>
     {% endfor %}
   </ul>
 </details>

@@ -16,6 +16,7 @@ The third is the dangerous one, and it is why `yearly_prices` takes an anchor.
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 from twsix.ingest.base import FetchError
@@ -433,3 +434,74 @@ def test_今年才上市的不去問_也不會踩到parser壞了的剎車():
     assert not cli._yearly_too_young(root / "sheets" / fresh[0], f"{int(this_year) + 1}-02-01"), (
         "明年一月之後要再問"
     )
+
+
+# ---------------------------------------------------------------------------
+# 交易所沒有這一檔：由股價週線與每日行情推算
+
+
+def _weekly(rows):
+    return [["年度", "日期", "收盤價", "開盤價", "最高價", "最低價", "成交量"], *rows]
+
+
+def test_推算的年度表_每日行情優先_週線補更早_不含當年與上市前():
+    from twsix.ingest.yearly_trading import derive
+
+    weekly = _weekly([
+        ["2021", "2021/03/01", "10", "10", "12", "9", "1"],     # 上市前：不列
+        ["2022", "2022/03/07", "20", "20", "22", "18", "1"],
+        ["2022", "2022/09/05", "30", "30", "33", "28", "1"],
+        ["2024", "2024/05/06", "99", "99", "99", "99", "1"],    # 每日行情有這一年：用每日的
+        ["2026", "2026/05/04", "50", "50", "55", "45", "1"],    # 當年度：不列
+    ])
+    daily = {2024: (120.0, 80.0, 100.5), 2025: (130.0, 90.0, 110.0)}
+    years = derive(weekly, daily, this_year=2026, listed_year=2022)
+    got = [(y.year, y.high, y.low, y.avg) for y in years]
+    assert got == [(114, 130.0, 90.0, 110.0), (113, 120.0, 80.0, 100.5), (111, 33.0, 18.0, 25.0)]
+
+
+def test_有交易所那一份就不推算_沒有才補而且標明推算():
+    import tempfile
+
+    from twsix.ingest.yearly_trading import SHEET, is_derived, with_derived_yearly
+
+    root = Path(tempfile.mkdtemp())
+    official = {SHEET: [[], [], ["114", "", "", "", "1", "", "2", "", "3"]]}
+    assert with_derived_yearly(official, root, "9999") is official
+
+    grids = {"股價(週)": _weekly([["2024", "2024/05/06", "10", "9", "12", "8", "1"],
+                                  ["2025", "2025/05/05", "20", "19", "22", "18", "1"]])}
+    out = with_derived_yearly(grids, root, "9999", this_year=2026)
+    assert is_derived(out[SHEET])
+    years, hi, lo, avg = yearly_prices(GridSource(out))
+    assert years[:2] == [114, 113] and hi[:2] == [22.0, 12.0] and lo[:2] == [18.0, 8.0]
+    assert with_derived_yearly({}, root, "9999") == {}, "連週線都沒有就照舊"
+
+
+def test_推算的年度表接在兩條讀分頁的路上_而且不影響交易所那一份的估值():
+    import inspect
+
+    from twsix import cli
+    from twsix.ingest import valuation_source
+    from twsix.report import build
+
+    assert "with_derived_yearly" in inspect.getsource(cli._fetched_grids)
+    assert "with_derived_yearly" in inspect.getsource(build._full_stock_page)
+    src = inspect.getsource(valuation_source.read_valuation_input)
+    assert "is_derived(" in src, "年數不夠時退回公布本益比，只限推算的那一份"
+
+
+def test_今年才上市的_資料來源寫明原因():
+    import tempfile
+
+    from twsix.ingest.yearly_trading import SHEET, annotate_sources
+
+    root = Path(tempfile.mkdtemp())
+    (root / "twse_companies.csv").write_text(
+        f"上市日期,公司代號\n{date.today():%Y}0301,1623\n", encoding="utf-8")
+
+    class Page:
+        sources = [{"sheet": SHEET, "ok": False, "note": ""}]
+
+    annotate_sources(Page, root, "1623")
+    assert "今年才上市" in Page.sources[0]["note"]

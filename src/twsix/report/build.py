@@ -1465,8 +1465,10 @@ def _full_stock_page(
     if not grids:
         return False
     from ..ingest.weekly_prices import with_daily_weeks
+    from ..ingest.yearly_trading import with_derived_yearly
 
     grids = with_daily_weeks(grids, sheets_dir.parent, stock_id)
+    grids = with_derived_yearly(grids, sheets_dir.parent, stock_id)
 
     try:
         grids = enrich(grids, stock_id)
@@ -1505,6 +1507,9 @@ def _full_stock_page(
             news_items=news_items,
             history=history,
         )
+        from ..ingest.yearly_trading import annotate_sources
+
+        annotate_sources(page, sheets_dir.parent, stock_id)
     except Exception:  # noqa: BLE001 - a bad cache must not fail the build
         return False
 

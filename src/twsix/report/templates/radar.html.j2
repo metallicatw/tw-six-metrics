@@ -34,7 +34,9 @@
 .cf-form .cf-dis{opacity:.5}
 .cf-tbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 .cf-tbl th,.cf-tbl td{border-bottom:1px solid var(--rule);padding:4px 6px;text-align:right;white-space:nowrap}
-.cf-tbl th{cursor:pointer;background:var(--surface-2);position:sticky;top:0}
+/* 釘住的表頭要在最上層：收盤價旁的 Yahoo 圖示用了 CSS mask，mask 會自成一個疊放層，
+   沒有 z-index 的話捲動時它會畫在表頭「收盤」兩個字上面。 */
+.cf-tbl th{cursor:pointer;background:var(--surface-2);position:sticky;top:0;z-index:2}
 .cf-tbl td.l,.cf-tbl th.l{text-align:left}
 .cf-tbl a{cursor:pointer;color:var(--accent-2);text-decoration:underline}
 .cf-tbl td.cf-px{white-space:nowrap}
@@ -53,6 +55,8 @@
 .cf-rank td{min-width:64px;font-size:var(--cf-rank-fs,12px);text-align:left;cursor:pointer}
 .cf-rank td.hl{background:var(--cf-hl);color:var(--cf-hl-ink);font-weight:600}
 .cf-rank th.r,.cf-rank td.r{position:sticky;left:0;background:var(--surface-2);text-align:right;cursor:default}
+.cf-rank td.r{z-index:1}
+.cf-rank th.r{z-index:3}
 .cf-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media (max-width:760px){.cf-two{grid-template-columns:1fr}}
 .cf-chips{display:flex;flex-wrap:wrap;gap:6px}

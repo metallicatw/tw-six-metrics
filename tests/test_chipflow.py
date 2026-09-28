@@ -429,3 +429,13 @@ def test_籌碼雷達的代號_名稱_收盤價各自連到該去的地方():
     # 每一張有代號的表都走同一組 helper，不是各寫各的
     assert src.count("codeCell(") >= 4 and src.count("priceCell(") >= 3 and src.count("nameCell(") >= 4
     assert 'a.onclick = function(){ open("t1", r.c); }' not in src, "代號不再只連到本頁的 ①"
+
+
+def test_籌碼雷達釘住的表頭在最上層_圖示不會蓋過去():
+    """收盤價旁的 Yahoo 圖示用 CSS mask（自成疊放層），表頭沒有 z-index 時捲動會被它蓋住。"""
+    import re as _re
+
+    src = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+           / "radar.html.j2").read_text("utf-8")
+    rule = _re.search(r"\.cf-tbl th\{([^}]*)\}", src).group(1)
+    assert "position:sticky" in rule and _re.search(r"z-index:\s*[1-9]", rule), rule

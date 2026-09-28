@@ -448,6 +448,18 @@ def read_valuation_input(
         # so index 0 is excluded either way.  當年度 and 當年/5年孰低 abstain
         # rather than quietly using a trailing figure in its place.
         pe_high, pe_low = PeBand.computed_multiples(p_hi, p_lo, [None, *eps_by_year[1:]])
+        # 本益比區間要五年窗口裡至少三年算得出來（`PeBand.from_history`）。年度交易
+        # 資訊是**推算**的那一份（交易所沒有這一檔，多半是上市才一、兩年）而湊不滿時，
+        # 退回〔BASIC〕公布的本益比——和推算之前（完全沒有年度資料）一樣，不讓推算
+        # 反而把原本有的區間弄丟。交易所那一份照舊，不走這條。
+        from .yearly_trading import is_derived  # noqa: PLC0415
+
+        if is_derived(_grid(reader, TRADING)) and min(
+            sum(v is not None for v in pe_high[1:6]),
+            sum(v is not None for v in pe_low[1:6]),
+        ) < 3:
+            pe_high = _nums(reader, BASIC, BASIC_ROW_PE_HIGH, BASIC_YEAR_COLS)
+            pe_low = _nums(reader, BASIC, BASIC_ROW_PE_LOW, BASIC_YEAR_COLS)
     else:
         pe_high = _nums(reader, BASIC, BASIC_ROW_PE_HIGH, BASIC_YEAR_COLS)
         pe_low = _nums(reader, BASIC, BASIC_ROW_PE_LOW, BASIC_YEAR_COLS)

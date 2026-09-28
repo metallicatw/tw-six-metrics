@@ -927,8 +927,10 @@ def _fetched_grids(root: Path, stock: str):
     if not grids:
         return None
     from .ingest.weekly_prices import with_daily_weeks
+    from .ingest.yearly_trading import with_derived_yearly
 
-    return enrich(with_daily_weeks(grids, root, stock), stock)
+    grids = with_derived_yearly(with_daily_weeks(grids, root, stock), root, stock)
+    return enrich(grids, stock)
 
 
 def _fetched_reader(root: Path, stock: str):
@@ -1298,6 +1300,9 @@ def cmd_page(args: argparse.Namespace) -> int:
         settings=settings,
         quote=quote,
     )
+    from .ingest.yearly_trading import annotate_sources
+
+    annotate_sources(page, root, args.stock)
 
     _store_rating(root, rating)
 
@@ -3731,24 +3736,10 @@ def _yearly_missing(data_dir: Path, *, include_too_young: bool = False) -> list[
 
 
 def _listing_dates(data_dir: Path) -> dict[str, str]:
-    """代號 → 上市（櫃）日期 `YYYYMMDD`，取自兩個交易所的公司基本資料快照。
+    """代號 → 上市（櫃）日期 `YYYYMMDD`（見 `ingest.yearly_trading.listing_dates`）。"""
+    from .ingest.yearly_trading import listing_dates  # noqa: PLC0415
 
-    讀不到就回空的——呼叫端只拿它來「少問幾次」：沒有日期的照常去問。
-    """
-    out: dict[str, str] = {}
-    for name, code_col, date_col in (("twse_companies.csv", "公司代號", "上市日期"),
-                                     ("tpex_companies.csv", "SecuritiesCompanyCode",
-                                      "DateOfListing")):
-        try:
-            with (data_dir / name).open(encoding="utf-8-sig", newline="") as fh:
-                for row in csv.DictReader(fh):
-                    code = (row.get(code_col) or "").strip()
-                    day = (row.get(date_col) or "").strip()
-                    if code and len(day) == 8 and day.isdigit():
-                        out[code] = day
-        except (OSError, csv.Error):
-            continue
-    return out
+    return listing_dates(data_dir)
 
 
 def cmd_backfill_yearly(args: argparse.Namespace) -> int:
