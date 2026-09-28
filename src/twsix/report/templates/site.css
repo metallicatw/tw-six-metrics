@@ -1272,6 +1272,43 @@ thead th .hsub{display:block;margin-top:1px;font-size:10px;font-weight:400;
 .hl-badge.hl-ok{background:var(--g4)}
 .hl-badge.hl-warn{background:#e07b12}
 .hl-badge.hl-bad{background:#dc2626}
+/* 徽章的字一律白色（2026-09-29）：.hl-ok／.hl-hit 這些「狀態字」的規則寫在後面、權重相同，
+   會把徽章的字也改成綠色——和綠底同色，整個看不見。兩個 class 疊起來權重較高，蓋得過。 */
+.hl-badge.hl-ok,.hl-badge.hl-warn,.hl-badge.hl-bad{color:#fff}
+/* ── 全站對比度檢查（2026-09-29）────────────────────────────────────────
+   深色模式裡 --accent／--accent-2 與導覽列的 --nav-c 都換成亮色（青、黃、淺橘），
+   原本寫死的白字貼在上面只剩 1.5～2:1，幾乎看不見。實心的亮色底一律改用深色字
+   （頁面底色 --ground），和 AI 選股、籌碼雷達分頁「選中那一顆」同一套做法。
+   淺色模式的底色是深色，白字照舊。 */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) nav a[aria-current=page],
+  :root:not([data-theme=light]) .way-h .n,
+  :root:not([data-theme=light]) .pxh-zoom button.on{color:var(--ground)}
+}
+:root[data-theme=dark] nav a[aria-current=page],
+:root[data-theme=dark] .way-h .n,
+:root[data-theme=dark] .pxh-zoom button.on{color:var(--ground)}
+/* 淺色模式的橘色字（--g1 #f0a72a）在白底上只有 2:1：報酬風險比「偏弱」、估價頁的
+   注意事項。淺色底用深一階的橘（色相不變）；深色模式照舊用 --g1。 */
+.rrv-weak,.criteria .warnings{color:#b86e00}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) .rrv-weak,:root:not([data-theme=light]) .criteria .warnings{color:var(--g1)}
+}
+:root[data-theme=dark] .rrv-weak,:root[data-theme=dark] .criteria .warnings{color:var(--g1)}
+/* 同一個問題的綠色：--g4／--g3 在白底上只有 2.3～2.5:1（報酬風險比、財務健診的
+   「✅ 正常」與「健康」徽章）。淺色底換深一階的綠，深色模式照舊。 */
+.rrv-best{color:#047857}.rrv-ok{color:#0f766e}
+.hl-badge.hl-ok{background:#047857}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) .rrv-best,:root:not([data-theme=light]) .hl-ok{color:var(--g4)}
+  :root:not([data-theme=light]) .rrv-ok{color:var(--g3)}
+  :root:not([data-theme=light]) .hl-badge.hl-ok{background:var(--g4);color:var(--ground)}
+  :root:not([data-theme=light]) .ai-stats tr.ai-d th{color:#b39cff}
+}
+:root[data-theme=dark] .rrv-best,:root[data-theme=dark] .hl-ok{color:var(--g4)}
+:root[data-theme=dark] .rrv-ok{color:var(--g3)}
+:root[data-theme=dark] .hl-badge.hl-ok{background:var(--g4);color:var(--ground)}
+:root[data-theme=dark] .ai-stats tr.ai-d th{color:#b39cff}
 .subtabs{display:flex;gap:4px;border-bottom:1px solid var(--rule);margin:0 0 12px}
 .subtab{appearance:none;border:none;background:none;font:inherit;font-size:14px;
   padding:8px 14px;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;
@@ -1283,7 +1320,7 @@ table.hl-t th,table.hl-t td{padding:8px 12px;white-space:normal;vertical-align:m
 table.hl-t .st{white-space:nowrap;width:1%}
 table.hl-t th.num,table.hl-t td.num{text-align:right;font-variant-numeric:tabular-nums}
 .hl-hit{color:#dc2626;font-weight:600}
-.hl-ok{color:var(--g4);font-weight:600}
+.hl-ok{color:#047857;font-weight:600}   /* 深色模式見上面的覆寫 */
 .hl-na{color:var(--muted)}
 .hl-sub{margin:0 0 8px;font-size:12.5px;color:var(--muted);max-width:none}
 .note-s{margin:6px 0 0;font-size:11.5px;color:var(--muted);max-width:none;line-height:1.65}

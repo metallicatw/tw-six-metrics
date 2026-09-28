@@ -2110,6 +2110,13 @@ function y3Eps(rev, sh, g, m){
     var c = stops[i].map(function(v, k){ return Math.round(v + (stops[i + 1][k] - v) * f); });
     return 'rgb(' + c.join(',') + ')';
   }
+  /* 底色夠亮（黃、黃綠、淺橘）就用深色字，不然白字貼在黃底上幾乎看不見（2026-09-29，
+     全站對比度檢查找到的：目標價中段的格子白字對黃底只有 1.8:1）。 */
+  function heatInk(css){
+    var c = css.match(/\d+/g).map(function(v){ v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    var L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    return L > 0.3 ? '#1b1b1b' : '#fff';
+  }
   function money(v){ return Math.round(v).toLocaleString(); }
   function signCls(v){ return v > 0 ? 'up' : (v < 0 ? 'down' : ''); }
 
@@ -2135,7 +2142,8 @@ function y3Eps(rev, sh, g, m){
       '<tr class="eps"><th scope="row">預估 EPS（元）</th>' + eps.map(function(v){ return '<td>' + v.toFixed(2) + '</td>'; }).join('') + '</tr>' +
       pes.map(function(pe){
         return '<tr class="tp"><th scope="row">預估 PE＝' + pe + '</th>' + eps.map(function(e){
-          var v = e * pe; return '<td style="background:' + color(v) + '">' + money(v) + '</td>';
+          var v = e * pe, bg = color(v), ink = heatInk(bg);
+          return '<td style="background:' + bg + ';color:' + ink + (ink === '#fff' ? '' : ';text-shadow:none') + '">' + money(v) + '</td>';
         }).join('') + '</tr>';
       }).join('') + '</tbody></table></div>' +
       '<p class="note-s">營收成長率：<span class="up">紅 ▲ 成長</span>、<span class="down">綠 ▼ 衰退</span>。目標價的底色是九格一起由低到高（綠 → 紅）。' +

@@ -48,6 +48,9 @@ window.SC_V = "{{ data_v|default('') }}";
 .sc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .sc-head h3{margin:0;font-size:17px}
 .sc-count{background:var(--accent-2);color:#fff;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:600}
+/* 深色模式的 --accent-2 是亮青色：實心按鈕與家數徽章改用深色字（2026-09-29 對比度檢查） */
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .sc-count,:root:not([data-theme=light]) .sc-btn.pri{color:var(--ground)}}
+:root[data-theme=dark] .sc-count,:root[data-theme=dark] .sc-btn.pri{color:var(--ground)}
 .sc-scroll{overflow:auto;max-height:70vh;border:1px solid var(--rule);border-radius:10px;margin-top:10px}
 .sc-tbl{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums;min-width:0}
 .sc-tbl th,.sc-tbl td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:right;white-space:nowrap}

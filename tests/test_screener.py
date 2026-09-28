@@ -158,3 +158,17 @@ def test_電腦版表格一次看到全部欄位_極端值縮短_EPS合計沒有
     assert ".sc-tbl th{white-space:normal;word-break:keep-all" in css and "td.ind{white-space:normal" in css
     assert ".sc-tbl.many" in css and 'cols.length > 17 ? "sc-tbl many"' in page
     assert "function short(x, d, pct)" in page and '"萬%"' in page
+
+
+def test_亮色底不放白字_淺色底不放淺色字():
+    """2026-09-29 全站對比度檢查：「健康 0/7 項地雷」綠字壓綠底看不見；深色模式的實心亮色
+    按鈕（導覽列目前那一頁、估值方式編號、股價健診區間、選股按鈕）白字只有 1.5～2:1。"""
+    T = ROOT / "src" / "twsix" / "report" / "templates"
+    css = (T / "site.css").read_text("utf-8")
+    assert ".hl-badge.hl-ok,.hl-badge.hl-warn,.hl-badge.hl-bad{color:#fff}" in css
+    for sel in ("nav a[aria-current=page]", ".way-h .n", ".pxh-zoom button.on"):
+        assert f":root[data-theme=dark] {sel}" in css and f":root:not([data-theme=light]) {sel}" in css, sel
+    assert ".hl-ok{color:#047857" in css and ".rrv-weak,.criteria .warnings{color:#b86e00}" in css
+    assert "function heatInk(" in (T / "site.js").read_text("utf-8"), "目標價熱度格要依底色選字色"
+    sc = (T / "screener.html.j2").read_text("utf-8")
+    assert ":root[data-theme=dark] .sc-count,:root[data-theme=dark] .sc-btn.pri{color:var(--ground)}" in sc
