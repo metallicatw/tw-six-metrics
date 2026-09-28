@@ -98,6 +98,7 @@ MONITOR_PAGE = "monitor.html"
 #: 〔AI 選股〕（見 report/ai_page.py）。
 AI_PAGE = "ai.html"
 RADAR_PAGE = "radar.html"
+SCREENER_PAGE = "screener.html"
 MONITOR_REPORT = "monitor-report.html"
 
 #: 〔趨勢選股〕。metallicatw/tw-trend-filter 每個交易日台北 15:10 掃過全市場
@@ -1133,6 +1134,10 @@ def build_site(
     # 在建站之後寫）。同 AI 選股：畫不出來也不准拖垮整站。
     written[f"{RADAR_PAGE}（籌碼雷達）"] = _write_radar_page(env, base, out_dir)
 
+    # 〔選股功能〕：外殼＋ screener/data.json、prices.json（瀏覽器裡篩）。同上：壞了不拖垮整站。
+    written[f"{SCREENER_PAGE}（選股功能）"] = _write_screener_page(
+        env, base, out_dir, sheets_dir.parent if sheets_dir is not None else None, live)
+
 
     _write_search_index(out_dir, rows, rich_ids, fetched_at, fetched_ts)
     written["search.json"] = 1
@@ -1563,6 +1568,30 @@ def _write_ai_page(env: Any, base: dict[str, Any], out_dir: Path,
         env.get_template("ai.html.j2").stream(
             **base, page="ai", rel="", ai={"ready": False, "error": True}
         ).dump(str(out_dir / AI_PAGE))
+        return 0
+
+
+def _write_screener_page(env: Any, base: dict[str, Any], out_dir: Path,
+                         data_dir: Path | None, live: list[Any]) -> int:
+    """畫〔選股功能〕的外殼，並寫出它要讀的 `screener/*.json`。任何例外都吞掉、回傳 0。"""
+    from . import screener  # noqa: PLC0415
+
+    if data_dir is not None:
+        try:
+            n = screener.write(out_dir, data_dir, [
+                {"code": r.stock_id, "name": r.name, "market": r.market, "industry": r.industry}
+                for r in live
+            ])
+            print(f"  screener/*.json   {n} 檔")
+        except Exception as exc:  # noqa: BLE001 - 頁面照畫，會寫「還沒有資料」
+            print(f"::error::選股功能的資料寫不出來（頁面會顯示沒有資料）：{exc!r}")
+    try:
+        env.get_template("screener.html.j2").stream(
+            **base, page="screener", rel=""
+        ).dump(str(out_dir / SCREENER_PAGE))
+        return 1
+    except Exception as exc:  # noqa: BLE001 - 新的一頁不能讓整站建不起來
+        print(f"::error::選股功能頁面畫不出來（其他頁面不受影響）：{exc!r}")
         return 0
 
 

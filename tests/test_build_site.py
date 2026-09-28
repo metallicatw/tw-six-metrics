@@ -274,7 +274,7 @@ def test_the_three_stale_pages_are_unlinked_but_still_built():
 
     nav = re.search(r"<nav>(.*?)</nav>", (out / "index.html").read_text("utf-8"), re.S)
     labels = re.findall(r">([^<>]+)</a>", nav.group(1))
-    assert labels == ["台股評等清單", "台股觀察清單", "AI 選股", "籌碼雷達"]
+    assert labels == ["台股評等清單", "台股觀察清單", "選股功能", "AI 選股", "籌碼雷達"]
     for name in ("picks.html", "stats.html", "about.html"):
         assert (out / name).is_file(), f"{name} 不該被刪掉，只是不連過去"
     # 評等清單 is the front door now; the old URL still resolves.
@@ -1297,13 +1297,15 @@ def test_the_trend_report_is_embedded_not_linked(tmp_path=None):
 #: 〔趨勢×六大×報酬〕是原本的〔台股趨勢選股〕和〔趨勢∩六大∩報酬〕併起來的一項。
 #: 兩頁嵌的本來就是同一份報告，差別只有兩個輸入框的預設值——而那兩個門檻就攤在
 #: 報告最上面那一列，隨時可以改成 0。兩個導覽項買到的只有那個預設值。
+# 2026-09-28 使用者指定：〔選股功能〕插在趨勢之後，〔全球市場監控〕移到台股這幾項之後。
 NAV_EXPECTED = [
-    ("nav-list",  "台股評等清單"),
-    ("nav-watch", "台股觀察清單"),
-    ("nav-trend", "趨勢×六大×報酬"),
-    ("nav-mon",   "全球市場監控＋日股觀察"),
-    ("nav-ai",    "AI 選股"),
-    ("nav-radar", "籌碼雷達"),
+    ("nav-list",   "台股評等清單"),
+    ("nav-watch",  "台股觀察清單"),
+    ("nav-trend",  "趨勢×六大×報酬"),
+    ("nav-screen", "選股功能"),
+    ("nav-ai",     "AI 選股"),
+    ("nav-radar",  "籌碼雷達"),
+    ("nav-mon",    "全球市場監控＋日股觀察"),
 ]
 
 
