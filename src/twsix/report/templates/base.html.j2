@@ -76,6 +76,16 @@
     <a class="nav-more" href="{{ rel }}about.html"{% if page=='about' %} aria-current="page"{% endif %}>評分規則</a>
     {% endif %}
   </nav>
+  {# 手機上這一列是橫向捲的，而每一顆都是換頁：換過去的新頁面從最左邊開始，
+     剛才捲到右邊點的那一顆（AI 選股、籌碼雷達）又看不到了，下一次還要再捲一次。
+     記住這一列捲到哪裡（sessionStorage，只在這個分頁視窗裡），新頁面照原位擺；
+     沒有記錄時（第一次打開、從外面連進來）只把目前這一頁那一顆捲進畫面，捲最少。
+     緊接在 nav 後面、不放進 site.js（defer）：等到 site.js 跑的時候畫面已經畫過一次，
+     會看到它先在最左邊再跳過去。 #}
+  {# 內嵌腳本整頁有 1,500 字的預算（見 test_build_site 的 downloaded_once 那一條），所以寫得很緊：
+     n＝導覽列，K＝存在 sessionStorage 的鍵；先照原位擺，再看目前這一頁那一顆有沒有被
+     切掉、有的話捲最少讓它露出來；點任何一顆（要換頁了）就記下現在的位置。 #}
+  <script>(function(){var n=document.currentScript.previousElementSibling,K='twsix-nav-x';try{n.scrollLeft=+sessionStorage.getItem(K)||0}catch(e){}var c=n.querySelector('[aria-current]'),a=n.getBoundingClientRect(),b=c&&c.getBoundingClientRect();if(b&&b.left<a.left)n.scrollLeft-=a.left-b.left+12;if(b&&b.right>a.right)n.scrollLeft+=b.right-a.right+12;n.addEventListener('click',function(){try{sessionStorage.setItem(K,n.scrollLeft)}catch(e){}})})()</script>
   {# 頁首這一塊（搜尋框 ＋ 抓取）只出現在〔台股評等清單〕與個股頁。
      它在〔趨勢選股〕〔全球市場監控〕那兩頁完全沒有作用——那裡是別的 repo 產的
      報告嵌進來的 iframe，輸入代號按抓取跟那一頁講的事情沒有關係；而〔觀察清單〕

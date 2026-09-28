@@ -660,9 +660,11 @@ def test_the_shared_css_and_js_are_downloaded_once_not_baked_into_every_page(tmp
         page = (out / name).read_text("utf-8")
         assert f'href="{rel}assets/site.css?v=' in page, name
         assert f'src="{rel}assets/site.js?v=' in page, name
-        # 內嵌的只剩那一行 bootstrap，不是整份腳本。
+        # 內嵌的只剩幾行 bootstrap，不是整份腳本（16 KB）。預算從 500 放寬到 1,500：
+        # 導覽列記住橫向捲動位置的那一段（base.html.j2）必須緊接在 nav 後面同步執行，
+        # 放進 defer 的 site.js 會先畫在最左邊再跳過去。
         assert "<style>" not in page, name
-        assert len(_script_bodies(page)) < 500, name
+        assert len(_script_bodies(page)) < 1_500, name
 
 
 def test_the_asset_url_carries_a_content_fingerprint(tmp_path=None):

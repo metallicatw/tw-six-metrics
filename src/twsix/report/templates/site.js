@@ -2247,6 +2247,12 @@ function y3Eps(rev, sh, g, m){
  * 〔AI 選股〕頁的分頁（2026-09-24）：一次只顯示一段。網址 #regime、#backtest…
  * 直接開到那一段；方向鍵左右切換。和個股頁的分頁同一套行為。
  * ========================================================================= */
+/* 橫向捲的分頁列：把 el 捲進 bar 的可見範圍，捲最少。已經整顆看得到就一動也不動。 */
+function reveal(bar, el){
+  var b = bar.getBoundingClientRect(), e = el.getBoundingClientRect();
+  if(e.left < b.left) bar.scrollLeft -= (b.left - e.left) + 8;
+  else if(e.right > b.right) bar.scrollLeft += (e.right - b.right) + 8;
+}
 (function(){
   var bar = document.querySelector('.ai-tabs');
   if(!bar) return;
@@ -2261,10 +2267,11 @@ function y3Eps(rev, sh, g, m){
       if(panel) panel.hidden = !on;
     });
     if(push && history.replaceState) history.replaceState(null, '', '#' + name);
-    // 手機上分頁列是橫向捲的：選中的那一顆要捲進畫面（網址 #journal 直接開的時候它在最右邊）
+    // 手機上分頁列是橫向捲的：選中的那一顆被切到一半才捲，而且只捲到剛好露出來
+    // ——點了一顆就把整列拉回最左邊（或把那顆拉到最左邊），剛才捲到的位置就沒了。
+    // 網址 #journal 直接開的時候它在最右邊，這時才會真的捲。
     var cur = document.getElementById('aitab-' + name);
-    if(cur && (cur.offsetLeft < bar.scrollLeft || cur.offsetLeft + cur.offsetWidth > bar.scrollLeft + bar.clientWidth))
-      bar.scrollLeft = cur.offsetLeft - 8;
+    if(cur) reveal(bar, cur);
     // 切過去之後停在分頁列上，不是停在上一段捲到的位置（那個位置在新的一段裡沒有意義）
     if(scroll && bar.getBoundingClientRect().top < 0)
       window.scrollTo({top: window.pageYOffset + bar.getBoundingClientRect().top - 8, behavior: 'auto'});

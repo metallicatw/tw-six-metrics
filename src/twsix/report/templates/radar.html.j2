@@ -845,6 +845,14 @@ function showVal(){
 var done = {};
 function open(tab, code){
   document.querySelectorAll(".cf-tab").forEach(function(b){ b.setAttribute("aria-selected", b.getAttribute("data-t") === tab ? "true" : "false"); });
+  // 分頁列在手機上橫向捲：點了哪一顆就停在原處，不把整列拉回最左邊；只有選中的那一顆
+  // 被切到一半（或網址 #t12 直接開、它在畫面外）時才捲，而且只捲到剛好露出來。
+  var bar = $("cf-tabs"), cur = bar.querySelector('.cf-tab[data-t="' + tab + '"]');
+  if (cur){
+    var bb = bar.getBoundingClientRect(), cb = cur.getBoundingClientRect();
+    if (cb.left < bb.left) bar.scrollLeft -= (bb.left - cb.left) + 8;
+    else if (cb.right > bb.right) bar.scrollLeft += (cb.right - bb.right) + 8;
+  }
   document.querySelectorAll(".cf-panel").forEach(function(p){ p.classList.toggle("on", p.id === "cf-" + tab); });
   if (history.replaceState) history.replaceState(null, "", "#" + tab + (code ? "-" + code : ""));
   var n = tab.replace("t", "");
