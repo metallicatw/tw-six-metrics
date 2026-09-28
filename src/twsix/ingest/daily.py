@@ -84,11 +84,17 @@ TPEX_INSTITUTIONAL_DATED = (
 #: 會在台北時間深夜跨日時指到前一天。
 TAIPEI = timezone(timedelta(hours=8))
 
+#: `value` 是成交金額（元）。〔籌碼雷達〕原本另存一份 `flows/`，而它和這一份
+#: 來自**同一個回應**——2026-09 整併進來，見 :mod:`twsix.store.consolidate`。
 PRICE_COLUMNS: tuple[str, ...] = (
-    "date", "code", "market", "close", "open", "high", "low", "change", "volume",
+    "date", "code", "market", "close", "open", "high", "low", "change", "volume", "value",
 )
+#: 後四欄是外資、投信的買進／賣出股數（買賣超只給淨額，周轉率要的是買＋賣）。
+#: 外資的口徑和 `foreign` 一致：上市「外陸資（不含外資自營商）」、上櫃「外資及陸資
+#: 合計」，所以 `f_buy − f_sell == foreign`（整併時逐列驗過，112,282 列 0 筆不符）。
 INSTITUTIONAL_COLUMNS: tuple[str, ...] = (
     "date", "code", "market", "foreign", "trust", "dealer", "total",
+    "f_buy", "f_sell", "t_buy", "t_sell",
 )
 
 _CODE = re.compile(r"^\d{4}$")
@@ -147,6 +153,7 @@ def parse_twse_prices(payload: Any) -> list[dict[str, Any]]:
                 "low": _num(row.get("LowestPrice")),
                 "change": _num(row.get("Change")),
                 "volume": _num(row.get("TradeVolume")),
+                "value": _num(row.get("TradeValue")),
             }
         )
     return out
@@ -169,6 +176,7 @@ def parse_tpex_prices(payload: Any) -> list[dict[str, Any]]:
                 "low": _num(_pick(row, "Low")),
                 "change": _num(_pick(row, "Change")),
                 "volume": _num(_pick(row, "TradingShares")),
+                "value": _num(_pick(row, "TransactionAmount")),
             }
         )
     return out
@@ -216,6 +224,7 @@ def parse_twse_mi_index(payload: Any) -> list[dict[str, Any]]:
                 "low": _num(at(row, "最低價")),
                 "change": change,
                 "volume": _num(at(row, "成交股數")),
+                "value": _num(at(row, "成交金額")),
             }
         )
     return out
@@ -267,6 +276,7 @@ def parse_tpex_rwd(payload: Any) -> list[dict[str, Any]]:
                 "low": _num(at(row, "最低")),
                 "change": _num(at(row, "漲跌")),
                 "volume": _num(at(row, "成交股數")),
+                "value": _num(at(row, "成交金額(元)")),
             }
         )
     return out
@@ -331,9 +341,13 @@ def parse_twse_institutional(payload: Any) -> list[dict[str, Any]]:
                 "trust": _num(at(row, "投信買賣超股數")),
                 "dealer": dealer,
                 "total": _num(at(row, "三大法人買賣超股數")),
+                "f_buy": _num(at(row, "外陸資買進股數(不含外資自營商)")),
+                "f_sell": _num(at(row, "外陸資賣出股數(不含外資自營商)")),
+                "t_buy": _num(at(row, "投信買進股數")),
+                "t_sell": _num(at(row, "投信賣出股數")),
             }
         )
-    return out
+    return _check_gross(out, f"上市三大法人 {day}")
 
 
 def parse_tpex_institutional(payload: Any) -> list[dict[str, Any]]:
@@ -354,9 +368,13 @@ def parse_tpex_institutional(payload: Any) -> list[dict[str, Any]]:
                 "trust": _num(_pick(row, "SecuritiesInvestmentTrustCompanies-Difference")),
                 "dealer": _num(_pick(row, "Dealers-Difference")),
                 "total": _num(_pick(row, "TotalDifference")),
+                "f_buy": _num(_pick(row, "ForeignInvestorsIncludeMainlandAreaInvestors-TotalBuy")),
+                "f_sell": _num(_pick(row, "ForeignInvestorsIncludeMainlandAreaInvestors-TotalSell")),
+                "t_buy": _num(_pick(row, "SecuritiesInvestmentTrustCompanies-TotalBuy")),
+                "t_sell": _num(_pick(row, "SecuritiesInvestmentTrustCompanies-TotalSell")),
             }
         )
-    return out
+    return _check_gross(out, "上櫃三大法人（開放資料）")
 
 
 #: 上櫃逐日三大法人：`tables[0].fields` 裡的欄名是重複的（買進股數／賣出股數／
@@ -370,7 +388,8 @@ def parse_tpex_institutional(payload: Any) -> list[dict[str, Any]]:
 #:   17~19 自營商（避險）
 #:   20~22 自營商合計              ← dealer
 #:   23    三大法人買賣超股數合計   ← total
-_TPEX_INSTI_COLS = {"foreign": 10, "trust": 13, "dealer": 22, "total": 23}
+_TPEX_INSTI_COLS = {"foreign": 10, "trust": 13, "dealer": 22, "total": 23,
+                    "f_buy": 8, "f_sell": 9, "t_buy": 11, "t_sell": 12}
 _TPEX_INSTI_MIN_COLS = 24
 
 
@@ -421,7 +440,29 @@ def parse_tpex_institutional_dated(payload: Any) -> list[dict[str, Any]]:
             "「合計 = 外資 + 投信 + 自營商」對不上，欄序可能變了，整批不採用。"
         )
         return []
-    return out
+    return _check_gross(out, f"上櫃三大法人 {day}")
+
+
+def _check_gross(rows: list[dict[str, Any]], label: str) -> list[dict[str, Any]]:
+    """買進 − 賣出 ＝ 買賣超。對不上超過一成就把**買進／賣出**那四欄清掉。
+
+    淨額（foreign／trust）是本來就在用、已經驗過的欄位；買進／賣出是 2026-09 整併
+    時才開始存的。欄序萬一變了，丟掉的只是新的四欄，淨額照收——不讓新欄位拖垮舊的。
+    """
+    checked = bad = 0
+    for r in rows:
+        for b, s, n in (("f_buy", "f_sell", "foreign"), ("t_buy", "t_sell", "trust")):
+            if r.get(b) is None or r.get(s) is None or r.get(n) is None:
+                continue
+            checked += 1
+            if abs((r[b] - r[s]) - r[n]) > 0.5:
+                bad += 1
+    if checked and bad / checked > 0.10:
+        print(f"    ⚠️ {label}：{bad}/{checked} 筆「買進 − 賣出 ≠ 買賣超」，買進／賣出欄不採用。")
+        for r in rows:
+            for k in ("f_buy", "f_sell", "t_buy", "t_sell"):
+                r[k] = None
+    return rows
 
 
 def by_date(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:

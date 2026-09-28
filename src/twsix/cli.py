@@ -924,7 +924,11 @@ def _fetched_grids(root: Path, stock: str):
 
     base = root / "sheets" / stock
     grids = sheet_store.read_all(base)
-    return enrich(grids, stock) if grids else None
+    if not grids:
+        return None
+    from .ingest.weekly_prices import with_daily_weeks
+
+    return enrich(with_daily_weeks(grids, root, stock), stock)
 
 
 def _fetched_reader(root: Path, stock: str):
@@ -1450,14 +1454,23 @@ def _mops_interval() -> float:
     return _interval("TWSIX_MOPS_INTERVAL", 1.2)
 
 
-def _save_levels_quietly(root: Path, stock: str, snaps: list[Any]) -> None:
-    """順手把原始 15 級另存一份給〔籌碼雷達〕。附加的：失敗只印一行，不影響本來那份。"""
+def _save_weeks(root: Path, stock: str, snaps: list[Any]) -> None:
+    """逐檔回補的週資料存檔：帶 15 級的存 15 級（正本），其餘存八級。
+
+    2026-09 整併之前是兩份都存（八級一份、15 級「順手」再一份），而八級正是 15 級
+    加總出來的。15 級萬一寫檔失敗，就把那幾週退回八級存——少了人數，但大戶持股
+    不會因此缺週。
+    """
+    import dataclasses  # noqa: PLC0415
+
     from .store import ownership as own  # noqa: PLC0415
 
     try:
         own.save_level_history(root, stock, snaps)
-    except Exception as exc:  # noqa: BLE001 - 附加的一份不能擋住本來那一份
-        print(f"    （原始 15 級沒存成：{exc}）", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001 - 退回八級，不讓那幾週白跑
+        print(f"    （原始 15 級沒存成，改存八級：{exc}）", file=sys.stderr)
+        snaps = [dataclasses.replace(s, levels=()) for s in snaps]
+    own.save_stock_history(root, stock, snaps)
 
 
 def _backfill_holders(args: argparse.Namespace, stock: str) -> bool:
@@ -1547,13 +1560,11 @@ def _backfill_holders(args: argparse.Namespace, stock: str) -> bool:
             # 邊跑邊存。整段跑完才存的話，step 被砍或 runner 逾時就等於白跑——
             # 而白跑的下一次會從同一個地方重新開始，永遠補不完。
             if ok and (i % 10 == 0 or i == len(days)):
-                own.save_stock_history(root, stock, ok)
-                _save_levels_quietly(root, stock, ok)
+                _save_weeks(root, stock, ok)
                 ok = []
                 print(f"    {label} {i}/{len(days)} 週")
         if ok:
-            own.save_stock_history(root, stock, ok)
-            _save_levels_quietly(root, stock, ok)
+            _save_weeks(root, stock, ok)
         return ok, bad
 
     _, failed_days = sweep(missing, "第一輪")
@@ -2255,49 +2266,43 @@ def cmd_chipflow_site(args: argparse.Namespace) -> int:
 
 
 def cmd_fetch_flows(args: argparse.Namespace) -> int:
-    """〔籌碼雷達〕：每日的成交金額與法人買進／賣出股數 → `data/market/daily/flows/`。
+    """（舊名，保留給還沒改的排程）成交金額與法人買進／賣出。
 
-    從最近的交易日往回補 `--days` 天（交易日取自已經存好的每日行情檔），已經齊
-    的跳過。一天四個請求（兩個交易所 × 行情、法人）。`--minutes` 是時間預算，
-    到了就停、下次接著補。**永遠回 0**：這是附加的資料，抓不到只留 ::warning::。
+    原本另存一份 `data/market/daily/flows/`，而那一份和每日行情、三大法人是**同一
+    組回應**讀兩次、存兩份。2026-09 整併：成交金額進每日行情的 `value` 欄、買進／
+    賣出進三大法人的 `f_buy`…`t_sell` 欄，抓取交給 `backfill-prices` 與
+    `backfill-institutional`（只補還沒齊的日子）。這裡只是把參數轉過去。
+    **永遠回 0**：這是附加的資料。
     """
-    settings = Settings.load(args.config)
-    from .ingest.base import HttpClient  # noqa: PLC0415
-    from .ingest.flows import Flows  # noqa: PLC0415
-    from .store import flows as fl  # noqa: PLC0415
-
-    data_dir = Path(args.data or settings.data_dir)
-    days = sorted((p.name[:10] for p in
-                   (data_dir / "market" / "daily" / "prices").glob("*.csv.gz")), reverse=True)
-    days = days[: max(1, args.days)]
-    pause = args.pause or settings.ingest.min_interval_seconds
-    http = HttpClient(cache_dir=None, cache_ttl=0, min_interval=pause,
-                      retries=settings.ingest.retries, timeout=90.0)
-    src = Flows(http)
-    started = time.monotonic()
-    done = skipped = empty = 0
-    for day in days:
-        if args.minutes and time.monotonic() - started > args.minutes * 60:
-            print(f"  跑滿 {args.minutes} 分鐘，其餘下次再補")
-            break
-        if not args.force and fl.complete(data_dir, day):
-            skipped += 1
-            continue
+    ns = argparse.Namespace(
+        config=args.config, out=args.data, days=max(1, args.days),
+        pause=args.pause or None, minutes=args.minutes,
+    )
+    for fn in (cmd_backfill_prices, cmd_backfill_institutional):
         try:
-            rows = src.on(day)
-        except Exception as exc:  # noqa: BLE001 - 一天抓不到不該讓整批停下
-            print(f"  {day} 沒拿到：{exc}")
-            continue
-        if not rows:
-            empty += 1
-            print(f"  {day} 沒有資料")
-            continue
-        fl.write_day(data_dir, day, rows)
-        done += 1
-        print(f"  {day} {len(rows)} 檔")
-    print(f"成交金額與法人明細：寫入 {done} 天、已齊跳過 {skipped} 天、沒資料 {empty} 天")
-    for p in src.problems[:5]:
-        print(f"::warning::{p}")
+            fn(ns)
+        except Exception as exc:  # noqa: BLE001 - 附加的資料抓不到只留警告
+            print(f"::warning::{fn.__name__}：{exc}")
+    return EXIT_OK
+
+
+def cmd_consolidate_data(args: argparse.Namespace) -> int:
+    """歷史資料整併。一次性、可以重跑（已經整併過的部分什麼都不做）。
+
+    見 :mod:`twsix.store.consolidate`。**永遠回 0**：整併失敗時舊的檔案原封不動，
+    讀取端兩種格式都讀得懂。
+    """
+    from .store import consolidate  # noqa: PLC0415
+
+    settings = Settings.load(args.config)
+    data_dir = Path(args.data or settings.data_dir)
+    try:
+        report = consolidate.run(data_dir, dry_run=args.dry_run)
+    except Exception as exc:  # noqa: BLE001 - 整併失敗不該擋住每日行情
+        print(f"::warning::資料整併沒做完（舊檔案不動，讀取端照常）：{exc!r}")
+        return EXIT_OK
+    for line in report:
+        print(f"  {line}")
     return EXIT_OK
 
 
@@ -2479,7 +2484,10 @@ def cmd_backfill_prices(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient  # noqa: PLC0415
     from .ingest.daily import PRICE_COLUMNS, Daily, by_date  # noqa: PLC0415
-    from .store.daily import merge_day_rows, read_day_rows  # noqa: PLC0415
+    from .store.daily import day_complete, merge_day_rows, read_day_rows  # noqa: PLC0415
+
+    started = time.monotonic()
+    budget = (getattr(args, "minutes", 0) or 0) * 60
 
     # 回補很長一段（history.yml 一次補三年）的時候放慢：證交所連續打太快會回
     # 307 轉址（實測 1.2 秒一次、第二個請求就被擋），那一天就只剩上櫃半個市場。
@@ -2513,14 +2521,18 @@ def cmd_backfill_prices(args: argparse.Namespace) -> int:
         if day.weekday() >= 5:      # 週六日不必問交易所
             continue
         iso = day.isoformat()
+        if budget and time.monotonic() - started > budget:
+            print(f"  跑滿 {args.minutes} 分鐘，其餘下次再補")
+            break
         had = read_day_rows(store.root, folder, iso)
         # 「有檔案」不等於「抓齊了」。一次抓取只拿到上市、上櫃那個端點掛掉的話，
         # 存下來的就是一份少了半個市場的檔案——它有一千多列，看起來很正常。
         #
         # 實測 2026-09-01 與 09-02 兩天正是這樣（1,093 列，全部是上市；正常是
-        # 1,980 列）。所以判斷條件是**兩個市場都在**，不是「檔案在不在」。
+        # 1,980 列）。所以判斷條件是**兩個市場都在**，不是「檔案在不在」；
+        # 2026-09 整併之後還要**成交金額也在**（見 `store.daily.day_complete`）。
         markets = {str(r.get("market") or "") for r in had}
-        if had and {"上市", "上櫃"} <= markets:
+        if had and day_complete(had, folder):
             skipped += 1
             print(f"  {iso} 已經有 {len(had)} 列（兩市都在），跳過")
             continue
@@ -2569,8 +2581,10 @@ def cmd_backfill_institutional(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient  # noqa: PLC0415
     from .ingest.daily import INSTITUTIONAL_COLUMNS, Daily, by_date  # noqa: PLC0415
-    from .store.daily import merge_day_rows, read_day_rows  # noqa: PLC0415
+    from .store.daily import day_complete, merge_day_rows, read_day_rows  # noqa: PLC0415
 
+    started = time.monotonic()
+    budget = (getattr(args, "minutes", 0) or 0) * 60
     http = HttpClient(
         cache_dir=None, cache_ttl=0,
         min_interval=max(3.0, settings.ingest.min_interval_seconds),
@@ -2591,11 +2605,18 @@ def cmd_backfill_institutional(args: argparse.Namespace) -> int:
         if day.weekday() >= 5:
             continue
         iso = day.isoformat()
+        if budget and time.monotonic() - started > budget:
+            print(f"  跑滿 {args.minutes} 分鐘，其餘下次再補")
+            break
         had = read_day_rows(store.root, folder, iso)
         # 跟收盤行情一樣：「有檔案」不等於「抓齊了」。一次抓取只拿到上市的話，
         # 存下來的是一份少了半個市場的檔案，而它看起來很正常。
+        #
+        # 2026-09 整併之後，2023-09～2025-08 那一段是從〔籌碼雷達〕的 flows 折進
+        # 來的：外資、投信有，自營商與合計沒有。那些日子也算「沒抓齊」，這支會
+        # 一天一天把自營商補上（合併不覆蓋，外資投信那幾欄不會被動到）。
         markets = {str(r.get("market") or "") for r in had}
-        if had and {"上市", "上櫃"} <= markets:
+        if had and day_complete(had, folder):
             skipped += 1
             print(f"  {iso} 已經有 {len(had)} 列（兩市都在），跳過")
             continue
@@ -3278,17 +3299,20 @@ def cmd_fetch_ownership(args: argparse.Namespace) -> int:
     wrote: list[str] = []
     if args.what in ("all", "holders"):
         market = Tdcc(http).fetch()
-        path = own.save_holders(root, market)
         day = next(iter(market.values())).day
-        wrote.append(f"  大戶持股　{len(market):,} 檔　{day:%Y-%m-%d}　-> {path}")
-        # 原始 15 級另存一份給〔籌碼雷達〕。這一步是附加的：失敗只留警告，
-        # 上面那一份（個股格線、AI 選股都靠它）已經寫好了，不受影響。
+        # 15 級是正本（八級由它加總，見 store.ownership 的「整併」一節）。存得成
+        # 15 級就只存 15 級；開放資料萬一沒給 15 級、或寫檔失敗，才退回八級——
+        # 那一週照樣有大戶持股，只是少了人數。
+        lv = None
         try:
             lv = own.save_levels(root, market)
-            if lv:
-                wrote.append(f"  持股分級（15 級）　-> {lv}")
-        except Exception as exc:  # noqa: BLE001 - 附加的一份不能擋住本來那一份
-            print(f"::warning::原始 15 級沒存成（大戶持股照常）：{exc!r}")
+        except Exception as exc:  # noqa: BLE001 - 退回八級
+            print(f"::warning::原始 15 級沒存成，改存八級：{exc!r}")
+        if lv:
+            wrote.append(f"  大戶持股（15 級）　{len(market):,} 檔　{day:%Y-%m-%d}　-> {lv}")
+        else:
+            path = own.save_holders(root, market)
+            wrote.append(f"  大戶持股（八級）　{len(market):,} 檔　{day:%Y-%m-%d}　-> {path}")
     if args.what in ("all", "directors"):
         companies = Insiders(http).fetch()
         path = own.save_directors(root, companies)
@@ -4070,7 +4094,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     ff = sub.add_parser(
         "fetch-flows",
-        help="籌碼雷達：每日成交金額與法人買進／賣出股數（寫進 data/market/daily/flows）",
+        help="（舊名，已整併）等同 backfill-prices ＋ backfill-institutional：成交金額與法人買進／賣出",
     )
     ff.add_argument("--data", help="資料目錄")
     ff.add_argument("--days", type=int, default=5, help="往回補幾個交易日（預設 5）")
@@ -4134,6 +4158,7 @@ def build_parser() -> argparse.ArgumentParser:
     bp.add_argument("--pause", type=float, default=None,
                     help="兩個請求之間至少隔幾秒（長回補用 3；預設沿用設定檔）。"
                          "給了這個參數，只拿到半個市場的那一天會等一下再問一次")
+    bp.add_argument("--minutes", type=float, default=0.0, help="時間預算（分鐘），0＝不限")
     bp.set_defaults(func=cmd_backfill_prices)
 
     bi = sub.add_parser(
@@ -4143,7 +4168,16 @@ def build_parser() -> argparse.ArgumentParser:
     bi.add_argument("--days", type=int, default=25,
                     help="要補幾個交易日（預設 25，蓋得住 20 日的視窗）")
     bi.add_argument("--out", help="資料目錄")
+    bi.add_argument("--minutes", type=float, default=0.0, help="時間預算（分鐘），0＝不限")
     bi.set_defaults(func=cmd_backfill_institutional)
+
+    cd = sub.add_parser(
+        "consolidate-data",
+        help="歷史資料整併（一次性、可重跑）：flows 折進每日行情與三大法人、集保八級併入 15 級",
+    )
+    cd.add_argument("--data", help="資料目錄")
+    cd.add_argument("--dry-run", action="store_true", help="只報告會做什麼，不寫檔")
+    cd.set_defaults(func=cmd_consolidate_data)
 
     pb = sub.add_parser(
         "probe",

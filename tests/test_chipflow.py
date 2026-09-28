@@ -321,48 +321,49 @@ def _sample(name: str):
 
 
 def test_成交金額與法人買賣明細_真實樣本():
+    """2026-09 整併：成交金額與買進／賣出由每日行情、三大法人的 parser 一起讀出來。"""
     from twsix.ingest import daily as DL
-    from twsix.ingest import flows as FL
 
-    v = FL.parse_twse_value(_sample("twse_mi_index_dated"))
+    v = {r["code"]: r["value"] for r in DL.parse_twse_mi_index(_sample("twse_mi_index_dated"))}
     assert v["2330"] > 1e9, "台積電一天的成交金額是百億級"
-    assert FL.parse_tpex_value(_sample("tpex_daily_rwd_dated")), "上櫃也要讀得到"
-    tw = FL.parse_twse_flows(_sample("twse_t86_rwd_dated"))
-    net = {r["code"]: r["foreign"] for r in DL.parse_twse_institutional(_sample("twse_t86_rwd_dated"))}
-    r = next(x for x in tw if x["code"] == "2330")
-    assert r["f_buy"] - r["f_sell"] == net["2330"], "外資口徑要和既有的三大法人檔一致"
-    tp = FL.parse_tpex_flows(_sample("tpex_insti_rwd_dated"))
-    net2 = {r["code"]: r["foreign"] for r in DL.parse_tpex_institutional_dated(
-        _sample("tpex_insti_rwd_dated"))}
+    otc = DL.parse_tpex_rwd(_sample("tpex_daily_rwd_dated"))
+    assert sum(1 for r in otc if r["value"]) > 600, "上櫃也要讀得到（沒成交的那幾檔是 0）"
+    tw = {r["code"]: r for r in DL.parse_twse_institutional(_sample("twse_t86_rwd_dated"))}
+    r = tw["2330"]
+    assert r["f_buy"] - r["f_sell"] == r["foreign"], "外資口徑要和既有的買賣超一致"
+    assert r["t_buy"] - r["t_sell"] == r["trust"]
+    tp = DL.parse_tpex_institutional_dated(_sample("tpex_insti_rwd_dated"))
     x = tp[0]
-    assert x["f_buy"] - x["f_sell"] == net2[x["code"]]
+    assert x["f_buy"] - x["f_sell"] == x["foreign"]
 
 
-def test_法人明細欄序錯了整批不收():
-    from twsix.ingest import flows as FL
+def test_法人明細欄序錯了_只丟買進賣出_淨額照收():
+    from twsix.ingest import daily as DL
 
     bad = {"date": "20260901", "fields": ["證券代號", "外陸資買進股數(不含外資自營商)",
                                           "外陸資賣出股數(不含外資自營商)",
                                           "外陸資買賣超股數(不含外資自營商)", "投信買進股數",
                                           "投信賣出股數", "投信買賣超股數"],
            "data": [[f"{1100 + k}", "10", "3", "99", "0", "0", "0"] for k in range(20)]}
-    assert FL.parse_twse_flows(bad) == []
+    rows = DL.parse_twse_institutional(bad)
+    assert len(rows) == 20 and all(r["foreign"] == 99 for r in rows), "淨額是驗過的舊欄位，照收"
+    assert all(r["f_buy"] is None and r["f_sell"] is None for r in rows), "對不上的買進／賣出不收"
 
 
-def test_flows存檔_合併與是否齊全():
-    from twsix.store import flows as SF
+def test_同一天逐欄合併_只有淨額的抓取不會抹掉成交金額與買進賣出():
+    from twsix.store.daily import day_complete, merge_day_rows
 
-    root = Path(tempfile.mkdtemp())
-    SF.write_day(root, "2026-09-01", [{"date": "2026-09-01", "code": "2330", "market": "上市",
-                                        "value": 1.5e10, "f_buy": 10.0, "f_sell": 3.0,
-                                        "t_buy": 0.0, "t_sell": 0.0}])
-    assert not SF.complete(root, "2026-09-01"), "只有上市，不算齊"
-    SF.write_day(root, "2026-09-01", [{"date": "2026-09-01", "code": "5439", "market": "上櫃",
-                                        "value": 3e8, "f_buy": 1.0, "f_sell": 1.0,
-                                        "t_buy": 0.0, "t_sell": 0.0}])
-    rows = SF.read_day(root, "2026-09-01")
-    assert {r["code"] for r in rows} == {"2330", "5439"} and SF.complete(root, "2026-09-01")
-    assert rows[0]["value"] == "15000000000", "整數不要寫成 1.5e10"
+    old = [{"date": "2026-09-01", "code": "2330", "market": "上市", "foreign": "7",
+            "dealer": "1", "trust": "0", "f_buy": "10", "f_sell": "3", "t_buy": "0"}]
+    new = [{"date": "2026-09-01", "code": "2330", "market": "上市", "foreign": "7",
+            "dealer": "2", "trust": "0", "f_buy": None, "f_sell": "", "t_buy": None}]
+    got = merge_day_rows(old, new)[0]
+    assert got["dealer"] == "2", "新的有值就用新的"
+    assert got["f_buy"] == "10" and got["f_sell"] == "3", "新的沒有的欄位保留舊值"
+    assert not day_complete([got], "institutional"), "只有上市，不算齊"
+    otc = {**got, "code": "5439", "market": "上櫃"}
+    assert day_complete([got, otc], "institutional")
+    assert not day_complete([got, {**otc, "dealer": ""}], "institutional"), "缺自營商也不算齊"
 
 
 QRY_PAGE = """<table><tr><th>序</th><th>持股分級</th><th>人數</th><th>股數</th><th>占比</th></tr>
@@ -415,3 +416,16 @@ def test_個股季報_合約負債與資本支出比例():
     assert F.sheet_metrics(quarters, income, asof="2026-08-13")["sq"] == "2026.1Q"
     tl = L.capital_timeline(quarters)
     assert tl[-1] == ("2026-08-14", 1e9)
+
+
+def test_籌碼雷達的代號_名稱_收盤價各自連到該去的地方():
+    """代號 → 個股資訊頁、名稱 → ① 個股籌碼多圖、收盤價旁 → Yahoo 技術分析（.TW／.TWO）。"""
+    src = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+           / "radar.html.j2").read_text("utf-8")
+    assert 'href: "stock/" + encodeURIComponent(code) + ".html"' in src
+    assert 'open("t1", code)' in src and 'href: "#t1-" + code' in src
+    assert '".TWO"' in src and '".TW"' in src and "/technical-analysis" in src
+    assert 'cls: "yf"' in src, "和評等清單同一個圖示"
+    # 每一張有代號的表都走同一組 helper，不是各寫各的
+    assert src.count("codeCell(") >= 4 and src.count("priceCell(") >= 3 and src.count("nameCell(") >= 4
+    assert 'a.onclick = function(){ open("t1", r.c); }' not in src, "代號不再只連到本頁的 ①"

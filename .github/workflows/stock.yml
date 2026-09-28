@@ -164,10 +164,11 @@ jobs:
           # 表，清單上那一列才會跟著動；漏掉它有兩個後果，而且都不像「漏了一個
           # 檔案」：個股頁是新的、清單是舊的（使用者看到的第一個症狀），以及
           # 下面那句 `git pull --rebase` 會因為工作區有未暫存的變更而整個失敗。
-          git add "data/sheets/$code" \
-                  "data/ownership/stock/$code.csv.gz" \
-                  "data/ownership/directors_stock/$code."* \
-                  data/ratings.csv || true
+          # data/ownership 整個目錄、而且用 -A：2026-09 整併之後集保回補寫的是
+          # levels_stock/<代號>（15 級），並把 stock/<代號> 裡重複的週刪掉——
+          # 逐一列檔名的話，一個不存在的路徑就讓整句 git add 什麼都沒加。
+          # 這個 job 只動這一檔，所以整個目錄的變動就是這一檔的變動。
+          git add -A -- "data/sheets/$code" data/ownership data/ratings.csv || true
           # ⚠️ **守門要在提早 exit 的上面。**
           #
           # 它防的是「引擎寫了一個白名單沒列的檔案」。而它以前排在

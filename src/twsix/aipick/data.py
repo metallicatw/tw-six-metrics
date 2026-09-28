@@ -245,7 +245,8 @@ def forward_return(panel: Panel, code: str, i: int, days: int) -> float:
 
 def load_institutional(data_dir: Path, panel: Panel) -> dict[str, dict[str, array]]:
     """`{代號: {"foreign": array, "trust": array, "dealer": array}}`，單位：股，
-    對齊 `panel.dates`。沒有資料的日子是 NaN（2025-09 以前沒有）。"""
+    對齊 `panel.dates`。沒有資料的日子是 NaN。外資、投信 2023-09 起（2026-09 整併時由
+    〔籌碼雷達〕的買進／賣出補回來）；自營商 2025-09 起，更早的由 `backfill-institutional` 逐日補。"""
     folder = data_dir / "market" / "daily" / "institutional"
     n = len(panel.dates)
     out: dict[str, dict[str, array]] = {}
@@ -301,9 +302,9 @@ def _holder_row(day: str, r: dict[str, str]) -> HolderWeek | None:
 def load_holders(data_dir: Path) -> dict[str, list[HolderWeek]]:
     """每一檔的集保週資料，舊的在前。
 
-    兩個來源合併：`ownership/stock/<代號>.csv.gz`（逐檔回補的一年）與
-    `ownership/holders/<日期>.csv.gz`（每週全市場一份）。同一週兩邊都有時用全市場
-    那一份——它是每週排程寫的，逐檔那份是某一天回補的。
+    四個來源合併：逐檔回補的八級（`stock/`）與 15 級（`levels_stock/`），每週全市場
+    的八級（`holders/`）與 15 級（`levels/`）。同一週兩邊都有時全市場優先、15 級
+    優先——兩者實測逐格相同，這個順序只是讓「同一週只有一個來源說了算」。
     """
     root = data_dir / "ownership"
     out: dict[str, dict[str, HolderWeek]] = {}
@@ -313,14 +314,35 @@ def load_holders(data_dir: Path) -> dict[str, list[HolderWeek]]:
             w = _holder_row((r.get("date") or "").strip(), r)
             if w:
                 out.setdefault(code, {})[w.date] = w
-    for path in sorted((root / "holders").glob("*.csv.gz")):
-        day = path.name[:8]
+    # 2026-09 整併：有 15 級的週只存 15 級（見 store.ownership），八級現算。
+    for path in sorted((root / "levels_stock").glob("*.csv.gz")):
+        code = path.name.split(".")[0]
         for r in _gz_rows(path):
-            code = (r.get("code") or "").strip()
-            w = _holder_row(day, r)
-            if code and w:
+            w = _holder_row((r.get("date") or "").strip(), _tiers_from_levels(r))
+            if w:
                 out.setdefault(code, {})[w.date] = w
+    for sub, fold in (("holders", None), ("levels", _tiers_from_levels)):
+        for path in sorted((root / sub).glob("*.csv.gz")):
+            day = path.name[:8]
+            for r in _gz_rows(path):
+                code = (r.get("code") or "").strip()
+                w = _holder_row(day, fold(r) if fold else r)
+                if code and w:
+                    out.setdefault(code, {})[w.date] = w
     return {c: [weeks[d] for d in sorted(weeks)] for c, weeks in out.items()}
+
+
+#: 八級各由哪幾個 15 級組成（和 ingest.tdcc.TIERS 同一張表）。
+_TIER_BINS = ((1, 2, 3), (4, 5, 6, 7, 8), (9,), (10,), (11,), (12, 13), (14,), (15,))
+
+
+def _tiers_from_levels(r: dict[str, str]) -> dict[str, str]:
+    """15 級的一列 → 八級的欄位（t1..t8），給 `_holder_row` 讀。"""
+    out = {"holders": r.get("holders", ""), "shares": r.get("shares", "")}
+    for i, bins in enumerate(_TIER_BINS, start=1):
+        vals = [_num(r.get(f"s{b}")) for b in bins]
+        out[f"t{i}"] = "" if any(isnan(v) for v in vals) else str(sum(vals))
+    return out
 
 
 # ---------------------------------------------------------------------------

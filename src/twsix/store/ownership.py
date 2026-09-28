@@ -13,6 +13,17 @@
 7 MB。代價是這樣，換來的是：**每週兩個請求，覆蓋所有股票，包括今天還沒加入
 觀察清單、三年後才想看的那一檔。** 逐檔抓要 1,741 次，而且對方不給。
 
+## 2026-09 整併：15 級是唯一的正本
+
+集保的原始資料是 15 級（每一級的人數與股數）。八級（Goodinfo 的樣子）是把 15 級
+**加總**出來的——`tdcc.TIERS` 就是那張對照表——所以兩份並存等於同一週存兩次。
+實測 4,068 檔 × 1 週（全市場）與 309 檔 × 13,854 週（逐檔）逐格比過，0 筆不同。
+
+所以現在：有 15 級的週只存 15 級（`levels/`、`levels_stock/`），八級在讀的時候
+現算；八級檔（`holders/`、`stock/`）只留**沒有 15 級的那些週**（15 級開始存之前
+回補的一年）。讀取端（:func:`weeks`、AI 選股、籌碼雷達）一律兩種都讀、同一週
+15 級優先，所以整併前後讀到的是同一份資料。整併本身見 :mod:`.consolidate`。
+
 回讀時才折成單一檔的格線（:func:`holders_grid` / :func:`directors_grid`），欄名
 和 :mod:`twsix.ingest.goodinfo` 攤平後一致，所以官方累積的和手動匯入的
 Goodinfo 歷史可以直接合併——前者從今天往後長，後者補今天以前。
@@ -91,6 +102,37 @@ def _read(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(fh))
 
 
+def _day(stamp: str) -> date:
+    return date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]))
+
+
+def snapshot_from_levels(stock_id: str, day: date, row: dict[str, str]) -> tdcc.Snapshot:
+    """一列 15 級 → 一個 :class:`tdcc.Snapshot`（八級由 15 級加總，並帶著原始 15 級）。"""
+    shares = {i: int(row.get(f"s{i}") or 0) for i in range(1, 16)}
+    people = {i: int(row.get(f"p{i}") or 0) for i in range(1, 16)}
+    return tdcc.Snapshot(
+        stock_id=stock_id,
+        day=day,
+        holders=int(row.get("holders") or 0),
+        shares=int(row.get("shares") or 0),
+        tiers={name: sum(shares[b] for b in bins) for name, bins in tdcc.TIERS},
+        levels=tuple((i, people[i], shares[i]) for i in range(1, 16)),
+    )
+
+
+def _snapshot_from_tiers(stock_id: str, day: date, row: dict[str, str]) -> tdcc.Snapshot:
+    return tdcc.Snapshot(
+        stock_id=stock_id,
+        day=day,
+        holders=int(row.get("holders") or 0),
+        shares=int(row.get("shares") or 0),
+        tiers={
+            name: int(row.get(f"t{i}") or 0)
+            for i, (name, _) in enumerate(tdcc.TIERS, start=1)
+        },
+    )
+
+
 # -- 寫入 -----------------------------------------------------------------
 
 
@@ -156,7 +198,24 @@ def save_level_history(root: Path, stock_id: str, snapshots: Iterable[tdcc.Snaps
         return 0
     rows = [have[k] for k in sorted(have)]
     _write(path, _LEVEL_STOCK_FIELDS, rows)
+    prune_tier_weeks(root, stock_id, set(have))
     return len(rows)
+
+
+def prune_tier_weeks(root: Path, stock_id: str, stamps: set[str]) -> int:
+    """`stock/<代號>` 裡已經有 15 級的那幾週刪掉（八級可以從 15 級現算）。回傳刪了幾列。"""
+    path = root / STOCK_DIR / f"{stock_id}.csv.gz"
+    if not path.exists() or not stamps:
+        return 0
+    rows = _read(path)
+    keep = [r for r in rows if r["date"] not in stamps]
+    if len(keep) == len(rows):
+        return 0
+    if keep:
+        _write(path, _STOCK_FIELDS, [[r[f] for f in _STOCK_FIELDS] for r in keep])
+    else:
+        path.unlink()
+    return len(rows) - len(keep)
 
 
 def level_history_dates(root: Path, stock_id: str) -> set[date]:
@@ -197,6 +256,10 @@ def save_stock_history(root: Path, stock_id: str, snapshots: Iterable[tdcc.Snaps
     塞一檔進去會讓它變成一份看起來完整、其實只有一檔的資料。
     """
     path = root / STOCK_DIR / f"{stock_id}.csv.gz"
+    # 帶著 15 級的那幾週由 `save_level_history` 存，這裡不再多存一份八級。
+    snapshots = [s for s in snapshots if not s.levels]
+    if not snapshots:
+        return len(_read(path)) if path.exists() else 0
     have: dict[str, list[str]] = {}
     if path.exists():
         for row in _read(path):
@@ -214,24 +277,22 @@ def save_stock_history(root: Path, stock_id: str, snapshots: Iterable[tdcc.Snaps
 
 
 def stock_history(root: Path, stock_id: str) -> dict[date, tdcc.Snapshot]:
-    """單檔回補的週線，依日期索引。沒有就回空的。"""
-    path = root / STOCK_DIR / f"{stock_id}.csv.gz"
-    if not path.exists():
-        return {}
+    """單檔回補的週線，依日期索引。沒有就回空的。
+
+    兩份合併：八級（`stock/`，15 級開始存之前回補的）與 15 級（`levels_stock/`，
+    八級現算）。同一週 15 級優先。
+    """
     out: dict[date, tdcc.Snapshot] = {}
-    for row in _read(path):
-        stamp = row["date"]
-        day = date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]))
-        out[day] = tdcc.Snapshot(
-            stock_id=stock_id,
-            day=day,
-            holders=int(row["holders"] or 0),
-            shares=int(row["shares"] or 0),
-            tiers={
-                name: int(row[f"t{i}"] or 0)
-                for i, (name, _) in enumerate(tdcc.TIERS, start=1)
-            },
-        )
+    path = root / STOCK_DIR / f"{stock_id}.csv.gz"
+    if path.exists():
+        for row in _read(path):
+            day = _day(row["date"])
+            out[day] = _snapshot_from_tiers(stock_id, day, row)
+    path = root / LEVELS_STOCK_DIR / f"{stock_id}.csv.gz"
+    if path.exists():
+        for row in _read(path):
+            day = _day(row["date"])
+            out[day] = snapshot_from_levels(stock_id, day, row)
     return out
 
 
@@ -315,22 +376,15 @@ def weeks(root: Path, stock_id: str) -> dict[date, tdcc.Snapshot]:
     為了正確性，是為了「同一週永遠只有一個來源說了算」。
     """
     out = stock_history(root, stock_id)
-    for stamp, path in _snapshots(root, HOLDERS_DIR):
-        day = date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]))
-        for row in _read(path):
-            if row["code"].strip() != stock_id:
-                continue
-            out[day] = tdcc.Snapshot(
-                stock_id=stock_id,
-                day=day,
-                holders=int(row["holders"] or 0),
-                shares=int(row["shares"] or 0),
-                tiers={
-                    name: int(row[f"t{i}"] or 0)
-                    for i, (name, _) in enumerate(tdcc.TIERS, start=1)
-                },
-            )
-            break
+    # 全市場那一份：八級（`holders/`）先、15 級（`levels/`）後，同一週 15 級優先。
+    for kind, make in ((HOLDERS_DIR, _snapshot_from_tiers), (LEVELS_DIR, snapshot_from_levels)):
+        for stamp, path in _snapshots(root, kind):
+            day = _day(stamp)
+            for row in _read(path):
+                if row["code"].strip() != stock_id:
+                    continue
+                out[day] = make(stock_id, day, row)
+                break
     return out
 
 

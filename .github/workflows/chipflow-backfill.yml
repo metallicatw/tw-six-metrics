@@ -2,8 +2,10 @@ name: 籌碼雷達回補（成交金額、法人明細、集保 15 級）
 
 # 〔籌碼雷達〕要兩樣歷史，每晚接著補，補齊之後每一趟幾秒鐘就結束：
 #
-# * data/market/daily/flows/ ：每日成交金額與法人買進／賣出股數（一年約 250 天，
-#   一天四個請求；證交所打太密會回 307，所以間隔拉到 5 秒）。
+# * 每日行情的成交金額（value）與三大法人（含自營商、買進／賣出）：2026-09 整併
+#   之後由 backfill-prices／backfill-institutional 補「還沒齊」的日子，一路補回
+#   2023-08（原本另存在 data/market/daily/flows/，同樣四個回應抓兩次）。
+#   證交所打太密會回 307，所以間隔拉到 5 秒。
 # * data/ownership/levels_stock/ ：集保原始 15 級（含人數）逐檔一年（51 週）。
 #   一檔約一分鐘，依流動性排序——最常被看的那幾百檔最先有「大戶人數」。
 #
@@ -16,7 +18,7 @@ on:
       flows_days:
         description: "成交金額與法人明細：往回補幾個交易日"
         required: false
-        default: "300"
+        default: "800"
         type: string
       levels_minutes:
         description: "集保 15 級：這一趟最多跑幾分鐘"
@@ -48,12 +50,15 @@ jobs:
       # 這條會寫資料，bot 的 push 又不觸發 ci.yml——所以寫之前先跑一次（見 OPERATIONS.md）
       - name: 測試
         run: python scripts/run_tests.py
+      - name: 歷史資料整併（一次性、可重跑）
+        run: twsix consolidate-data
       - name: 成交金額與法人明細
         env:
-          IN_DAYS: ${{ inputs.flows_days || '300' }}
+          IN_DAYS: ${{ inputs.flows_days || '800' }}
         run: |
-          case "$IN_DAYS" in ''|*[!0-9]*) IN_DAYS=300 ;; esac
-          twsix fetch-flows --days "$IN_DAYS" --pause 5 --minutes 80
+          case "$IN_DAYS" in ''|*[!0-9]*) IN_DAYS=800 ;; esac
+          twsix backfill-prices --days "$IN_DAYS" --pause 5 --minutes 30 || true
+          twsix backfill-institutional --days "$IN_DAYS" --minutes 60 || true
       - name: 集保原始 15 級（逐檔）
         env:
           IN_MIN: ${{ inputs.levels_minutes || '200' }}
@@ -65,8 +70,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          mkdir -p data/market/daily/flows data/ownership/levels_stock
-          git add data/market/daily/flows data/ownership/levels_stock
+          # 整併會刪掉 flows/ 與重複的八級集保，所以用 -A（連刪除一起記）。
+          git add -A -- data/market/daily data/ownership
           if ! git diff --quiet; then
             echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
             git diff --name-only | sed 's/^/  /'
@@ -77,7 +82,7 @@ jobs:
             echo "changed=no" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          flows=$(git diff --cached --name-only -- data/market/daily/flows | wc -l)
+          flows=$(git diff --cached --name-only -- data/market/daily/institutional | wc -l)
           levels=$(git diff --cached --name-only -- data/ownership/levels_stock | wc -l)
           git commit -m "籌碼雷達回補：成交金額與法人明細 $flows 天、集保 15 級 $levels 檔"
       - name: 推送

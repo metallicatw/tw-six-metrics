@@ -373,7 +373,8 @@ def test_backfilled_weeks_and_market_snapshots_land_in_one_series():
 
     root = _archive(_tmp())
     page = (MARKET / "tdcc_qrystock_20260807.html").read_text("utf-8")
-    own.save_stock_history(root, "5439", [parse_week(page, "5439", date(2026, 8, 7))])
+    # 查詢頁帶著 15 級：2026-09 整併之後只存 15 級，八級讀的時候現算。
+    own.save_level_history(root, "5439", [parse_week(page, "5439", date(2026, 8, 7))])
 
     weeks = own.weeks(root, "5439")
     assert set(weeks) == {date(2026, 8, 7), date(2026, 8, 28)}
@@ -387,8 +388,11 @@ def test_backfilling_twice_does_not_duplicate_a_week():
     root = _tmp() / "ownership"
     page = (MARKET / "tdcc_qrystock_20260807.html").read_text("utf-8")
     snap = parse_week(page, "5439", date(2026, 8, 7))
-    assert own.save_stock_history(root, "5439", [snap]) == 1
-    assert own.save_stock_history(root, "5439", [snap]) == 1
+    assert own.save_level_history(root, "5439", [snap]) == 1
+    assert own.save_level_history(root, "5439", [snap]) == 1
+    # 帶 15 級的快照不再多存一份八級
+    assert own.save_stock_history(root, "5439", [snap]) == 0
+    assert not (root / own.STOCK_DIR / "5439.csv.gz").exists()
 
 
 def test_the_backfill_also_gives_the_directors_percentage_a_denominator_per_month():
@@ -401,7 +405,8 @@ def test_the_backfill_also_gives_the_directors_percentage_a_denominator_per_mont
 
     root = _archive(_tmp())
     page = (MARKET / "tdcc_qrystock_20260807.html").read_text("utf-8")
-    own.save_stock_history(root, "5439", [parse_week(page, "5439", date(2026, 8, 7))])
+    # 查詢頁帶著 15 級：2026-09 整併之後只存 15 級，八級讀的時候現算。
+    own.save_level_history(root, "5439", [parse_week(page, "5439", date(2026, 8, 7))])
     custody = own.custody_shares(root, "5439")
     assert custody["2026/08"] == 92_976_751
 
@@ -542,8 +547,10 @@ def test_stock_workflow_commits_the_directors_backfill_it_paid_for():
     隨著機器一起消失，而使用者看到的是「明明更新過了，怎麼還是一樣慢」。
     """
     text = (ROOT.parent / ".github" / "workflows" / "stock.yml").read_text("utf-8")
-    assert '"data/ownership/stock/$code.csv.gz"' in text
-    assert '"data/ownership/directors_stock/$code."*' in text
+    # 2026-09 整併之後集保回補寫 levels_stock/<代號>、並刪掉 stock/<代號> 裡重複的週，
+    # 所以整個 data/ownership 用 -A 加（連刪除一起記；董監月線與地板也在裡面）。
+    line = next(ln for ln in text.splitlines() if "git add -A --" in ln and "data/sheets/$code" in ln)
+    assert "data/ownership" in line
 
 
 def test_stock_workflow_commits_the_rating_it_just_recomputed():
@@ -671,7 +678,7 @@ def test_a_scattered_failure_does_not_abandon_the_rest_of_the_year():
     src = inspect.getsource(cli._backfill_holders)
     assert "streak" in src and "streak >= 6" in src
     # 邊跑邊存：step 被砍或 runner 逾時的時候，拿到的那幾週不能跟著消失。
-    assert src.count("save_stock_history") >= 2
+    assert src.count("_save_weeks") >= 2
     # 沒拿到的再試一次，而不是留給下一次執行。
     assert "再試一次" in src
 

@@ -214,7 +214,7 @@
   <h3 class="ai-h"><span class="ai-tag ai-tag-b">驗</span>回測</h3>
   <p class="ai-lead">成本：買 0.1425%、賣 0.1425% ＋ 0.3% 證交稅（一買一賣 0.585%，未算折扣與滑價）。
     除權息日當天報酬記 0；已下市的公司放回母體（不做倖存者偏差）。財報在法定公告期限之後、營收在次月 10 日之後才算看得到。
-    各方案的資料起點不同：營收約 2022 年中起、股價 2023-08 起、集保與法人 2025-09 起。</p>
+    各方案的資料起點不同：營收約 2022 年中起、股價 2023-08 起、法人（外資、投信）2023-09 起、集保 2025-09 起——方案 D 要集保，所以它的回測從 2025-09 開始。</p>
   <div class="ai-verdict">{% for p in ai.verdict %}<p>{{ p|safe }}</p>{% endfor %}</div>
   {% if 'ai-all-chart' in ai.chart_ids %}<div class="ai-chart" id="ai-all-chart"></div>{% endif %}
   <div class="scroll"><table class="ai-t ai-stats">

@@ -32,7 +32,7 @@ IC。財報、月營收、E 否決都用**那一週看得到的**版本（月營
 
 ## 資料口徑
 
-* 成交金額：官方成交金額（`data/market/daily/flows/`）；還沒回補到的日子用
+* 成交金額：官方成交金額（每日行情的 `value` 欄；整併前在 `data/market/daily/flows/`）；還沒回補到的日子用
   成交股數 × 收盤價。法人金額 ＝ 買賣超股數 × 當日均價（成交金額 ÷ 成交股數）。
 * 法人預估成交額 ＝（外資＋投信的買進＋賣出）÷ 2 × 均價。
 * 大戶：集保原始 15 級（每週全市場＋逐檔回補 51 週）；還沒補到的用八級。
@@ -831,8 +831,9 @@ def _strip_nulls(row: dict) -> dict:
 
 
 def _flows_days(engine: Engine) -> int:
-    folder = engine.data_dir / "market" / "daily" / "flows"
-    return len(list(folder.glob("*.csv.gz"))) if folder.is_dir() else 0
+    from .load import flows_days  # noqa: PLC0415
+
+    return flows_days(engine.data_dir)
 
 
 def run(data_dir: Path) -> dict[str, object]:

@@ -37,6 +37,10 @@
 .cf-tbl th{cursor:pointer;background:var(--surface-2);position:sticky;top:0}
 .cf-tbl td.l,.cf-tbl th.l{text-align:left}
 .cf-tbl a{cursor:pointer;color:var(--accent-2);text-decoration:underline}
+.cf-tbl td.cf-px{white-space:nowrap}
+.cf-tbl a.yf{text-decoration:none}
+/* 名稱（→ ① 個股籌碼多圖，留在本頁）用虛線底線，和代號（→ 個股資訊頁，換頁）分得出來 */
+.cf-tbl a[href^="#t1-"]{text-decoration-style:dotted}
 .cf-scroll{overflow:auto;max-height:70vh;border:1px solid var(--rule);border-radius:8px}
 .cf-badge{display:inline-block;border-radius:999px;padding:0 7px;font-size:11.5px;margin-left:3px;border:1px solid var(--rule)}
 .cf-badge.pick{background:var(--accent);color:var(--surface);border-color:var(--accent)}
@@ -252,6 +256,32 @@ function resolve(q){
 }
 function stock(code){ return getJSON("stock/" + code + ".json"); }
 function label(code){ var r = ROWS[code]; return code + " " + (r ? r.n : ""); }
+// ── 連結 ────────────────────────────────────────────────────────────────
+// 代號 → 本站的〔個股資訊頁〕；名稱 → 本頁的〔① 個股籌碼多圖〕；收盤價旁的小圖示 →
+// Yahoo 股市技術分析（和評等清單同一個圖示、同一個網址格式：上市 .TW、上櫃 .TWO）。
+// 不另外加欄位：三種去處各自掛在「最自然會去點的那一格」，表頭的說明列講一次。
+function yahooTA(code){
+  var r = ROWS[code] || {};
+  return "https://tw.stock.yahoo.com/quote/" + encodeURIComponent(code) + (r.mk === "上櫃" ? ".TWO" : r.mk === "上市" ? ".TW" : "") + "/technical-analysis";
+}
+function codeCell(code){
+  return el("td", {cls: "l"}, el("a", {href: "stock/" + encodeURIComponent(code) + ".html", title: "個股資訊頁", text: code}));
+}
+function nameCell(code, name){
+  var a = el("a", {href: "#t1-" + code, title: "① 個股籌碼多圖", text: name || code});
+  a.onclick = function(e){ e.preventDefault(); open("t1", code); window.scrollTo(0, $("cf-tabs").getBoundingClientRect().top + window.pageYOffset - 8); };
+  return el("td", {cls: "l"}, a);
+}
+function priceCell(code, v, d){
+  return el("td", {cls: "cf-px"}, fmt(v, d), el("a", {cls: "yf", href: yahooTA(code), target: "_blank", rel: "noopener", title: "Yahoo股市技術分析", "aria-label": code + " Yahoo 技術分析"}));
+}
+function stockLinks(code, extra){
+  // ①②③ 分頁頂端那一行：股票名稱之後接兩個去處
+  return el("p", {cls: "cf-note"}, label(code) + (extra || "") + "　",
+    el("a", {href: "stock/" + encodeURIComponent(code) + ".html", text: "個股資訊頁"}), "　",
+    el("a", {href: yahooTA(code), target: "_blank", rel: "noopener", text: "Yahoo 技術分析"}));
+}
+var LINK_NOTE = "點代號開個股資訊頁、點名稱看 ① 個股籌碼多圖、點收盤價旁的圖示開 Yahoo 技術分析。";
 
 // ── 圖 ──────────────────────────────────────────────────────────────
 function chart(title, dates, series, opt){
@@ -425,7 +455,7 @@ function show1(code){
   var o = $("cf-o1"); o.textContent = "載入中…";
   Promise.all([getJSON("market.json"), stock(code)]).then(function(res){
     var mk = res[0], s = res[1]; o.innerHTML = "";
-    o.appendChild(el("p", {cls: "cf-note", text: label(code) + "　資料日 " + s.asof}));
+    o.appendChild(stockLinks(code, "　資料日 " + s.asof));
     if (!s.d){ o.appendChild(el("p", {cls: "cf-note", text: "這一檔流動性不足（20 日均額 ≤ 5,000 萬），沒有產生每日序列；可改看 ② 大戶籌碼與 ③ 基本面。"})); return; }
     var d = s.d, ds = mk.dates;
     o.appendChild(chart("收盤價", ds, [{v: d.cl, c: "var(--price)"}], {wide: true}));
@@ -468,7 +498,7 @@ function show2(code){
   var o = $("cf-o2"); o.textContent = "載入中…";
   Promise.all([getJSON("market.json"), stock(code)]).then(function(res){
     var mk = res[0], s = res[1]; o.innerHTML = "";
-    o.appendChild(el("p", {cls: "cf-note", text: label(code) + "　資料日 " + s.asof}));
+    o.appendChild(stockLinks(code, "　資料日 " + s.asof));
     if (s.d){
       var g = group(o, "每日大戶籌碼指標（每日）");
       g.appendChild(chart("收盤價", mk.dates, [{v: s.d.cl, c: "var(--price)"}]));
@@ -497,9 +527,9 @@ function show3(code){
   stock(code).then(function(s){
     o.innerHTML = "";
     var r = ROWS[code] || {};
-    o.appendChild(el("p", {cls: "cf-note", text: label(code)}));
+    o.appendChild(stockLinks(code));
     var k = el("div", {cls: "cf-kpi"});
-    var yl = el("a", {href: "https://tw.stock.yahoo.com/quote/" + encodeURIComponent(code) + "/technical-analysis", target: "_blank", rel: "noopener", text: fmt(r.p, 2)});
+    var yl = el("a", {href: yahooTA(code), target: "_blank", rel: "noopener", text: fmt(r.p, 2)});
     k.appendChild(el("div", null, "最新收盤價（Yahoo 技術分析）", el("b", null, yl)));
     [["單月營收年增率", isnum(r.r1) ? fmt(r.r1, 1) + "%" : "—"], ["四季 EPS 年增率", isnum(r.e4y) ? fmt(r.e4y, 1) + "%" : "—"], ["最新營益率", isnum(r.om) ? fmt(r.om, 1) + "%" : "—"]].forEach(function(x){ k.appendChild(el("div", null, x[0], el("b", {text: x[1]}))); });
     o.appendChild(k);
@@ -684,7 +714,7 @@ function table(host, rows, cols, opt){
     }
     var pages = Math.max(1, Math.ceil(list.length / size));
     if (state.page >= pages) state.page = pages - 1;
-    head.textContent = "符合條件：" + list.length.toLocaleString() + " / " + R.rows.length.toLocaleString() + " 檔" + (opt.extra || "");
+    head.textContent = "符合條件：" + list.length.toLocaleString() + " / " + R.rows.length.toLocaleString() + " 檔" + (opt.extra || "") + "。" + LINK_NOTE;
     var t = el("table", {cls: "cf-tbl"});
     var tr = el("tr");
     cols.forEach(function(c){
@@ -697,7 +727,9 @@ function table(host, rows, cols, opt){
     list.slice(state.page * size, state.page * size + size).forEach(function(r){
       var row = el("tr");
       cols.forEach(function(c){
-        if (c[0] === "c"){ var a = el("a", {text: r.c}); a.onclick = function(){ open("t1", r.c); }; row.appendChild(el("td", {cls: "l"}, a)); }
+        if (c[0] === "c") row.appendChild(codeCell(r.c));
+        else if (c[0] === "n") row.appendChild(nameCell(r.c, r.n));
+        else if (c[0] === "p") row.appendChild(priceCell(r.c, r.p, c[2]));
         else if (c[2] === "l") row.appendChild(el("td", {cls: "l", text: r[c[0]] == null ? "" : String(r[c[0]])}));
         else row.appendChild(el("td", {text: fmt(r[c[0]], c[2])}));
       });
@@ -789,7 +821,7 @@ function showPicks(){
   o.appendChild(el("p", {cls: "cf-note", text: "資料日 " + R.asof + "；集保週 " + R.week + "；流動性母體 " + R.universe + " 檔；E 否決名單 " + R.veto_count + " 檔（AI 選股 " + (R.veto_asof || "未取得") + "）。今天的特徵權重（過去已實現週的 rank IC，負的歸零）：" + Object.keys(w).map(function(k){ return (R.feature_text[k] || k) + " " + fmt(w[k], 3); }).join("、")}));
   var cols = [["c", "代號", "l"], ["n", "名稱", "l"], ["ind", "產業", "l"], ["p", "收盤", 1], ["s", "共振分數", 3]];
   function block(title, codes, desc){
-    var card = el("div", {cls: "cf-card"}, el("h4", {text: title + "（" + codes.length + " 檔）"}), el("p", {cls: "cf-note", text: desc}));
+    var card = el("div", {cls: "cf-card"}, el("h4", {text: title + "（" + codes.length + " 檔）"}), el("p", {cls: "cf-note", text: desc + " " + LINK_NOTE}));
     var t = el("table", {cls: "cf-tbl"});
     var tr = el("tr"); cols.forEach(function(c){ tr.appendChild(el("th", {cls: c[2] === "l" ? "l" : "", text: c[1]})); });
     ["柱子", "時機", "成長旗標", "回檔警戒", "理由"].forEach(function(h){ tr.appendChild(el("th", {cls: "l", text: h})); });
@@ -797,7 +829,9 @@ function showPicks(){
     codes.map(function(c){ return ROWS[c]; }).filter(Boolean).sort(function(a, b){ return (b.s || 0) - (a.s || 0); }).forEach(function(r){
       var row = el("tr");
       cols.forEach(function(c){
-        if (c[0] === "c"){ var a = el("a", {text: r.c}); a.onclick = function(){ open("t1", r.c); }; row.appendChild(el("td", {cls: "l"}, a)); }
+        if (c[0] === "c") row.appendChild(codeCell(r.c));
+        else if (c[0] === "n") row.appendChild(nameCell(r.c, r.n));
+        else if (c[0] === "p") row.appendChild(priceCell(r.c, r.p, c[2]));
         else if (c[2] === "l") row.appendChild(el("td", {cls: "l", text: r[c[0]] || ""}));
         else row.appendChild(el("td", {text: fmt(r[c[0]], c[2])}));
       });
@@ -817,7 +851,7 @@ function showPicks(){
   var card = el("div", {cls: "cf-card"}, el("h4", {text: "精選日誌（近 60 個交易日）"}), el("p", {cls: "cf-note", text: "每天的精選照實記下來（data/chipflow/journal.csv），之後對答案：報酬是入選當天收盤到今天的還原報酬，超額是減去同一天流動性母體的平均。這不是交易紀錄，沒有扣成本。"}));
   var t = el("table", {cls: "cf-tbl"});
   t.appendChild(el("tr", null, el("th", {cls: "l", text: "入選日"}), el("th", {cls: "l", text: "代號"}), el("th", {cls: "l", text: "名稱"}), el("th", {text: "入選價"}), el("th", {text: "天數"}), el("th", {text: "報酬%"}), el("th", {text: "超額%"}), el("th", {cls: "l", text: "今日警戒"})));
-  j.forEach(function(x){ t.appendChild(el("tr", null, el("td", {cls: "l", text: x.date}), el("td", {cls: "l", text: x.code}), el("td", {cls: "l", text: x.name}), el("td", {text: fmt(x.close, 2)}), el("td", {text: String(x.held)}), el("td", {text: fmt(x.ret, 2)}), el("td", {text: fmt(x.excess, 2)}), el("td", {cls: "l"}, el("span", {cls: "cf-w-" + x.warn, text: x.warn})))); });
+  j.forEach(function(x){ t.appendChild(el("tr", null, el("td", {cls: "l", text: x.date}), codeCell(x.code), nameCell(x.code, x.name), el("td", {text: fmt(x.close, 2)}), el("td", {text: String(x.held)}), el("td", {text: fmt(x.ret, 2)}), el("td", {text: fmt(x.excess, 2)}), el("td", {cls: "l"}, el("span", {cls: "cf-w-" + x.warn, text: x.warn})))); });
   if (!j.length) t.appendChild(el("tr", null, el("td", {cls: "l", colspan: 8, text: "還沒有紀錄。"})));
   card.appendChild(el("div", {cls: "cf-scroll"}, t));
   o.appendChild(card);

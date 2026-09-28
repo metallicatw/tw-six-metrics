@@ -220,34 +220,64 @@ def load_vetoes(data_dir: Path) -> tuple[set[str], str]:
 
 
 # ---------------------------------------------------------------------------
-# 成交金額與法人買進／賣出（data/market/daily/flows，見 twsix.ingest.flows）
+# 成交金額與法人買進／賣出
+#
+# 2026-09 整併之後在每日行情（`value`）與三大法人（`f_buy`…`t_sell`）裡；整併前
+# 另存在 `data/market/daily/flows/`。兩種都讀：整併那一步還沒在排程上跑過的時候，
+# 這裡照樣讀得到舊的那一份。
 
 
 def load_flows(data_dir: Path, panel: Panel, codes: set[str]) -> dict[str, dict[str, array]]:
     """`{代號: {"value", "fb", "fs", "tb", "ts": array}}`，對齊 `panel.dates`，缺值 NaN。
 
-    沒有這個目錄（還沒回補）時回空 dict，呼叫端改用 股數 × 收盤價 估。
+    完全沒有這些欄位（還沒回補）時回空 dict，呼叫端改用 股數 × 收盤價 估。
     """
-    folder = data_dir / "market" / "daily" / "flows"
+    daily = data_dir / "market" / "daily"
     n = len(panel.dates)
     pos = {d: i for i, d in enumerate(panel.dates)}
     out: dict[str, dict[str, array]] = {}
-    keys = (("value", "value"), ("fb", "f_buy"), ("fs", "f_sell"), ("tb", "t_buy"),
-            ("ts", "t_sell"))
-    for path in sorted(folder.glob("*.csv.gz")):
-        i = pos.get(path.name[:10])
-        if i is None:
-            continue
-        for r in _gz_rows(path):
-            code = (r.get("code") or "").strip()
-            if code not in codes:
+    keys = ("value", "fb", "fs", "tb", "ts")
+    sources = (
+        ("flows", (("value", "value"), ("fb", "f_buy"), ("fs", "f_sell"),
+                   ("tb", "t_buy"), ("ts", "t_sell"))),
+        ("prices", (("value", "value"),)),
+        ("institutional", (("fb", "f_buy"), ("fs", "f_sell"), ("tb", "t_buy"), ("ts", "t_sell"))),
+    )
+    seen = False
+    for sub, cols in sources:
+        for path in sorted((daily / sub).glob("*.csv.gz")):
+            i = pos.get(path.name[:10])
+            if i is None:
                 continue
-            slot = out.get(code)
-            if slot is None:
-                slot = out[code] = {k: array("d", [NAN]) * n for k, _ in keys}
-            for k, col in keys:
-                slot[k][i] = _num(r.get(col))
-    return out
+            for r in _gz_rows(path):
+                code = (r.get("code") or "").strip()
+                if code not in codes:
+                    continue
+                for k, col in cols:
+                    v = _num(r.get(col))
+                    if isnan(v):
+                        continue
+                    slot = out.get(code)
+                    if slot is None:
+                        slot = out[code] = {kk: array("d", [NAN]) * n for kk in keys}
+                    slot[k][i] = v
+                    seen = True
+    return out if seen else {}
+
+
+def flows_days(data_dir: Path) -> int:
+    """有官方成交金額的交易日數（整併前後都算得對）。"""
+    daily = data_dir / "market" / "daily"
+    days = {p.name[:10] for p in (daily / "flows").glob("*.csv.gz")}
+    for path in sorted((daily / "prices").glob("*.csv.gz"), reverse=True):
+        if path.name[:10] in days:
+            continue
+        rows = _gz_rows(path)
+        if any((r.get("value") or "").strip() for r in rows[:50]):
+            days.add(path.name[:10])
+        elif rows and "value" not in rows[0]:
+            break                       # 更舊的檔案整份沒有這一欄，不必再往下讀
+    return len(days)
 
 
 # ---------------------------------------------------------------------------

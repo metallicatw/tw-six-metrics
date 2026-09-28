@@ -135,7 +135,7 @@ def test_there_is_a_schedule_that_runs_twice_because_the_feeds_lag():
     # 而後來搬進來的〔年度交易資訊〕寫的是 data/sheets/、季財報彙總寫的是
     # data/market/*_income——漏掉的話下面那道「被改到但沒被 commit」的檢查會
     # 讓整趟紅掉（它就是為了這件事存在的）。
-    assert "git add data/market data/sheets" in wf
+    assert "git add -A -- data/market data/sheets" in wf
 
 
 def test_the_two_defaults_for_yearly_limit_are_the_same_number():

@@ -97,6 +97,18 @@ jobs:
       - name: 抓取
         run: twsix fetch-daily
 
+      # 〔籌碼雷達〕要的成交金額與法人買進／賣出股數：2026-09 起就在每日行情
+      # （value）與三大法人（f_buy…t_sell）裡，由下面「補齊最近幾天」那兩支一起
+      # 補齊——原本這裡另外跑一次 fetch-flows，把同樣四個回應再抓一次、再存一份。
+      #
+      # 歷史資料整併（見 src/twsix/store/consolidate.py）：舊的 flows/ 折進行情與
+      # 三大法人、集保八級併進 15 級。一次性、可重跑——整併完之後這一步幾秒鐘、
+      # 什麼都不寫。永遠回 0：整併失敗時舊檔案不動，讀取端兩種格式都讀。
+      - name: 歷史資料整併
+        timeout-minutes: 10
+        continue-on-error: true
+        run: twsix consolidate-data
+
       # 補上前幾天沒抓齊的。
       #
       # 兩個交易所各自可能掛掉，掛掉的那天留下的是一份**只有半個市場**的檔案
@@ -177,13 +189,6 @@ jobs:
         continue-on-error: true
         run: twsix aipick --sync-macro || echo "::error::AI 選股這一趟失敗（行情照常存檔），看上面的 log"
 
-      # 〔籌碼雷達〕要的成交金額與法人買進／賣出股數（data/market/daily/flows/）。
-      # 補最近五個交易日裡還沒齊的（一天四個請求）；抓不到只留 warning，不擋存檔。
-      - name: 籌碼雷達：成交金額與法人明細
-        timeout-minutes: 10
-        continue-on-error: true
-        run: twsix fetch-flows --days 5 --pause 3 --minutes 8 || echo "::warning::成交金額與法人明細沒補到"
-
       # 〔籌碼雷達〕：法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面的每日
       # 橫斷面、精選漏斗、每週回頭驗證，寫進 data/chipflow/（約 30 秒、不連網）。
       # 讀 AI 選股剛寫好的 E 否決名單，所以排在它後面；但**不改** AI 選股的任何檔案。
@@ -206,7 +211,8 @@ jobs:
           # data/valuations.csv 也要加，理由一樣：〔全市場估值〕那一步每天都會
           # 改到它（股價每天都在動）。漏掉它的話，那道檢查每天都會紅——而那正是
           # market.yml 的白名單漏掉 data/ratings.csv 時發生過的事。
-          git add data/market data/sheets data/valuations.csv data/aipick
+          # data/ownership：〔歷史資料整併〕會刪掉和 15 級重複的八級集保檔（一次性）。
+          git add -A -- data/market data/sheets data/valuations.csv data/aipick data/ownership
           # 籌碼雷達的輸出。那一步失敗、目錄還不存在時不能讓 git add 報錯。
           if [ -d data/chipflow ]; then git add data/chipflow; fi
           # ⚠️ **守門要在提早 exit 的上面。**

@@ -237,9 +237,44 @@ def merge_day_rows(
 
     合併之後，抓齊過一次的那一天就不會再退回去；同一天跑第二次只會把缺的補上。
     """
-    merged = {(r.get("code") or ""): r for r in old if r.get("code")}
-    merged.update({(r.get("code") or ""): r for r in new if r.get("code")})
+    # **逐欄**合併，不是逐列：同一檔，新的那一列有值的欄位蓋過去，新的那一列
+    # 沒有的欄位（空字串或 None）保留舊值。2026-09 整併之後一天的檔案有兩種來源
+    # 寫進來——每日開放資料與帶日期的回補——而不是每一種都帶齊每一欄；整列覆蓋
+    # 的話，一次只帶了淨額的抓取會把先前補好的成交金額、買進／賣出抹掉。
+    merged: dict[str, dict] = {}
+    for rows in (old, new):
+        for r in rows:
+            code = r.get("code") or ""
+            if not code:
+                continue
+            slot = merged.setdefault(code, {})
+            for k, v in r.items():
+                if v is not None and v != "":
+                    slot[k] = v
+                else:
+                    slot.setdefault(k, v)
     return list(merged.values())
+
+
+#: 一天的檔案要有哪些欄位才算「抓齊」。2026-09 整併之後多了成交金額與法人的
+#: 買進／賣出；只有淨額（或只有價格）的那一天要再補一次，不是跳過。
+COMPLETE_FIELDS = {
+    "prices": ("close", "value"),
+    "institutional": ("foreign", "trust", "dealer", "f_buy", "t_buy"),
+}
+
+
+def day_complete(rows: list[dict[str, str]], folder: str) -> bool:
+    """兩個市場都在，而且每個市場至少有一列該有的欄位都有值。"""
+    need = COMPLETE_FIELDS.get(folder, ())
+    for market in ("上市", "上櫃"):
+        if not any(
+            (r.get("market") or "") == market
+            and all(str(r.get(k) or "").strip() for k in need)
+            for r in rows
+        ):
+            return False
+    return True
 
 
 #: 〔股價健診〕與〔推估三年目標價〕要的長度：畫 500 個交易日，而第一天就要有
@@ -278,3 +313,71 @@ def price_history(
         code: (list(reversed(d)), list(reversed(closes[code])))
         for code, d in dates.items()
     }
+
+
+# ---------------------------------------------------------------------------
+# 週線：由每日行情彙總（給〔股價(週)〕那張分頁補上最近幾週）
+
+_WEEKLY_CACHE: dict[str, dict[str, list[tuple]]] = {}
+
+
+def weekly_bars(data_dir: Path) -> dict[str, list[tuple[str, float, float, float, float, float]]]:
+    """`{代號: [(週起始日 YYYY/MM/DD, 開, 高, 低, 收, 量（張）), ...]}`，舊的在前。
+
+    〔股價(週)〕那張分頁是券商鏡像的週線，要等那一檔被「立即更新」才會動——
+    實測 1,923 檔停在 08/31 那一週（而且那一根還是週四抓的半週）。每日行情
+    一天一個檔、涵蓋全市場，同一週的五根日線加起來就是那一根週線：
+
+    * 日期：那一週**第一個交易日**（和券商那張表的標記一致，週一放假就是週二）
+    * 開：第一天的開盤；高／低：五天的最高／最低；收：最後一天的收盤
+    * 量：成交股數加總 ÷ 1,000（券商那張表的單位是張）
+
+    和券商那張表逐根比過（2330 的 08/24 那一週：2410／2445／2350／2420／80,319
+    張），一模一樣。每日行情的第一週（2023-08-09 起、那一週從週三開始）不完整，
+    不列。一次建站只讀一次（快取在這個模組裡）。
+    """
+    key = str(Path(data_dir).resolve())
+    if key in _WEEKLY_CACHE:
+        return _WEEKLY_CACHE[key]
+    from datetime import date as _date  # noqa: PLC0415
+
+    folder = data_dir / "market" / "daily" / "prices"
+    files = sorted(folder.glob("*.csv.gz")) if folder.is_dir() else []
+    acc: dict[str, dict[tuple[int, int], list]] = {}
+    labels: dict[tuple[int, int], str] = {}
+    first_week = None
+    for path in files:
+        day = path.name[:10]
+        try:
+            y, m, d = (int(x) for x in day.split("-"))
+            wk = _date(y, m, d).isocalendar()[:2]
+        except ValueError:
+            continue
+        if first_week is None:
+            first_week = wk
+        if wk == first_week:
+            continue                        # 每日行情開始的那一週只有半週
+        # 標記用**全市場**那一週的第一個交易日，不是這一檔第一次有成交的那天——
+        # 冷門股週一沒成交時，券商那張表的標記照樣是週一。
+        label = labels.setdefault(wk, f"{y:04d}/{m:02d}/{d:02d}")
+        for row in _rows(path):
+            code = (row.get("code") or "").strip()
+            o, h, lo, c = (_num(row.get(k, "")) for k in ("open", "high", "low", "close"))
+            v = _num(row.get("volume", "")) or 0.0
+            if not code or c is None:
+                continue                    # 那天沒成交（沒有收盤價）
+            slot = acc.setdefault(code, {}).get(wk)
+            if slot is None:
+                acc[code][wk] = [label, o if o is not None else c, h if h is not None else c,
+                                 lo if lo is not None else c, c, v]
+                continue
+            slot[2] = max(slot[2], h if h is not None else c)
+            slot[3] = min(slot[3], lo if lo is not None else c)
+            slot[4] = c
+            slot[5] += v
+    out = {
+        code: [(s[0], s[1], s[2], s[3], s[4], round(s[5] / 1000)) for _, s in sorted(weeks.items())]
+        for code, weeks in acc.items()
+    }
+    _WEEKLY_CACHE[key] = out
+    return out

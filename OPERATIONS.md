@@ -46,7 +46,7 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 
 | 時間 | 排程 | repo | 做什麼 | 發布網站？ |
 | --- | --- | --- | --- | --- |
-| 00:53（每天） | 籌碼雷達回補 | tw-six-metrics | `twsix fetch-flows`＋`twsix backfill-levels`：成交金額、法人買賣明細、集保 15 級；補齊後幾秒就結束 | ❌ 下一次建站用上 |
+| 00:53（每天） | 籌碼雷達回補 | tw-six-metrics | `twsix consolidate-data`（一次性）＋`backfill-prices`／`backfill-institutional`（成交金額、法人含自營商與買賣明細，補回 2023-08）＋`backfill-levels`（集保 15 級）；補齊後幾秒就結束 | ❌ 下一次建站用上 |
 | 02:23（旺季） | 評等補課 | tw-six-metrics | `twsix refresh --limit 100`；佇列空就不跑 | ✅ 有變動才 |
 | **06:23**（二–六） | 每日更新報告 | **market-monitor** | 美／日／台股與總經，產生報告 | ✅ 自己的 Pages |
 | **07:03**（二–六） | 每日更新報告（保險） | **market-monitor** | 06:23 那班今天已發布就直接結束 | ✅ 自己的 Pages |

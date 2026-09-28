@@ -1464,6 +1464,9 @@ def _full_stock_page(
     grids = sheet_store.read_all(base_dir)
     if not grids:
         return False
+    from ..ingest.weekly_prices import with_daily_weeks
+
+    grids = with_daily_weeks(grids, sheets_dir.parent, stock_id)
 
     try:
         grids = enrich(grids, stock_id)
