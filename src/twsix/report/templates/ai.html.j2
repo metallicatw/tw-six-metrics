@@ -5,6 +5,85 @@
 {# 這一頁有來自外部的文字（重大訊息主旨、LLM 摘要、公司名稱），一律跳脫。站上的
    樣板檔名是 .html.j2，select_autoescape 認不出來，所以在這裡明白打開。 #}
 {% autoescape true %}
+{# 名詞解釋（2026-09-28）：同一段文字給燈泡與〔名詞解釋〕分頁共用，改一處就好。
+   內容照程式碼寫：aipick/regime.py、revenue.py、links.py、chips.py、quality.py、
+   news.py、talks.py、combo.py、sim.py、run.py。 #}
+{% macro aig(k) -%}
+{%- if k == 'breadth' -%}
+<b>市場寬度</b>＝全市場收盤價站上自己 60 日均線的股票比例（%）。只算當天有收盤價、也有完整 60 日線的股票；有效檔數不到 200 檔的那天不算。寬度高＝上漲是大多數股票一起漲；指數創高但寬度往下＝只剩少數權值股在撐。它是 F 判斷「恐慌（&lt; 20%）」「收縮（&lt; 40%）」「擴張（≥ 50%）」的依據之一。
+{%- elif k == 'F' -%}
+<b>F 市場狀態／部位上限</b>：不選股，只決定現在最多能持有幾檔。依序判斷，先成立的算數：<br>
+① <b>恐慌</b>：VIX &gt; 30 或寬度 &lt; 20% → 持股比例 20%（上限 2 檔）；<br>
+② <b>收縮</b>：加權指數在 200 日線下，且（PMI &lt; 50 或寬度 &lt; 40%）→ 30%（4 檔）；<br>
+③ <b>過熱</b>：市值貨幣比在近五年（60 筆月資料）的百分位 ≥ 80，且寬度比它的 20 日均低 5 個百分點以上 → 60%（7 檔）；<br>
+④ <b>擴張</b>：加權指數在 200 日線上、寬度 ≥ 50%、PMI ≥ 50 → 100%（12 檔）；<br>
+⑤ 其他＝<b>中性</b> → 60%（7 檔）。<br>
+上限＝12 × 持股比例（四捨五入）。每週最後一個交易日收盤後判定，下一個交易日起整週生效；超過上限時不賣，只是不再買。收縮與恐慌時，所有持股的停損收緊到「收盤 − 1.5 × ATR」（只往上調）。各項數據只用那一天看得到的值（VIX 用前一個美股交易日、PMI 月初 + 33 天、市值貨幣比月初 + 75 天）。
+{%- elif k == 'paper' -%}
+<b>影子帳戶</b>：從上線那一天起，照規則每天記帳的虛擬帳戶（100 萬起），用來檢驗回測——回測是事後算的，影子帳戶是事前就寫死、每天往後走的。規則換版時從換版那天重新起算。<br>
+・A、B、D 三套共用這一筆錢（就是下面的<b>合併帳戶</b>）；最多 12 檔、每檔約淨值的 1/12，可用現金不到半份就不再買；檔數上限由 F 決定。<br>
+・訊號日收盤後產生候選，<b>下一個交易日收盤</b>買進；每個訊號日最多新買 6 檔。<br>
+・出場照買進它的那一套：價格條件（停損、持有天數）當天收盤出場；收盤後才知道的資料（營收、財報、集保、法說）隔一個交易日收盤出場。<br>
+・成本：買 0.1425%、賣 0.1425% ＋ 證交稅 0.3%，一買一賣 0.585%；未算折扣與滑價。持股用還原股價計價。
+{%- elif k == 'combo' -%}
+<b>合併帳戶</b>：A、B、D 三套共用同一筆錢的帳戶。每一套先取前 10 名候選；同時被兩套以上選中的排最前面，其餘依 A → D → B 輪流各取一檔，每個訊號日最多新買 6 檔。每一筆持股照買進它的那一套規則出場，另外套用 C：最新一場法說是負轉折（120 天內）的不買、持有中出現負轉折的隔天出場。
+{%- elif k == 'since_full' -%}
+<b>合併帳戶（三套都在）</b>：從 D 第一個有結果的訊號週開始（集保資料約 2025-09 起），A、B、D 三套都在場，最接近影子帳戶實際的樣子。<br>
+<b>合併帳戶（全期）</b>：同一個模型，從 A、B 較早的起點開始跑；前面那一段 D 還沒有資料，實際上只有 A、B 兩套，所以期間較長、但組成不同。
+{%- elif k == 'A' -%}
+<b>A 營收驚喜</b>：用每家公司<b>自己的</b>營收模型，看這個月比「應該有的水準」好多少。<br>
+・預期營收＝去年同月營收 × 最近的成長速度（在對數上算：最近 3 個「單月對去年同月」的中位數，往前 6 個月內至少要 2 個）。1 月不單獨評分，2 月用 1＋2 月合計比，避開春節。<br>
+・<b>營收 SUE</b>（標準化意外）＝（實際 − 預期）÷ 過去 24 個月意外幅度的均方根（至少 8 個月）。SUE +2＝這個月的驚喜是它平常波動的兩倍。<br>
+・候選：SUE 在全市場前 10%、上一個有評分的月份也 &gt; 0（連兩個月比預期好）、營收年增 &gt; 0、訊號日前 5 日漲幅 &lt; 15%（還沒被搶先反應）、股價 &gt; 10、20 日均額 &gt; 5,000 萬、沒有被 E 否決；依 SUE 排序，每月最多買 5 檔。<br>
+・時點：次月 10 日（含）之後第一個交易日收盤後評分，隔一個交易日進場。<br>
+・出場：跌破停損（進場價 − 3 × ATR14）當天出場；下一次訊號日不在候選名單、或被 E 否決，隔一個交易日出場——所以大約一個月重新檢查一次。
+{%- elif k == 'sue' -%}
+<b>營收 SUE</b>（Standardized Unexpected Earnings 的營收版）＝（實際營收 − 模型預期）÷ 這家公司過去 24 個月「意外」的均方根。用自己的歷史波動當尺，營收一向很穩的公司小幅超標也會得高分，營收本來就大起大落的要超很多才算。
+{%- elif k == 'a_ver' -%}
+<b>A 營收驚喜・一致版</b>：停損＝進場價 − 3 × ATR14，和 B、D 同一把尺；影子帳戶用的就是這一版。它是看過規劃版的回測之後才訂的，數字屬於<b>樣本內</b>，偏樂觀。<br>
+<b>A 營收驚喜・規劃版</b>：照〈AI選股方案規劃〉原文——停損較緊（進場價 − 2.5 × ATR14），收盤獲利達 2 × ATR 後停損拉到成本價。其他規則相同。ATR 沒有值時兩版都用進場價 × 0.88。
+{%- elif k == 'B' -%}
+<b>B 供應鏈連動</b>：和它一起動的那幾家已經漲了，它自己還沒跟上。<br>
+・<b>鄰居</b>：最近 104 週的週報酬先扣掉大盤（beta 迴歸的殘差），兩兩算相關，每一檔留相關 &gt; 0.3 的前 8 名。每季（1、4、7、10 月）重建一次，只用當時以前的資料；ETF 不列入。<br>
+・<b>鄰居 20 日</b>＝鄰居 20 日報酬的相關加權平均；<b>自己 20 日</b>＝自己的 20 日報酬；<b>落後</b>＝兩者相減。<br>
+・候選（每週最後一個交易日）：鄰居 20 日在全市場前 10%、落後 &gt; 0、趨勢沒壞（收盤 &gt; 60 日線且 20 日線 &gt; 60 日線）、股價 &gt; 10、20 日均額 &gt; 5,000 萬、沒有被 E 否決；依落後幅度排序，每週最多 5 檔。<br>
+・出場：停損 3 × ATR14、持有滿 20 個交易日、或被 E 否決。回測只有這一個版本。
+{%- elif k == 'D' -%}
+<b>D 籌碼共振</b>：大戶在集中籌碼、股價還沒動。<br>
+・六個特徵：持股 &gt; 1,000 張大戶比例的 4 週變化（對自己歷史的 z 分數）、股東人數 4 週減少、投信 20 日與 5 日買超、外資 20 日買超（都除以集保總股數）、董監持股 3 個月變化。<br>
+・<b>共振分數</b>：見下一條。<br>
+・候選（每週集保資料日）：共振分數 ≥ 0.95（前 5%）、股價 &gt; 10、20 日均額 &gt; 5,000 萬、收盤 &gt; 60 日線且 20 日線 &gt; 60 日線、20 日報酬低於同產業中位數（還沒動）、沒有被 E 否決；每週最多 5 檔。<br>
+・出場（週期對齊版）：停損 3 × ATR14、持有滿 20 個交易日、或被 E 否決。
+{%- elif k == 'score' -%}
+<b>共振分數</b>（0～1）＝每個特徵先在全市場取百分位，再用權重加權平均（至少要有 4 個特徵有值），最後再取一次百分位。0.97＝這一週排在前 3%。<br>
+<b>權重</b>＝每個特徵過去各週的 rank IC（特徵排名和之後 20 個交易日報酬排名的相關係數）平均，負的歸零；只用 20 日報酬已經實現的週，不到 8 週時等權。
+{%- elif k == 'd_ver' -%}
+<b>D 籌碼共振・週期對齊版</b>：持有滿 20 個交易日出場——和權重學習用的「之後 20 日報酬」同一個週期，所以叫對齊；影子帳戶用的就是這一版。它也是看過規劃版回測之後才訂的（樣本內，偏樂觀）。<br>
+<b>D 籌碼共振・規劃版</b>：照〈AI選股方案規劃〉的出場條件——收盤跌破 60 日線（原文是 20 日線）或持有滿 40 個交易日當天出場；大戶比例連兩週下降、投信連三日賣超時隔一個交易日出場。兩版停損都是 3 × ATR14。
+{%- elif k == 'E' -%}
+<b>E 否決</b>（財報品質）：不選股，只把地雷擋在外面，紅旗合計三面以上就否決。<br>
+・財報八面：單季營業利益 &lt; 0；連兩季淨利 &lt; 0；近四季業外佔稅前淨利 &gt; 50%；近四季有獲利但營業現金流 &lt; 0；應計比率（淨利 − 營業現金流）÷ 總資產 &gt; 10%；負債比 &gt; 60% 且比一年前高 10 個百分點以上；近四季營收年減超過 20%；董監質押比 &gt; 30%。<br>
+・重大訊息四面：非例行更換簽證會計師、財務／會計主管異動（各 1 面，180 天有效）；退票／重整／繼續經營疑慮（2 面，365 天）；停工／災害（1 面，90 天）。<br>
+・財報在法定公告期限後才算看得到（Q1 5/15、Q2 8/14、Q3 11/14、年報次年 3/31）。A、B、D 選股時先過這一關；持有中新被否決的隔一個交易日出場。
+{%- elif k == 'C' -%}
+<b>C 法說負轉折</b>：比較同一家公司<b>這一次和上一次</b>法說會簡報的差異。LLM 讀法：營收方向、毛利率方向、整體口氣三項各打 −2～+2，轉折分數＝這一次總分 − 上一次總分；規則讀法：4 ×（這一次語氣 − 上一次語氣），語氣＝（正面詞 − 負面詞）÷（正＋負＋5）。<br>
+分數 ≤ −2＝<b>負轉折</b>：影子帳戶不買（120 天內）、持有中的隔一個交易日出場；≥ +2＝正轉折，只標示、不因此買進。資料從上線那天才開始累積，回測期間沒有作用。
+{%- elif k == 'bench_f' -%}
+<b>0050 ＋ 市場狀態（F）</b>：只買 0050，持股比例跟著 F 走（擴張 100%、中性與過熱 60%、收縮 30%、恐慌 20%），其餘放現金（報酬 0）。每次調整比例都付買賣成本。用來回答「光靠 F 擇時，比 0050 買進持有好還是壞」。（注意：它在判定當天就調整，比影子帳戶隔天才動早一天，對它略有利。）
+{%- elif k == 'bench_ew' -%}
+<b>全市場等權（流動性門檻以上）</b>：每天把前一天收盤 &gt; 10 元、20 日均額 &gt; 5,000 萬的所有股票等權買進，隔天重新平衡，不含成本。這就是 A、B、D 挑股的那個母體，所以打贏它才代表「挑」有價值，而不只是搭上多頭。
+{%- elif k == 'sig' -%}
+<b>訊號本身</b>：每個訊號日，把<b>全部</b>候選股（不只實際買進的 5 檔）之後 20 個交易日的報酬取平均，減去同一天流動性門檻以上全市場的平均。<br>
+<b>平均超額報酬</b>＝各訊號日超額的簡單平均；<b>贏的次數</b>＝超額 &gt; 0 的訊號日數 ／ 訊號日總數（A 以月計，B、D 以週計）。沒有成本、停損與部位限制，是訊號的上限。
+{%- elif k == 'stats' -%}
+全部用每日淨值算：<br>
+<b>總報酬</b>＝期末 ÷ 期初 − 1。<br>
+<b>年化</b>＝（期末 ÷ 期初）^（1 ÷ 年數）− 1，年數＝日曆天數 ÷ 365.25；期間短的時候年化會被放大，看總報酬比較實在。<br>
+<b>最大回撤</b>＝期間內從前高往下掉最多的幅度（淨值 ÷ 之前最高淨值 − 1 的最小值）。<br>
+<b>夏普</b>＝日報酬平均 ÷ 日報酬標準差 × √252（無風險利率當 0）；每承擔一單位波動換到多少報酬，1 以上算不錯。<br>
+<b>交易數、勝率、平均每筆、獲利因子、平均天數</b>只算已出場的交易、已扣買賣成本：勝率＝報酬 &gt; 0 的比例；平均每筆＝各筆報酬率的平均；獲利因子＝賺錢那幾筆的報酬率總和 ÷ 賠錢那幾筆的總和（絕對值），&gt; 1 才有賺；平均天數＝平均持有幾個交易日。
+{%- endif -%}
+{%- endmacro %}
 {# 〔AI 選股〕：A 營收驚喜、B 供應鏈連動、C 法說轉折、D 籌碼共振、E 財報品質否決、
    F 市場狀態，合併影子帳戶與回測。每一個數字都來自 data/aipick/*.json（<code>twsix aipick</code>
    與 <code>twsix aipick-fetch</code> 每天寫的），這一頁不算任何東西，見 report/ai_page.py。 #}
@@ -45,11 +124,12 @@
   {% endif %}
   <button type="button" role="tab" id="aitab-veto" class="ai-tab ai-j-e" aria-controls="ai-veto" aria-selected="false" tabindex="-1">E 否決</button>
   <button type="button" role="tab" id="aitab-journal" class="ai-tab ai-j-j" aria-controls="ai-journal" aria-selected="false" tabindex="-1">日誌</button>
+  <button type="button" role="tab" id="aitab-gloss" class="ai-tab ai-j-g" aria-controls="ai-gloss" aria-selected="false" tabindex="-1">名詞解釋</button>
 </div>
 
 {# ── F 市場狀態 ─────────────────────────────────────────────── #}
 <section class="ai-block ai-panel" id="ai-regime" role="tabpanel" aria-labelledby="aitab-regime">
-  <h3 class="ai-h"><span class="ai-tag ai-tag-f">F</span>市場狀態</h3>
+  <h3 class="ai-h"><span class="ai-tag ai-tag-f">F</span>市場狀態{% call tip() %}{{ aig('F') }}{% endcall %}</h3>
   {% if rn %}
   <div class="ai-regime ai-tone-{{ rn.tone }}">
     <div class="ai-regime-main">
@@ -62,7 +142,7 @@
     {% endif %}
   </div>
   <div class="ai-gauges">
-    <div><span>市場寬度</span><b>{{ '%.0f'|format(rn.breadth) }}%</b><em>站上 60 日線的比例（20 日均 {{ '%.0f'|format(rn.breadth_ma20) }}%）</em></div>
+    <div><span>市場寬度{% call tip() %}{{ aig('breadth') }}{% endcall %}</span><b>{{ '%.0f'|format(rn.breadth) }}%</b><em>站上 60 日線的比例（20 日均 {{ '%.0f'|format(rn.breadth_ma20) }}%）</em></div>
     <div><span>加權指數</span><b>{{ '{:,.0f}'.format(rn.taiex) if rn.taiex else '—' }}</b><em>200 日線 {{ '{:,.0f}'.format(rn.taiex_ma200) if rn.taiex_ma200 else '—' }}</em></div>
     <div><span>VIX</span><b>{{ '%.1f'|format(rn.vix) if rn.vix else '—' }}</b><em>&gt; 30 視為恐慌</em></div>
     <div><span>台灣 PMI</span><b>{{ '%.1f'|format(rn.pmi) if rn.pmi else '—' }}</b><em>50 為榮枯線</em></div>
@@ -76,7 +156,7 @@
 
 {# ── 合併影子帳戶 ─────────────────────────────────────────────── #}
 <section class="ai-block ai-panel" id="ai-paper" role="tabpanel" aria-labelledby="aitab-paper" hidden>
-  <h3 class="ai-h"><span class="ai-tag ai-tag-p">影</span>影子帳戶
+  <h3 class="ai-h"><span class="ai-tag ai-tag-p">影</span>影子帳戶{% call tip() %}{{ aig('paper') }}<br><br>{{ aig('combo') }}{% endcall %}
     <span class="muted">（{{ ai.port.live_start }} 上線，虛擬 100 萬）</span></h3>
   <p class="ai-lead">{{ ai.port.rules }}。最多 12 檔、每檔 1/12；同一天有兩套以上出訊號時輪流挑，
     三套同時看好的排最前面；每一筆持股照買進它的那一套規則出場。</p>
@@ -125,7 +205,8 @@
     「法說」一欄是那一檔最近一次法說的轉折（C）；負轉折的不會進影子帳戶。</p>
 
   <h4><span class="ai-s ai-s-A">A 營收驚喜</span>
-    <span class="muted">（{{ ai.a.month or '—' }} 營收，{{ ai.a.day or '—' }} 評分，{{ ai.a.universe or 0 }} 檔參與；共 {{ ai.a_total }} 檔符合，列前 {{ ai.a_cands|length }}）</span></h4>
+    <span class="ai-cnt ai-cnt-A">共 {{ ai.a_total }} 檔符合</span>
+    <span class="muted">（{{ ai.a.month or '—' }} 營收，{{ ai.a.day or '—' }} 評分，{{ ai.a.universe or 0 }} 檔參與；列前 {{ ai.a_cands|length }}）</span>{% call tip() %}{{ aig('A') }}{% endcall %}</h4>
   <p class="muted">營收比「去年同月 × 最近的成長速度」好很多（標準化後全市場前 10%）、連兩個月比預期好、年增為正、還沒被搶先反應。</p>
   {% if ai.a_cands %}
   <div class="scroll"><table class="ai-t">
@@ -141,7 +222,8 @@
   {% else %}<p class="stale">最近一次沒有符合全部條件的股票。</p>{% endif %}
 
   <h4><span class="ai-s ai-s-B">B 供應鏈連動</span>
-    <span class="muted">（{{ ai.b.day or '—' }}，連動圖建於 {{ ai.b.graph_day or '—' }}；共 {{ ai.b_total }} 檔符合，列前 {{ ai.b_cands|length }}）</span></h4>
+    <span class="ai-cnt ai-cnt-B">共 {{ ai.b_total }} 檔符合</span>
+    <span class="muted">（{{ ai.b.day or '—' }}，連動圖建於 {{ ai.b.graph_day or '—' }}；列前 {{ ai.b_cands|length }}）</span>{% call tip() %}{{ aig('B') }}{% endcall %}</h4>
   <p class="muted">「鄰居」是扣掉大盤之後股價長期一起動的那幾家（多半是上下游或同一題材）。鄰居 20 日平均漲幅在全市場前 10%、自己落後、趨勢沒壞。
     鄰居關係的文字說明是 LLM 註解，只供參考，不影響選股。</p>
   {% if ai.b_cands %}
@@ -158,7 +240,8 @@
   {% else %}<p class="stale">最近一次沒有符合全部條件的股票。</p>{% endif %}
 
   <h4><span class="ai-s ai-s-D">D 籌碼共振</span>
-    <span class="muted">（集保 {{ t.week or '—' }}，{{ t.universe }} 檔參與排名）</span></h4>
+    <span class="ai-cnt ai-cnt-D">共 {{ ai.d_cands|length }} 檔符合</span>
+    <span class="muted">（集保 {{ t.week or '—' }}，{{ t.universe }} 檔參與排名）</span>{% call tip() %}{{ aig('D') }}<br><br>{{ aig('score') }}{% endcall %}</h4>
   <p class="muted">大戶（＞1,000 張）持股增加、股東人數減少、法人買超、董監增持——四個獨立來源同時偏多，
     <b>但股價還沒動</b>（20 日報酬低於同產業）、趨勢沒壞（站上 60 日線）。</p>
   {% if ai.d_cands %}
@@ -186,7 +269,7 @@
 
 {# ── C 法說轉折 ─────────────────────────────────────────────── #}
 <section class="ai-block ai-panel" id="ai-talks" role="tabpanel" aria-labelledby="aitab-talks" hidden>
-  <h3 class="ai-h"><span class="ai-tag ai-tag-t">C</span>法說轉折
+  <h3 class="ai-h"><span class="ai-tag ai-tag-t">C</span>法說轉折{% call tip() %}{{ aig('C') }}{% endcall %}
     <span class="muted">（近 90 天，{{ ai.turns|length }} 家；累計讀過 {{ t.talks_count or 0 }} 份簡報）</span></h3>
   <p class="ai-lead">同一家公司這一次法說和上一次的<b>差異</b>：營收方向、毛利率方向、整體口氣。
     轉折 ≤ −2 是負轉折——影子帳戶不買、持有中的隔一個交易日出場。這份資料從上線那天才開始累積，回測期間沒有。</p>
@@ -211,7 +294,7 @@
 {# ── 回測 ─────────────────────────────────────────────── #}
 {% if ai.bt %}
 <section class="ai-block ai-panel" id="ai-backtest" role="tabpanel" aria-labelledby="aitab-backtest" hidden>
-  <h3 class="ai-h"><span class="ai-tag ai-tag-b">驗</span>回測</h3>
+  <h3 class="ai-h"><span class="ai-tag ai-tag-b">驗</span>回測{% call tip() %}{{ aig('stats') }}<br><br>{{ aig('since_full') }}<br><br>{{ aig('a_ver') }}<br><br>{{ aig('d_ver') }}<br><br>{{ aig('bench_f') }}<br><br>{{ aig('bench_ew') }}{% endcall %}</h3>
   <p class="ai-lead">成本：買 0.1425%、賣 0.1425% ＋ 0.3% 證交稅（一買一賣 0.585%，未算折扣與滑價）。
     除權息日當天報酬記 0；已下市的公司放回母體（不做倖存者偏差）。財報在法定公告期限之後、營收在次月 10 日之後才算看得到。
     各方案的資料起點不同：營收約 2022 年中起、股價 2023-08 起、法人（外資、投信）2023-09 起、集保 2025-09 起——方案 D 要集保，所以它的回測從 2025-09 開始。</p>
@@ -236,7 +319,7 @@
   <p class="muted">合併帳戶（三套都在的那一段）依方案：{% for n, k, avg, tone, win in ai.by_strategy %}{{ n }} {{ k }} 筆、平均 <span class="{{ tone }}">{{ avg }}</span>、勝率 {{ win }}{% if not loop.last %}；{% endif %}{% endfor %}。</p>
   {% endif %}
 
-  <h4>訊號本身：候選股之後 20 個交易日 vs 全市場</h4>
+  <h4>訊號本身：候選股之後 20 個交易日 vs 全市場{% call tip() %}{{ aig('sig') }}{% endcall %}</h4>
   <div class="scroll"><table class="ai-t">
     <thead><tr><th>方案</th><th class="num">平均超額報酬</th><th class="num">贏的次數</th></tr></thead>
     <tbody>{% for n, v, tone, hit, cnt in ai.sig_rows %}
@@ -258,7 +341,7 @@
   </details>
   {% endif %}
 
-  <h4>F 市場狀態：0050 擇時 vs 買進持有 <span class="muted">（{{ ai.f_rows[0][1].start }} ～ {{ ai.f_rows[0][1].end }}）</span></h4>
+  <h4>F 市場狀態：0050 擇時 vs 買進持有{% call tip() %}{{ aig('bench_f') }}{% endcall %} <span class="muted">（{{ ai.f_rows[0][1].start }} ～ {{ ai.f_rows[0][1].end }}）</span></h4>
   {% if 'ai-f-chart' in ai.chart_ids %}<div class="ai-chart" id="ai-f-chart"></div>{% endif %}
   <div class="scroll"><table class="ai-t ai-stats">
     <thead><tr><th></th><th class="num">總報酬</th><th class="num">年化</th><th class="num">最大回撤</th><th class="num">夏普</th></tr></thead>
@@ -286,7 +369,7 @@
 
 {# ── E 否決名單 ─────────────────────────────────────────────── #}
 <section class="ai-block ai-panel" id="ai-veto" role="tabpanel" aria-labelledby="aitab-veto" hidden>
-  <h3 class="ai-h"><span class="ai-tag ai-tag-e">E</span>財報品質否決名單
+  <h3 class="ai-h"><span class="ai-tag ai-tag-e">E</span>財報品質否決名單{% call tip() %}{{ aig('E') }}{% endcall %}
     <span class="muted">（{{ t.veto_count }} / {{ t.rated }} 檔，紅旗三面以上）</span></h3>
   <p class="ai-lead">財報八面：本業虧損、連兩季虧損、獲利靠業外、獲利沒有變成現金、應計比率偏高、負債快速上升、營收大幅衰退、董監高質押。
     重大訊息四面：非例行更換簽證會計師、財務／會計主管異動、退票／重整／繼續經營疑慮（算兩面）、停工／災害。
@@ -327,6 +410,33 @@
   {% else %}
   <p class="muted">還沒有紀錄。影子帳戶從 {{ ai.port.live_start }} 開始，第一筆會在下一個訊號日之後出現。</p>
   {% endif %}
+</section>
+
+{# ── 名詞解釋 ─────────────────────────────────────────────── #}
+<section class="ai-block ai-panel" id="ai-gloss" role="tabpanel" aria-labelledby="aitab-gloss" hidden>
+  <h3 class="ai-h"><span class="ai-tag ai-tag-g">詞</span>名詞解釋</h3>
+  <p class="ai-lead">各段標題旁的 💡 是這裡的節錄。定義照程式碼寫；數字門檻改了，這裡跟著改。</p>
+  <dl class="ai-gl">
+    <dt>市場寬度</dt><dd>{{ aig('breadth') }}</dd>
+    <dt>F 市場狀態／部位上限</dt><dd>{{ aig('F') }}</dd>
+    <dt>影子帳戶</dt><dd>{{ aig('paper') }}</dd>
+    <dt>合併帳戶</dt><dd>{{ aig('combo') }}</dd>
+    <dt>A 營收驚喜</dt><dd>{{ aig('A') }}</dd>
+    <dt>營收 SUE</dt><dd>{{ aig('sue') }}</dd>
+    <dt>B 供應鏈連動</dt><dd>{{ aig('B') }}</dd>
+    <dt>D 籌碼共振</dt><dd>{{ aig('D') }}</dd>
+    <dt>共振分數</dt><dd>{{ aig('score') }}</dd>
+    <dt>E 否決</dt><dd>{{ aig('E') }}</dd>
+    <dt>C 法說負轉折</dt><dd>{{ aig('C') }}</dd>
+    <dt>合併帳戶（三套都在）／合併帳戶（全期）</dt><dd>{{ aig('since_full') }}</dd>
+    <dt>A 營收驚喜・一致版／規劃版</dt><dd>{{ aig('a_ver') }}</dd>
+    <dt>B 供應鏈連動（回測）</dt><dd>只有一個版本：停損 3 × ATR14、持有滿 20 個交易日出場，和影子帳戶一樣。</dd>
+    <dt>D 籌碼共振・週期對齊版／規劃版</dt><dd>{{ aig('d_ver') }}</dd>
+    <dt>0050 ＋ 市場狀態（F）</dt><dd>{{ aig('bench_f') }}</dd>
+    <dt>全市場等權（流動性門檻以上）</dt><dd>{{ aig('bench_ew') }}</dd>
+    <dt>平均超額報酬、贏的次數</dt><dd>{{ aig('sig') }}</dd>
+    <dt>總報酬、年化、最大回撤、夏普（與交易統計）</dt><dd>{{ aig('stats') }}</dd>
+  </dl>
 </section>
 
 <p class="note">⚠️ 這一頁是一組規則的輸出與它的歷史表現，不是投資建議。回測期間短（籌碼資料只有一年、營收兩年多），

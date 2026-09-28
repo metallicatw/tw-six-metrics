@@ -72,7 +72,7 @@
   </div>
   <div class="sc-grid" id="f-ranges"></div>
   <div class="sc-btns">
-    <button class="sc-btn pri" data-run="fin">🔍 開始篩選</button>
+    <button class="sc-btn pri" data-run="fin">重新掃描</button>
     <button class="sc-btn" data-preset="fin">預設條件</button>
     <button class="sc-btn" data-clear="fin">清除條件</button>
     <span class="sc-note">欄位留空表示不限制；範圍可只填一邊。</span>
@@ -91,7 +91,7 @@
   <div class="sc-row"><span class="sc-tag">條件三</span>均線 <select id="t-ma"><option value="">不限制</option><option value="bull">多頭排列</option><option value="bear">空頭排列</option></select>
     <span class="sc-note">多頭 = 10 日 ≥ 月線(20) ≥ 季線(60)；空頭反之</span></div>
   <div class="sc-btns">
-    <button class="sc-btn pri" data-run="trend">🔍 開始篩選</button>
+    <button class="sc-btn pri" data-run="trend">重新掃描</button>
     <button class="sc-btn" data-preset="trend">預設條件</button>
     <button class="sc-btn" data-clear="trend">清除條件</button>
     <span class="sc-note">結果一律採用基準季與基準月的財報與營收；多個條件都填時須同時符合，留空表示不套用。</span>
@@ -104,15 +104,15 @@
 <section class="sc-panel" id="sc-strong" hidden>
 <div class="sc-card">
   <div class="sc-row"><span class="sc-tag">門檻</span>股價 ≥ <input type="number" id="s-p" step="any"> 元，最近一季營業利益率 ≥ <input type="number" id="s-opm" step="any"> %，成交量 ≥ <input type="number" id="s-v" step="any"> 張</div>
-  <div class="sc-row"><span class="sc-tag">條件一</span>近 <input type="number" id="s-n1" min="1" max="249"> 個交易日，漲幅超過 <input type="number" id="s-x1" step="any"> %</div>
-  <div class="sc-row"><span class="sc-tag">條件二</span>近 <input type="number" id="s-n2" min="1" max="60"> 個交易日平均成交量，比之前 <input type="number" id="s-b2" min="1" max="120"> 日的平均成交量增加 <input type="number" id="s-x2" step="any"> %</div>
-  <div class="sc-row"><span class="sc-tag">條件三</span>近 <input type="number" id="s-n3" min="1" max="249"> 個交易日，漲幅超過 <input type="number" id="s-x3" step="any"> %</div>
+  <div class="sc-row"><span class="sc-tag">條件一</span>過去 <input type="number" id="s-n1" min="1" max="249"> 個交易日，漲幅超過 <input type="number" id="s-x1" step="any"> %</div>
+  <div class="sc-row"><span class="sc-tag">條件二</span>過去 <input type="number" id="s-n2" min="1" max="60"> 個交易日，成交量漲幅超過前 <input type="number" id="s-b2" min="1" max="120"> 個交易日均量 <input type="number" id="s-x2" step="any"> %</div>
+  <div class="sc-row"><span class="sc-tag">條件三</span>過去 <input type="number" id="s-n3" min="1" max="249"> 個交易日，漲幅超過 <input type="number" id="s-x3" step="any"> %</div>
   <div class="sc-btns">
-    <button class="sc-btn pri" data-run="strong">🔍 開始篩選</button>
+    <button class="sc-btn pri" data-run="strong">重新掃描</button>
     <button class="sc-btn" data-preset="strong">預設條件</button>
-    <button class="sc-btn" id="s-mode" title="切換條件一～三的組合方式">組合篩選：全部符合</button>
+    <button class="sc-btn" id="s-adv" title="門檻＋條件一、二、三全部套用">進階預設</button>
     <button class="sc-btn" data-clear="strong">清除條件</button>
-    <span class="sc-note">門檻一律要符合；條件一～三按「組合篩選」切換「全部符合」或「任一符合」，留空表示不套用。</span>
+    <span class="sc-note">門檻與所有填了的條件都要同時符合，留空表示不套用。「預設條件」＝門檻＋條件一；「進階預設」＝門檻＋條件一、二、三。</span>
   </div>
 </div>
 <div class="sc-card" id="r-strong"></div>
@@ -127,7 +127,7 @@
   <div class="sc-row"><span class="sc-tag">條件四</span>股價創 <input type="number" id="h-p" min="2" max="250"> 個交易日新高</div>
   <div class="sc-row"><span class="sc-tag">條件五</span>成交量創 <input type="number" id="h-v" min="2" max="250"> 個交易日新高</div>
   <div class="sc-btns">
-    <button class="sc-btn pri" data-run="high">🔍 開始篩選</button>
+    <button class="sc-btn pri" data-run="high">重新掃描</button>
     <button class="sc-btn" data-preset="high">預設條件</button>
     <button class="sc-btn" data-clear="high">清除條件</button>
     <span class="sc-note">多個條件都填時須同時符合，留空表示不套用。基準月／基準季自動取「已公布家數足夠」的最新期別。「創 N 期新高」＝這一期比之前 N 期都高；股價、成交量是不低於之前 N 個交易日的最高。</span>
@@ -322,10 +322,11 @@ var RANGES = [["opm", "營業利益率 (%)"], ["eps", "EPS (元)"], ["yoy", "營
 var PRESET = {
   fin: {opm: [10, null], eps: [1, null], yoy: [20, null], cum: [20, null], arrow: [40, null], p: [50, null]},
   trend: {"t-n1": 20, "t-dir": "up", "t-x1": 10, "t-n2": 20, "t-hl": "high", "t-ma": "bull"},
-  strong: {"s-p": 50, "s-opm": 0, "s-v": 100, "s-n1": 5, "s-x1": 20, "s-n2": 3, "s-b2": 10, "s-x2": 50, "s-n3": 10, "s-x3": 30},
+  strong: {"s-p": 50, "s-opm": 0, "s-v": 100, "s-n1": 5, "s-x1": 20, "s-n2": "", "s-b2": "", "s-x2": "", "s-n3": "", "s-x3": ""},
+  strong2: {"s-p": 50, "s-opm": 0, "s-v": 100, "s-n1": 5, "s-x1": 20, "s-n2": 3, "s-b2": 10, "s-x2": 50, "s-n3": 10, "s-x3": 30},
   high: {"h-r": 3, "h-o": 3, "h-e": 3, "h-p": "", "h-v": ""}
 };
-var strongAll = true, INDS = null;
+var INDS = null;
 
 function indLabel(){
   var all = D.industries.length, n = INDS ? INDS.size : all;
@@ -423,9 +424,9 @@ function runStrong(){
     if (o0 != null) gate.push("最近一季營益率 ≥ " + o0 + "%");
     if (v0 != null) gate.push("成交量 ≥ " + v0 + " 張");
     var c1 = n1 != null && x1 != null, c2 = n2 != null && b2 != null && x2 != null, c3 = n3 != null && x3 != null;
-    if (c1) conds.push("近 " + n1 + " 日漲幅 > " + x1 + "%");
-    if (c2) conds.push("近 " + n2 + " 日均量較前 " + b2 + " 日增加 > " + x2 + "%");
-    if (c3) conds.push("近 " + n3 + " 日漲幅 > " + x3 + "%");
+    if (c1) conds.push("過去 " + n1 + " 日漲幅 > " + x1 + "%");
+    if (c2) conds.push("過去 " + n2 + " 日成交量較前 " + b2 + " 日均量增加 > " + x2 + "%");
+    if (c3) conds.push("過去 " + n3 + " 日漲幅 > " + x3 + "%");
     var list = [];
     D.rows.forEach(function(r){
       if (!series(r.c)) return;
@@ -438,13 +439,13 @@ function runStrong(){
       if (c1) hits.push(isnum(v.r5) && v.r5 > x1);
       if (c2) hits.push(isnum(v.v3) && v.v3 > x2);
       if (c3) hits.push(isnum(v.r10) && v.r10 > x3);
-      if (hits.length && !(strongAll ? hits.every(Boolean) : hits.some(Boolean))) return;
+      if (!hits.every(Boolean)) return;
       list.push(v);
     });
     var a = n1 || 5, b = n2 || 3, c = n3 || 10, base = b2 || 10;
     STRONG_COLS[0][1] = a + "日漲幅"; STRONG_COLS[1][1] = b + "日均量增幅"; STRONG_COLS[2][1] = c + "日漲幅";
     table(host, "篩選結果（季度 " + D.base_q + "　營收 " + D.base_m + "）",
-      "使用條件：" + (gate.join("、") || "（無門檻）") + "　＋　" + (conds.length ? conds.join(strongAll ? "　且　" : "　或　") + "（" + (strongAll ? "全部符合" : "任一符合") + "）" : "（不限）") +
+      "使用條件：" + (gate.join("、") || "（無門檻）") + "　＋　" + (conds.join("　且　") || "（不限）") +
       "　｜　" + basePeriods() + "。股價資料到 " + P.dates[P.dates.length - 1] + "。" + LINKS, list,
       {extra: STRONG_COLS, sort: "r5", chart: function(l){ return barChart(l, "r5", a + " 日漲幅排名", 30); },
        legend: [[a + "日漲幅", "最新收盤對 " + a + " 個交易日前收盤的漲跌幅(%)"],
@@ -511,7 +512,7 @@ fetch(BASE + "data.json", {cache: "no-cache"}).then(function(r){
   document.querySelectorAll("[data-run]").forEach(function(b){ b.onclick = function(){ RUN[b.getAttribute("data-run")](); }; });
   document.querySelectorAll("[data-preset]").forEach(function(b){ b.onclick = function(){ var t = b.getAttribute("data-preset"); preset(t, false); RUN[t](); }; });
   document.querySelectorAll("[data-clear]").forEach(function(b){ b.onclick = function(){ preset(b.getAttribute("data-clear"), true); }; });
-  $("s-mode").onclick = function(){ strongAll = !strongAll; this.textContent = "組合篩選：" + (strongAll ? "全部符合" : "任一符合"); this.classList.toggle("on", !strongAll); runStrong(); };
+  $("s-adv").onclick = function(){ presetFields("strong2", false); runStrong(); };
   document.querySelectorAll(".sc input").forEach(function(i){ i.addEventListener("keydown", function(e){
     if (e.key === "Enter"){ var p = i.closest(".sc-panel"); if (p) RUN[p.id.slice(3)](); } }); });
   var want = (location.hash || "").slice(1);

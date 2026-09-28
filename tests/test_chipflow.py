@@ -439,3 +439,21 @@ def test_籌碼雷達釘住的表頭在最上層_圖示不會蓋過去():
            / "radar.html.j2").read_text("utf-8")
     rule = _re.search(r"\.cf-tbl th\{([^}]*)\}", src).group(1)
     assert "position:sticky" in rule and _re.search(r"z-index:\s*[1-9]", rule), rule
+
+
+def test_籌碼雷達分頁各自一色_符合檔數跟分頁同色_標記欄可排序_名詞有燈泡():
+    import re as _re
+
+    src = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+           / "radar.html.j2").read_text("utf-8")
+    tabs = _re.findall(r'data-t="(\w+)" role="tab"', src)
+    colors = dict(_re.findall(r"\('(\w+)','(#[0-9a-f]{6})','#[0-9a-f]{6}'\)", src))
+    assert set(tabs) == set(colors) and len(set(colors.values())) == len(tabs), "每一顆分頁一個不同的顏色"
+    assert 'cls: "cf-cnt"' in src and ".cf-cnt{font-size:17px" in src and "color:var(--tc" in src
+    assert 'state.key = "_tag"' in src and "function tagv(r)" in src
+    for t in ("外資＋投信買賣超 ÷ 資本額 60 日累計（倍）", "扣掉大戶之 20 日周轉率（%）", "大戶庫存張數",
+              "貪婪指標 1（買盤比例 20 日總和）", "買盤比例 60 日 − 賣盤比例 60 日"):
+        assert f'"{t}":' in src, t
+    about = src.split('id="cf-gloss"', 1)[1].split("</dl>", 1)[0]
+    for t in ("流動性母體", "E 否決名單", "rank IC", "共振分數", "三根柱子", "成長旗標", "T1 趨勢", "精選（整條漏斗）"):
+        assert t in about, t

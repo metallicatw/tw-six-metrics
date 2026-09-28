@@ -1366,7 +1366,15 @@ table.hl-t{min-width:0}
 .ai-tag{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;
   border-radius:6px;font-size:13px;font-weight:800;color:#fff;flex:0 0 auto}
 .ai-tag-f{background:#1c62b8}.ai-tag-d{background:#6d3fd1}.ai-tag-p{background:#0e7c6f}
-.ai-tag-b{background:#b25a00}.ai-tag-e{background:#a3306b}.ai-tag-j{background:#5f6b78}
+.ai-tag-b{background:#b25a00}.ai-tag-e{background:#a3306b}.ai-tag-j{background:#5f6b78}.ai-tag-g{background:#7048e8}
+/* 〔名詞解釋〕分頁（2026-09-28） */
+.ai-gl dt{font-weight:700;margin:12px 0 2px}
+.ai-gl dd{margin:0 0 0 1em;color:var(--ink-2);font-size:13.5px;line-height:1.7}
+.ai-gauges span .tip{margin-left:2px}
+.ai-gauges span button.bulb{font-size:11px;padding:1px 5px}
+.ai-gauges .tipbox{font-size:13px;color:var(--ink-2)}
+.ai-gauges .tipbox b{font-size:inherit}
+.ai-h .tip,.ai-block h4 .tip{margin-left:2px}
 .ai-lead{max-width:none;color:var(--ink-2);font-size:13.5px}
 .ai-regime{border-radius:8px;padding:12px 14px;border:1px solid var(--rule);background:var(--surface-2)}
 .ai-regime-main{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 14px}
@@ -1412,6 +1420,14 @@ table.hl-t{min-width:0}
 .ai-s{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:700;
   color:#fff;background:#5f6b78;white-space:nowrap}
 .ai-s-A{background:#e67700}.ai-s-B{background:#1c7ed6}.ai-s-D{background:#6d3fd1}
+/* 〔今日候選〕每一套標題旁的「共 N 檔符合」：放大、和那一套的標籤同色（2026-09 使用者要求） */
+.ai-cnt{font-size:17px;font-weight:800;margin-left:4px;font-variant-numeric:tabular-nums}
+.ai-cnt-A{color:#e67700}.ai-cnt-B{color:#1c7ed6}.ai-cnt-D{color:#6d3fd1}
+/* 深底：同一個色相調亮，才讀得出來 */
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .ai-cnt-B{color:#6fb0f5}
+  :root:not([data-theme=light]) .ai-cnt-D{color:#b39cff}}
+:root[data-theme=dark] .ai-cnt-B{color:#6fb0f5}
+:root[data-theme=dark] .ai-cnt-D{color:#b39cff}
 .ai-stats tr.ai-all th{color:#c2255c}.ai-stats tr.ai-a th{color:#e67700}
 .ai-stats tr.ai-b2 th{color:#1c7ed6}.ai-stats tr.ai-bm th{color:var(--muted);font-weight:500}
 .ai-stats tr.ai-sub th{font-weight:400;padding-left:18px}
@@ -1427,7 +1443,7 @@ table.hl-t{min-width:0}
 .ai-tab[aria-selected=true]{background:var(--tc);color:#fff}
 .ai-tab:focus-visible{outline:2px solid var(--tc);outline-offset:2px}
 .ai-j-f{--tc:#1c62b8}.ai-j-p{--tc:#0e7c6f}.ai-j-c{--tc:#c2255c}.ai-j-t{--tc:#2b8a3e}
-.ai-j-b{--tc:#b25a00}.ai-j-e{--tc:#a3306b}.ai-j-j{--tc:#5f6b78}
+.ai-j-b{--tc:#b25a00}.ai-j-e{--tc:#a3306b}.ai-j-j{--tc:#5f6b78}.ai-j-g{--tc:#7048e8}
 /* 深色底：按鈕色調亮，選中那一顆用底色當字色（和個股頁分頁同一套做法）。 */
 @media (prefers-color-scheme:dark){
   :root:not([data-theme=light]) .ai-j-f{--tc:#6fb0f5}
@@ -1437,6 +1453,7 @@ table.hl-t{min-width:0}
   :root:not([data-theme=light]) .ai-j-b{--tc:#ffa94d}
   :root:not([data-theme=light]) .ai-j-e{--tc:#e599f7}
   :root:not([data-theme=light]) .ai-j-j{--tc:#a3aebb}
+  :root:not([data-theme=light]) .ai-j-g{--tc:#b39cff}
   :root:not([data-theme=light]) .ai-tab[aria-selected=true]{color:var(--ground)}
 }
 :root[data-theme=dark] .ai-j-f{--tc:#6fb0f5}
@@ -1446,6 +1463,7 @@ table.hl-t{min-width:0}
 :root[data-theme=dark] .ai-j-b{--tc:#ffa94d}
 :root[data-theme=dark] .ai-j-e{--tc:#e599f7}
 :root[data-theme=dark] .ai-j-j{--tc:#a3aebb}
+:root[data-theme=dark] .ai-j-g{--tc:#b39cff}
 :root[data-theme=dark] .ai-tab[aria-selected=true]{color:var(--ground)}
 html:not(.js) .ai-panel[hidden]{display:block}
 html:not(.js) .ai-tabs{display:none}

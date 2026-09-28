@@ -107,6 +107,15 @@ def test_選股功能四個子分頁的順序與預設條件():
     assert "z-index:2" in page.split(".sc-tbl th{", 1)[1].split("}", 1)[0], "釘住的表頭要在圖示上面"
 
 
+def test_近期強勢股_預設條件與進階預設():
+    """預設＝門檻＋條件一（對照畫面 20 家）；進階預設＝門檻＋條件一二三（對照畫面 6 家）。"""
+    page = (ROOT / "src" / "twsix" / "report" / "templates" / "screener.html.j2").read_text("utf-8")
+    assert '"s-n1": 5, "s-x1": 20, "s-n2": "", "s-b2": "", "s-x2": "", "s-n3": "", "s-x3": ""' in page
+    assert 'strong2: {"s-p": 50, "s-opm": 0, "s-v": 100, "s-n1": 5, "s-x1": 20, "s-n2": 3, "s-b2": 10, "s-x2": 50, "s-n3": 10, "s-x3": 30}' in page
+    assert ">進階預設<" in page and "組合篩選" not in page and "strongAll" not in page
+    assert "開始篩選" not in page and page.count(">重新掃描<") == 4
+
+
 def test_產業名稱兩種寫法併成一個():
     root = Path(tempfile.mkdtemp())
     data, _ = S.build(root, [

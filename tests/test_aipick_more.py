@@ -701,6 +701,13 @@ def test_AI頁面用新格式的資料畫得出來_讀法沒有寫死數字():
     assert "負轉折" in html and "客戶" in html
     for cid in ("ai-all-chart", "ai-a-chart", "ai-b-chart", "ai-d-chart", "ai-f-chart"):
         assert f'id="{cid}"' in html, cid
+    # 名詞解釋：分頁裡每一條都有內容（燈泡和分頁共用同一段文字）
+    gloss = html.split('id="ai-gloss"', 1)[1].split("</section>", 1)[0]
+    for term in ("市場寬度", "影子帳戶", "營收 SUE", "共振分數", "E 否決", "C 法說負轉折", "合併帳戶（三套都在）",
+                 "0050 ＋ 市場狀態（F）", "全市場等權（流動性門檻以上）", "平均超額報酬", "夏普"):
+        assert any(term in d for d in re.findall(r"<dt>(.*?)</dt>", gloss)), term
+    assert "<dd></dd>" not in gloss.replace("\n", "").replace(" ", "")
+    assert html.count('class="bulb"') >= 8, "各段標題旁要有燈泡"
 
 
 def test_讀簡報有時間上限_每讀完一份就存():
@@ -776,11 +783,11 @@ def test_AI頁各段是獨立分頁_不是定位點():
     assert '<nav class="ai-jump"' not in tpl and 'href="#ai-' not in tpl
     tabs = re.findall(r'role="tab" id="aitab-(\w+)"', tpl)
     panels = re.findall(r'id="ai-(\w+)" role="tabpanel"', tpl)
-    assert tabs == panels == ["regime", "paper", "picks", "talks", "backtest", "veto", "journal"]
+    assert tabs == panels == ["regime", "paper", "picks", "talks", "backtest", "veto", "journal", "gloss"]
     # 只有第一段一開始是打開的
     assert tpl.count('role="tabpanel" aria-labelledby="aitab-regime">') == 1
     assert tpl.count('role="tabpanel"') - 1 == tpl.count('role="tabpanel" aria-labelledby') - 1
-    assert len(re.findall(r'role="tabpanel" aria-labelledby="aitab-\w+" hidden>', tpl)) == 6
+    assert len(re.findall(r'role="tabpanel" aria-labelledby="aitab-\w+" hidden>', tpl)) == 7
     css = (ROOT / "src/twsix/report/templates/site.css").read_text("utf-8")
     assert "html:not(.js) .ai-panel[hidden]{display:block}" in css, "沒有 JavaScript 時要全部攤開"
     js = (ROOT / "src/twsix/report/templates/site.js").read_text("utf-8")

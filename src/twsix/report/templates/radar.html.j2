@@ -10,8 +10,30 @@
 .cf h2 .cf-beta{font-size:12px;border:1px solid var(--rule);border-radius:999px;padding:1px 8px;margin-left:6px;color:var(--muted);vertical-align:middle}
 .cf-note{color:var(--muted);font-size:13px;line-height:1.6}
 .cf-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;margin:12px 0;padding-bottom:4px}
-.cf-tab{flex:0 0 auto;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:5px 12px;font-size:13.5px;cursor:pointer;white-space:nowrap}
-.cf-tab[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+/* 每一顆分頁一個顏色（2026-09-28）：沒選中的是那個顏色的外框與字，選中的整顆填滿。
+   同一個 --tc 也掛在對應的面板上，④⑤⑥「符合條件：N / M 檔」那一行用它上色。
+   深色底換成亮一階的色調，選中那一顆用底色當字色（和 AI 選股頁的分頁同一套）。 */
+.cf-tab{--tc:var(--accent);flex:0 0 auto;border:1.5px solid var(--tc);background:var(--surface);color:var(--tc);border-radius:999px;padding:5px 12px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.cf-tab:hover{background:var(--surface-2)}
+.cf-tab[aria-selected=true]{background:var(--tc);border-color:var(--tc);color:#fff}
+{% set cf_colors = [('t1','#d9480f','#ff8a5c'),('t2','#c2255c','#f783ac'),('t3','#2b8a3e','#69db7c'),
+  ('t4','#1864ab','#6fb0f5'),('t5','#0b7285','#3bc9db'),('t6','#6741d9','#b39cff'),
+  ('t7','#b25a00','#ffa94d'),('t8','#a61e4d','#faa2c1'),('t9','#5c7c00','#a9e34b'),
+  ('t10','#087f5b','#38d9a9'),('t11','#862e9c','#e599f7'),('t12','#364fc7','#91a7ff'),
+  ('picks','#c92a2a','#ff8787'),('val','#7a5230','#e0b084'),('about','#495057','#adb5bd')] %}
+{% for k, c, d in cf_colors %}.cf-tab[data-t={{ k }}],#cf-{{ k }}{--tc:{{ c }}}
+{% endfor %}@media (prefers-color-scheme:dark){
+{% for k, c, d in cf_colors %}  :root:not([data-theme=light]) .cf-tab[data-t={{ k }}],:root:not([data-theme=light]) #cf-{{ k }}{--tc:{{ d }}}
+{% endfor %}  :root:not([data-theme=light]) .cf-tab[aria-selected=true]{color:var(--ground)}
+}
+{% for k, c, d in cf_colors %}:root[data-theme=dark] .cf-tab[data-t={{ k }}],:root[data-theme=dark] #cf-{{ k }}{--tc:{{ d }}}
+{% endfor %}:root[data-theme=dark] .cf-tab[aria-selected=true]{color:var(--ground)}
+.cf-cnt{font-size:17px;font-weight:800;color:var(--tc,var(--accent));font-variant-numeric:tabular-nums;margin-right:4px}
+.cf-card h4 .tip{margin-left:4px}
+.cf-card h4 button.bulb{font-size:11px;padding:2px 6px}
+.cf-card h4 .tipbox{font-weight:400}
+.cf-gl dt{font-weight:700;margin-top:8px}
+.cf-gl dd{margin:2px 0 0 1em;color:var(--ink-2);font-size:13.5px;line-height:1.65}
 .cf-tab.cf-sep{margin-left:10px}
 .cf-panel{display:none}
 .cf-panel.on{display:block}
@@ -194,6 +216,47 @@
 ・<b>內外盤</b>（逐筆成交是主動買還是主動賣）：證交所與櫃買中心的公開資料只給每日彙總，沒有逐筆明細，只能向資訊商購買。本站以 K 線買賣盤比例（貪婪／恐懼）代替——BG財報 的「含內外盤因子的買賣盤力道」因此無法一比一重現。</dd>
 <dt>免責</dt><dd>本頁僅為公開財務及籌碼數據之整理與自訂條件篩選輔助，不構成任何投資建議、推介、要約或招攬。各項排名與清單是過去交易資料的統計，不代表未來走勢；清單由數字自動產生，不代表推薦。</dd>
 </dl></div>
+<div class="cf-card cf-gl" id="cf-gloss"><h4>名詞解釋</h4>
+<p class="cf-note">頁面上各張圖、各個表頭旁的 💡 是同一份說明的節錄。排名一律「第 1 名＝最大」，而且只在流動性母體裡排。</p>
+<dl>
+<dt>① 個股籌碼多圖：外資法人</dt>
+<dd><b>外資＋投信買賣超 ÷ 資本額 60 日累計（倍）</b>：外資＋投信（不含自營商）每天買賣超股數 × 當日均價（成交金額 ÷ 成交股數）＝買賣超金額；最近 60 個交易日加總，再除以資本額（那一天看得到的季報股本）。0.05 倍＝兩個多月法人淨買進股本 5% 的金額，大小型股可以直接比。<br>
+<b>紅：法人預估成交額 20 日／藍：成交金額 20 日</b>：法人預估成交額＝（外資＋投信的買進＋賣出股數）÷ 2 × 均價，是法人參與的成交金額；紅線是它的 20 日加總，藍線是全部成交金額的 20 日加總。紅佔藍越多，這段行情越是法人在做。<br>
+<b>外資投信 20 日市值周轉率（%）</b>：法人預估成交額 20 日加總 ÷ 市值 × 100。法人換手變積極時會上升（買賣都算，方向看買賣超）。<br>
+<b>扣掉大戶之 20 日周轉率（%）</b>：20 日成交金額 ÷（市值 ×（1 − 大戶比例））× 100。大戶的股票通常不動，扣掉之後才是真正流通的籌碼；比例高＝流通籌碼換手快、短線資金多。<br>
+<b>外資投信買賣超 ÷ 大戶人數 60 日（千元）</b>與<b>…排名</b>：60 日累計買賣超金額 ÷ 5,000 萬大戶人數。同樣的法人買超，大戶越少、每位大戶「分到」的越多，籌碼越容易被推動。排名是它在母體裡的名次。需要集保 15 級（含人數）資料。</dd>
+<dt>① 大戶籌碼</dt>
+<dd><b>大戶</b>＝持股市值 ≥ 5,000 萬元的股東，每天用收盤價換算成張數門檻，加總集保 15 級裡門檻以上的各級（跨級時按對數比例內插，所以不會突然跳）。<b>大戶比例</b>＝大戶持股 ÷ 集保總股數；<b>大戶人數</b>＝門檻以上的人數；<b>大戶庫存張數</b>＝大戶比例 × 集保總股數 ÷ 1,000，也就是大戶手上合計幾張——股本變動時比看比例更不容易誤判。</dd>
+<dt>① 成交量能</dt>
+<dd><b>成交金額 ÷ 大戶人數 20 日（千元）</b>與<b>…排名</b>：20 日成交金額加總 ÷ 5,000 萬大戶人數。市場資金相對於大戶規模的熱度。<br>
+<b>成交金額 20 日佔全市場比例</b>、<b>成交資金佔比排名</b>、<b>成交金額 ÷ 資本額 20 日</b>：這一檔 20 日成交金額佔全市場的比重、它的名次，以及除以股本後的倍數。</dd>
+<dt>① 貪婪恐懼</dt>
+<dd>每根 K 線拆成往上（買盤）與往下（賣盤）的路徑：開盤跳空算一段；紅 K 假設走「開→低→高→收」，黑 K 假設走「開→高→低→收」。<b>買盤比例</b>＝往上的長度 ÷ 全部長度（0～1），一字線比昨收高記 1、低記 0。<br>
+<b>貪婪指標 1／2</b>＝買盤比例最近 20／60 天的<b>加總</b>；<b>恐懼指標 1／2</b>＝天數 − 貪婪（也就是賣盤比例的加總）。<br>
+<b>買盤比例 20／60 日 − 賣盤比例</b>＝貪婪 − 恐懼＝買賣盤力道；> 0 表示買方較主動。20 日力道轉正且比五天前強，就是 <b>T2 蓄勢</b>。它用來代替公開資料沒有的內外盤。</dd>
+<dt>流動性母體（L0 流動性）</dt>
+<dd>普通股、收盤 &gt; 10 元、20 日平均成交金額 &gt; 5,000 萬，而且不在 E 否決名單上。所有排名、百分位、共振分數、驗證的「母體平均」都只在這一群裡算。</dd>
+<dt>E 否決名單</dt>
+<dd>沿用〔AI 選股〕的財報品質否決：財報八面（本業虧損、連兩季虧損、獲利靠業外、有獲利沒現金、應計比率偏高、負債快速上升、營收大幅衰退、董監高質押）加重大訊息四面（更換簽證會計師、財會主管異動、退票／重整／繼續經營疑慮、停工災害），合計三面以上就擋掉。表格〔標記〕欄的「E否決」就是它。</dd>
+<dt>rank IC、平均 IC、t 值</dt>
+<dd><b>rank IC</b>：每一週把母體裡每一檔的某個特徵排名，和它之後 20 個交易日的報酬排名算 Spearman 相關；+1＝完全一致、0＝無關、負的＝相反。平均 IC 在 ±0.02 左右算很弱，0.05 以上已經算強。<b>平均 IC</b>＝各週 IC 的平均；<b>t 值</b>＝平均 ÷ 標準差 × √週數，|t| &gt; 2 大致算顯著——但週與週的 20 日持有期重疊，t 值會偏高。</dd>
+<dt>共振分數</dt>
+<dd>七個特徵（外資投信 60 日買超 ÷ 資本額、法人 60 日買超排名 20 日進步、5,000 萬大戶持股比例四週增加、總股東人數四週減少、成交資金佔比排名 20 日進步、20 日成交金額 ÷ 資本額、買賣盤力道 20 日）各自取母體百分位，用權重加權平均（至少 4 個特徵有值），再取一次百分位（0～1）。權重＝每個特徵過去已實現各週的平均 rank IC，負的歸零；不到 8 週時等權。</dd>
+<dt>籌碼共振（L1）與三根柱子</dt>
+<dd>L1＝共振分數前 10%，而且三根柱子至少兩根同向：① <b>法人</b>：外資投信 60 日累計買超 &gt; 0 且在全市場前 30%；② <b>大戶</b>：5,000 萬大戶持股比例比四週前高；③ <b>股東</b>：總股東人數比四週前少。</dd>
+<dt>成長旗標（L2）</dt>
+<dd>① 月營收創 12 個月新高且 3 個月累計年增 &gt; 0（不成立時，單月營收年增 &gt; 20% 也算這一面）；② 近四季 EPS 年增；③ 單季 EPS 創近 4 季新高；④ 營益率創近 4 季新高。精選要兩面以上。</dd>
+<dt>趨勢成立（T1 趨勢）、T2 蓄勢</dt>
+<dd><b>T1</b>：收盤 &gt; 60 日均線，且 20 日均線 &gt; 60 日均線，精選的必要條件。<b>T2</b>：買賣盤力道 20 日 &gt; 0 且比五個交易日前強，只標示、不設門檻。</dd>
+<dt>精選（整條漏斗）</dt>
+<dd>L0 流動性 ∩（L1 且共振分數前 5%）∩ 兩面以上成長旗標 ∩ T1。每天的精選寫進精選日誌，之後對答案。</dd>
+<dt>回檔警戒</dt>
+<dd>資金轉弱＝成交資金佔比百分位比 20 天前掉 10 個百分點以上且 20 日成交金額變少；籌碼轉弱＝大戶比例連兩週下降，或股東人數比四週前多且法人 20 日賣超。兩邊都轉弱＝高風險、一邊＝待觀察、都穩＝相對安心。</dd>
+<dt>指標驗證的欄位</dt>
+<dd><b>母體</b>：那一週的 L0 檔數。<b>L1 檔數／L1 超額%</b>：那一週照規則選出的 L1 檔數，與它們之後 20 日平均報酬減去母體平均。<b>L1+T1</b>：L1 再加上 T1。<b>精選檔數／精選超額%</b>：整條漏斗。<b>母體報酬%</b>：母體之後 20 日報酬的平均（超額就是扣掉它）。財報、營收、E 否決都用那一週看得到的版本；沒有扣交易成本。</dd>
+<dt>〔標記〕欄（④⑤⑥）</dt>
+<dd><b>精選</b>、<b>共振</b>（L1 但不是精選）、<b>E否決</b>。點表頭可以排序：精選 ＞ 共振 ＞ 無標記，被 E 否決的排在同級之後。</dd>
+</dl></div>
 </section>
 </div>
 
@@ -287,13 +350,57 @@ function stockLinks(code, extra){
 }
 var LINK_NOTE = "點代號開個股資訊頁、點名稱看 ① 個股籌碼多圖、點收盤價旁的圖示開 Yahoo 技術分析。";
 
+// ── 💡 名詞說明 ─────────────────────────────────────────────────────────
+// 和全站同一個燈泡（site.js 用事件委派處理，後來才畫出來的也有效）。內容是這裡寫死的
+// 常數，不是資料，所以可以用 innerHTML。完整的名詞解釋在〔說明〕分頁。
+function tipEl(html){
+  var box = el("span", {cls: "tipbox", role: "note"}); box.innerHTML = html;
+  return el("span", {cls: "tip"}, el("button", {type: "button", cls: "bulb", "aria-expanded": "false", title: "說明"},
+    el("span", {"aria-hidden": "true", text: "💡"}), el("span", {cls: "sr", text: "說明"})), box);
+}
+var G_FI = "外資＋投信（不含自營商）每天的買賣超股數 × 當日均價（成交金額 ÷ 成交股數）＝買賣超金額。";
+var G_WHALE = "<b>大戶</b>＝持股市值 ≥ 5,000 萬元的股東。每天用收盤價把 5,000 萬換算成張數門檻，加總集保 15 級裡門檻以上各級；門檻落在某一級中間時按對數比例只算一部分，所以股價跨級時不會突然跳動。";
+var G_GF = "每根 K 線拆成往上（買盤）和往下（賣盤）的路徑：開盤跳空算一段；紅 K 假設走「開→低→高→收」，黑 K 假設走「開→高→低→收」。買盤比例＝往上的長度 ÷ 全部長度（0～1）。一字線（高＝低）比昨收高記 1、低記 0。";
+var G_L0 = "<b>流動性母體（L0）</b>＝普通股、收盤 > 10 元、20 日平均成交金額 > 5,000 萬，而且不在 E 否決名單上。所有排名、百分位、共振分數都只在這一群裡比；太冷門的股票價格容易被少數單子推動，排名沒有意義。";
+var G_E = "<b>E 否決名單</b>＝〔AI 選股〕的財報品質否決：財報八面（本業虧損、連兩季虧損、獲利靠業外、有獲利沒現金、應計比率偏高、負債快速上升、營收大幅衰退、董監高質押）加重大訊息四面，合計三面以上就擋掉。這裡直接沿用，被否決的不進漏斗。";
+var G_IC = "<b>rank IC</b>（等級相關係數）＝每一週，把流動性母體裡每一檔的某個特徵排名，和它<b>之後 20 個交易日</b>的報酬排名算 Spearman 相關。+1＝特徵越高的之後漲越多、完全一致；0＝沒關係；負的＝反過來。股票市場裡平均 IC 在 ±0.02 左右算很弱，0.05 以上已經算強。";
+var G_SCORE = "<b>共振分數</b>＝七個特徵各自在流動性母體裡的百分位（0～1），用權重加權平均（至少要有 4 個特徵有值），再取一次全市場百分位。0.95＝前 5%。七個特徵：外資投信 60 日買超 ÷ 資本額、法人 60 日買超排名 20 日進步、5,000 萬大戶持股比例四週增加、總股東人數四週減少、成交資金佔比排名 20 日進步、20 日成交金額 ÷ 資本額、買賣盤力道 20 日（貪婪 − 恐懼）。<br><b>權重</b>＝每個特徵過去各週的平均 rank IC，負的歸零；只用 20 日報酬已經實現的週，不到 8 週時等權。";
+var G_PIL = "<b>三根柱子</b>（L1 要至少兩根）：① 法人：外資投信 60 日累計買超 > 0，且在全市場前 30%；② 大戶：5,000 萬大戶持股比例比四週前高；③ 股東：總股東人數比四週前少（籌碼往少數人集中）。";
+var G_TIME = "<b>T1 趨勢成立</b>：收盤 > 60 日均線，且 20 日均線 > 60 日均線——精選的必要條件。<br><b>T2 蓄勢</b>：買賣盤力道 20 日（貪婪 1 − 恐懼 1）> 0，而且比五個交易日前更強——只標示，不是門檻。";
+var G_FLAG = "<b>成長旗標</b>（L2，精選要兩面以上）：① 月營收創 12 個月新高且 3 個月累計年增 > 0（沒有的話，單月營收年增 > 20% 也算這一面）；② 近四季 EPS 年增 > 0；③ 單季 EPS 創近 4 季新高；④ 營益率創近 4 季新高。財報與營收都用那一天看得到的版本。";
+var G_WARN = "<b>回檔警戒</b>：<br>・資金轉弱＝成交資金佔比的百分位比 20 天前掉 10 個百分點以上，而且 20 日成交金額變少；<br>・籌碼轉弱＝大戶比例連兩週下降，或（股東人數比四週前多、且法人 20 日賣超）。<br>兩邊都轉弱＝<b>高風險</b>、一邊＝<b>待觀察</b>、都穩＝<b>相對安心</b>。";
+var GLOSS = {
+  "外資＋投信買賣超 ÷ 資本額 60 日累計（倍）": G_FI + "把最近 60 個交易日加總，再除以資本額（那一天看得到的季報股本金額）。0.05 倍＝兩個多月法人淨買進了股本 5% 的金額。和個股大小無關，大型股、小型股可以直接比。",
+  "紅：法人預估成交額 20 日／藍：成交金額 20 日（億）": "<b>法人預估成交額</b>＝（外資＋投信的買進股數＋賣出股數）÷ 2 × 當日均價，也就是法人參與的成交金額；紅線是它的 20 日加總。藍線是全部成交金額的 20 日加總。紅線佔藍線的比例越高，這段期間的成交越是法人在做。",
+  "外資投信 20 日市值周轉率（%）": "法人預估成交額 20 日加總 ÷ 市值 × 100。市值＝收盤 × 股本股數。數字變大表示法人最近換手變積極（買或賣都算，方向看買賣超那幾張圖）。",
+  "扣掉大戶之 20 日周轉率（%）": "20 日成交金額 ÷（市值 ×（1 − 大戶比例））× 100。大戶的股票通常不動，把它扣掉，剩下的才是真的在市場上流通的籌碼；這個比例高＝流通籌碼換手很快、短線資金在裡面。" ,
+  "外資投信買賣超 ÷ 大戶人數 60 日（千元）": G_FI + "60 日累計買賣超金額 ÷ 5,000 萬大戶的人數（千元／人）。同樣的法人買超，大戶越少的股票，每位大戶能分到的越多——籌碼越容易被推動。要有集保 15 級（含人數）資料才畫得出來。",
+  "外資投信買賣超 ÷ 大戶人數 60 日排名": "上一張圖的數值在流動性母體（股價 > 10、20 日均額 > 5,000 萬）裡的名次，第 1 名＝最大。",
+  "大戶比例（持股市值 ≥ 5,000 萬，%）": G_WHALE + "大戶比例＝大戶持股 ÷ 集保總股數。",
+  "大戶比例（持股市值 5,000 萬以上，%）": G_WHALE + "大戶比例＝大戶持股 ÷ 集保總股數。",
+  "大戶人數": G_WHALE + "大戶人數＝門檻以上各級的人數加總（同樣按比例內插）。",
+  "大戶庫存張數": "大戶比例 × 集保總股數 ÷ 1,000，也就是 5,000 萬大戶手上合計有幾張。和大戶比例看的是同一件事，只是換成張數，股本變動（增資、減資）時比較不會誤判。",
+  "成交金額 ÷ 大戶人數 20 日（千元）": "20 日成交金額加總 ÷ 5,000 萬大戶人數（千元／人）。成交資金相對於大戶的規模；越高表示市場資金對這檔的熱度比大戶的佈局更大。要有集保 15 級資料。",
+  "成交金額 ÷ 大戶人數 20 日排名": "上一張圖的數值在流動性母體裡的名次，第 1 名＝最大。",
+  "貪婪指標 1（買盤比例 20 日總和）": G_GF + "<b>貪婪指標 1</b>＝最近 20 天買盤比例的加總（0～20），越高＝買方越主動。",
+  "恐懼指標 1（賣盤比例 20 日總和）": "<b>恐懼指標 1</b>＝20 − 貪婪指標 1，也就是最近 20 天賣盤比例的加總。兩者相加永遠等於天數。",
+  "貪婪指標 2（買盤比例 60 日總和）": G_GF + "<b>貪婪指標 2</b>＝最近 60 天買盤比例的加總（0～60）。",
+  "恐懼指標 2（賣盤比例 60 日總和）": "<b>恐懼指標 2</b>＝60 − 貪婪指標 2。",
+  "買盤比例 20 日 − 賣盤比例 20 日": "貪婪 1 − 恐懼 1（＝ 2 × 貪婪 1 − 20），也就是<b>買賣盤力道 20 日</b>。> 0 表示近 20 天買方力道大於賣方。它轉正、而且比五天前更強，就是精選漏斗裡的 <b>T2 蓄勢</b>。",
+  "買盤比例 60 日 − 賣盤比例 60 日": "貪婪 2 − 恐懼 2（＝ 2 × 貪婪 2 − 60），較長期的買賣盤力道。",
+  "法人 60 日累計買超排名（越小越前面）": G_FI + "60 日累計買賣超金額在全市場的名次，第 1 名＝買超最多。",
+  "成交資金佔比排名（越小越前面）": "20 日成交金額佔全市場比例的名次，第 1 名＝資金最集中。",
+  "成交金額 20 日累計佔全市場比例（%）": "這一檔最近 20 天的成交金額 ÷ 全市場同期成交金額 × 100。",
+  "成交金額 ÷ 資本額 20 日累計（倍）": "20 日成交金額加總 ÷ 資本額。和市值周轉率類似，但用股本而不是市值，不受股價高低影響。"
+};
+
 // ── 圖 ──────────────────────────────────────────────────────────────
 function chart(title, dates, series, opt){
   opt = opt || {};
   var W = opt.wide ? 1000 : 400, H = opt.wide ? 220 : 150, L = 46, Rr = 8, T = 8, B = 18;
   var card = el("div", {cls: "cf-card"});
   var tip = el("span", {cls: "cf-tip"});
-  card.appendChild(el("h4", null, el("span", {text: title}), tip));
+  card.appendChild(el("h4", null, el("span", null, title, GLOSS[title] ? tipEl(GLOSS[title]) : null), tip));
   var vals = [];
   series.forEach(function(s){ s.v.forEach(function(v){ if (isnum(v)) vals.push(v); }); });
   if (!vals.length){ card.appendChild(el("p", {cls: "cf-note", text: opt.empty || "沒有資料"})); return card; }
@@ -638,7 +745,7 @@ function buildForms(){
     if (x.note){ lab.appendChild(el("span", {cls: "cf-note", text: x.note})); if (!has15) lab.className = "cf-dis"; }
     f.appendChild(lab);
   });
-  f.appendChild(el("label", null, el("input", {type: "checkbox", id: "cf4-liq", checked: "checked"}), "只看流動性母體（股價 > 10、20 日均額 > 5,000 萬）"));
+  f.appendChild(el("label", null, el("input", {type: "checkbox", id: "cf4-liq", checked: "checked"}), "只看流動性母體（股價 > 10、20 日均額 > 5,000 萬）", tipEl(G_L0)));
   f.appendChild(el("label", null, el("input", {type: "checkbox", id: "cf4-noveto"}), "排除 E 財報否決名單"));
   var g5 = $("cf-f5"), cur = "";
   F5.forEach(function(x){
@@ -707,18 +814,23 @@ function table(host, rows, cols, opt){
   var wrap = el("div", {cls: "cf-scroll"});
   var nav = el("div", {cls: "cf-row"});
   host.appendChild(head); host.appendChild(wrap); host.appendChild(nav);
+  // 〔標記〕欄可以排序：精選 3 ＞ 共振 2 ＞ 沒有標記 1，被 E 否決的再扣 0.5
+  // （所以「共振＋E否決」排在「共振」之後、「沒有標記」之前）。第一次點由大到小。
+  function tagv(r){ return (r.pick ? 3 : r.l1 ? 2 : 1) - (r.veto ? 0.5 : 0); }
   function render(){
     var list = rows.slice();
     if (state.key){
       list.sort(function(a, b){
-        var x = a[state.key], y = b[state.key];
+        var x = state.key === "_tag" ? tagv(a) : a[state.key], y = state.key === "_tag" ? tagv(b) : b[state.key];
         if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
         return (x < y ? -1 : x > y ? 1 : 0) * state.dir;
       });
     }
     var pages = Math.max(1, Math.ceil(list.length / size));
     if (state.page >= pages) state.page = pages - 1;
-    head.textContent = "符合條件：" + list.length.toLocaleString() + " / " + R.rows.length.toLocaleString() + " 檔" + (opt.extra || "") + "。" + LINK_NOTE;
+    head.innerHTML = "";
+    head.appendChild(el("span", {cls: "cf-cnt", text: "符合條件：" + list.length.toLocaleString() + " / " + R.rows.length.toLocaleString() + " 檔"}));
+    head.appendChild(document.createTextNode((opt.extra || "") + "。" + LINK_NOTE));
     var t = el("table", {cls: "cf-tbl"});
     var tr = el("tr");
     cols.forEach(function(c){
@@ -726,7 +838,9 @@ function table(host, rows, cols, opt){
       th.onclick = function(){ if (state.key === c[0]) state.dir = -state.dir; else { state.key = c[0]; state.dir = 1; } render(); };
       tr.appendChild(th);
     });
-    tr.appendChild(el("th", {cls: "l", text: "標記"}));
+    var tg = el("th", {cls: "l", title: "精選 ＞ 共振 ＞ 無；E 否決排在同級之後", text: "標記" + (state.key === "_tag" ? (state.dir > 0 ? " ▲" : " ▼") : "")});
+    tg.onclick = function(){ if (state.key === "_tag") state.dir = -state.dir; else { state.key = "_tag"; state.dir = -1; } render(); };
+    tr.appendChild(tg);
     t.appendChild(tr);
     list.slice(state.page * size, state.page * size + size).forEach(function(r){
       var row = el("tr");
@@ -822,10 +936,12 @@ function redraw12(){ chips($("cf-c12"), multi["12"], redraw12); amountTrail($("c
 function showPicks(){
   var o = $("cf-opicks"); o.innerHTML = "";
   var w = R.weights || {};
-  o.appendChild(el("p", {cls: "cf-note", text: "資料日 " + R.asof + "；集保週 " + R.week + "；流動性母體 " + R.universe + " 檔；E 否決名單 " + R.veto_count + " 檔（AI 選股 " + (R.veto_asof || "未取得") + "）。今天的特徵權重（過去已實現週的 rank IC，負的歸零）：" + Object.keys(w).map(function(k){ return (R.feature_text[k] || k) + " " + fmt(w[k], 3); }).join("、")}));
+  o.appendChild(el("p", {cls: "cf-note"}, "資料日 " + R.asof + "；集保週 " + R.week + "；流動性母體 " + R.universe + " 檔；E 否決名單 " + R.veto_count + " 檔（AI 選股 " + (R.veto_asof || "未取得") + "）。今天的特徵權重（過去已實現週的 rank IC，負的歸零）：" + Object.keys(w).map(function(k){ return (R.feature_text[k] || k) + " " + fmt(w[k], 3); }).join("、") + " ",
+    tipEl(G_L0 + "<br><br>" + G_E + "<br><br>" + G_IC)));
   var cols = [["c", "代號", "l"], ["n", "名稱", "l"], ["ind", "產業", "l"], ["p", "收盤", 1], ["s", "共振分數", 3]];
   function block(title, codes, desc){
-    var card = el("div", {cls: "cf-card"}, el("h4", {text: title + "（" + codes.length + " 檔）"}), el("p", {cls: "cf-note", text: desc + " " + LINK_NOTE}));
+    var card = el("div", {cls: "cf-card"}, el("h4", null, el("span", null, title + "（" + codes.length + " 檔）",
+      tipEl(G_SCORE + "<br><br>" + G_PIL + "<br><br>" + G_TIME + "<br><br>" + G_FLAG + "<br><br>" + G_WARN))), el("p", {cls: "cf-note", text: desc + " " + LINK_NOTE}));
     var t = el("table", {cls: "cf-tbl"});
     var tr = el("tr"); cols.forEach(function(c){ tr.appendChild(el("th", {cls: c[2] === "l" ? "l" : "", text: c[1]})); });
     ["柱子", "時機", "成長旗標", "回檔警戒", "理由"].forEach(function(h){ tr.appendChild(el("th", {cls: "l", text: h})); });
@@ -868,14 +984,16 @@ function showVal(){
     var t = el("table", {cls: "cf-tbl"});
     t.appendChild(el("tr", null, el("th", {cls: "l", text: "特徵"}), el("th", {text: "平均 IC"}), el("th", {text: "t 值"}), el("th", {text: "IC>0 週比例"}), el("th", {text: "週數"}), el("th", {text: "今天權重"})));
     Object.keys(v.features).forEach(function(k){ var f = v.features[k]; t.appendChild(el("tr", null, el("td", {cls: "l", text: f.text}), el("td", {text: fmt(f.mean, 4)}), el("td", {text: fmt(f.t, 2)}), el("td", {text: isnum(f.hit) ? fmt(f.hit * 100, 0) + "%" : "—"}), el("td", {text: String(f.n)}), el("td", {text: fmt(f.weight, 4)}))); });
-    o.appendChild(el("div", {cls: "cf-card"}, el("h4", {text: "特徵有效性"}), t));
+    o.appendChild(el("div", {cls: "cf-card"}, el("h4", null, el("span", null, "特徵有效性", tipEl(G_IC +
+      "<br><br><b>平均 IC</b>：各週 IC 的平均。<br><b>t 值</b>＝平均 ÷ 標準差 × √週數，衡量平均是不是穩定地不等於 0；|t| > 2 大致算顯著，但週與週的 20 日持有期互相重疊，這裡的 t 值會偏高。<br><b>IC>0 週比例</b>：有幾成的週 IC 是正的。<br><b>週數</b>：算得出 IC 的週數（那週流動性母體至少 100 檔）。<br><b>今天權重</b>：共振分數現在用的權重＝平均 IC，負的歸零（加權平均時會除以權重總和，所以只有相對大小有意義；歷史不到 8 週時七個都是 1）。"))), t));
     var k = el("div", {cls: "cf-kpi"});
     [["L1 共振", v.l1], ["L1＋趨勢（T1）", v.l1t], ["精選（整條漏斗）", v.pick]].forEach(function(x){ var s = x[1] || {}; k.appendChild(el("div", null, x[0], el("b", {text: isnum(s.mean) ? (s.mean >= 0 ? "+" : "") + fmt(s.mean, 2) + "%" : "—"}), el("span", {cls: "cf-note", text: "平均 20 日超額；" + (s.weeks || 0) + " 週、勝週 " + (isnum(s.win) ? fmt(s.win * 100, 0) + "%" : "—")}))); });
     o.appendChild(k);
     var w = el("table", {cls: "cf-tbl"});
     w.appendChild(el("tr", null, el("th", {cls: "l", text: "集保週"}), el("th", {text: "母體"}), el("th", {text: "L1 檔數"}), el("th", {text: "L1 超額%"}), el("th", {text: "L1+T1 檔數"}), el("th", {text: "L1+T1 超額%"}), el("th", {text: "精選檔數"}), el("th", {text: "精選超額%"}), el("th", {text: "母體報酬%"})));
     v.weekly.forEach(function(r){ w.appendChild(el("tr", null, el("td", {cls: "l", text: r.week + (r.realized ? "" : "（未實現）")}), el("td", {text: String(r.universe)}), el("td", {text: String(r.l1.n)}), el("td", {text: fmt(r.l1.excess, 2)}), el("td", {text: String(r.l1t.n)}), el("td", {text: fmt(r.l1t.excess, 2)}), el("td", {text: String((r.pick || {}).n || 0)}), el("td", {text: fmt((r.pick || {}).excess, 2)}), el("td", {text: fmt(r.market, 2)}))); });
-    o.appendChild(el("div", {cls: "cf-card"}, el("h4", {text: "每週明細"}), el("div", {cls: "cf-scroll"}, w)));
+    o.appendChild(el("div", {cls: "cf-card"}, el("h4", null, el("span", null, "每週明細", tipEl(
+      "<b>集保週</b>：以那一週的集保資料日為基準日，照規則選一次；（未實現）＝之後 20 個交易日還沒走完。<br><b>母體</b>：那一週的流動性母體（L0）檔數。<br><b>L1 檔數／L1 超額%</b>：籌碼共振（共振分數前 10%＋三根柱子至少兩根）的檔數，與它們之後 20 日平均報酬減去母體平均。<br><b>L1+T1 檔數／超額%</b>：L1 再加上趨勢成立（T1）。<br><b>精選檔數／精選超額%</b>：整條漏斗（L0 ∩ 共振前 5% 的 L1 ∩ 兩面成長旗標 ∩ T1）。<br><b>母體報酬%</b>：母體所有股票之後 20 日報酬的平均——超額就是扣掉這個。<br>上面三格是各週超額的平均、週數與勝週比例（超額 > 0 的週）。都沒有扣交易成本。"))), el("div", {cls: "cf-scroll"}, w)));
   }).catch(function(e){ o.textContent = "讀不到驗證資料：" + e.message; });
 }
 
