@@ -1,5 +1,20 @@
 {% extends "base.html.j2" %}
 {% block title %}籌碼雷達｜{{ site_title }}{% endblock %}
+{% block head_early %}
+{# 先開始下載 radar.json（約 0.6 MB，壓縮後）——在樣式表之前，不等整頁解析完。
+   @@CFV@@ 由 `twsix chipflow-site` 換成這一份資料的版本碼（見 chipflow/site.py 的
+   stamp_page）：網址帶版本碼之後可以放心用瀏覽器快取，資料一換網址就換。沒有換到
+   （例如本機只跑了 build）就退回每次都向伺服器確認的舊作法。 #}
+<script>
+window.CF_V = "@@CFV@@";
+(function(){
+  var v = window.CF_V.charAt(0) === "@" ? "" : window.CF_V;
+  window.CF_URL = function(name){ return "chipflow/" + name + (v ? "?v=" + v : ""); };
+  window.CF_OPT = v ? {} : {cache: "no-cache"};
+  try { window.CF_EARLY = {"radar.json": fetch(window.CF_URL("radar.json"), window.CF_OPT)}; } catch (e) { window.CF_EARLY = {}; }
+})();
+</script>
+{% endblock %}
 {% block body %}
 {# 〔籌碼雷達〕：十二項工具（①～⑫）＋精選漏斗＋指標驗證。
    這一頁不帶任何數字：全部由瀏覽器讀 chipflow/*.json（`twsix chipflow` 與
@@ -290,9 +305,13 @@ function svgel(tag, attrs){
   return n;
 }
 function isnum(v){ return typeof v === "number" && isFinite(v); }
+var NF = {};
 function fmt(v, d){
   if (!isnum(v)) return "—";
-  return v.toLocaleString("zh-TW", {minimumFractionDigits: d||0, maximumFractionDigits: d||0});
+  // 格式器重複用（每次 toLocaleString(語系, 選項) 都會重建一個，表格一大就慢）
+  d = d || 0;
+  var f = NF[d] || (NF[d] = new Intl.NumberFormat("zh-TW", {minimumFractionDigits: d, maximumFractionDigits: d}));
+  return f.format(v);
 }
 // 座標軸只有 46 px 寬：七位數以上改用「萬／億」，完整數字看圖右上角的提示
 function axisFmt(v, d, span){
@@ -306,7 +325,9 @@ function axisFmt(v, d, span){
 }
 function getJSON(name){
   if (cache[name]) return cache[name];
-  cache[name] = fetch(BASE + name, {cache: "no-cache"}).then(function(r){
+  var early = (window.CF_EARLY || {})[name];
+  if (early) delete window.CF_EARLY[name];
+  cache[name] = (early || fetch(window.CF_URL ? window.CF_URL(name) : BASE + name, window.CF_OPT || {cache: "no-cache"})).then(function(r){
     if (!r.ok) throw new Error(name + " " + r.status);
     return r.json();
   });
@@ -1073,11 +1094,31 @@ function init(){
   open(tab, h[1] && ROWS[h[1]] ? h[1] : null);
 }
 
+// radar.json 按欄存（chipflow/site.py 的 pack_rows）：還原成一列一檔，null 的欄位略過
+// ——和原本「沒有這個鍵」一樣，後面的程式不用分兩種。
+function unpackRows(doc){
+  if (!doc.cols) return doc;
+  var keys = Object.keys(doc.cols), rows = new Array(doc.nrows);
+  for (var i = 0; i < doc.nrows; i++){
+    var r = {};
+    for (var k = 0; k < keys.length; k++){ var v = doc.cols[keys[k]][i]; if (v != null) r[keys[k]] = v; }
+    rows[i] = r;
+  }
+  delete doc.cols; doc.rows = rows;
+  return doc;
+}
 getJSON("radar.json").then(function(doc){
-  R = doc;
+  R = unpackRows(doc);
   R.rows.forEach(function(r){ ROWS[r.c] = r; BYNAME[r.n] = r.c; if (isnum(r.hr)) has15 = true; });
-  var dl = $("cf-codes");
-  R.rows.forEach(function(r){ dl.appendChild(el("option", {value: r.c + " " + r.n})); });
+  // 代號清單（輸入框的下拉提示）一千九百多項：等第一次點進輸入框才建，不擋首頁顯示。
+  var dl = $("cf-codes"), dlDone = false;
+  document.addEventListener("focusin", function(e){
+    if (dlDone || !e.target || e.target.getAttribute("list") !== "cf-codes") return;
+    dlDone = true;
+    var frag = document.createDocumentFragment();
+    R.rows.forEach(function(r){ frag.appendChild(el("option", {value: r.c + " " + r.n})); });
+    dl.appendChild(frag);
+  });
   $("cf-asof").textContent = "資料日 " + R.asof + "（產生於 " + R.generated_at + "）。";
   $("cf-msg").textContent = "不構成任何投資建議；清單由公開資料自動產生，不代表推薦。";
   buildForms();

@@ -70,7 +70,7 @@ def _stamp_key(data_dir: Path) -> dict[str, str]:
         # 內容雜湊而不是修改時間：CI 每次 checkout，檔案時間都是「現在」。
         "radar": hashlib.sha1(radar.read_bytes()).hexdigest() if radar.exists() else "",
         "levels": str(len(list((data_dir / "ownership" / "levels").glob("*.csv.gz")))),
-        "version": "2",
+        "version": "3",   # 3：radar.json 按欄存（2026-09-28）
     }
 
 
@@ -397,6 +397,65 @@ def _whale_counts(engine: Engine, i: int) -> dict[str, float]:
     return out
 
 
+def pack_rows(doc: dict) -> dict:
+    """radar.json 的 rows 改成按欄存（2026-09-28，頁面載入太久）。
+
+    一千九百多檔、每檔八十個欄位，原本每一列都把八十個欄位名稱再寫一次；按欄存之後
+    （每個欄位一個陣列，第 i 個＝第 i 檔）gzip 後小了三成左右。沒有值的格子是 null；
+    頁面（radar.html.j2 的 unpackRows）還原時把 null 的欄位略過，和原本「沒有這個鍵」
+    一樣。其他鍵原樣保留。
+    """
+    rows = doc.get("rows")
+    if not isinstance(rows, list):
+        return doc
+    keys: list[str] = []
+    seen: set[str] = set()
+    for r in rows:
+        for k in r:
+            if k not in seen:
+                seen.add(k)
+                keys.append(k)
+    out = {k: v for k, v in doc.items() if k != "rows"}
+    out["cols"] = {k: [r.get(k) for r in rows] for k in keys}
+    out["nrows"] = len(rows)
+    return out
+
+
+def unpack_rows(doc: dict) -> dict:
+    """pack_rows 的反向（測試與本機工具用；頁面上是 JavaScript 版）。"""
+    if "cols" not in doc:
+        return doc
+    cols = doc["cols"]
+    rows = [{k: v[i] for k, v in cols.items() if v[i] is not None} for i in range(doc["nrows"])]
+    out = {k: v for k, v in doc.items() if k not in ("cols", "nrows")}
+    out["rows"] = rows
+    return out
+
+
+PAGE_FILE = "radar.html"
+VERSION_MARK = "@@CFV@@"
+
+
+def stamp_page(site_dir: Path) -> str:
+    """把 radar.html 裡的 @@CFV@@ 換成這一份網站資料的版本碼，回傳版本碼（沒做事回 ""）。
+
+    頁面讀 chipflow/*.json 時網址帶 ?v=版本碼，就能用瀏覽器快取、不必每次都向伺服器確認
+    （2026-09-28：頁面載入太久）。版本碼取 stamp.json 的內容（最新行情檔、radar 的指紋、
+    格式版本）——資料一換就換，所以不會讀到舊資料。建站每次都重畫 radar.html，而
+    `export` 資料沒換時會提早回來，所以這一步要在 export 之後**另外**做，每次都做。
+    """
+    page = site_dir / PAGE_FILE
+    stamp = site_dir / SITE_DIR / "stamp.json"
+    if not page.exists() or not stamp.exists() or not (site_dir / SITE_DIR / "radar.json").exists():
+        return ""
+    html = page.read_text(encoding="utf-8")
+    if VERSION_MARK not in html:
+        return ""
+    v = hashlib.sha1(stamp.read_bytes()).hexdigest()[:10]
+    page.write_text(html.replace(VERSION_MARK, v), encoding="utf-8")
+    return v
+
+
 def export(data_dir: Path, site_dir: Path, *, force: bool = False,
            repo_root: Path | None = None) -> dict[str, object]:
     out = site_dir / SITE_DIR
@@ -415,8 +474,8 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
     radar = data_dir / OUT_DIR / RADAR_FILE
     if radar.exists():
         raw = gzip.decompress(radar.read_bytes())
-        (out / "radar.json").write_bytes(raw)
         radar_doc = json.loads(raw)
+        (out / "radar.json").write_bytes(_dump(pack_rows(radar_doc)))
     val = data_dir / OUT_DIR / VALIDATE_FILE
     if val.exists():
         (out / "validate.json").write_bytes(val.read_bytes())

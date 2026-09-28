@@ -1,10 +1,28 @@
 {% extends "base.html.j2" %}
 {% block title %}選股功能｜{{ site_title }}{% endblock %}
+{% block head_early %}
+{# 先開始下載（2026-09-28，頁面載入太久）：data.json 一定要；直接開到趨勢選股或近期強勢股
+   的，連 prices_recent.json 一起抓。網址帶 ?v=資料指紋（report/screener.py 的 version.txt），
+   瀏覽器可以放心快取；沒有指紋就退回每次向伺服器確認。 #}
+<script>
+window.SC_V = "{{ data_v|default('') }}";
+(function(){
+  var v = window.SC_V;
+  window.SC_URL = function(name){ return "screener/" + name + (v ? "?v=" + v : ""); };
+  window.SC_OPT = v ? {} : {cache: "no-cache"};
+  var E = window.SC_EARLY = {};
+  try {
+    E["data.json"] = fetch(window.SC_URL("data.json"), window.SC_OPT);
+    if (/^#(trend|strong)/.test(location.hash)) E["prices_recent.json"] = fetch(window.SC_URL("prices_recent.json"), window.SC_OPT);
+  } catch (e) {}
+})();
+</script>
+{% endblock %}
 {% block body %}
 {# 〔選股功能〕：財務選股、趨勢選股、近期強勢股、創新高選股。
    這一頁不帶數字：瀏覽器讀 screener/data.json（財報、營收、最新股價）與
-   screener/prices.json（近 250 個交易日收盤與成交量，要用到時才下載），
-   兩份都由建站時的 report/screener.py 寫出來。樣式與程式只在這一頁、以 .sc 為前綴。 #}
+   screener/prices_recent.json（近 80 個交易日收盤與成交量）／prices.json（近 250 個交易日，
+   使用者填的天數超過 80 才下載），都由建站時的 report/screener.py 寫出來。樣式與程式只在這一頁、以 .sc 為前綴。 #}
 <style>
 .sc-note{color:var(--muted);font-size:13px;line-height:1.6;max-width:none}
 .sc-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;margin:12px 0 14px;border-bottom:1px solid var(--rule)}
@@ -140,7 +158,9 @@
 <script>
 (function(){
 "use strict";
-var BASE = "screener/", D = null, P = null, PIDX = {}, loadingP = null;
+var D = null, P = null, RECENT = null, FULL = null;
+// 和 report/screener.py 的 RECENT_DAYS 一樣：prices_recent.json 有幾個交易日
+var RECENT_N = 80;
 var $ = function(id){ return document.getElementById(id); };
 function el(tag, attrs){
   var n = document.createElement(tag);
@@ -156,7 +176,14 @@ function el(tag, attrs){
   return n;
 }
 function isnum(v){ return typeof v === "number" && isFinite(v); }
-function fmt(v, d){ return isnum(v) ? v.toLocaleString("en-US", {minimumFractionDigits: d, maximumFractionDigits: d}) : "—"; }
+// 每一種小數位數建一個格式器重複用：toLocaleString(語系, 選項) 每呼叫一次就重建一個，
+// 兩百列 × 十幾欄在手機上要多花零點幾秒（2026-09-28 量的）。
+var NF = {};
+function fmt(v, d){
+  if (!isnum(v)) return "—";
+  var f = NF[d] || (NF[d] = new Intl.NumberFormat("en-US", {minimumFractionDigits: d, maximumFractionDigits: d}));
+  return f.format(v);
+}
 function val(id){ var e = $(id); if (!e || e.value === "") return null; var v = parseFloat(e.value); return isFinite(v) ? v : null; }
 function setv(id, v){ var e = $(id); if (e) e.value = v == null ? "" : v; }
 function cls(v){ return !isnum(v) ? "" : v > 0 ? "up" : v < 0 ? "dn" : ""; }
@@ -179,12 +206,70 @@ function inRange(v, lo, hi){
 }
 
 // ── 股價序列（prices.json） ───────────────────────────────────────────
-function needPrices(){
-  if (P) return Promise.resolve(P);
-  if (!loadingP) loadingP = fetch(BASE + "prices.json", {cache: "no-cache"}).then(function(r){
-    if (!r.ok) throw new Error("prices.json " + r.status); return r.json();
-  }).then(function(doc){ P = doc; return P; });
-  return loadingP;
+// ── 還原壓縮格式（report/screener.py 的 pack_data／pack_prices）───────────────
+// 還原出來的物件和以前的 data.json／prices.json 一模一樣，後面的程式不用分兩種。
+function unpackData(doc){
+  if (doc.fmt !== 2) return doc;
+  var cols = doc.cols, n = cols.c.length, rows = new Array(n), keys = Object.keys(cols);
+  for (var i = 0; i < n; i++){
+    var r = {q: {}, h: {}, r: {}};
+    for (var k = 0; k < keys.length; k++) r[keys[k]] = cols[keys[k]][i];
+    rows[i] = r;
+  }
+  [["Q", "q"], ["H", "h"], ["R", "r"]].forEach(function(x){
+    var per = doc[x[0]] || {};
+    Object.keys(per).forEach(function(p){
+      var arrs = per[p], w = arrs.length;
+      for (var i = 0; i < n; i++){
+        var v = new Array(w), any = false;
+        for (var j = 0; j < w; j++){ v[j] = arrs[j][i]; if (v[j] != null) any = true; }
+        if (any) rows[i][x[1]][p] = v;
+      }
+    });
+    delete doc[x[0]];
+  });
+  delete doc.cols;
+  doc.rows = rows;
+  return doc;
+}
+function undelta(a, scale){
+  var out = new Array(a.length), cur = null;
+  for (var i = 0; i < a.length; i++){
+    if (a[i] == null){ out[i] = null; continue; }
+    cur = cur == null ? a[i] : cur + a[i];
+    out[i] = scale === 1 ? cur : cur / scale;
+  }
+  return out;
+}
+function unpackPrices(doc){
+  if (doc.fmt !== 2) return doc;
+  var px = {};
+  doc.codes.forEach(function(c, i){ px[c] = [undelta(doc.c[i], 100), undelta(doc.v[i], 1)]; });
+  return {dates: doc.dates, px: px};
+}
+function grab(name){
+  var early = (window.SC_EARLY || {})[name];
+  if (early) delete window.SC_EARLY[name];
+  return (early || fetch(window.SC_URL(name), window.SC_OPT)).then(function(r){
+    if (!r.ok) throw new Error(name + " " + r.status); return r.json();
+  });
+}
+// days＝這一次篩選最多要往回看幾個交易日（含最新一天）。80 天以內讀 prices_recent.json
+// （約完整檔的三分之一），超過才讀完整的 prices.json。兩份的最後一天相同，下面的函式
+// 都從最後一天往回數，所以換哪一份都一樣。
+function grabFull(){
+  if (!FULL) FULL = grab("prices.json").then(function(doc){ doc = unpackPrices(doc); doc.full = 1; return doc; });
+  return FULL;
+}
+function setP(doc){ if (!P || doc.full || doc.dates.length > P.dates.length) P = doc; return P; }
+function needPrices(days){
+  days = days || 0;
+  if (P && (P.full || P.dates.length >= days)) return Promise.resolve(P);
+  if (days <= RECENT_N){
+    if (!RECENT) RECENT = grab("prices_recent.json").then(unpackPrices).catch(function(){ return grabFull(); });
+    return RECENT.then(setP);
+  }
+  return grabFull().then(setP);
 }
 function series(code){ var s = P && P.px[code]; return s ? {c: s[0], v: s[1]} : null; }
 function lastIdx(a){ for (var i = a.length - 1; i >= 0; i--) if (isnum(a[i])) return i; return -1; }
@@ -391,7 +476,8 @@ function basePeriods(){ return "財報季度：" + D.base_q + "、營收月份�
 
 function runTrend(){
   var host = $("r-trend"); host.textContent = "載入股價資料…";
-  needPrices().then(function(){
+  var need = Math.max(val("t-n1") != null ? val("t-n1") + 1 : 0, val("t-n2") != null ? val("t-n2") + 1 : 0, $("t-ma").value ? 60 : 0);
+  needPrices(need).then(function(){
     var n1 = val("t-n1"), x1 = val("t-x1"), dir = $("t-dir").value, n2 = val("t-n2"), hl = $("t-hl").value, mav = $("t-ma").value;
     var conds = [];
     if (n1 != null && x1 != null) conds.push("股價在 " + n1 + " 日內" + (dir === "up" ? "上漲" : "下跌") + "幅度超過 " + x1 + "%");
@@ -416,7 +502,8 @@ function runTrend(){
 
 function runStrong(){
   var host = $("r-strong"); host.textContent = "載入股價資料…";
-  needPrices().then(function(){
+  var need = Math.max((val("s-n1") || 5) + 1, (val("s-n3") || 10) + 1, (val("s-n2") || 3) + (val("s-b2") || 10));
+  needPrices(need).then(function(){
     var p0 = val("s-p"), o0 = val("s-opm"), v0 = val("s-v");
     var n1 = val("s-n1"), x1 = val("s-x1"), n2 = val("s-n2"), b2 = val("s-b2"), x2 = val("s-x2"), n3 = val("s-n3"), x3 = val("s-x3");
     var gate = [], conds = [];
@@ -483,7 +570,7 @@ function runHigh(){
     table(host, "篩選結果（季度 " + D.base_q + "　營收 " + D.base_m + "）",
       "使用條件：" + (conds.join("　且　") || "（不限）") + "　｜　基準季 " + D.base_q + "（" + D.qcount[D.base_q] + " 家）、基準月 " + D.base_m + "（" + D.mcount[D.base_m] + " 家）。" + LINKS, list);
   };
-  if (np != null || nv != null){ host.textContent = "載入股價資料…"; needPrices().then(go).catch(function(e){ host.textContent = "讀不到股價資料：" + e.message; }); }
+  if (np != null || nv != null){ host.textContent = "載入股價資料…"; needPrices(Math.max(np != null ? np + 1 : 0, nv != null ? nv + 1 : 0)).then(go).catch(function(e){ host.textContent = "讀不到股價資料：" + e.message; }); }
   else go();
 }
 
@@ -502,10 +589,8 @@ function open(name, push){
 }
 tabs.forEach(function(t){ t.addEventListener("click", function(){ open(t.getAttribute("data-t"), true); }); });
 
-fetch(BASE + "data.json", {cache: "no-cache"}).then(function(r){
-  if (!r.ok) throw new Error("data.json " + r.status); return r.json();
-}).then(function(doc){
-  D = doc;
+grab("data.json").then(function(doc){
+  D = unpackData(doc);
   $("sc-msg").textContent = "資料日 " + D.asof + "；基準季 " + D.base_q + "（" + D.qcount[D.base_q] + " 家）、基準月 " + D.base_m + "（" + D.mcount[D.base_m] + " 家）；共 " + D.rows.length + " 檔。篩選在你的瀏覽器裡進行。不構成任何投資建議。";
   buildFin();
   ["fin", "trend", "strong", "high"].forEach(function(t){ preset(t, false); });
@@ -517,6 +602,8 @@ fetch(BASE + "data.json", {cache: "no-cache"}).then(function(r){
     if (e.key === "Enter"){ var p = i.closest(".sc-panel"); if (p) RUN[p.id.slice(3)](); } }); });
   var want = (location.hash || "").slice(1);
   open(RUN[want] ? want : "fin", false);
+  // 先畫好眼前這一頁，再趁空檔把近期股價抓下來：切到趨勢／強勢分頁時就不用再等。
+  setTimeout(function(){ needPrices(0).catch(function(){}); }, 1200);
 }).catch(function(){
   $("sc-msg").textContent = "還沒有資料：選股功能的資料在建站時產生（screener/data.json），這一次建站沒有寫出來。下一次排程後會自動出現。";
   var want = (location.hash || "").slice(1); open(RUN[want] ? want : "fin", false);

@@ -2261,10 +2261,12 @@ def cmd_chipflow_site(args: argparse.Namespace) -> int:
     root = Path(args.data or settings.data_dir)
     out = Path(args.out or "site")
     try:
-        from .chipflow.site import export  # noqa: PLC0415
+        from .chipflow.site import export, stamp_page  # noqa: PLC0415
 
         summary = export(root, out, force=args.force, repo_root=Path.cwd())
         print("籌碼雷達（網站）：" + "、".join(f"{k} {v}" for k, v in summary.items()))
+        v = stamp_page(out)
+        print(f"籌碼雷達（網站）：頁面資料版本碼 {v or '沒有換（頁面每次向伺服器確認）'}")
     except Exception as exc:  # noqa: BLE001 - 一頁的資料不能拖垮建站
         print(f"::warning::籌碼雷達的網站資料沒產生（其他頁面不受影響）：{exc!r}")
     return EXIT_OK

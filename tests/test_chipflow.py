@@ -457,3 +457,24 @@ def test_籌碼雷達分頁各自一色_符合檔數跟分頁同色_標記欄可
     about = src.split('id="cf-gloss"', 1)[1].split("</dl>", 1)[0]
     for t in ("流動性母體", "E 否決名單", "rank IC", "共振分數", "三根柱子", "成長旗標", "T1 趨勢", "精選（整條漏斗）"):
         assert t in about, t
+
+
+def test_radar_json按欄存_還原後和原本一樣_頁面網址帶版本碼():
+    from twsix.chipflow import site as CS
+
+    doc = {"asof": "2026-09-24", "rows": [{"c": "1111", "n": "甲", "p": 10.5, "gfw": ["a"]},
+                                          {"c": "2222", "n": "乙", "hr": 3}]}
+    packed = CS.pack_rows(doc)
+    assert "rows" not in packed and packed["nrows"] == 2
+    assert CS.unpack_rows(json.loads(json.dumps(packed))) == doc
+    site = Path(tempfile.mkdtemp())
+    (site / "chipflow").mkdir()
+    (site / "chipflow" / "stamp.json").write_text('{"radar": "abc"}', encoding="utf-8")
+    (site / "chipflow" / "radar.json").write_text("{}", encoding="utf-8")
+    (site / "radar.html").write_text('<script>window.CF_V = "@@CFV@@";</script>', encoding="utf-8")
+    v = CS.stamp_page(site)
+    assert len(v) == 10 and f'window.CF_V = "{v}"' in (site / "radar.html").read_text("utf-8")
+    assert CS.stamp_page(site) == "", "換過一次就沒有記號了"
+    tpl = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+           / "radar.html.j2").read_text("utf-8")
+    assert '"@@CFV@@"' in tpl and "function unpackRows(" in tpl

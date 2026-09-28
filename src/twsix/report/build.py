@@ -1587,7 +1587,7 @@ def _write_screener_page(env: Any, base: dict[str, Any], out_dir: Path,
             print(f"::error::選股功能的資料寫不出來（頁面會顯示沒有資料）：{exc!r}")
     try:
         env.get_template("screener.html.j2").stream(
-            **base, page="screener", rel=""
+            **base, page="screener", rel="", data_v=screener.version(out_dir)
         ).dump(str(out_dir / SCREENER_PAGE))
         return 1
     except Exception as exc:  # noqa: BLE001 - 新的一頁不能讓整站建不起來

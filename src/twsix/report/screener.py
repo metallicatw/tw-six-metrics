@@ -35,6 +35,7 @@ from __future__ import annotations
 import calendar
 import csv
 import gzip
+import hashlib
 import io
 import json
 import re
@@ -311,11 +312,125 @@ def build(data_dir: Path, stocks: list[dict[str, str]]) -> tuple[dict, dict]:
     return data, {"dates": dates, "px": prices}
 
 
+#: prices_recent.json 留最近幾個交易日。預設條件最多要 61 天（趨勢選股的季線＝60 日均線
+#: 加最新一天），留 80 天有餘裕；使用者填的天數超過它才去抓完整的 prices.json（250 天）。
+RECENT_DAYS = 80
+
+
+# ── 壓縮格式（2026-09-28）────────────────────────────────────────────────
+# 網頁拿到之後會還原成跟以前一模一樣的物件（screener.html.j2 的 unpackData／unpackPrices），
+# 所以篩選的程式一行都不用改；只是傳輸時小了兩成多（gzip 之後量的）：
+#
+# * data.json：每檔一列、每列帶「2026Q2」「2026/08」這些鍵，同樣的鍵重複一千九百多次。
+#   改成**按欄存**：每個欄位一個陣列（第 i 個＝第 i 檔），季／月的數字也是每一期一組陣列。
+# * 股價：收盤 × 100 取整數（台股報價最多兩位小數，還原是精確的），和成交量一樣存
+#   「和前一個有值的數字差多少」——相鄰兩天的價差多半是個小數字，壓縮得好很多。
+#   沒有值的日子照樣是 null。
+
+PACK_FORMAT = 2
+_SCALARS = ("c", "n", "m", "i", "p", "chg", "pe", "mc", "v")
+_WIDTH = {"q": 5, "h": 2, "r": 3}
+
+
+def pack_data(data: dict) -> dict:
+    rows = data["rows"]
+    out = {k: v for k, v in data.items() if k != "rows"}
+    out["fmt"] = PACK_FORMAT
+    out["cols"] = {k: [r.get(k) for r in rows] for k in _SCALARS}
+    for key, width in _WIDTH.items():
+        periods = sorted({p for r in rows for p in r.get(key, {})}, reverse=True)
+        out[key.upper()] = {
+            p: [[(r.get(key, {}).get(p) or [None] * width)[j] for r in rows] for j in range(width)]
+            for p in periods
+        }
+    return out
+
+
+def _delta(values: list, scale: int) -> list:
+    out: list = []
+    prev = None
+    for x in values:
+        if x is None:
+            out.append(None)
+            continue
+        n = round(x * scale)
+        out.append(n if prev is None else n - prev)
+        prev = n
+    return out
+
+
+def pack_prices(prices: dict) -> dict:
+    codes = list(prices["px"])
+    return {"fmt": PACK_FORMAT, "dates": prices["dates"], "codes": codes,
+            "c": [_delta(prices["px"][c][0], 100) for c in codes],
+            "v": [_delta(prices["px"][c][1], 1) for c in codes]}
+
+
+def unpack_data(doc: dict) -> dict:
+    """pack_data 的反向（測試用；頁面上是 JavaScript 的 unpackData）。"""
+    if doc.get("fmt") != PACK_FORMAT:
+        return doc
+    cols = doc["cols"]
+    n = len(cols["c"])
+    rows = [{**{k: cols[k][i] for k in cols}, "q": {}, "h": {}, "r": {}} for i in range(n)]
+    for key in _WIDTH:
+        for p, arrs in doc.get(key.upper(), {}).items():
+            for i in range(n):
+                v = [a[i] for a in arrs]
+                if any(x is not None for x in v):
+                    rows[i][key][p] = v
+    out = {k: v for k, v in doc.items() if k not in ("fmt", "cols", "Q", "H", "R")}
+    out["rows"] = rows
+    return out
+
+
+def _undelta(values: list, scale: int) -> list:
+    out: list = []
+    cur = None
+    for x in values:
+        if x is None:
+            out.append(None)
+            continue
+        cur = x if cur is None else cur + x
+        out.append(cur if scale == 1 else cur / scale)
+    return out
+
+
+def unpack_prices(doc: dict) -> dict:
+    """pack_prices 的反向（測試用；頁面上是 JavaScript 的 unpackPrices）。"""
+    if doc.get("fmt") != PACK_FORMAT:
+        return doc
+    return {"dates": doc["dates"],
+            "px": {c: [_undelta(doc["c"][i], 100), _undelta(doc["v"][i], 1)]
+                   for i, c in enumerate(doc["codes"])}}
+
+
+def recent_prices(prices: dict, days: int = RECENT_DAYS) -> dict:
+    """只留最近 `days` 個交易日的股價與成交量（大小約完整檔的三分之一）。"""
+    return {"dates": prices["dates"][-days:],
+            "px": {c: [s[0][-days:], s[1][-days:]] for c, s in prices["px"].items()}}
+
+
 def write(out_dir: Path, data_dir: Path, stocks: list[dict[str, str]]) -> int:
+    """寫出 data.json、prices.json、prices_recent.json 與 version.txt，回傳檔數。
+
+    version.txt 是三個檔內容的指紋（前 10 碼）：頁面讀資料時網址帶 ?v=指紋，瀏覽器就能
+    快取、不必每次都向伺服器確認；資料一換指紋就換，不會讀到舊的（2026-09-28）。
+    """
     data, prices = build(data_dir, stocks)
     folder = out_dir / OUT_DIR
     folder.mkdir(parents=True, exist_ok=True)
-    for name, doc in (("data.json", data), ("prices.json", prices)):
-        (folder / name).write_text(
-            json.dumps(doc, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    digest = hashlib.sha1()
+    for name, doc in (("data.json", pack_data(data)), ("prices.json", pack_prices(prices)),
+                      ("prices_recent.json", pack_prices(recent_prices(prices)))):
+        raw = json.dumps(doc, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        (folder / name).write_bytes(raw)
+        digest.update(raw)
+    (folder / "version.txt").write_text(digest.hexdigest()[:10], encoding="utf-8")
     return len(data["rows"])
+
+
+def version(out_dir: Path) -> str:
+    """write() 留下的資料指紋；沒有就回 ""（頁面退回每次向伺服器確認）。"""
+    f = out_dir / OUT_DIR / "version.txt"
+    return f.read_text(encoding="utf-8").strip() if f.exists() else ""

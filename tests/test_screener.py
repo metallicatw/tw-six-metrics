@@ -79,12 +79,12 @@ def test_月漲幅_成交量_寫出兩個JSON():
         sheet_store.write_grid(root / "sheets" / "2330", name, grid)
     out = Path(tempfile.mkdtemp())
     assert S.write(out, root, [{"code": "2330", "name": "台積電", "market": "上市", "industry": "半導體業"}]) == 1
-    data = json.loads((out / "screener" / "data.json").read_text("utf-8"))
+    data = S.unpack_data(json.loads((out / "screener" / "data.json").read_text("utf-8")))
     row = data["rows"][0]
     assert row["p"] == 2475 and row["v"] == 14558 and row["chg"] == -25
     assert row["mc"] == round((2475 / 2410 - 1) * 100, 2), "一個月前（08-24）當天或之前最後一個交易日的收盤"
     assert data["base_q"] == "2026Q2" and data["base_m"] == "2026/08"
-    px = json.loads((out / "screener" / "prices.json").read_text("utf-8"))
+    px = S.unpack_prices(json.loads((out / "screener" / "prices.json").read_text("utf-8")))
     assert px["dates"][-1] == "2026-09-24" and px["px"]["2330"][1][-1] == 14558
 
 
@@ -124,3 +124,27 @@ def test_產業名稱兩種寫法併成一個():
         {"code": "3333", "name": "丙", "market": "上市", "industry": "化學工業"},
     ])
     assert data["industries"] == ["化學工業", "建材營造"], "只有兩種寫法都在時才併；化學工業不能變成化學工"
+
+
+def test_壓縮格式還原後和原本一模一樣_近期股價只留最後80天():
+    """2026-09-28 頁面載入太久：按欄存、股價存差值，gzip 後小兩成多；還原必須一字不差。"""
+    import json
+
+    data = {"asof": "2026-09-24", "base_q": "2026Q2", "rows": [
+        {"c": "1111", "n": "甲", "m": "上市", "i": "x", "p": 25.25, "chg": None, "pe": 12.3, "mc": 1.5, "v": 12,
+         "q": {"2026Q2": [1.0, 2.0, None, 3.0, 4.0]}, "h": {"2026Q2": [1.0, 2.0], "2026Q1": [0.5, 1.0]},
+         "r": {"2026/08": [100.0, 5.5, 3.3]}},
+        {"c": "2222", "n": "乙", "m": "上櫃", "i": "y", "p": None, "chg": None, "pe": None, "mc": None,
+         "v": None, "q": {}, "h": {}, "r": {}},
+    ]}
+    packed = json.loads(json.dumps(S.pack_data(data)))
+    assert S.unpack_data(packed) == data
+    closes = [10.05, 10.1, None, 9.99, 1234.5, 0.01] * 20
+    prices = {"dates": [f"d{i}" for i in range(120)],
+              "px": {"1111": [closes, [1, 2, None, 4, 5, 6] * 20], "2222": [[None] * 120, [None] * 120]}}
+    assert S.unpack_prices(json.loads(json.dumps(S.pack_prices(prices)))) == prices
+    recent = S.recent_prices(prices)
+    assert recent["dates"] == prices["dates"][-80:] and recent["px"]["1111"][0] == closes[-80:]
+    page = (ROOT / "src" / "twsix" / "report" / "templates" / "screener.html.j2").read_text("utf-8")
+    assert f"var RECENT_N = {S.RECENT_DAYS};" in page, "頁面和 Python 的天數要一致"
+    assert "function unpackData(" in page and "function unpackPrices(" in page
