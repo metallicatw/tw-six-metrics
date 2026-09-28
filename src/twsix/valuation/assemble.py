@@ -48,6 +48,15 @@ Number = float | None
 # -- revenue growth --------------------------------------------------------
 
 
+def _negative_dividend_reason(eps: float | None, payout: float | None) -> str:
+    """預估股利不是正數時，說清楚是哪一個乘數讓它變成負的（或零）。"""
+    if eps is not None and eps <= 0:
+        return "預估 EPS 為負（虧損），推算的股利不是正數，殖利率估價不適用"
+    if payout is not None and payout <= 0:
+        return "歷年平均配發率不是正數（虧損年度把平均拉成負的），推算的股利不是正數，殖利率估價不適用"
+    return "推算的股利不是正數，殖利率估價不適用"
+
+
 def pick_growth(
     monthly_yoy: Sequence[Number],
     method: GrowthMethod = "1&6",
@@ -350,6 +359,13 @@ def evaluate(
         )
         if yield_view is None:
             gaps["yield"] = "缺配發率或歷年殖利率"
+        elif yield_view.dividend <= 0:
+            # 預估股利 ＝ 預估 EPS × 配發率。兩者任一是負的，股利就是負的，再除以
+            # 殖利率得到的便宜／合理／昂貴價也全是負數——活頁簿照公式照算，但一個
+            # 負的股價沒有任何意義，拿去和現價比只會得到「便宜」這種假結論。
+            # 所以不給價格，只說原因（個股頁與清單都讀這一句）。
+            gaps["yield"] = _negative_dividend_reason(row.eps, yield_view.payout_ratio)
+            yield_view = None
 
     return StockValuation(
         stock_id=inp.stock_id,
