@@ -185,7 +185,9 @@ def trailing_eps(h: dict[str, list]) -> float | None:
         y, n = (y, n - 1) if n > 1 else (y - 1, 4)
     if keys != want or any(h[k][1] is None for k in keys):
         return None
-    return sum(h[k][1] for k in keys)
+    # EPS 都是兩位小數：加總要四捨五入回兩位。不然 0.1＋0.2−0.3 這種組合會留下
+    # 1e-17 的浮點尾數，被當成「正的」，本益比算出 3×10¹⁸（2026-09-28 選股表格撐寬）。
+    return round(sum(h[k][1] for k in keys), 2)
 
 
 # ---------------------------------------------------------------------------

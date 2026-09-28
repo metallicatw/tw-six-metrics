@@ -148,3 +148,13 @@ def test_壓縮格式還原後和原本一模一樣_近期股價只留最後80�
     page = (ROOT / "src" / "twsix" / "report" / "templates" / "screener.html.j2").read_text("utf-8")
     assert f"var RECENT_N = {S.RECENT_DAYS};" in page, "頁面和 Python 的天數要一致"
     assert "function unpackData(" in page and "function unpackPrices(" in page
+
+
+def test_電腦版表格一次看到全部欄位_極端值縮短_EPS合計沒有浮點尾數():
+    """2026-09-28：表格 1,280～1,560px 塞不進 1,164px 的內容欄；本益比還出現 3×10¹⁸。"""
+    assert S.trailing_eps({"2026Q2": [1, 0.1], "2026Q1": [1, 0.2], "2025Q4": [1, -0.3], "2025Q3": [1, 0.0]}) == 0
+    page = (ROOT / "src" / "twsix" / "report" / "templates" / "screener.html.j2").read_text("utf-8")
+    css = page.split("@media (min-width:1024px){", 1)[1].split("\n}", 1)[0]
+    assert ".sc-tbl th{white-space:normal;word-break:keep-all" in css and "td.ind{white-space:normal" in css
+    assert ".sc-tbl.many" in css and 'cols.length > 17 ? "sc-tbl many"' in page
+    assert "function short(x, d, pct)" in page and '"萬%"' in page

@@ -52,6 +52,24 @@ window.SC_V = "{{ data_v|default('') }}";
 .sc-tbl{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums;min-width:0}
 .sc-tbl th,.sc-tbl td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:right;white-space:nowrap}
 .sc-tbl th{position:sticky;top:0;z-index:2;background:var(--surface-2);cursor:pointer;user-select:none}
+/* 電腦版：一次看到全部欄位，不必橫向捲（2026-09-28）。
+   量過：內容欄 1,164px，而表格原本 1,280～1,440px（近期強勢股多三欄）。收的是留白，
+   不是資訊——格子左右各 4px、表頭可以折成兩行（只在標籤裡預留的斷點折，
+   keep-all 讓「自由現金」不會折成「自由現／金」）、產業名稱最多兩行。
+   窄於 1,024px（平板、手機）維持原樣：一行一格、可以橫向捲。 */
+@media (min-width:1024px){
+  .sc-tbl{font-size:13px}
+  .sc-tbl th,.sc-tbl td{padding:5px 4px}
+  .sc-tbl th{white-space:normal;word-break:keep-all;line-height:1.25;vertical-align:bottom}
+  .sc-tbl td.ind{white-space:normal;min-width:4em;max-width:6.2em;line-height:1.3}
+  .sc-tbl.many td.ind{max-width:5.5em}
+  .sc-tbl td.nm{white-space:normal;word-break:keep-all;max-width:6em;line-height:1.3}
+  /* 近期強勢股多三欄（二十欄）：字小半號、格子再收 1px，才塞得進 1,164px。 */
+  .sc-tbl.many{font-size:12.5px}
+  .sc-tbl.many th,.sc-tbl.many td{padding:5px 3px}
+  .sc-tbl th:first-child,.sc-tbl td:first-child{padding-left:8px}
+  .sc-tbl th:last-child,.sc-tbl td:last-child{padding-right:8px}
+}
 .sc-tbl th.l,.sc-tbl td.l{text-align:left}
 .sc-tbl a{color:var(--accent-2);text-decoration:none}
 .sc-tbl a:hover{text-decoration:underline}
@@ -316,9 +334,9 @@ function monthsBack(from, n){
 var YA = function(v){ return "https://tw.stock.yahoo.com/quote/" + encodeURIComponent(v.c) + (v.m === "上櫃" ? ".TWO" : v.m === "上市" ? ".TW" : "") + "/technical-analysis"; };
 var COLS = [
   ["c", "代號", "code"], ["n", "名稱", "name"], ["m", "市場", "mk"], ["i", "產業", "text"],
-  ["p", "股價", "price"], ["pe", "本益比", 1], ["mc", "月漲幅", "pct"], ["v", "成交量", 0],
+  ["p", "股價", "price"], ["pe", "本益比", 1], ["mc", "月\u200b漲幅", "pct"], ["v", "成交量", 0],
   ["opm", "營益率", "pct"], ["eps", "EPS", "sig2"], ["npm", "淨利率", "pct"], ["inv", "存貨", 2],
-  ["fcf", "自由現金", "sig0"], ["rev", "營收", 0], ["yoy", "營收年增", "pct"], ["cum", "營收累計", "pct"], ["arrow", "雙箭頭", "pct"]
+  ["fcf", "自由\u200b現金", "sig0"], ["rev", "營收", 0], ["yoy", "營收\u200b年增", "pct"], ["cum", "營收\u200b累計", "pct"], ["arrow", "雙\u200b箭頭", "pct"]
 ];
 var STRONG_COLS = [["r5", "", "pct"], ["v3", "", "pct"], ["r10", "", "pct"]];
 var LEGEND = [
@@ -328,18 +346,36 @@ var LEGEND = [
   ["營收", "當月營收(百萬元)"], ["營收年增", "營收年增率(%)"], ["營收累計", "營收累計年增率(%)"],
   ["雙箭頭", "營收年增率 + 營業利益率(%)"]
 ];
+// 表格裡的數字：極端值縮短，讓欄寬由「一般的數字」決定（2026-09-28，電腦版一次看到
+// 全部欄位）。1,000 以上不留小數；百分比 100 以上留一位小數、一萬以上寫成「萬%」（營收
+// 從 0 起跳的年增率會到幾百萬 %）。縮短過的格子，滑鼠停上去看完整數字。
+function short(x, d, pct){
+  if (!isnum(x)) return {t: "—"};
+  var a = Math.abs(x), full = fmt(x, d) + (pct ? "%" : "");
+  if (pct && a >= 1e4) return {t: fmt(x / 1e4, a >= 1e6 ? 0 : 1) + "萬%", full: full};
+  if (a >= 1000 && d > 0) return {t: fmt(x, 0) + (pct ? "%" : ""), full: full};
+  if (pct && a >= 100 && d > 1) return {t: fmt(x, 1) + "%", full: full};
+  return {t: full};
+}
+function numTd(x, d, pct, extra){
+  var s = short(x, d, pct), a = {cls: (extra || "") + " " + cls(x), text: s.t};
+  if (s.full) a.title = s.full;
+  return el("td", a);
+}
 function cell(v, col){
   var k = col[0], kind = col[2], x = v[k];
   if (kind === "code") return el("td", {cls: "l"}, el("a", {href: "stock/" + encodeURIComponent(v.c) + ".html", title: "個股資訊頁", text: v.c}));
-  if (kind === "name") return el("td", {cls: "l"}, el("a", {href: "stock/" + encodeURIComponent(v.c) + ".html", title: "個股資訊頁", text: v.n}));
+  if (kind === "name") return el("td", {cls: "l nm"}, el("a", {href: "stock/" + encodeURIComponent(v.c) + ".html", title: "個股資訊頁", text: v.n}));
   if (kind === "mk") return el("td", {cls: "l"}, v.m ? el("span", {cls: "sc-mk", text: v.m}) : "");
-  if (kind === "text") return el("td", {cls: "l", text: x || ""});
-  if (kind === "price") return el("td", null, el("span", {cls: cls(v.chg), text: fmt(x, 2)}),
+  if (kind === "text") return el("td", {cls: "l ind", text: x || ""});
+  if (kind === "price") return el("td", null, el("span", {cls: cls(v.chg), text: short(x, 2).t}),
     isnum(x) ? el("a", {cls: "yf", href: YA(v), target: "_blank", rel: "noopener", title: "Yahoo股市技術分析", "aria-label": v.c + " Yahoo 技術分析"}) : null);
-  if (kind === "pct") return el("td", {cls: cls(x), text: isnum(x) ? fmt(x, 2) + "%" : "—"});
-  if (kind === "sig2") return el("td", {cls: cls(x), text: fmt(x, 2)});
-  if (kind === "sig0") return el("td", {cls: cls(x), text: fmt(x, 0)});
-  return el("td", {text: fmt(x, kind)});
+  if (kind === "pct") return numTd(x, 2, true);
+  if (kind === "sig2") return numTd(x, 2);
+  if (kind === "sig0") return numTd(x, 0);
+  var s = short(x, kind), a = {text: s.t};
+  if (s.full) a.title = s.full;
+  return el("td", a);
 }
 function table(host, title, summary, list, opt){
   opt = opt || {};
@@ -358,10 +394,10 @@ function table(host, title, summary, list, opt){
       if (!isnum(x)) return 1; if (!isnum(y)) return -1;
       return (x - y) * state.dir;
     });
-    var t = el("table", {cls: "sc-tbl"}), tr = el("tr");
+    var t = el("table", {cls: cols.length > 17 ? "sc-tbl many" : "sc-tbl"}), tr = el("tr");
     cols.forEach(function(c){
       var l = ["code", "name", "mk", "text"].indexOf(c[2]) >= 0;
-      var th = el("th", {cls: l ? "l" : "", text: c[1] + (state.key === c[0] ? (state.dir < 0 ? " ▼" : " ▲") : "")});
+      var th = el("th", {cls: l ? "l" : "", text: c[1] + (state.key === c[0] ? (state.dir < 0 ? "\u00a0▼" : "\u00a0▲") : "")});
       th.onclick = function(){ if (state.key === c[0]) state.dir = -state.dir; else { state.key = c[0]; state.dir = l ? 1 : -1; } render(); };
       tr.appendChild(th);
     });
@@ -530,7 +566,7 @@ function runStrong(){
       list.push(v);
     });
     var a = n1 || 5, b = n2 || 3, c = n3 || 10, base = b2 || 10;
-    STRONG_COLS[0][1] = a + "日漲幅"; STRONG_COLS[1][1] = b + "日均量增幅"; STRONG_COLS[2][1] = c + "日漲幅";
+    STRONG_COLS[0][1] = a + "日\u200b漲幅"; STRONG_COLS[1][1] = b + "日均量\u200b增幅"; STRONG_COLS[2][1] = c + "日\u200b漲幅";
     table(host, "篩選結果（季度 " + D.base_q + "　營收 " + D.base_m + "）",
       "使用條件：" + (gate.join("、") || "（無門檻）") + "　＋　" + (conds.join("　且　") || "（不限）") +
       "　｜　" + basePeriods() + "。股價資料到 " + P.dates[P.dates.length - 1] + "。" + LINKS, list,
