@@ -94,8 +94,12 @@ window.CF_V = "@@CFV@@";
 .cf-rank th.r,.cf-rank td.r{position:sticky;left:0;background:var(--surface-2);text-align:right;cursor:default}
 .cf-rank td.r{z-index:1}
 .cf-rank th.r{z-index:3}
-.cf-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-@media (max-width:760px){.cf-two{grid-template-columns:1fr}}
+/* minmax(0,1fr) 而不是 1fr：1fr 的下限是「內容的最小寬度」，裡面那張排名表有二十幾天、
+   每格 64px，欄就被撐到一千多 px，整頁跟著變寬（手機上右邊一大片空白，2026-09-29）。
+   下限設 0，寬的表格才會乖乖在自己的 .cf-scroll 裡橫向捲。 */
+.cf-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+@media (max-width:760px){.cf-two{grid-template-columns:minmax(0,1fr)}}
+.cf-panel,.cf-card{min-width:0}
 .cf-chips{display:flex;flex-wrap:wrap;gap:6px}
 .cf-chip{border:1px solid var(--rule);border-radius:999px;padding:2px 8px;font-size:13px;display:inline-flex;gap:6px;align-items:center}
 .cf-chip i{width:10px;height:10px;border-radius:50%;display:inline-block}
@@ -103,7 +107,11 @@ window.CF_V = "@@CFV@@";
 .cf-quick{display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow:auto}
 .cf-quick button{border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:6px;padding:2px 6px;font-size:12px;cursor:pointer}
 .cf-inds{display:flex;flex-wrap:wrap;gap:4px 12px;max-height:130px;overflow:auto;border:1px solid var(--rule);border-radius:8px;padding:6px;font-size:13px}
-.cf-notes td{white-space:normal;text-align:left}
+/* 營收變動說明：表格寬度固定在卡片寬，長句子（有時夾著很長的英文或數字）在格子裡折行，
+   不把整頁撐寬（手機上 ③ 曾被撐到 587px，2026-09-29）。 */
+.cf-notes{table-layout:fixed;min-width:0}   /* 全站表格預設 min-width:560px（site.css），這張不要 */
+.cf-notes th:first-child,.cf-notes td:first-child{width:5.5em}
+.cf-notes td{white-space:normal;text-align:left;overflow-wrap:anywhere}
 .cf dl dt{font-weight:600;margin-top:8px}.cf dl dd{margin:2px 0 0 1em;color:var(--ink-2);font-size:13.5px;line-height:1.6}
 </style>
 
@@ -1006,7 +1014,7 @@ function showVal(){
     t.appendChild(el("tr", null, el("th", {cls: "l", text: "特徵"}), el("th", {text: "平均 IC"}), el("th", {text: "t 值"}), el("th", {text: "IC>0 週比例"}), el("th", {text: "週數"}), el("th", {text: "今天權重"})));
     Object.keys(v.features).forEach(function(k){ var f = v.features[k]; t.appendChild(el("tr", null, el("td", {cls: "l", text: f.text}), el("td", {text: fmt(f.mean, 4)}), el("td", {text: fmt(f.t, 2)}), el("td", {text: isnum(f.hit) ? fmt(f.hit * 100, 0) + "%" : "—"}), el("td", {text: String(f.n)}), el("td", {text: fmt(f.weight, 4)}))); });
     o.appendChild(el("div", {cls: "cf-card"}, el("h4", null, el("span", null, "特徵有效性", tipEl(G_IC +
-      "<br><br><b>平均 IC</b>：各週 IC 的平均。<br><b>t 值</b>＝平均 ÷ 標準差 × √週數，衡量平均是不是穩定地不等於 0；|t| > 2 大致算顯著，但週與週的 20 日持有期互相重疊，這裡的 t 值會偏高。<br><b>IC>0 週比例</b>：有幾成的週 IC 是正的。<br><b>週數</b>：算得出 IC 的週數（那週流動性母體至少 100 檔）。<br><b>今天權重</b>：共振分數現在用的權重＝平均 IC，負的歸零（加權平均時會除以權重總和，所以只有相對大小有意義；歷史不到 8 週時七個都是 1）。"))), t));
+      "<br><br><b>平均 IC</b>：各週 IC 的平均。<br><b>t 值</b>＝平均 ÷ 標準差 × √週數，衡量平均是不是穩定地不等於 0；|t| > 2 大致算顯著，但週與週的 20 日持有期互相重疊，這裡的 t 值會偏高。<br><b>IC>0 週比例</b>：有幾成的週 IC 是正的。<br><b>週數</b>：算得出 IC 的週數（那週流動性母體至少 100 檔）。<br><b>今天權重</b>：共振分數現在用的權重＝平均 IC，負的歸零（加權平均時會除以權重總和，所以只有相對大小有意義；歷史不到 8 週時七個都是 1）。"))), el("div", {cls: "cf-scroll"}, t)));
     var k = el("div", {cls: "cf-kpi"});
     [["L1 共振", v.l1], ["L1＋趨勢（T1）", v.l1t], ["精選（整條漏斗）", v.pick]].forEach(function(x){ var s = x[1] || {}; k.appendChild(el("div", null, x[0], el("b", {text: isnum(s.mean) ? (s.mean >= 0 ? "+" : "") + fmt(s.mean, 2) + "%" : "—"}), el("span", {cls: "cf-note", text: "平均 20 日超額；" + (s.weeks || 0) + " 週、勝週 " + (isnum(s.win) ? fmt(s.win * 100, 0) + "%" : "—")}))); });
     o.appendChild(k);

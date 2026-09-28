@@ -478,3 +478,14 @@ def test_radar_json按欄存_還原後和原本一樣_頁面網址帶版本碼()
     tpl = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
            / "radar.html.j2").read_text("utf-8")
     assert '"@@CFV@@"' in tpl and "function unpackRows(" in tpl
+
+
+def test_籌碼雷達手機版不被表格撐寬():
+    """2026-09-29：⑨⑩ 的兩欄格線用 1fr（下限是內容寬），指標驗證的表沒包捲動框，
+    ③ 的營收說明吃到全站 table 的 min-width:560px——手機上整頁都被撐寬。"""
+    src = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+           / "radar.html.j2").read_text("utf-8")
+    assert ".cf-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)" in src
+    assert "grid-template-columns:1fr 1fr" not in src
+    assert ".cf-notes{table-layout:fixed;min-width:0}" in src
+    assert '"))), el("div", {cls: "cf-scroll"}, t)));' in src, "特徵有效性的表要包在捲動框裡"
