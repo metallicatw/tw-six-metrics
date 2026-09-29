@@ -62,8 +62,9 @@ window.CF_V = "@@CFV@@";
 .cf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
 .cf-grid .cf-card{margin:0}
 .cf-grp{margin:14px 0 4px;font-size:14px;color:var(--ink-2);border-left:4px solid var(--accent);padding-left:8px}
-.cf svg{display:block;width:100%;height:auto;touch-action:none}
-.cf svg text{font-size:10px;fill:var(--muted)}
+/* 只給本頁自己的圖（指標驗證）；BG 各頁（.bgm）的 svg 照它們自己的樣式，不能被撐成 100% */
+.cf svg:not(.bgm svg){display:block;width:100%;height:auto;touch-action:none}
+.cf svg:not(.bgm svg) text{font-size:10px;fill:var(--muted)}
 .cf input[type=text],.cf input[type=number],.cf select{border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:8px;padding:5px 8px;font-size:14px}
 .cf input[type=number]{width:90px}
 .cf-tbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
@@ -75,7 +76,7 @@ window.CF_V = "@@CFV@@";
 .cf-tbl a{cursor:pointer;color:var(--accent-2);text-decoration:underline}
 .cf-tbl td.cf-px{white-space:nowrap}
 .cf-tbl a.yf{text-decoration:none}
-/* 名稱（→ ① 個股籌碼多圖，留在本頁）用虛線底線，和代號（→ 個股資訊頁，換頁）分得出來 */
+/* 代號（→ ① 個股籌碼多圖，留在本頁）用虛線底線，和名稱（→ 個股資訊頁，換頁）分得出來 */
 .cf-tbl a[href^="#t1-"]{text-decoration-style:dotted}
 .cf-scroll{overflow:auto;max-height:70vh;border:1px solid var(--rule);border-radius:8px}
 .cf-w-高風險{color:var(--up);font-weight:600}.cf-w-待觀察{color:#b25a00}.cf-w-相對安心{color:var(--down)}
@@ -96,15 +97,26 @@ window.CF_V = "@@CFV@@";
 /* ⑥ 籌碼 × 基本面雙向交叉檢索器：版面照 BG 同名工具（2026-09-29）。橘＝籌碼、藍＝基本面。 */
 
 #x6-bthint{margin:8px 12px}
-.cf dl dt{font-weight:600;margin-top:8px}.cf dl dd{margin:2px 0 0 1em;color:var(--ink-2);font-size:13.5px;line-height:1.6}
+.cf dl:not(.bgm dl) dt{font-weight:600;margin-top:8px}.cf dl:not(.bgm dl) dd{margin:2px 0 0 1em;color:var(--ink-2);font-size:13.5px;line-height:1.6}
 /* ── BG 13 個工具頁的樣式 ── 先把全站對元素的樣式（表格最小寬、h2 底線、p 最大寬、
    header.top 的底色……）在 .bgm 裡還原成瀏覽器預設，再疊上各頁自己的樣式
-   （用 #cf 墊高權重、:where 不再加權；各頁樣式也收在 #cf .bgN 底下，所以一定蓋得過這條） */
-#cf .bgm :where(header, h1, h2, h3, h4, p, table, thead, tbody, tr, th, td, footer, nav, section, aside, main, label, input, select, button, details, summary, kbd){all:revert}
+   （用 #cf 墊高權重、:where 不再加權；各頁樣式也收在 #cf .bgN 底下，所以一定蓋得過這條）。
+   全站的 class 規則（.val、.kpi、.tag……）和 BG 各頁的 class 撞名也會滲進來，所以一律全部還原；
+   svg 與裡面的元素除外——all:revert 會連 fill、stroke 這些屬性一起抹掉。 */
+#cf .bgm :where(:not(svg, svg *)){all:revert}
+/* Chrome 把 hidden 屬性當成「屬性樣式」，all:revert 會把它一起還原掉，要補回來（BG 自己有寫 display 的照樣蓋過去，和原頁一樣） */
+#cf .bgm [hidden]{display:none}
 #cf .bgm tr:hover{background:revert}
 .bgm{margin:0 -4px;border-radius:12px;overflow:clip}
-.bgm .bg-err{color:#c92a2a;font-weight:600;padding:8px 12px}
-.cf-panel .bgm a[href^="stock/"]{color:inherit}
+#cf .bgm .bg-err{color:#c92a2a;font-weight:600;padding:8px 12px}
+#cf .bgm a.bg-t1,#cf .bgm a.bg-lk{color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+#cf .bgm a.bg-t1{text-decoration-style:dotted}
+#cf .bgm a.bg-t1:hover,#cf .bgm a.bg-lk:hover{color:var(--accent-2)}
+/* 全站的 .yf 被上面的還原抹掉了，在 BG 頁裡再寫一次（::before 的圖示不受影響） */
+#cf .bgm a.yf{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:3px;vertical-align:-3px;border-radius:4px;color:var(--accent-2);border:1px solid var(--rule);background:var(--surface-2);text-decoration:none}
+#cf .bgm a.yf:hover{border-color:var(--accent-2);background:var(--surface)}
+/* 釘住的表頭要壓在 Yahoo 圖示上面（圖示用 CSS mask，會自成疊放層）；.bgm.bgm 是為了權重高過 BG 各頁的 thead th */
+#cf .bgm.bgm thead th{z-index:3}
 {% include "radar_bg/style.css" %}
 </style>
 
@@ -152,7 +164,7 @@ window.CF_V = "@@CFV@@";
 <section class="cf-panel" id="cf-about">
 <div class="cf-card"><dl>
 <dt>十三項工具（版面照 BG財報 會員工具一比一還原，數字全部換成本站自己算的）</dt>
-<dd>各分頁預設個股是台積電（2330）；點精選漏斗、指標驗證表格裡的名稱，會帶到〔① 個股籌碼多圖〕。</dd>
+<dd>各分頁預設個股是台積電（2330）。所有表格裡：點<b>代號</b>看〔① 個股籌碼多圖〕、點<b>名稱</b>開個股資訊頁、點收盤價旁的圖示開 Yahoo 技術分析。</dd>
 <dt>① 個股籌碼多圖</dt><dd>近 120 個交易日的股價，以及外資法人、大戶籌碼、成交量能、貪婪恐懼四組共十多張走勢圖；滑鼠移到圖上看當天數值。</dd>
 <dt>② 大戶籌碼</dt><dd>每日：收盤、大戶比例、大戶人數、總股東人數。每週（集保）：集保股權分散表各級距的持股張數與人數趨勢。</dd>
 <dt>③ 基本面</dt><dd>月營收、損益表（單季 EPS、營益率、淨利率……）、存貨／資本支出／合約負債，近幾年逐季逐月。</dd>
@@ -286,26 +298,28 @@ function resolve(q){
 function stock(code){ return getJSON("stock/" + code + ".json"); }
 function label(code){ var r = ROWS[code]; return code + " " + (r ? r.n : ""); }
 // ── 連結 ────────────────────────────────────────────────────────────────
-// 代號 → 本站的〔個股資訊頁〕；名稱 → 本頁的〔① 個股籌碼多圖〕；收盤價旁的小圖示 →
+// 代號 → 本頁的〔① 個股籌碼多圖〕；名稱 → 本站的〔個股資訊頁〕；收盤價旁的小圖示 →
 // Yahoo 股市技術分析（和評等清單同一個圖示、同一個網址格式：上市 .TW、上櫃 .TWO）。
 // 不另外加欄位：三種去處各自掛在「最自然會去點的那一格」，表頭的說明列講一次。
+// ①～⑬ 裡的表格用 radar_bg/api.js 的 bgCode / bgName / bgYf，去處相同。
 function yahooTA(code){
   var r = ROWS[code] || {};
   return "https://tw.stock.yahoo.com/quote/" + encodeURIComponent(code) + (r.mk === "上櫃" ? ".TWO" : r.mk === "上市" ? ".TW" : "") + "/technical-analysis";
 }
+function toT1(code){ open("t1", code); window.scrollTo(0, $("cf-tabs").getBoundingClientRect().top + window.pageYOffset - 8); }
 function codeCell(code){
-  return el("td", {cls: "l"}, el("a", {href: "stock/" + encodeURIComponent(code) + ".html", title: "個股資訊頁", text: code}));
+  var a = el("a", {href: "#t1-" + code, title: "① 個股籌碼多圖", text: code});
+  a.onclick = function(e){ e.preventDefault(); toT1(code); };
+  return el("td", {cls: "l"}, a);
 }
 function nameCell(code, name){
-  var a = el("a", {href: "#t1-" + code, title: "① 個股籌碼多圖", text: name || code});
-  a.onclick = function(e){ e.preventDefault(); open("t1", code); window.scrollTo(0, $("cf-tabs").getBoundingClientRect().top + window.pageYOffset - 8); };
-  return el("td", {cls: "l"}, a);
+  return el("td", {cls: "l"}, el("a", {href: "stock/" + encodeURIComponent(code) + ".html", title: "個股資訊頁", text: name || code}));
 }
 function priceCell(code, v, d){
   return el("td", {cls: "cf-px"}, fmt(v, d), el("a", {cls: "yf", href: yahooTA(code), target: "_blank", rel: "noopener", title: "Yahoo股市技術分析", "aria-label": code + " Yahoo 技術分析"}));
 }
 
-var LINK_NOTE = "點代號開個股資訊頁、點名稱看 ① 個股籌碼多圖、點收盤價旁的圖示開 Yahoo 技術分析。";
+var LINK_NOTE = "點代號看 ① 個股籌碼多圖、點名稱開個股資訊頁、點收盤價旁的圖示開 Yahoo 技術分析。";
 
 // ── 💡 名詞說明 ─────────────────────────────────────────────────────────
 // 和全站同一個燈泡（site.js 用事件委派處理，後來才畫出來的也有效）。內容是這裡寫死的
@@ -658,6 +672,14 @@ function bgShow(tab, code){
 }
 
 function init(){
+  // ①～⑬ 表格裡的代號／名稱／Yahoo 圖示（bgCode / bgName / bgYf）：捕捉階段先攔，
+  // 不讓那一列原本的點擊（例如 ⑬ 點列看走勢）同時觸發
+  $("cf").addEventListener("click", function(e){
+    var a = e.target.closest && e.target.closest(".bgm a.bg-t1, .bgm a.bg-lk");
+    if (!a) return;
+    e.stopPropagation();
+    if (a.classList.contains("bg-t1")){ e.preventDefault(); toT1(a.getAttribute("href").slice(4)); }
+  }, true);
   document.querySelectorAll(".cf-tab").forEach(function(b){ b.addEventListener("click", function(){ open(b.getAttribute("data-t")); }); });
   var h = (location.hash || "").replace("#", "").split("-");
   var tab = h[0] && document.querySelector('.cf-tab[data-t="' + h[0] + '"]') ? h[0] : "picks";
