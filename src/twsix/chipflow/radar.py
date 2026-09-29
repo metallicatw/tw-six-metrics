@@ -104,7 +104,7 @@ TOP_PCT = 0.90
 RECENT_DAYS = 20
 #: 基本面裡以百分比顯示的欄位（內部存的是比例）
 PCT_FIELDS = ("r1", "r3", "r12", "e4y", "oy", "om", "nm", "cl_cap", "cx_cap", "cl_rev",
-              "inv_rev")
+              "cl_rv", "inv_rev")
 #: 精選比 L1 嚴：共振分數前 5%、至少兩面成長旗標、趨勢成立（T1）。T2 只標示。
 PICK_PCT = 0.95
 PICK_FLAGS = 2

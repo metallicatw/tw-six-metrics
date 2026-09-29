@@ -1,0 +1,46 @@
+{% raw %}<div class="bgm bg7">
+<div class="wrap">
+  <header>
+    <h1>法人買超 × 成交佔比　排名軌跡（法人買超／成交佔比前 50 名快選）</h1>
+    <p id="m7-sub">讀取資料中…</p>
+  </header>
+  <section class="top50" aria-label="前 50 名快選">
+    <div class="t50h"><div class="t50tabs" role="tablist" aria-label="清單"><button type="button" role="tab" id="m7-tabX" aria-selected="true" aria-controls="m7-t50x">法人買超前 50 名</button><button type="button" role="tab" id="m7-tabY" aria-selected="false" aria-controls="m7-t50y">成交佔比前 50 名</button></div><h2 id="m7-t50title">—</h2></div>
+    <p class="hint">點一下就會帶入該檔並自動播放排名軌跡；不在清單裡的個股，請在下方「其他個股」輸入代號。</p>
+    <div class="t50grid" id="m7-t50x" role="tabpanel" aria-labelledby="m7-tabX"></div>
+    <div class="t50grid" id="m7-t50y" role="tabpanel" aria-labelledby="m7-tabY" hidden></div>
+    <p class="t50note"><b>清單說明：</b>上方兩份清單係依公開市場交易資料之客觀數值，由系統依資料最後一天之排名先後自動列出前 50 名，目的僅為方便使用者快速點選查詢。清單之產生不涉及任何主觀篩選、分析或評價；個股是否列入清單，完全取決於當日排名數據。清單內容不代表對任何個股之推薦、評價或買賣建議，亦不構成任何投資建議、推介、要約或招攬。各項排名僅為過去期間交易資料之統計結果，不代表未來走勢，使用者應自行判斷並承擔投資風險。</p>
+  </section>
+  <div class="controls">
+    <div class="group"><label class="lb" for="m7-code">其他個股</label><input type="text" id="m7-code" list="m7-stocklist" placeholder="不在清單裡再輸入代號"><button id="m7-go">帶入</button><span class="err" id="m7-err" role="status"></span></div>
+    <div class="group">
+      <label class="lb">刻度</label>
+      <div class="seg" role="group" aria-label="座標刻度">
+        <button id="m7-scLog" aria-pressed="true">對數（放大兩端）</button>
+        <button id="m7-scLin" aria-pressed="false">線性</button>
+      </div>
+    </div>
+    <div class="timeline">
+      <button id="m7-play" class="primary" aria-label="播放">▶ 播放</button>
+      <button id="m7-prev" aria-label="前一天">◀</button>
+      <input type="range" id="m7-day" min="0" max="59" value="59" aria-label="日期">
+      <button id="m7-next" aria-label="後一天">▶</button>
+      <span class="date" id="m7-dateLabel">—</span>
+      <select id="m7-speed" aria-label="播放速度"><option value="600">慢</option><option value="300" selected>中</option><option value="120">快</option></select>
+    </div>
+  </div>
+  <div class="main">
+    <div class="chart" id="m7-chartBox">
+      <svg id="m7-svg" viewBox="0 0 660 636" role="img" aria-label="排名點狀圖"></svg>
+      <div class="tip" id="m7-tip" hidden></div>
+      <div id="m7-notes"></div>
+    </div>
+    <aside class="side" id="m7-side"></aside>
+  </div>
+  <footer>
+    <p>免責聲明：本工具僅為公開財務及籌碼數據之資料整理與自訂條件篩選輔助工具，頁面所呈現之各項指標與計算結果皆取自公開資訊觀測站及市場公開資料，不構成任何形式之投資建議、推介、要約或招攬。使用者應獨立判斷、審慎評估，並自行承擔所有投資決策與風險。</p>
+    <p>X 軸為「外資投信買賣超金額60日累計排名」，第 1 名是 60 日累計買超金額最大者，最後一名是賣超金額最大者；Y 軸為「成交金額20日累計佔比排名」，第 1 名是 20 日累計成交金額佔全市場比重最高者。點越新顏色越深，連線依交易日先後串接。</p>
+    <p>清單說明：「法人買超前 50 名」依外資投信買賣超金額 60 日累計排名、「成交佔比前 50 名」依成交金額 20 日累計佔比排名。上方兩份清單係依公開市場交易資料之客觀數值，由系統依資料最後一天之排名先後自動列出前 50 名，目的僅為方便使用者快速點選查詢。清單之產生不涉及任何主觀篩選、分析或評價；個股是否列入清單，完全取決於當日排名數據。清單內容不代表對任何個股之推薦、評價或買賣建議，亦不構成任何投資建議、推介、要約或招攬。各項排名僅為過去期間交易資料之統計結果，不代表未來走勢，使用者應自行判斷並承擔投資風險。</p>
+  </footer>
+</div>
+</div>{% endraw %}

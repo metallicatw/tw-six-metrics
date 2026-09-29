@@ -1,0 +1,79 @@
+{% raw %}<div class="bgm bg5">
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="name">基本面財務指標篩選器</span>
+      <span class="tag">營收動能 · 獲利成長 · 獲利能力 · 合約負債 · 資本規模 — 橫向比較全上市櫃個股</span>
+    </div>
+    <div class="stats-bar">
+      符合條件 <b id="m5-matchCount">—</b> / <span id="m5-totalCount">—</span> 檔<span class="hint" id="m5-dayLabelText" style="margin-left:2px;font-style:italic;"></span>
+      <div class="seg" role="group" aria-label="檢視方式">
+        <button type="button" id="m5-tabDay" aria-pressed="true">單月結果</button>
+        <button type="button" id="m5-tabBacktest" aria-pressed="false">24個月回測彙總表</button>
+      </div>
+      <button class="btn" id="m5-resetBtn">重設篩選條件</button>
+      <button class="btn" id="m5-exportBtn">匯出Excel</button>
+    </div>
+    <div class="example-bar" id="m5-exampleBar">
+      <span class="example-label">篩選範例（第一次使用可以先點點看）</span>
+      <div class="example-btns" id="m5-exampleBtns"></div>
+    </div>
+    <p class="example-warn">⚠️以上範例僅為示範本工具操作方式所預設的數值條件，並非依任何投資分析或評價結果所選出，不代表對特定產業、指標或個股之推薦、評價、買賣建議，亦不構成任何投資建議、推介、要約或招攬。使用者應自行審慎判斷篩選門檻，並承擔所有投資決策與風險。</p>
+  </header>
+  <div class="layout">
+    <aside class="filters">
+      <div class="fgroup" id="m5-asOfGroup">
+        <h3>篩選月（可回測最近 24 次月營收公告）</h3>
+        <select id="m5-asOfDay"><option>載入中…</option></select>
+        <p style="margin:6px 0 0;font-size:11px;color:var(--muted);font-style:italic;">每個選項是一次月營收實際公告日；選哪一次，所有基本面條件（含季報）就依公告截止日規則換算成那一天實際已公佈的季度/月份重新計算，收盤價也是當天股價。</p>
+      </div>
+      <div class="fgroup">
+        <h3>基本篩選</h3>
+        <input type="search" id="m5-searchBox" placeholder="輸入代號或名稱">
+        <details class="ind-picker" id="m5-indPicker">
+          <summary>產業 <span id="m5-indSummary">(全部)</span></summary>
+          <div class="ind-actions">
+            <button type="button" id="m5-indAll">全選</button>
+            <button type="button" id="m5-indNone">全部取消</button>
+          </div>
+          <div class="ind-list" id="m5-indList"></div>
+        </details>
+      </div>
+      <div class="fgroup" id="m5-rangeGroups"></div>
+      <div class="fgroup">
+        <h3>財務指標創高條件</h3>
+        <div id="m5-flagGroup"></div>
+      </div>
+    </aside>
+    <main>
+      <div class="table-wrap" id="m5-dayView">
+        <table id="m5-resultsTable">
+          <thead><tr id="m5-headRow"></tr></thead>
+          <tbody id="m5-bodyRows"></tbody>
+        </table>
+      </div>
+      <div class="table-wrap" id="m5-backtestView" hidden>
+        <div class="backtest-toolbar" style="margin:12px 12px 0;">
+          <span style="font-size:11px;color:var(--muted);">字級</span>
+          <div class="seg" role="group" aria-label="表格字級">
+            <button type="button" data-size="s" aria-pressed="true">小（24個月一次看完）</button>
+            <button type="button" data-size="m" aria-pressed="false">中</button>
+            <button type="button" data-size="l" aria-pressed="false">大</button>
+          </div>
+        </div>
+        <p class="backtest-hint" id="m5-backtestHint" style="margin:8px 12px;">每一欄是一次月營收公告日，用同一組篩選條件依公告截止日規則重新計算那一天的結果；格子顯示的是「該檔股票在那次公告日有符合條件」時的收盤價，沒有符合就留空。</p>
+        <table id="m5-backtestTable" class="size-s">
+          <colgroup id="m5-backtestColgroup"><col class="code"><col class="name"></colgroup>
+          <thead><tr id="m5-backtestHead"></tr></thead>
+          <tbody id="m5-backtestBody"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+  <footer>
+    <p>可回測最近 24 次「月營收股價」公告日（每一次就是某個月營收實際公告的當天，日期不固定在每月幾號）。選擇某一次公告日時，季報類指標（EPS、營益率、稅後淨利率、合約負債、資本支出、股本、四季營收）會依台灣上市櫃公司公告截止日規則（Q1 5/15、Q2 8/14、Q3 11/14、Q4／年報次年3/31）換算成那一天實際已公佈的季度，月營收類指標則直接對應那一次公告本身，避免用到當時還沒公佈的未來資料。</p>
+    <p>免責聲明：本工具僅為公開財務及籌碼數據之資料整理與自訂條件篩選輔助工具，頁面所呈現之各項指標與計算結果皆取自公開資訊觀測站及市場公開資料，不構成任何形式之投資建議、推介、要約或招攬。使用者應獨立判斷、審慎評估，並自行承擔所有投資決策與風險。</p>
+    <p>「創新高」等動能訊號僅為數字條件判斷，與股價無因果關係；創新高比較的區間也會隨篩選月往回推算，不是永遠只看現在。資料來源：政府資料開放平臺（台灣證券交易所、證券櫃檯買賣中心、公開資訊觀測站，TOL-1.0 開放授權），金融類股與部分個股之季報資料未納入整理。</p>
+  </footer>
+</div>
+</div>{% endraw %}

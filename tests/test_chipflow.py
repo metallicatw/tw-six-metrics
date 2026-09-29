@@ -427,7 +427,7 @@ def test_籌碼雷達的代號_名稱_收盤價各自連到該去的地方():
     assert '".TWO"' in src and '".TW"' in src and "/technical-analysis" in src
     assert 'cls: "yf"' in src, "和評等清單同一個圖示"
     # 每一張有代號的表都走同一組 helper，不是各寫各的
-    assert src.count("codeCell(") >= 4 and src.count("priceCell(") >= 3 and src.count("nameCell(") >= 4
+    assert src.count("codeCell(") >= 3 and src.count("priceCell(") >= 2 and src.count("nameCell(") >= 3
     assert 'a.onclick = function(){ open("t1", r.c); }' not in src, "代號不再只連到本頁的 ①"
 
 
@@ -449,8 +449,7 @@ def test_籌碼雷達分頁各自一色_符合檔數跟分頁同色_標記欄可
     tabs = _re.findall(r'data-t="(\w+)" role="tab"', src)
     colors = dict(_re.findall(r"\('(\w+)','(#[0-9a-f]{6})','#[0-9a-f]{6}'\)", src))
     assert set(tabs) == set(colors) and len(set(colors.values())) == len(tabs), "每一顆分頁一個不同的顏色"
-    assert 'cls: "cf-cnt"' in src and ".cf-cnt{font-size:17px" in src and "color:var(--tc" in src
-    assert 'state.key = "_tag"' in src and "function tagv(r)" in src
+    assert "color:var(--tc" in src
     for t in ("外資＋投信買賣超 ÷ 資本額 60 日累計（倍）", "扣掉大戶之 20 日周轉率（%）", "大戶庫存張數",
               "貪婪指標 1（買盤比例 20 日總和）", "買盤比例 60 日 − 賣盤比例 60 日"):
         assert f'"{t}":' in src, t
@@ -485,9 +484,8 @@ def test_籌碼雷達手機版不被表格撐寬():
     ③ 的營收說明吃到全站 table 的 min-width:560px——手機上整頁都被撐寬。"""
     src = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
            / "radar.html.j2").read_text("utf-8")
-    assert ".cf-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)" in src
+    # ①～⑬ 換成 BG 版面後，舊的 ⑨⑩ 兩欄格線與 ③ 營收說明表已經拿掉；BG 各頁的寬表各自包在捲動框
     assert "grid-template-columns:1fr 1fr" not in src
-    assert ".cf-notes{table-layout:fixed;min-width:0}" in src
     assert '"))), el("div", {cls: "cf-scroll"}, t)));' in src, "特徵有效性的表要包在捲動框裡"
 
 
@@ -625,15 +623,41 @@ def test_集保15級回補_新上市股查不到舊週_不算被擋():
     assert codes.count("2330") == 5
 
 
-def test_籌碼雷達十三項工具_回測與匯出都在頁面上():
-    src = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
-           / "radar.html.j2").read_text("utf-8")
-    for t in ('data-t="t13"', "⑬ 籌碼回測", 'id="cf-run13"', "function run13()", "function loadHist(",
-              "DecompressionStream", "function passAt(", "function retAt(", "function mktAt(",
-              "20 天回測彙總表", "24 個月回測彙總表", 'data-ex5="3"', 'data-ex6="3"', 'id="cf-d6"',
-              "function csvDownload(", 'data-csv="4"', "function quickTop(", "function sideList(",
-              "function rankCards(", "function hitGrid("):
-        assert t in src, t
-    # 編號對齊 BG 手冊：① 大戶籌碼看板、② 個股籌碼多圖（內部代號不動，外面的 #t1-代號 連結照舊）
+def test_籌碼雷達十三項工具_版面照BG移植_預設台積電():
+    import re as _re
+
+    tpl = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+    src = (tpl / "radar.html.j2").read_text("utf-8")
+    bg = tpl / "radar_bg"
+    mods = (bg / "mods.js").read_text("utf-8")
+    css = (bg / "style.css").read_text("utf-8")
+    api = (bg / "api.js").read_text("utf-8")
+    # 分頁編號照 BG 會員工具總覽：① 個股籌碼多圖（t1）、② 大戶籌碼（t2）……⑬ 籌碼回測
     tabs = src.split('id="cf-tabs"', 1)[1].split("</div>", 1)[0]
-    assert tabs.index('data-t="t2" role="tab">① 大戶籌碼') < tabs.index('data-t="t1" role="tab">② 個股籌碼多圖')
+    order = _re.findall(r'data-t="(t\d+)" role="tab">', tabs)
+    assert order == [f"t{n}" for n in range(1, 14)], order
+    assert 'data-t="t1" role="tab">① 個股籌碼多圖' in tabs and 'data-t="t13" role="tab">⑬ 籌碼回測' in tabs
+    htmls = []
+    for n in range(1, 14):
+        assert f'{{% include "radar_bg/t{n}.html" %}}' in src
+        html = (bg / f"t{n}.html").read_text("utf-8")
+        htmls.append(html)
+        assert html.startswith("{% raw %}") and f'class="bgm bg{n}"' in html
+        assert f'CF_MODS["t{n}"] = function(ROOT, API)' in mods
+        # CSS 裡的 #id 都已加上該頁前綴，而且真的對得到頁面上的元素
+        for i in set(_re.findall(rf"#(m{n}-[\w-]+)", css)):
+            assert f'id="{i}"' in html, i
+        assert f"#cf .bg{n} " in css, "各頁樣式都收在 #cf .bgN 底下"
+    for t in [src, mods, css, api] + htmls:
+        assert ("ben" + "go") not in t.lower() and ("笨" + "狗") not in t, "來源網站只稱 BG"
+        assert "試用版的資料日期" not in t
+    # 預設個股：台積電
+    assert 'var initial = "2330";' in mods and 'byCode["2330"]' in mods and 'D.codes["2330"]' in mods
+    # 全站樣式在 .bgm 裡還原成預設（:where 不加權，BG 各頁樣式才蓋得過）
+    assert "#cf .bgm :where(" in src
+    # 資料轉接層；舊的分頁程式已經拿掉
+    for t in ("API.stock(code)", "API.entry(code)", "API.rec(code)", "API.fundVal(", "API.fundFlag("):
+        assert t in mods, t
+    for t in ("function run13()", "function buildForms(", "x6-tbl", "cf-form"):
+        assert t not in src, t
+

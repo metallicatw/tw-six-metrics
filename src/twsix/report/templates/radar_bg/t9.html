@@ -1,0 +1,46 @@
+{% raw %}<div class="bgm bg9">
+<div class="wrap">
+  <header>
+    <h1>成交資金佔比排名 × 外資投信買賣超排名(單檔檢視)（法人買超／成交佔比前 50 名快選）</h1>
+    <p id="m9-sub">讀取資料中…</p>
+  </header>
+  <section class="top50" aria-label="前 50 名快選">
+    <div class="t50h"><div class="t50tabs" role="tablist" aria-label="清單"><button type="button" role="tab" id="m9-tabI" aria-selected="true" aria-controls="m9-t50inst">法人買超前 50 名</button><button type="button" role="tab" id="m9-tabT" aria-selected="false" aria-controls="m9-t50turnover">成交佔比前 50 名</button></div><h2 id="m9-t50title">—</h2></div>
+    <p class="hint">點一下就會帶入該檔，兩張表同時標成黃色，並回到最上面、最左邊（第 1 名、最新日期）；不在清單裡的個股，請在下方「其他個股」輸入代號。</p>
+    <div class="t50grid" id="m9-t50inst" role="tabpanel" aria-labelledby="m9-tabI"></div>
+    <div class="t50grid" id="m9-t50turnover" role="tabpanel" aria-labelledby="m9-tabT" hidden></div>
+    <p class="t50note"><b>清單說明：</b>上方兩份清單係依公開市場交易資料之客觀數值，由系統依資料最後一天之排名先後自動列出前 50 名，目的僅為方便使用者快速點選查詢。清單之產生不涉及任何主觀篩選、分析或評價；個股是否列入清單，完全取決於當日排名數據。清單內容不代表對任何個股之推薦、評價或買賣建議，亦不構成任何投資建議、推介、要約或招攬。各項排名僅為過去期間交易資料之統計結果，不代表未來走勢，使用者應自行判斷並承擔投資風險。</p>
+  </section>
+  <div class="bar">
+    <div class="group">
+      <label class="lb" for="m9-q">其他個股</label>
+      <input type="text" id="m9-q" list="m9-namelist" placeholder="不在清單裡再輸入代號">
+      <button id="m9-go" class="primary">標示</button>
+      <button id="m9-clear">清除</button>
+      <span class="err" id="m9-err" role="status"></span>
+    </div>
+    <div class="group">
+      <label class="lb">字級</label>
+      <div class="seg" role="group" aria-label="表格字級">
+        <button data-size="s" aria-pressed="true">小</button>
+        <button data-size="m" aria-pressed="false">中</button>
+        <button data-size="l" aria-pressed="false">大</button>
+      </div>
+    </div>
+    <label class="sync"><input type="checkbox" id="m9-sync" checked> 兩張表同步捲動（同一名次、同一天對齊）</label>
+  </div>
+  <div class="summary" id="m9-summary"></div>
+  <p class="notice"><b>示範個股聲明：</b>本頁預設標示之個股，僅用於示範本工具之操作方式與標示效果，係依資料排序自動帶入清單第 1 名，並非依任何投資分析或評價結果所選出，不代表對該等個股之推薦、評價或買賣建議，亦不構成任何投資建議、推介、要約或招攬。各項排名僅為過去期間市場交易資料之統計整理，不代表未來走勢。使用者可自行清除並輸入欲查詢之股票代號。</p>
+  <div class="pair" id="m9-pair" data-size="s">
+    <section class="pane"><h2>成交資金佔比排名</h2><div class="sheet" id="m9-sheet-turnover"></div></section>
+    <section class="pane"><h2>外資投信買賣超排名</h2><div class="sheet" id="m9-sheet-inst"></div></section>
+  </div>
+  <p class="hint">兩張表的最左邊都是最新的交易日，往右越舊；每一列是名次（第 1 名在最上面）。表格往下捲動可以看到全部名次。點表格裡任何一個名稱，也可以直接標示那一檔。</p>
+  <footer>
+    <p>免責聲明：本工具僅為公開財務及籌碼數據之資料整理與自訂條件篩選輔助工具，頁面所呈現之各項指標與計算結果皆取自公開資訊觀測站及市場公開資料，不構成任何形式之投資建議、推介、要約或招攬。使用者應獨立判斷、審慎評估，並自行承擔所有投資決策與風險。</p>
+    <p>「成交資金佔比排名」依每日成交金額 20 日累計佔全市場比重排序；「外資投信買賣超排名」依外資投信買賣超金額 60 日累計排序，第 1 名為累計買超金額最大者。列出每日全部個股之排名；表格顏色標示僅為方便檢視，無其他意義。</p>
+    <p>清單說明：「法人買超前 50 名」依外資投信買賣超排名、「成交佔比前 50 名」依成交資金佔比排名。上方兩份清單係依公開市場交易資料之客觀數值，由系統依資料最後一天之排名先後自動列出前 50 名，目的僅為方便使用者快速點選查詢。清單之產生不涉及任何主觀篩選、分析或評價；個股是否列入清單，完全取決於當日排名數據。清單內容不代表對任何個股之推薦、評價或買賣建議，亦不構成任何投資建議、推介、要約或招攬。各項排名僅為過去期間交易資料之統計結果，不代表未來走勢，使用者應自行判斷並承擔投資風險。</p>
+    <p>示範個股聲明：本頁預設標示之個股，僅用於示範本工具之操作方式與標示效果，係依資料排序自動帶入清單第 1 名，並非依任何投資分析或評價結果所選出，不代表對該等個股之推薦、評價或買賣建議，亦不構成任何投資建議、推介、要約或招攬。各項排名僅為過去期間市場交易資料之統計整理，不代表未來走勢。使用者可自行清除並輸入欲查詢之股票代號。</p>
+  </footer>
+</div>
+</div>{% endraw %}

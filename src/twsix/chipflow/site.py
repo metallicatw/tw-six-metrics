@@ -17,9 +17,7 @@
 變就直接跳過（建站一天跑好幾次，大部分時候資料沒有換）。任何錯誤都由呼叫端吞掉，
 不影響網站其他部分。
 
-每日序列（①）只產生給「值得看」的那幾百檔：流動性母體、共振與精選、觀察清單、
-日誌裡的、兩張排行榜前 100 名。其餘股票的檔案只有 ② 與 ③（量小），① 會說明
-「流動性不足，未產生每日序列」。
+每日序列（①②）全部個股都產生（2026-09-29 起，照 BG 任何一檔都查得到）。
 """
 
 from __future__ import annotations
@@ -71,7 +69,7 @@ def _stamp_key(data_dir: Path) -> dict[str, str]:
         # 內容雜湊而不是修改時間：CI 每次 checkout，檔案時間都是「現在」。
         "radar": hashlib.sha1(radar.read_bytes()).hexdigest() if radar.exists() else "",
         "levels": str(len(list((data_dir / "ownership" / "levels").glob("*.csv.gz")))),
-        "version": "4",   # 3：radar.json 按欄存（2026-09-28）；4：逐日歷史 hist（2026-09-29）
+        "version": "5",   # 3：radar.json 按欄存（2026-09-28）；4：逐日歷史 hist（2026-09-29）
     }
 
 
@@ -517,6 +515,9 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
     rich |= listed
     rich |= _watchlist(repo_root or data_dir.parent)
     rich &= set(engine.codes)
+    # 2026-09-29：① 個股籌碼多圖、② 大戶籌碼看板照 BG 的版面，任何一檔都查得到——每日序列
+    # 改成全部個股都產生（每檔約 15 KB，建站多 1 分鐘左右）。⑫ 的「全部收錄個股」範圍仍用上面那群。
+    daily_codes = {c for c in engine.codes if not isnan(p.close[c][ia]) or c in rows}
 
     # ⑫「範圍：全部收錄個股」：近 60 日所有有日序列的個股，金額的上下限
     ext_fa: list[float] = []
@@ -536,6 +537,10 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
                 "va": [_r(min(ext_va), 3), _r(max(ext_va), 2)] if ext_va else None}}))
 
     hist = _write_history(engine, out)
+    # ① 個股籌碼多圖照 BG 用 Chart.js 畫：附一份在網站裡，不靠外部 CDN
+    vendor = Path(__file__).with_name("vendor") / "chart.umd.min.js"
+    if vendor.exists():
+        (out / "chart.umd.min.js").write_bytes(vendor.read_bytes())
 
     income = load_income(data_dir)
     balance = load_balance(data_dir)
@@ -550,7 +555,7 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
         doc: dict[str, object] = {"c": c, "n": rows.get(c, {}).get("n") or
                                   engine.names.get(c, (c, ""))[0] or c,
                                   "asof": p.asof}
-        if c in rich:
+        if c in daily_codes:
             doc["d"] = daily_series(engine, c, days, ranks)
         doc["h"] = holders_series(engine, c)
         doc["fq"] = fundamentals_series(income.get(c, {}), balance.get(c, {}))
@@ -559,7 +564,7 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
         (out / "stock" / f"{c}.json").write_bytes(_dump(doc))
         written += 1
     stamp.write_text(json.dumps(key), encoding="utf-8")
-    return {"資料日": p.asof, "個股檔": written, "含日序列": len(rich), "逐日歷史": hist}
+    return {"資料日": p.asof, "個股檔": written, "含日序列": len(daily_codes), "逐日歷史": hist}
 
 
 def _write_history(engine: Engine, out: Path) -> str:

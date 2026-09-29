@@ -1,0 +1,51 @@
+{% raw %}<div class="bgm bg11">
+<div class="wrap">
+  <header>
+    <h1>法人買超 × 20日成交金額　軌跡點狀圖（前50名快選）</h1>
+    <p id="m11-sub">讀取資料中…</p>
+  </header>
+  <section class="top50" aria-label="前 50 名快選">
+    <div class="t50h"><div class="t50tabs" role="tablist" aria-label="清單"><button type="button" role="tab" id="m11-tabX" aria-selected="true" aria-controls="m11-t50x">法人買超前 50 名</button><button type="button" role="tab" id="m11-tabY" aria-selected="false" aria-controls="m11-t50y">20日成交金額前 50 名</button></div><h2 id="m11-t50title">—</h2></div>
+    <p class="hint">點一下就會帶入該檔並從第一天自動播放軌跡；不在清單裡的個股，請在下方「個股」欄位輸入代號或名稱。</p>
+    <div class="t50grid" id="m11-t50x" role="tabpanel" aria-labelledby="m11-tabX"></div>
+    <div class="t50grid" id="m11-t50y" role="tabpanel" aria-labelledby="m11-tabY" hidden></div>
+    <p class="t50note"><b>清單說明：</b>上方兩份清單係依公開市場交易資料之客觀數值，由系統依資料最後一天（<span id="m11-t50date">—</span>）之數值大小自動列出前 50 名，目的僅為方便使用者快速點選查詢。清單之產生不涉及任何主觀篩選、分析或評價；個股是否列入清單，完全取決於當日數據。清單內容不代表對任何個股之推薦、評價或買賣建議，亦不構成任何投資建議、推介、要約或招攬。各項數據僅為過去期間交易資料之統計結果，不代表未來走勢，使用者應自行判斷並承擔投資風險。</p>
+  </section>
+  <div class="controls">
+    <div class="group"><label class="lb" for="m11-code">個股</label><input type="text" id="m11-code" list="m11-stocklist" placeholder="代號或名稱"><button id="m11-go">查詢</button><span class="err" id="m11-err" role="status"></span></div>
+    <div class="group">
+      <label class="lb">刻度</label>
+      <div class="seg" role="group" aria-label="座標刻度">
+        <button id="m11-scLog" aria-pressed="true">對數（放大小金額）</button>
+        <button id="m11-scLin" aria-pressed="false">線性</button>
+      </div>
+    </div>
+    <div class="group">
+      <label class="lb">範圍</label>
+      <div class="seg" role="group" aria-label="座標範圍">
+        <button id="m11-rgFit" aria-pressed="true">依所選個股</button>
+        <button id="m11-rgAll" aria-pressed="false">全市場</button>
+      </div>
+    </div>
+    <div class="timeline">
+      <button id="m11-play" class="primary" aria-label="播放">▶ 播放</button>
+      <button id="m11-prev" aria-label="前一天">◀</button>
+      <input type="range" id="m11-day" min="0" max="59" value="59" aria-label="日期">
+      <button id="m11-next" aria-label="後一天">▶</button>
+      <span class="date" id="m11-dateLabel">—</span>
+      <select id="m11-speed" aria-label="播放速度"><option value="600">慢</option><option value="300" selected>中</option><option value="120">快</option></select>
+    </div>
+  </div>
+  <div class="main">
+    <div class="chart" id="m11-chartBox">
+      <svg id="m11-svg" viewBox="0 0 660 636" role="img" aria-label="金額點狀圖"></svg>
+      <div class="tip" id="m11-tip" hidden></div>
+    </div>
+    <aside class="side" id="m11-side"></aside>
+  </div>
+  <footer>
+    <p>免責聲明：本工具僅為公開財務及籌碼數據之資料整理與自訂條件篩選輔助工具，頁面所呈現之各項指標與計算結果皆取自公開資訊觀測站及市場公開資料，不構成任何形式之投資建議、推介、要約或招攬。使用者應獨立判斷、審慎評估，並自行承擔所有投資決策與風險。</p>
+    <p>X 軸為「外資投信買賣超金額60日累計」（單位：億元），右邊是累計買超、左邊是累計賣超，虛線是 0；Y 軸為「成交金額20日累計」（單位：億元），是個股最近 20 個交易日的成交金額加總，越上面成交越大，水平虛線是當天全市場平均每檔的 20 日累計成交金額。點越新顏色越深，連線依交易日先後串接。對數刻度下 X 軸用對稱對數（0 附近放大、兩端壓縮），Y 軸低於 0.01 億會畫在最底部。</p>
+  </footer>
+</div>
+</div>{% endraw %}

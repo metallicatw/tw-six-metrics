@@ -30,5 +30,5 @@ def test_頁內分頁列點了不會被拉回最左邊():
     assert re.search(r"reveal\(bar, cur\)", js)
     for src in (js, radar):
         assert not re.search(r"scrollLeft\s*=\s*0\b", src), "有地方把分頁列歸零"
-    body = radar[radar.index("function open(tab"):radar.index("function go(n")]
+    body = radar[radar.index("function open(tab"):radar.index("function bgShow(")]
     assert "scrollLeft +=" in body and "scrollLeft -=" in body, "籌碼雷達的分頁只該捲最少"

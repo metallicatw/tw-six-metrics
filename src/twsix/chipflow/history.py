@@ -29,6 +29,9 @@ ft    外資投信 20 日市值周轉率（%）                           10
 d20   買盤比例 − 賣盤比例 20 日（貪婪 1 − 恐懼 1）             10
 d60   同上，60 日                                            10
 fl    旗標：1＝流動性母體（收盤 > 10、20 日均額 > 5,000 萬）、2＝T1 趨勢成立
+hc    5,000 萬大戶人數（有 15 級人數才有）                    1
+fa    外資投信買賣超金額 60 日累計（億元）                     100
+va    20 日成交金額（億元）                                   100
 ====  =====================================================  ======
 
 「大戶」與排名的算法和 :func:`twsix.chipflow.site.daily_series` 完全一樣（那一天
@@ -65,6 +68,7 @@ FIELDS = (
     ("cl", 100), ("yr", 1), ("vr", 1), ("hr", 1), ("wr", 1), ("xr", 1),
     ("hp", 100), ("sh", 1), ("z", 1000), ("tex", 10), ("ft", 10),
     ("d20", 10), ("d60", 10), ("fl", 1),
+    ("hc", 1), ("fa", 100), ("va", 100),
 )
 SCALE = dict(FIELDS)
 #: 最近幾天單獨放一個檔（④⑥ 只要這一段：20 個篩選日 × 往前最多比 60 日）
@@ -153,6 +157,7 @@ def build(engine, days: int = HIST_DAYS) -> tuple[dict, bytes, bytes]:
                 grid["sh"][k][j] = int(w.holders)
             if not isnan(count) and count > 0:
                 counts[j][c] = count
+                grid["hc"][k][j] = int(round(count))
             # 扣掉大戶之 20 日周轉率
             cap = engine.capital_at(c, i)
             st = engine.day_stats(i)
@@ -184,6 +189,11 @@ def build(engine, days: int = HIST_DAYS) -> tuple[dict, bytes, bytes]:
             f = fi60.get(c, NAN)
             if not isnan(f) and cap > 0:
                 grid["z"][k][j] = _q(f / cap, SCALE["z"])
+            if not isnan(f):
+                grid["fa"][k][j] = _q(f / 1e8, SCALE["fa"])        # 億
+            v20 = val20.get(c, NAN)
+            if not isnan(v20):
+                grid["va"][k][j] = _q(v20 / 1e8, SCALE["va"])      # 億
             fit20 = engine.fit[c].window(i, 20)
             if not isnan(fit20) and cap > 0:
                 grid["ft"][k][j] = _q(fit20 / (price * cap / 10) * 100, SCALE["ft"])
@@ -249,7 +259,7 @@ def build(engine, days: int = HIST_DAYS) -> tuple[dict, bytes, bytes]:
 FUND_FIELDS = (
     ("r1", 1000), ("r3", 1000), ("r12", 1000), ("e4y", 1000), ("oy", 1000),
     ("e4", 100), ("eq", 100), ("om", 1000), ("nm", 1000),
-    ("cl_rev", 1000), ("cl_cap", 1000), ("cx_cap", 1000), ("inv_rev", 1000),
+    ("cl_rev", 1000), ("cl_rv", 1000), ("cl_cap", 1000), ("cx_cap", 1000), ("inv_rev", 1000),
     ("inv_turn", 1000), ("rv4", 1), ("cap", 1), ("fg", 1),
     ("p0", 100), ("r20", 1000), ("r60", 1000),
 )

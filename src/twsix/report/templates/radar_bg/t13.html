@@ -1,0 +1,155 @@
+{% raw %}<div class="bgm bg13">
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>籌碼回測檢視表</h1>
+      <p>用同一組篩選條件，回到過去 50 個交易日逐日重新篩選，檢視每天篩出的個股在 20 日與 60 日後的實際漲跌。</p>
+    </div>
+    <div class="window" id="m13-windowBox"><span>回測篩選日</span><b class="num" id="m13-windowText">資料載入中…</b><span id="m13-latestText"></span></div>
+  </header>
+  
+  <section class="panel" aria-labelledby="m13-formTitle">
+    <div class="panel-head">
+      <h2 id="m13-formTitle">篩選條件</h2>
+      <p>標示「必填」的欄位都要自行輸入，系統不提供預設值。</p>
+    </div>
+    <form id="m13-filterForm" novalidate>
+      <div class="fg">
+        <div class="fg-title">三項排名門檻 <span class="req">必填</span></div>
+        <div class="row"><span class="lbl">外資投信買賣超 ÷ 大戶人數・60日排名 ≤</span><input type="number" id="m13-pA" min="1" inputmode="numeric"></div>
+        <div class="row"><span class="lbl">成交金額 ÷ 大戶人數・20日排名 ≤</span><input type="number" id="m13-pB" min="1" inputmode="numeric"></div>
+        <div class="row"><span class="lbl">外資投信買賣超金額・60日累計排名 ≤</span><input type="number" id="m13-pC" min="1" inputmode="numeric"></div>
+        <span class="hint">不想用某項排名篩選，可填 9999。</span>
+      </div>
+      <div class="fg">
+        <div class="fg-title">大戶比例</div>
+        <div class="row"><span class="lbl">跟</span><input type="number" id="m13-pI" min="1" max="60" inputmode="numeric"><span class="lbl">個交易日前比較</span><span class="req">必填 1～60</span></div>
+        <div class="row"><span class="lbl">增加要大於</span><input type="number" id="m13-pJ" step="0.1"><span class="lbl">個百分點</span><span class="opt">空白 = 0</span></div>
+        <div class="row"><span class="lbl">本身大戶比例要大於</span><input type="number" id="m13-pK" step="0.1"><span class="lbl">%</span><span class="opt">空白 = 不篩</span></div>
+      </div>
+      <div class="fg">
+        <div class="fg-title">總股東人數減少 <span class="req">必填</span></div>
+        <div class="row"><span class="lbl">跟</span><input type="number" id="m13-pL" min="1" max="60" inputmode="numeric"><span class="lbl">個交易日前比較，人數要減少</span></div>
+        <span class="hint">請輸入 1～60 的整數。</span>
+      </div>
+      <div class="fg">
+        <div class="fg-title">外資投信買賣超金額 ÷ 資本額・60日累計 <span class="req">必填</span></div>
+        <div class="row"><span class="lbl">倍數要大於</span><input type="number" id="m13-pM" step="0.01"></div>
+        <span class="hint">可以是 0 或正數；填 0 代表 60 日累計為買超即可。</span>
+      </div>
+      <div class="fg">
+        <div class="fg-title">大戶人數排名 <span class="req">必填</span></div>
+        <div class="row"><span class="lbl">篩前</span><input type="number" id="m13-pN" min="1" inputmode="numeric"><span class="lbl">名</span></div>
+        <span class="hint">不想用這項篩選，可填 9999。</span>
+      </div>
+      <div class="fg">
+        <div class="fg-title">排名進步條件 <span class="opt">選填</span></div>
+        <div class="row"><span class="lbl">法人買超 ÷ 大戶人數排名，較</span><input type="number" id="m13-pE" min="1" max="60" inputmode="numeric"><span class="lbl">日前進步</span></div>
+        <div class="row"><span class="lbl">成交金額 ÷ 大戶人數排名，較</span><input type="number" id="m13-pF" min="1" max="60" inputmode="numeric"><span class="lbl">日前進步</span></div>
+        <div class="row"><span class="lbl">法人買超金額60日累計排名，較</span><input type="number" id="m13-pG" min="1" max="60" inputmode="numeric"><span class="lbl">日前進步</span></div>
+        <div class="row"><span class="lbl">大戶人數，較</span><input type="number" id="m13-pH" min="1" max="60" inputmode="numeric"><span class="lbl">日前增加或持平</span></div>
+        <span class="hint">空白 = 不要求。排名「進步」包含持平（名次數字不變或變小）。</span>
+      </div>
+      <p id="m13-formError" hidden></p>
+      <div class="btnrow">
+        <button type="submit" class="primary" id="m13-runBtn" disabled>開始回測</button>
+        <button type="button" class="ghost" id="m13-sampleBtn" disabled>套用範例條件</button>
+        <button type="button" class="ghost" id="m13-resetBtn">清除條件</button>
+        <span class="hint">「套用範例條件」僅示範操作方式，非本工具或作者之選股建議，請自行決定篩選門檻。</span>
+      </div>
+    </form>
+  </section>
+  <section id="m13-emptyState" class="empty-state">
+    <h3>填好條件後按「開始回測」</h3>
+    <p>系統會把同一組條件套用到回測期間的每一個交易日，統計每天篩出幾檔、20 日與 60 日後有多少比例上漲，並列出所有曾被篩中的個股。</p>
+  </section>
+  <section id="m13-results" hidden aria-live="polite">
+    <div class="wrap" style="gap:14px; max-width:none;">
+      <div class="tiles" id="m13-tiles"></div>
+      <div class="charts">
+        <div class="chart-card">
+          <h3>每日篩出檔數</h3>
+          <p class="cap">每一根代表一個篩選日，由舊到新排列</p>
+          <div class="svgbox" id="m13-countChart"></div>
+        </div>
+        <div class="chart-card">
+          <h3>每日正報酬比例</h3>
+          <div class="legend"><span><i style="background:var(--s20)"></i>20 日後</span><span><i style="background:var(--s60)"></i>60 日後</span></div>
+          <div class="svgbox" id="m13-rateChart"></div>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="seg" role="group" aria-label="檢視方式">
+          <button type="button" data-tab="daily" aria-pressed="true">每日勝率</button>
+          <button type="button" data-tab="matrix" aria-pressed="false">個股彙整</button>
+          <button type="button" data-tab="stock" aria-pressed="false">個股走勢</button>
+        </div>
+        <div class="toolbar">
+          <span class="toolbar" id="m13-matrixTools" hidden>
+            <span class="hint">格子顯示</span>
+            <span class="seg" role="group" aria-label="格子顯示內容">
+              <button type="button" data-mode="r20" aria-pressed="true">20日報酬%</button>
+              <button type="button" data-mode="r60" aria-pressed="false">60日報酬%</button>
+              <button type="button" data-mode="p0" aria-pressed="false">篩選日收盤價</button>
+            </span>
+          </span>
+          <button type="button" id="m13-exportBtn" hidden>匯出 CSV</button>
+        </div>
+      </div>
+      <div id="m13-tab-daily">
+        <div class="tablewrap">
+          <table id="m13-dailyTable">
+            <thead>
+              <tr class="grp"><th class="l" rowspan="2">篩選日</th><th rowspan="2">篩出檔數</th>
+                <th class="sep" colspan="8">20 日後報酬</th><th class="sep" colspan="8">60 日後報酬</th></tr>
+              <tr class="sub">
+                <th class="sep">正報酬比例</th><th>平均</th><th>0~50%</th><th>50~100%</th><th>&gt;100%</th><th>0~-50%</th><th>-50~-100%</th><th>&lt;-100%</th>
+                <th class="sep">正報酬比例</th><th>平均</th><th>0~50%</th><th>50~100%</th><th>&gt;100%</th><th>0~-50%</th><th>-50~-100%</th><th>&lt;-100%</th>
+              </tr>
+            </thead>
+            <tbody id="m13-dailyBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="m13-tab-matrix" hidden>
+        <p class="hint" id="m13-matrixHint" style="margin:0 0 8px;"></p>
+        <div class="tablewrap">
+          <table id="m13-matrix">
+            <thead><tr id="m13-matrixHead"></tr></thead>
+            <tbody id="m13-matrixBody"></tbody>
+          </table>
+        </div>
+        <div class="pager" style="margin-top:8px;">
+          <button type="button" id="m13-prevPage">‹ 上一頁</button><span id="m13-pageInfo"></span><button type="button" id="m13-nextPage">下一頁 ›</button>
+        </div>
+      </div>
+      <div id="m13-tab-stock" hidden>
+        <div class="toolbar" style="margin-bottom:10px;">
+          <label class="row" for="m13-stockPick"><span class="lbl">選擇個股</span></label>
+          <select id="m13-stockPick" style="width:auto; max-width:100%;"></select>
+          <span class="hint">清單只列出回測期間曾被篩中的個股；也可以在「個股彙整」點一列直接跳過來。</span>
+        </div>
+        <div class="detail">
+          <div class="chart-card">
+            <h3 id="m13-stockTitle">—</h3>
+            <p class="cap">近 120 個交易日收盤價。淺色區塊是回測的 50 個篩選日，圓點是被篩中的那幾天。</p>
+            <div class="svgbox" id="m13-priceChart"></div>
+          </div>
+          <div class="tablewrap picklist">
+            <table>
+              <thead><tr><th class="l">篩中日</th><th>收盤價</th><th>20日後</th><th>60日後</th></tr></thead>
+              <tbody id="m13-pickBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <footer class="notes">
+    <p>免責聲明：本工具僅為公開財務及籌碼數據之資料整理與自訂條件篩選輔助工具，頁面所呈現之各項指標與計算結果皆取自公開資訊觀測站及市場公開資料，不構成任何形式之投資建議、推介、要約或招攬。使用者應獨立判斷、審慎評估，並自行承擔所有投資決策與風險。</p>
+    <p>回測結果僅反映過去期間之市場數據在使用者自訂條件下的統計，不代表未來表現。報酬率以收盤價直接計算，未還原除權息；「60 日後」為篩選日後第 59 個交易日（資料可取得的最遠一天）。正報酬比例的計算方式與原 Excel 回測檢視表相同：報酬率 ≥ 0 視為正報酬。</p>
+    <p>原 Excel 另有「扣掉大戶之20日周轉率」「外資投信周轉率」「買盤比例減賣盤比例20日/60日」及其「20日增減」共 8 組參數，線上版固定為不篩選（等同原檔 -9999）；「將自己的追蹤清單列為必要條件」亦未提供。</p>
+    <p id="m13-dataNote"></p>
+  </footer>
+</div>
+</div>{% endraw %}

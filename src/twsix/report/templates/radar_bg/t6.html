@@ -1,0 +1,112 @@
+{% raw %}<div class="bgm bg6">
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="name">籌碼 × 基本面雙向交叉檢索器</span>
+      <span class="tag">籌碼面（法人 · 大戶 · 股東人數）＋ 基本面（營收 · 獲利 · 合約負債 · 資本規模）— 全上市櫃公開數據多條件交叉比對</span>
+    </div>
+    <div class="stats-bar">
+      符合條件 <b id="m6-matchCount">—</b> / <span id="m6-totalCount">—</span> 檔<span class="hint" id="m6-dayLabelText" style="margin-left:2px;font-style:italic;"></span>
+      <div class="seg" role="group" aria-label="檢視方式">
+        <button type="button" id="m6-tabDay" aria-pressed="true">單日結果</button>
+        <button type="button" id="m6-tabBacktest" aria-pressed="false">20天回測彙總表</button>
+      </div>
+      <button class="btn" id="m6-resetBtn">重設篩選條件</button>
+      <button class="btn" id="m6-exportBtn">匯出Excel</button>
+    </div>
+    <div class="example-bar" id="m6-exampleBar">
+      <span class="example-label">篩選範例（第一次使用可以先點點看）</span>
+      <div class="example-btns" id="m6-exampleBtns"></div>
+    </div>
+    <p class="example-warn">⚠️以上範例僅為示範本工具操作方式所預設的數值條件，並非依任何投資分析或評價結果所選出，不代表對特定產業、指標或個股之推薦、評價、買賣建議，亦不構成任何投資建議、推介、要約或招攬。使用者應自行審慎判斷篩選門檻，並承擔所有投資決策與風險。</p>
+  </header>
+  <div class="layout">
+    <aside class="filters">
+      <div class="fgroup" id="m6-asOfGroup">
+        <h3>篩選日（可回測最近 20 個交易日）</h3>
+        <select id="m6-asOfDay"><option>載入中…</option></select>
+        <p style="margin:6px 0 0;font-size:11px;color:var(--muted);font-style:italic;">選哪一天，下面的籌碼條件就用那一天（含當時的大戶比例/總股東人數趨勢）重新計算；基本面條件（營收、獲利等季/月資料）也會依公告截止日換算成那一天實際已公佈的季度/月份（季報 5/15、8/14、11/14、次年3/31；月營收每月10日），不會用到當時還沒公佈的資料。</p>
+      </div>
+      <div class="fgroup">
+        <h3>基本篩選</h3>
+        <input type="search" id="m6-searchBox" placeholder="輸入代號或名稱">
+        <details class="ind-picker" id="m6-indPicker">
+          <summary>產業 <span id="m6-indSummary">(全部)</span></summary>
+          <div class="ind-actions">
+            <button type="button" id="m6-indAll">全選</button>
+            <button type="button" id="m6-indNone">全部取消</button>
+          </div>
+          <div class="ind-list" id="m6-indList"></div>
+        </details>
+      </div>
+      <div class="fgroup chip">
+        <h3>籌碼條件</h3>
+        <div class="chip-row">
+          <div class="ctitle">外資投信買賣超÷大戶人數・60日排名 <span class="req">必填欄位</span></div>
+          <div class="frow">排名 ≤ <input type="number" id="m6-r1_max" placeholder="例如 500"></div>
+        </div>
+        <div class="chip-row">
+          <div class="ctitle">成交金額÷大戶人數・20日排名 <span class="req">必填欄位</span></div>
+          <div class="frow">排名 ≤ <input type="number" id="m6-r2_max" placeholder="例如 500"></div>
+        </div>
+        <div class="chip-row">
+          <div class="ctitle">外資投信買賣超金額・60日累計排名 <span class="req">必填欄位</span></div>
+          <div class="frow">排名 ≤ <input type="number" id="m6-r3_max" placeholder="例如 500"></div>
+        </div>
+        <div class="chip-row">
+          <div class="ctitle">大戶比例</div>
+          <div class="frow">本身 ≥ <input type="number" id="m6-hp_min" step="0.1" class="wide" placeholder="%"> %</div>
+          <div class="frow">較 <input type="number" id="m6-hp_trend_n" min="1" max="60" class="wide" placeholder="天數"> 個交易日前 <span class="req">必填欄位</span></div>
+          <div class="frow">增加 ≥ <input type="number" id="m6-hp_trend_val" step="0.1" class="wide" placeholder="留空不篩"> 個百分點<span class="hint">請自行輸入（1～60天）</span></div>
+        </div>
+        <div class="chip-row">
+          <div class="ctitle">總股東人數 <span class="req">必填欄位</span></div>
+          <div class="frow">較 <input type="number" id="m6-sh_down_n" min="1" max="60" class="wide" placeholder="天數"> 個交易日前減少<span class="hint">請自行輸入（必填，1～60天）</span></div>
+        </div>
+        <div class="chip-row">
+          <div class="ctitle">外資投信買賣超金額÷資本額・60日（倍數）</div>
+          <div class="frow">≥ <input type="number" id="m6-z_min" step="0.01" placeholder="例如 0.1"></div>
+        </div>
+        <div class="chip-row">
+          <div class="ctitle">大戶人數排名 <span class="req">必填欄位</span></div>
+          <div class="frow">篩前 <input type="number" id="m6-hr_top" min="1" class="wide" placeholder="N"> 名<span class="hint">數字越小越集中</span></div>
+        </div>
+      </div>
+      <div class="fgroup" id="m6-rangeGroups"></div>
+      <div class="fgroup">
+        <h3>財務指標創高條件</h3>
+        <div id="m6-flagGroup"></div>
+      </div>
+    </aside>
+    <main>
+      <div class="table-wrap" id="m6-dayView">
+        <table id="m6-resultsTable">
+          <thead><tr id="m6-headRow"></tr></thead>
+          <tbody id="m6-bodyRows"></tbody>
+        </table>
+      </div>
+      <div class="table-wrap" id="m6-backtestView" hidden>
+        <div class="backtest-toolbar" style="margin:12px 12px 0;">
+          <span style="font-size:11px;color:var(--muted);">字級</span>
+          <div class="seg" role="group" aria-label="表格字級">
+            <button type="button" data-size="s" aria-pressed="true">小（20天一次看完）</button>
+            <button type="button" data-size="m" aria-pressed="false">中</button>
+            <button type="button" data-size="l" aria-pressed="false">大</button>
+          </div>
+        </div>
+        <p class="backtest-hint" id="m6-backtestHint" style="margin:8px 12px;">每一欄是一個回測日，用同一組篩選條件重新計算那一天的結果——籌碼條件依當天籌碼資料重算，基本面條件依當天實際已公佈的季度/月份重算；格子顯示的是「該檔股票在那一天有符合條件」時的收盤價，沒有符合就留空。</p>
+        <table id="m6-backtestTable" class="size-s">
+          <colgroup id="m6-backtestColgroup"><col class="code"><col class="name"></colgroup>
+          <thead><tr id="m6-backtestHead"></tr></thead>
+          <tbody id="m6-backtestBody"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+  <footer>
+    <p>本工具融合兩份獨立篩選台的資料：籌碼面資料是本站用證交所、櫃買中心、集保結算所的公開資料自行計算的逐日籌碼（法人/大戶/股東人數排名與趨勢，和 ④ 同一套），基本面資料是本站整理公開資訊觀測站的季度/月度歷史（單季EPS、營益率、稅後淨利率、股本、合約負債、資本支出、單月營收等）。選擇「篩選日」時，基本面條件會依台灣上市櫃公司公告截止日規則（季報：Q1 5/15、Q2 8/14、Q3 11/14、Q4／年報次年3/31；月營收：每月10日）換算成那一天實際已公佈的季度／月份再套用，籌碼與基本面兩邊資料更新頻率不同，仍請留意兩者實際反映的時點可能不完全一致。</p>
+    <p>免責聲明：本工具僅為公開財務及籌碼數據之資料整理與自訂條件篩選輔助工具，頁面所呈現之各項指標與計算結果皆取自公開資訊觀測站及市場公開資料，不構成任何形式之投資建議、推介、要約或招攬。使用者應獨立判斷、審慎評估，並自行承擔所有投資決策與風險。</p>
+    <p>原籌碼篩選台另有「扣掉大戶之20日周轉率」「外資投信周轉率」「買盤比例減賣盤比例20日/60日」及其「20日增減」共8組參數，為簡化介面固定寫死為不篩選，未開放調整。金融類股與部分個股之季報資料未納入基本面整理，故不會出現在相關欄位篩選結果中。</p>
+  </footer>
+</div>
+</div>{% endraw %}

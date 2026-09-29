@@ -192,6 +192,7 @@ def sheet_metrics(quarters: dict[str, dict[str, float]],
     """存貨、合約負債、資本支出（個股季報，百萬元）。`asof` 之前看得到的最新一季。
 
     * 合約負債佔股本比 ＝ 合約負債 ÷ 股本
+    * 合約負債佔四季營收比 ＝ 合約負債 ÷ 近四季營收
     * 合約負債年增額佔四季營收比 ＝（本季 − 去年同季合約負債）÷ 近四季營收
     * 資本支出（四季）佔股本比 ＝ 近四季購置不動產廠房設備 ÷ 股本
     * 存貨營收比 ＝ 存貨 ÷ 單季營收；存貨周轉率 ＝ 單季營業成本 ÷ 平均存貨（次／季）
@@ -223,6 +224,8 @@ def sheet_metrics(quarters: dict[str, dict[str, float]],
         out["cl_cap"] = cl / cap
     if not any(isnan(v) for v in capex) and not isnan(cap) and cap > 0:
         out["cx_cap"] = sum(capex) / cap
+    if not isnan(cl) and not isnan(rev4) and rev4 > 0:
+        out["cl_rv"] = cl / rev4                    # 合約負債佔四季營收比（⑥）
     cl4 = get(4, "cl")
     if not isnan(cl) and not isnan(cl4) and not isnan(rev4) and rev4 > 0:
         out["cl_rev"] = (cl - cl4) / rev4
