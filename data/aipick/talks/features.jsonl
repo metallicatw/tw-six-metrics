@@ -788,3 +788,10 @@
 {"code":"6235","name":"華孚","date":"2026-09-29","file":"623520260929M002.pdf","processed":"2026-09-29","source":"pdf","rules":{"pos":7,"neg":4,"tone":0.1875,"chars":6911},"llm":null,"model":""}
 {"code":"3710","name":"連展投控","date":"2026-09-29","file":"371020260929M001.pdf","processed":"2026-09-29","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":33},"llm":null,"model":""}
 {"code":"7765","name":"中華資安","date":"2026-08-05","file":"776520260929M004.pdf","processed":"2026-09-29","source":"pdf","rules":{"pos":35,"neg":2,"tone":0.7857,"chars":5931},"llm":null,"model":""}
+{"code":"3015","name":"全漢","date":"2026-09-30","file":"301520260929M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":0,"neg":0,"tone":0.0,"chars":4923},"llm":null,"model":""}
+{"code":"5438","name":"東友","date":"2026-09-30","file":"543820260929M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":1,"neg":0,"tone":0.1667,"chars":1521},"llm":null,"model":""}
+{"code":"5547","name":"久舜","date":"2026-09-30","file":"554720260929M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":5,"neg":0,"tone":0.5,"chars":3931},"llm":null,"model":""}
+{"code":"6620","name":"漢達","date":"2026-09-30","file":"662020260929M002.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":3,"neg":0,"tone":0.375,"chars":1551},"llm":null,"model":""}
+{"code":"7818","name":"溢泰實業","date":"2026-09-30","file":"781820260929M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":26,"neg":4,"tone":0.6286,"chars":8259},"llm":null,"model":""}
+{"code":"8147","name":"正淩","date":"2026-09-30","file":"814720260929M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":8,"neg":0,"tone":0.6154,"chars":2015},"llm":null,"model":""}
+{"code":"6919","name":"康霈*","date":"2026-09-29","file":"691920260929M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":196},"llm":null,"model":""}
