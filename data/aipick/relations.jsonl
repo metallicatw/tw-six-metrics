@@ -22,3 +22,12 @@
 {"a":"4949","b":"2468","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"兩者皆屬台股資訊服務與綠能/電子零組件相關題材，無直接供應鏈關係。"}
 {"a":"4949","b":"6874","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"兩者業務性質不同，有成精密屬綠能與精密零件，倍力為資訊服務軟體，股價同步可能僅因盤勢或特定資金炒作題材。"}
 {"a":"4949","b":"6499","asked":"2026-09-25","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"兩者皆屬台股上市櫃公司，無直接業務往來，股價同步多因盤勢或市場資金歸類於相同題材。"}
+{"a":"1711","b":"4960","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬台股常被市場歸類之偏光片或特用化學相關轉機題材，股價常因題材連動。"}
+{"a":"1711","b":"1735","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"永光與日勝化皆屬於台灣上市櫃化學工業類股，兩者在特用化學品或相關化學製品領域具備同業競爭與產業題材同步性。"}
+{"a":"1711","b":"3054","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"永光為特用化學與光阻劑廠，立萬利則主要經營生技保健及不動產租賃，兩者業務性質與產業鏈不同。"}
+{"a":"3228","b":"6261","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"金麗科為IC設計，久元為半導體封測，兩者同屬半導體族群，常因台股題材連動而同步。"}
+{"a":"3228","b":"6423","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"兩者皆屬台股IC設計類股，常因半導體或IP題材受資金連動影響而同步變動。"}
+{"a":"3228","b":"8227","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.9,"note":"金麗科與巨有科技皆為台股著名的 ASIC（特殊應用IC）與 IP 矽智財概念股，常隨題材同步連動。"}
+{"a":"6789","b":"3711","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"供應商","confidence":0.85,"note":"日月光投控為半導體封測大廠，采鈺為台積電旗下精於晶圓級色彩濾光片及微透鏡製造廠，日月光提供采鈺相關後段封測代工服務。"}
+{"a":"6789","b":"2454","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆屬台股半導體產業供應鏈，常因半導體族群整體行情而同漲同跌。"}
+{"a":"6789","b":"4977","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"采鈺為台積電旗下色彩濾光片及微透鏡廠，眾達-KY為光收發模組廠，兩者皆屬半導體與光通訊相關的台股科技股題材。"}
