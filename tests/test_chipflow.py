@@ -489,3 +489,151 @@ def test_籌碼雷達手機版不被表格撐寬():
     assert "grid-template-columns:1fr 1fr" not in src
     assert ".cf-notes{table-layout:fixed;min-width:0}" in src
     assert '"))), el("div", {cls: "cf-scroll"}, t)));' in src, "特徵有效性的表要包在捲動框裡"
+
+
+# ---------------------------------------------------------------------------
+# 逐日歷史（④⑥⑬）與集保 15 級回補（2026-09-29）
+
+
+def test_逐日歷史編碼_差分zigzag_varint_可逆():
+    from twsix.chipflow import history as H
+
+    series = [None, 0, 1, -1, 123456, None, None, 2 ** 31 - 1, -(2 ** 31) + 1, 5, 5, 5, None]
+    buf = bytearray()
+    H.encode_series(series, buf)
+    H.encode_series([7] * 50, buf)
+    got, pos = H.decode_series(bytes(buf), 0, len(series))
+    assert got == series
+    same, end = H.decode_series(bytes(buf), pos, 50)
+    assert same == [7] * 50 and end == len(buf)
+    assert end - pos == 50, "不變的序列一天只佔一個位元組（差分是 0）"
+
+
+class _StubEngine:
+    """history.build 需要的最小介面：兩檔、30 天。"""
+
+    def __init__(self):
+        from array import array
+
+        from twsix.aipick.data import Panel
+
+        n = 30
+        self.p = Panel(dates=[f"2026-08-{d:02d}" for d in range(1, n + 1)])
+        self.p.asof_index = n - 1
+        self.codes = ["1111", "2222"]
+        for k, c in enumerate(self.codes):
+            cl = array("d", [100.0 + k * 50 + i for i in range(n)])
+            cl[3] = math.nan                             # 停牌一天
+            self.p.close[c] = cl
+            rt = array("d", [math.nan] * n)
+            for i in range(1, n):
+                if not math.isnan(cl[i]) and not math.isnan(cl[i - 1]):
+                    rt[i] = cl[i] / cl[i - 1] - 1
+            rt[10] = 0.0 if c == "1111" else rt[10]     # 除權息日：價格掉了但還原報酬是 0
+            self.p.ret[c] = rt
+        lower = I.LEVEL15_LOWER
+        self.tiers = {c: [L.TierWeek("2026-08-01", 1000.0 + k, 1e8, lower, tuple([1e8 / 15] * 15),
+                                     tuple([10.0] * 15), "15")] for k, c in enumerate(self.codes)}
+        self.fi = {c: I.Prefix([1e6 * (k + 1)] * n) for k, c in enumerate(self.codes)}
+        self.val = {c: I.Prefix([1e8] * n) for c in self.codes}
+        self.fit = {c: I.Prefix([5e7] * n) for c in self.codes}
+        self.bs = {c: I.Prefix([0.1] * n) for c in self.codes}
+
+    def whale_week(self, code, w, price):
+        return I.whale(w.lower, w.shares, w.total, price, w.people)
+
+    def capital_at(self, code, i):
+        return 1e9
+
+    def day_stats(self, i):
+        return {"fi60": {c: self.fi[c].window(i, 3) for c in self.codes},
+                "val20": {c: self.val[c].window(i, 3) for c in self.codes}}
+
+    def liquid(self, code, i, st):
+        return code == "2222"
+
+    def trend_ok(self, code, i):
+        return i > 20
+
+
+def test_逐日歷史_欄位與排名與除權息調整():
+    from twsix.chipflow import history as H
+
+    eng = _StubEngine()
+    head, older, recent = H.build(eng, days=25)
+    assert head["dates"][-1] == "2026-08-30" and len(head["dates"]) == 25
+    assert head["codes"] == ["1111", "2222"]
+    assert head["split"] == 0, "不到 80 天：全部都在最近那一段"
+    raw = gzip.decompress(recent)
+    nd, pos, got = 25, 0, {}
+    for key, _s in head["fields"]:
+        got[key] = []
+        for _ in head["codes"]:
+            seq, pos = H.decode_series(raw, pos, nd)
+            got[key].append(seq)
+    assert pos == len(raw) and gzip.decompress(older) == b""
+    assert got["yr"][1][-1] == 1 and got["yr"][0][-1] == 2, "法人買超 2222 比較多，排第 1"
+    assert got["cl"][0][-1] == round(129.0 * 100)
+    assert got["fl"][1][-1] == H.FLAG_LIQ | H.FLAG_T1 and got["fl"][0][-1] == H.FLAG_T1
+    assert got["hr"][0][-1] is not None and got["sh"][0][-1] == 1000
+    assert "1111" in head["adj"] and head["adj"]["1111"][0][0] == 10 - (30 - 25)
+    assert head["whales"][-1] == 2
+
+
+def test_集保15級回補_新上市股查不到舊週_不算被擋():
+    """2026-09-28～29：新上市股的舊週「查詢頁沒有回傳分級表」，被當成被擋，
+    連續六次就整批停下——回補一晚只補 0～2 檔。"""
+    import argparse
+    import types
+
+    from twsix import cli
+    from twsix.ingest import tdcc_history as TH
+
+    root = Path(tempfile.mkdtemp())
+    (root / "market" / "daily" / "prices").mkdir(parents=True)
+    rows = "date,code,close,volume\n" + "".join(f"2026-09-24,{c},100,{v}\n" for c, v in
+                                               (("7001", 9e6), ("7002", 8e6), ("7003", 7e6),
+                                                ("7004", 6e6), ("7005", 5e6), ("7006", 4e6),
+                                                ("7007", 3e6), ("2330", 1e6)))
+    (root / "market" / "daily" / "prices" / "2026-09-24.csv.gz").write_bytes(gzip.compress(rows.encode()))
+    weeks = [date(2026, 9, 24) - timedelta(days=7 * k) for k in range(5)]
+    asked: list[tuple[str, date]] = []
+
+    class FakeHistory:
+        def __init__(self, http):
+            pass
+
+        def dates(self):
+            return weeks
+
+        def week(self, code, day):
+            asked.append((code, day))
+            if code.startswith("700") and day < weeks[1]:
+                raise TH.NoHistory(f"{code} {day}：查詢頁沒有回傳分級表")
+            return types.SimpleNamespace(day=day, levels=())
+
+    real = TH.History
+    TH.History = FakeHistory
+    try:
+        cli.cmd_backfill_levels(argparse.Namespace(config=None, data=str(root), stock=None,
+                                                   shard="", minutes=0, limit=0))
+    finally:
+        TH.History = real
+    codes = [c for c, _ in asked]
+    assert "2330" in codes, "前面七檔新股沒有讓整批停下"
+    assert codes.count("7001") == 3, "新股問到第一個沒有表的週就停，不再往更舊的問"
+    assert codes.count("2330") == 5
+
+
+def test_籌碼雷達十三項工具_回測與匯出都在頁面上():
+    src = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+           / "radar.html.j2").read_text("utf-8")
+    for t in ('data-t="t13"', "⑬ 籌碼回測", 'id="cf-run13"', "function run13()", "function loadHist(",
+              "DecompressionStream", "function passAt(", "function retAt(", "function mktAt(",
+              "20 天回測彙總表", "24 個月回測彙總表", 'data-ex5="3"', 'data-ex6="3"', 'id="cf-d6"',
+              "function csvDownload(", 'data-csv="4"', "function quickTop(", "function sideList(",
+              "function rankCards(", "function hitGrid("):
+        assert t in src, t
+    # 編號對齊 BG 手冊：① 大戶籌碼看板、② 個股籌碼多圖（內部代號不動，外面的 #t1-代號 連結照舊）
+    tabs = src.split('id="cf-tabs"', 1)[1].split("</div>", 1)[0]
+    assert tabs.index('data-t="t2" role="tab">① 大戶籌碼') < tabs.index('data-t="t1" role="tab">② 個股籌碼多圖')

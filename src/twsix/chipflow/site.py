@@ -10,6 +10,7 @@
     site/chipflow/market.json       120 個交易日的日期、全市場平均 20 日成交金額
     site/chipflow/ranks.json        ⑨⑩ 近 20 日兩張排名表的前 100 名
     site/chipflow/stock/<代號>.json ①②③⑦⑧⑪⑫ 的個股序列
+    site/chipflow/hist*.json/bin    ④⑥⑬ 的逐日歷史（見 chipflow/history.py）
     site/chipflow/stamp.json        這一份是用哪一天的資料算的
 
 **同一份資料只算一次**：`stamp.json` 記下最新行情檔與 radar 的產生時間，兩者都沒
@@ -70,7 +71,7 @@ def _stamp_key(data_dir: Path) -> dict[str, str]:
         # 內容雜湊而不是修改時間：CI 每次 checkout，檔案時間都是「現在」。
         "radar": hashlib.sha1(radar.read_bytes()).hexdigest() if radar.exists() else "",
         "levels": str(len(list((data_dir / "ownership" / "levels").glob("*.csv.gz")))),
-        "version": "3",   # 3：radar.json 按欄存（2026-09-28）
+        "version": "4",   # 3：radar.json 按欄存（2026-09-28）；4：逐日歷史 hist（2026-09-29）
     }
 
 
@@ -534,6 +535,8 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
         "ext": {"fa": [_r(min(ext_fa), 2), _r(max(ext_fa), 2)] if ext_fa else None,
                 "va": [_r(min(ext_va), 3), _r(max(ext_va), 2)] if ext_va else None}}))
 
+    hist = _write_history(engine, out)
+
     income = load_income(data_dir)
     balance = load_balance(data_dir)
     from ..aipick.revenue import load_revenue  # noqa: PLC0415
@@ -556,4 +559,31 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
         (out / "stock" / f"{c}.json").write_bytes(_dump(doc))
         written += 1
     stamp.write_text(json.dumps(key), encoding="utf-8")
-    return {"資料日": p.asof, "個股檔": written, "含日序列": len(rich)}
+    return {"資料日": p.asof, "個股檔": written, "含日序列": len(rich), "逐日歷史": hist}
+
+
+def _write_history(engine: Engine, out: Path) -> str:
+    """④⑥⑬ 的逐日歷史（hist.json＋hist_a.bin＋hist_b.bin）。
+
+    失敗只少了回測那幾個功能：舊檔刪掉（頁面會說「還沒有歷史資料」），其餘照寫。
+    """
+    from . import history  # noqa: PLC0415
+
+    try:
+        header, older, recent = history.build(engine)
+    except Exception as exc:  # noqa: BLE001
+        print(f"::warning::籌碼雷達逐日歷史沒有產生（④⑥⑬ 的回測暫停）：{exc!r}")
+        for name in ("hist.json", "hist_a.bin", "hist_b.bin", "fund.bin"):
+            (out / name).unlink(missing_ok=True)
+        return "失敗"
+    try:
+        fund_header, fund = history.build_fund(engine)
+        (out / "fund.bin").write_bytes(fund)
+        header["fund"] = fund_header
+    except Exception as exc:  # noqa: BLE001
+        print(f"::warning::籌碼雷達基本面歷史沒有產生（⑤⑥ 的回測暫停）：{exc!r}")
+        (out / "fund.bin").unlink(missing_ok=True)
+    (out / "hist_a.bin").write_bytes(older)
+    (out / "hist_b.bin").write_bytes(recent)
+    (out / "hist.json").write_bytes(_dump(header))
+    return f"{len(header['dates'])} 天、{len(header['codes'])} 檔、{(len(older) + len(recent)) / 1e6:.1f} MB"

@@ -16,7 +16,9 @@ window.CF_V = "@@CFV@@";
 </script>
 {% endblock %}
 {% block body %}
-{# 〔籌碼雷達〕：十二項工具（①～⑫）＋精選漏斗＋指標驗證。
+{# 〔籌碼雷達〕：十三項工具（①～⑬）＋精選漏斗＋指標驗證。編號對齊 BG財報〈會員工具使用手冊〉：
+   ① 大戶籌碼看板（內部代號 t2）、② 個股籌碼多圖（t1）——內部代號沒換，是為了不讓外面既有的
+   連結（#t1-2330 → 多圖）失效。
    這一頁不帶任何數字：全部由瀏覽器讀 chipflow/*.json（`twsix chipflow` 與
    `twsix chipflow-site` 產生，見 src/twsix/chipflow/）。樣式與程式都只在這一頁、
    以 .cf 為前綴，不動 site.css / site.js——壞了只影響這一頁。 #}
@@ -35,7 +37,7 @@ window.CF_V = "@@CFV@@";
   ('t4','#1864ab','#6fb0f5'),('t5','#0b7285','#3bc9db'),('t6','#6741d9','#b39cff'),
   ('t7','#b25a00','#ffa94d'),('t8','#a61e4d','#faa2c1'),('t9','#5c7c00','#a9e34b'),
   ('t10','#087f5b','#38d9a9'),('t11','#862e9c','#e599f7'),('t12','#364fc7','#91a7ff'),
-  ('picks','#c92a2a','#ff8787'),('val','#7a5230','#e0b084'),('about','#495057','#adb5bd')] %}
+  ('t13','#9c6500','#ffc94d'),('picks','#c92a2a','#ff8787'),('val','#7a5230','#e0b084'),('about','#495057','#adb5bd')] %}
 {% for k, c, d in cf_colors %}.cf-tab[data-t={{ k }}],#cf-{{ k }}{--tc:{{ c }}}
 {% endfor %}@media (prefers-color-scheme:dark){
 {% for k, c, d in cf_colors %}  :root:not([data-theme=light]) .cf-tab[data-t={{ k }}],:root:not([data-theme=light]) #cf-{{ k }}{--tc:{{ d }}}
@@ -78,7 +80,7 @@ window.CF_V = "@@CFV@@";
 .cf-tbl a{cursor:pointer;color:var(--accent-2);text-decoration:underline}
 .cf-tbl td.cf-px{white-space:nowrap}
 .cf-tbl a.yf{text-decoration:none}
-/* 名稱（→ ① 個股籌碼多圖，留在本頁）用虛線底線，和代號（→ 個股資訊頁，換頁）分得出來 */
+/* 名稱（→ ② 個股籌碼多圖，留在本頁）用虛線底線，和代號（→ 個股資訊頁，換頁）分得出來 */
 .cf-tbl a[href^="#t1-"]{text-decoration-style:dotted}
 .cf-scroll{overflow:auto;max-height:70vh;border:1px solid var(--rule);border-radius:8px}
 .cf-badge{display:inline-block;border-radius:999px;padding:0 7px;font-size:11.5px;margin-left:3px;border:1px solid var(--rule)}
@@ -112,18 +114,52 @@ window.CF_V = "@@CFV@@";
 .cf-notes{table-layout:fixed;min-width:0}   /* 全站表格預設 min-width:560px（site.css），這張不要 */
 .cf-notes th:first-child,.cf-notes td:first-child{width:5.5em}
 .cf-notes td{white-space:normal;text-align:left;overflow-wrap:anywhere}
+.cf-err{color:var(--up);font-size:13.5px}
+.cf-in{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.cf-form label.cf-f{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;align-items:center;border-bottom:1px dashed var(--rule);padding:3px 0}
+.cf-form label.cf-fw{grid-template-columns:auto minmax(0,1fr)}
+.cf-in.cf-wrap{flex-wrap:wrap;white-space:normal}
+.cf-form label.cf-ck{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px;align-items:center}
+.cf-grp{grid-column:1/-1}
+.cf-form select{max-width:100%}
+.cf-err ul{margin:4px 0 0 1.2em;padding:0}
+.cf input.cf-bad,.cf select.cf-bad{border-color:var(--up);box-shadow:0 0 0 2px color-mix(in srgb,var(--up) 25%,transparent)}
+.cf-warn{color:#b25a00}
+.cf-subs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0 6px;border-bottom:1px solid var(--rule);padding-bottom:6px}
+.cf-subs button[role=tab]{border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:8px;padding:4px 12px;font-size:13.5px;cursor:pointer}
+.cf-subs button[role=tab][aria-selected=true]{border-color:var(--tc,var(--accent));color:var(--tc,var(--accent));font-weight:700;box-shadow:inset 0 -2px 0 var(--tc,var(--accent))}
+.cf-subs .cf-csv{margin-left:auto}
+.cf-tbl td.cf-up{color:var(--up)}.cf-tbl td.cf-dn{color:var(--down)}
+.cf-kpi b.cf-up{color:var(--up)}.cf-kpi b.cf-dn{color:var(--down)}
+.cf-kpi4 div{flex:1 1 180px}
+.cf-kpi .cf-note{display:block;font-size:12px}
+.cf-tbl tr.cf-sum td{font-weight:700;background:var(--surface-2)}
+.cf-hits td.d,.cf-hits th.d{min-width:40px;text-align:center;padding:3px 4px;font-size:12px}
+.cf-hits td.hit{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--ink)}
+.cf-hits td.hit.cf-up{background:color-mix(in srgb,var(--up) 22%,transparent);color:var(--ink)}
+.cf-hits td.hit.cf-dn{background:color-mix(in srgb,var(--down) 22%,transparent);color:var(--ink)}
+.cf-hits th.fz,.cf-hits td.fz{position:sticky;left:0;background:var(--surface);z-index:1}
+.cf-hits th.fz{z-index:3;background:var(--surface-2)}
+.cf-names{max-width:520px;white-space:normal!important;line-height:1.5}
+.cf-names summary{cursor:pointer}
+.cf-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px}
+.cf-rcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:8px;margin:8px 0}
+.cf-rcard{min-width:0;overflow-x:auto}
+.cf-rcard{border:1px solid var(--rule);border-left:5px solid var(--accent);border-radius:10px;padding:6px 10px;background:var(--surface)}
+.cf-mini{margin-top:4px;min-width:0!important}.cf-mini th,.cf-mini td{padding:2px 6px}
+.cf-ex{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
 .cf dl dt{font-weight:600;margin-top:8px}.cf dl dd{margin:2px 0 0 1em;color:var(--ink-2);font-size:13.5px;line-height:1.6}
 </style>
 
 <div class="cf" id="cf">
 <h2>籌碼雷達 <span class="cf-beta">試行</span></h2>
-<p class="cf-note">法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面。十二項工具的設計參考 BG財報公開的方法，數字全部由本站用政府資料開放平臺（證交所、櫃買中心、集保結算所、公開資訊觀測站）自行計算。
+<p class="cf-note">法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面。十三項工具的設計參考 BG財報公開的方法，數字全部由本站用政府資料開放平臺（證交所、櫃買中心、集保結算所、公開資訊觀測站）自行計算。
 <span id="cf-asof"></span></p>
 <p class="cf-note" id="cf-msg">載入中…</p>
 
 <div class="cf-tabs" role="tablist" id="cf-tabs">
-  <button class="cf-tab" data-t="t1" role="tab">① 個股籌碼多圖</button>
-  <button class="cf-tab" data-t="t2" role="tab">② 大戶籌碼</button>
+  <button class="cf-tab" data-t="t2" role="tab">① 大戶籌碼</button>
+  <button class="cf-tab" data-t="t1" role="tab">② 個股籌碼多圖</button>
   <button class="cf-tab" data-t="t3" role="tab">③ 基本面</button>
   <button class="cf-tab cf-sep" data-t="t4" role="tab">④ 籌碼篩選</button>
   <button class="cf-tab" data-t="t5" role="tab">⑤ 基本面篩選</button>
@@ -134,6 +170,7 @@ window.CF_V = "@@CFV@@";
   <button class="cf-tab" data-t="t10" role="tab">⑩ 排名榜（多檔）</button>
   <button class="cf-tab" data-t="t11" role="tab">⑪ 金額軌跡</button>
   <button class="cf-tab" data-t="t12" role="tab">⑫ 多檔金額軌跡</button>
+  <button class="cf-tab cf-sep" data-t="t13" role="tab">⑬ 籌碼回測</button>
   <button class="cf-tab cf-sep" data-t="picks" role="tab">精選漏斗</button>
   <button class="cf-tab" data-t="val" role="tab">指標驗證</button>
   <button class="cf-tab" data-t="about" role="tab">說明</button>
@@ -154,48 +191,61 @@ window.CF_V = "@@CFV@@";
 </section>
 
 <section class="cf-panel" id="cf-t4">
-  <p class="cf-note">留空 ＝ 不套用。全部條件同時成立（AND）。「套用範例條件」只是示範操作方式，不是選股建議。</p>
-  <div class="cf-form" id="cf-f4"></div>
-  <div class="cf-row"><button class="cf-btn pri" data-run="4">開始篩選</button><button class="cf-btn" id="cf-sample">套用範例條件</button><button class="cf-btn" data-reset="4">重設</button></div>
+  <p class="cf-note">先設條件，從全市場挑出符合的名單。留空 ＝ 不套用（排名填 9999 也一樣）；全部條件同時成立（AND）。大戶比例、股東人數、排名進步都跟「N 個交易日前」比，和 ⑬ 籌碼回測同一套口徑。「套用範例條件」只是示範操作方式，不是選股建議。</p>
+  <div class="cf-form" id="cf4-f"></div>
+  <div class="cf-row"><button class="cf-btn pri" data-run="4">開始篩選</button><button class="cf-btn" id="cf-sample">套用範例條件</button><button class="cf-btn" data-reset="4">清除條件</button><button class="cf-btn" data-csv="4">匯出 CSV</button></div>
+  <div class="cf-err" id="cf-e4"></div>
+  <div id="cf-s4"></div>
   <div id="cf-o4"></div>
 </section>
 <section class="cf-panel" id="cf-t5">
+  <div class="cf-ex"><button class="cf-btn" data-ex5="1">範例① 營收動能</button><button class="cf-btn" data-ex5="2">範例② 獲利成長</button><button class="cf-btn" data-ex5="3">範例③ 創高動能</button><span class="cf-note" id="cf-x5">範例只是示範操作方式所預設的數值，不代表對任何產業或個股的推薦。</span></div>
   <p class="cf-note">留空 ＝ 不套用。月營收、EPS、利潤率取自官方全市場彙總；合約負債、存貨、資本支出取自個股季報（近八季）。金融保險業的損益科目不同，不在這些欄位裡。</p>
   <div class="cf-row"><b>產業</b><button class="cf-btn" id="cf-ind-all">全選</button><button class="cf-btn" id="cf-ind-none">全部取消</button></div>
   <div class="cf-inds" id="cf-inds"></div>
   <div class="cf-form" id="cf-f5"></div>
   <div class="cf-row"><b>動能訊號（創新高）</b></div>
   <div class="cf-form" id="cf-f5b"></div>
-  <div class="cf-row"><button class="cf-btn pri" data-run="5">開始篩選</button><button class="cf-btn" data-reset="5">重設</button></div>
+  <div class="cf-row"><button class="cf-btn pri" data-run="5">開始篩選</button><button class="cf-btn" data-reset="5">清除條件</button><button class="cf-btn" data-csv="5">匯出 CSV</button></div>
+  <div id="cf-s5"></div>
   <div id="cf-o5"></div>
 </section>
 <section class="cf-panel" id="cf-t6">
-  <p class="cf-note">把 ④ 的籌碼條件與 ⑤ 的基本面條件（含產業）同時套用。要改條件，到 ④、⑤ 兩頁改完再回來按「交集篩選」。兩邊資料的日期不同：籌碼是每日、集保每週、營收每月、財報每季。</p>
-  <div class="cf-row"><button class="cf-btn pri" data-run="6">交集篩選</button><button class="cf-btn" id="cf-sample6">套用籌碼面範例條件</button></div>
+  <p class="cf-note">把 ④ 的籌碼條件與 ⑤ 的基本面條件（含產業）同時套用。要改條件，到 ④、⑤ 兩頁改完再回來按「交集篩選」；或先點下面的範例。選一個「篩選日」，籌碼用那一天的值、基本面只用那一天<b>已經公布</b>的月營收與財報，不會用到當時還沒公布的資料。</p>
+  <div class="cf-ex"><button class="cf-btn" data-ex6="1">範例① 偏籌碼面</button><button class="cf-btn" data-ex6="2">範例② 基本面成長</button><button class="cf-btn" data-ex6="3">範例③ 兩邊都要</button><span class="cf-note" id="cf-x6">範例會改寫 ④、⑤ 兩頁的條件；只是示範操作，不是選股建議。</span></div>
+  <div class="cf-row"><label>篩選日 <select id="cf-d6"><option value="">最新</option></select></label><button class="cf-btn pri" data-run="6">交集篩選</button><button class="cf-btn" data-csv="6">匯出 CSV</button></div>
+  <div class="cf-err" id="cf-e6"></div>
+  <div id="cf-s6"></div>
   <div id="cf-o6"></div>
 </section>
 
 <section class="cf-panel" id="cf-t7">
-  <div class="cf-row"><input type="text" id="cf-q7" list="cf-codes" placeholder="代號或名稱"><button class="cf-btn pri" data-go="7">查詢</button>
+  <div class="cf-row"><b>法人買超前 50 名</b><span class="cf-note">（點一下就帶入並從第一天播放）</span></div><div class="cf-quick" id="cf-q7a"></div>
+  <div class="cf-row"><b>成交佔比前 50 名</b></div><div class="cf-quick" id="cf-q7b"></div>
+  <div class="cf-row"><input type="text" id="cf-q7" list="cf-codes" placeholder="其他個股：代號或名稱"><button class="cf-btn pri" data-go="7">帶入</button>
     <label>刻度 <select id="cf-s7"><option value="log">對數（放大前段）</option><option value="lin">線性</option></select></label></div>
   <div id="cf-o7"></div>
   <p class="cf-note">X 軸：外資投信買賣超金額 60 日累計排名（第 1 名＝買超最多）；Y 軸：20 日成交金額佔全市場比重排名（第 1 名＝佔比最高）。越靠左上越強。點越新顏色越深，連線依交易日先後串接（近 60 個交易日）。</p>
 </section>
 <section class="cf-panel" id="cf-t8">
-  <div class="cf-row"><input type="text" id="cf-q8" list="cf-codes" placeholder="加入個股（最多 8 檔）"><button class="cf-btn pri" data-add="8">加入</button>
+  <div class="cf-row"><input type="text" id="cf-q8" list="cf-codes" placeholder="加入個股（可用空白隔開多檔，最多 8 檔）"><button class="cf-btn pri" data-add="8">加入</button>
     <label>刻度 <select id="cf-s8"><option value="log">對數（放大前段）</option><option value="lin">線性</option></select></label></div>
   <div class="cf-chips" id="cf-c8"></div>
   <div id="cf-o8"></div>
 </section>
 <section class="cf-panel" id="cf-t9">
+  <div class="cf-row"><b>法人買超前 50 名</b></div><div class="cf-quick" id="cf-q9a"></div>
+  <div class="cf-row"><b>成交佔比前 50 名</b></div><div class="cf-quick" id="cf-q9b"></div>
   <div class="cf-row"><input type="text" id="cf-q9" list="cf-codes" placeholder="標示一檔"><button class="cf-btn pri" data-go="9">標示</button><button class="cf-btn" id="cf-clear9">清除</button><label><input type="checkbox" id="cf-sync9" checked> 兩張表同步捲動</label>
     <label>字級 <select class="cf-fs" data-for="cf-o9"><option value="11px">小</option><option value="12px" selected>中</option><option value="14px">大</option></select></label></div>
+  <div id="cf-k9"></div>
   <div id="cf-o9"></div>
 </section>
 <section class="cf-panel" id="cf-t10">
-  <div class="cf-row"><input type="text" id="cf-q10" list="cf-codes" placeholder="加入個股（最多 8 檔）"><button class="cf-btn pri" data-add="10">加入</button><button class="cf-btn" id="cf-clear10">全部清除</button><label><input type="checkbox" id="cf-sync10" checked> 兩張表同步捲動</label>
+  <div class="cf-row"><input type="text" id="cf-q10" list="cf-codes" placeholder="可一次輸入多檔，用空白隔開（最多 8 檔）"><button class="cf-btn pri" data-add="10">加入</button><button class="cf-btn" id="cf-clear10">全部清除</button><label><input type="checkbox" id="cf-sync10" checked> 兩張表同步捲動</label>
     <label>字級 <select class="cf-fs" data-for="cf-o10"><option value="11px">小</option><option value="12px" selected>中</option><option value="14px">大</option></select></label></div>
   <div class="cf-chips" id="cf-c10"></div>
+  <div id="cf-k10"></div>
   <div id="cf-o10"></div>
 </section>
 <section class="cf-panel" id="cf-t11">
@@ -208,26 +258,49 @@ window.CF_V = "@@CFV@@";
   <p class="cf-note">X 軸：外資投信買賣超金額 60 日累計（億元，右＝買超、左＝賣超）；Y 軸：20 日成交金額加總（億元）；水平虛線＝當天全市場平均每檔的 20 日成交金額。清單依最新一天的數值自動排出，不代表推薦。</p>
 </section>
 <section class="cf-panel" id="cf-t12">
-  <div class="cf-row"><input type="text" id="cf-q12" list="cf-codes" placeholder="加入個股（最多 8 檔）"><button class="cf-btn pri" data-add="12">加入</button>
+  <div class="cf-row"><input type="text" id="cf-q12" list="cf-codes" placeholder="加入個股（可用空白隔開多檔，最多 8 檔）"><button class="cf-btn pri" data-add="12">加入</button>
     <label>刻度 <select id="cf-s12"><option value="log">對數（放大小金額）</option><option value="lin">線性</option></select></label>
     <label>範圍 <select id="cf-r12"><option value="sel">依所選個股</option><option value="all">全部收錄個股</option></select></label></div>
   <div class="cf-chips" id="cf-c12"></div>
   <div id="cf-o12"></div>
 </section>
 
+<section class="cf-panel" id="cf-t13">
+  <p class="cf-note">像一台時光機：把時間倒回去，用<b>那一天</b>的籌碼資料套入你設定的條件，看那一天會篩出哪些股票，再用後來真正發生的股價，算出它們 20 個與 60 個交易日後是漲是跌；連續往回算好幾十個交易日，每天各自重篩一次。條件和 ④ 同一套（留空＝不套用，排名填 9999 也一樣）。回測只是用過去的資料檢查條件，過去的正報酬比例不代表未來也一樣。</p>
+  <div class="cf-row">
+    <label>回測期間 <select id="cf13-per"><option value="std">標準：20 日與 60 日後都算得出來（同 BG）</option><option value="recent">較近：篩選日到 20 個交易日前</option></select></label>
+    <label>篩選日數 <select id="cf13-n"><option value="20">20 天</option><option value="50" selected>50 天</option><option value="80">80 天</option><option value="100">100 天</option><option value="120">120 天</option></select></label>
+    <label>同一檔 <input type="number" id="cf13-dd" min="1" max="60" step="1" placeholder="空白"> 個交易日內只算第一次</label>
+    <label><input type="checkbox" id="cf13-adj" checked> 報酬還原除權息</label>
+  </div>
+  <p class="cf-note" id="cf13-info"></p>
+  <div class="cf-form" id="cf13-f"></div>
+  <div class="cf-row"><button class="cf-btn pri" id="cf-run13">開始回測</button><button class="cf-btn" id="cf-sample13">套用範例條件</button><button class="cf-btn" id="cf-reset13">清除條件</button></div>
+  <div class="cf-err" id="cf-e13"></div>
+  <div id="cf-o13"></div>
+</section>
 <section class="cf-panel" id="cf-picks"><div id="cf-opicks"></div></section>
 <section class="cf-panel" id="cf-val"><div id="cf-oval"></div></section>
 <section class="cf-panel" id="cf-about">
 <div class="cf-card"><dl>
-<dt>① 個股籌碼多圖（四組）</dt>
+<dt>② 個股籌碼多圖（四組）</dt>
 <dd><b>外資法人</b>：外資＋投信買賣超 60 日累計 ÷ 資本額（倍）；60 日累計買超金額與排名；扣掉大戶之 20 日周轉率 ＝ 20 日成交金額 ÷（市值 ×（1 − 大戶比例））；有 15 級資料後另有「÷ 大戶人數」與其排名。<br>
 <b>大戶籌碼</b>：大戶 ＝ 持股市值 ≥ 5,000 萬元。每天用當天收盤價把 5,000 萬換算成張數門檻，加總門檻以上各級的持股（與人數）；門檻落在某一級中間時，那一級按對數比例只算一部分——BG財報 的做法是對到最接近的一條級距，股價跨過級距中點時大戶人數會突然跳三成，內插之後就是連續的。<br>
 <b>成交量能</b>：20 日成交金額佔全市場比重（%）；20 日成交金額 ÷ 資本額（倍）。<br>
 <b>貪婪恐懼</b>：把每根 K 線拆成往上（買盤）與往下（賣盤）的路徑，買盤比例的 20／60 日<b>加總</b>是貪婪指標、賣盤比例的加總是恐懼指標（兩者相加 ＝ 天數）。</dd>
-<dt>② 大戶籌碼看板</dt><dd>每日：收盤、大戶比例、大戶人數、總股東人數。每週（集保）：總集保張數，以及「N 張以上」的累計持股張數與人數。</dd>
+<dt>① 大戶籌碼看板</dt><dd>每日：收盤、大戶比例、大戶人數、總股東人數。每週（集保）：總集保張數，以及「N 張以上」的累計持股張數與人數。</dd>
 <dt>③ 個股基本面</dt><dd>近五年單季 EPS、近四季 EPS 與年增、營業利益與年增、營益率、（保留盈餘＋資本公積）÷ 股本、四季 ROA；近兩年月營收、單月／3 月／12 月累計年增、月營收公告日（次月 10 日）的收盤價、營收變動說明。</dd>
-<dt>④⑤⑥ 篩選器</dt><dd>籌碼條件、基本面條件、兩者交集。排名一律「第 1 名最大」。</dd>
+<dt>④⑤⑥ 篩選器</dt><dd>籌碼條件、基本面條件、兩者交集。排名一律「第 1 名最大」；留空（或排名填 9999）＝不套用。<br>
+・<b>④ 籌碼篩選</b>：和 ⑬ 同一套條件——三項排名、大戶比例與股東人數跟「N 個交易日前」比、法人買超 ÷ 資本額、大戶人數排名、排名進步，另有 BG 線上版沒有的周轉率與買賣盤參數。〔20 天回測彙總表〕把同一組條件套回最近 20 個交易日、每天各自重篩，列出每天篩出的名單與到今天的報酬。<br>
+・<b>⑤ 基本面篩選</b>：三個範例（營收動能、獲利成長、創高動能）；〔24 個月回測彙總表〕套回過去 24 次月營收公告日，每次只用那一天已經公布的月營收與財報，附 20／60 日後報酬與同日母體平均。<br>
+・<b>⑥ 籌碼 × 基本面</b>：範例①②③；「篩選日」可以選最近 20 個交易日中的任何一天，籌碼用那一天的值、基本面只用那一天已經公布的資料；也有 20 天回測彙總表。<br>
+・三個篩選器與 ⑬ 都可以「匯出 CSV」（Excel 直接開）。</dd>
 <dt>⑦⑧ 排名軌跡、⑨⑩ 排名榜、⑪⑫ 金額軌跡</dt><dd>法人 60 日累計買超與 20 日成交資金，在全市場的排名（或金額）怎麼一天一天移動。排名會隨市場溫度自動校準——大盤跌時某一檔的法人排名一路往前，才是資金真正的選擇。</dd>
+<dt>⑬ 籌碼回測檢視表</dt><dd>把時間倒回去：用篩選日<b>當天</b>的籌碼資料套入條件，看那一天會篩出哪些股票，再算它們 20／60 個交易日後的漲跌；連續往回 50 個交易日（可改 20～120 天），每天各自重篩。篩選日要比最新資料早 60 個交易日，才算得出 60 日後報酬（「較近」模式放寬到 20 日）。<br>
+・摘要四格：有篩出個股的天數、累計篩出檔次（與不重複檔數）、20／60 日後正報酬比例（附平均、<b>超額</b>＝減去同一天流動性母體平均，以及母體自己的正報酬比例——多頭時大部分股票都會漲，要跟母體比才知道條件有沒有用）。<br>
+・兩張圖：每日篩出檔數、每日正報酬比例（虛線是母體）。三個分頁：每日勝率（含報酬分布，每 10 個百分點一格）、個股彙整（格子顯示 20 日／60 日報酬或收盤價，可排序）、個股走勢（淺色區塊＝篩選日、紅點＝被篩中的那幾天）。<br>
+・<b>和 BG 不一樣的地方</b>：報酬預設還原除權息（可以關掉，關掉就和 BG 一樣用收盤價直接算）；60 日後就是第 60 個交易日（BG 是第 59 個）；可以設「同一檔 N 個交易日內只算第一次」，避免同一檔連續被篩中、灌大檔次；BG 線上版沒有的 Excel 周轉率、買賣盤參數這裡都有。<br>
+・大戶人數相關的三個條件（÷ 大戶人數的兩個排名、大戶人數排名）要集保 15 級的人數：開放資料只給最新一週，過去的週要逐檔向集保查詢頁回補（每晚依流動性由大到小接著補）。還沒補到的個股在那些日子碰到這三個條件一律不符合，頁面上會標出那段期間有人數的檔數。</dd>
 <dt>精選漏斗</dt><dd>L0 流動性（股價 &gt; 10、20 日均額 &gt; 5,000 萬、不在 AI 選股的 E 財報否決名單）→ L1 籌碼共振（七個特徵的加權百分位前 10%，且法人、大戶、股東三根柱子至少兩根同向）→ 精選再要求共振前 5%、兩面以上成長旗標、趨勢成立（收盤 &gt; 60 日線且 20 日線 &gt; 60 日線）。權重每週用過去已實現的 20 日報酬學（rank IC，負的歸零），不是人工拍板。</dd>
 <dt>資料來源與口徑</dt><dd>
 ・<b>成交金額、法人買進／賣出</b>：證交所 MI_INDEX、T86，櫃買中心每日收盤與三大法人明細（官方成交金額；法人金額 ＝ 股數 × 當日均價，均價 ＝ 成交金額 ÷ 成交股數）。法人預估成交額 ＝（外資＋投信的買進＋賣出）÷ 2 × 均價。<br>
@@ -242,18 +315,18 @@ window.CF_V = "@@CFV@@";
 <div class="cf-card cf-gl" id="cf-gloss"><h4>名詞解釋</h4>
 <p class="cf-note">頁面上各張圖、各個表頭旁的 💡 是同一份說明的節錄。排名一律「第 1 名＝最大」，而且只在流動性母體裡排。</p>
 <dl>
-<dt>① 個股籌碼多圖：外資法人</dt>
+<dt>② 個股籌碼多圖：外資法人</dt>
 <dd><b>外資＋投信買賣超 ÷ 資本額 60 日累計（倍）</b>：外資＋投信（不含自營商）每天買賣超股數 × 當日均價（成交金額 ÷ 成交股數）＝買賣超金額；最近 60 個交易日加總，再除以資本額（那一天看得到的季報股本）。0.05 倍＝兩個多月法人淨買進股本 5% 的金額，大小型股可以直接比。<br>
 <b>紅：法人預估成交額 20 日／藍：成交金額 20 日</b>：法人預估成交額＝（外資＋投信的買進＋賣出股數）÷ 2 × 均價，是法人參與的成交金額；紅線是它的 20 日加總，藍線是全部成交金額的 20 日加總。紅佔藍越多，這段行情越是法人在做。<br>
 <b>外資投信 20 日市值周轉率（%）</b>：法人預估成交額 20 日加總 ÷ 市值 × 100。法人換手變積極時會上升（買賣都算，方向看買賣超）。<br>
 <b>扣掉大戶之 20 日周轉率（%）</b>：20 日成交金額 ÷（市值 ×（1 − 大戶比例））× 100。大戶的股票通常不動，扣掉之後才是真正流通的籌碼；比例高＝流通籌碼換手快、短線資金多。<br>
 <b>外資投信買賣超 ÷ 大戶人數 60 日（千元）</b>與<b>…排名</b>：60 日累計買賣超金額 ÷ 5,000 萬大戶人數。同樣的法人買超，大戶越少、每位大戶「分到」的越多，籌碼越容易被推動。排名是它在母體裡的名次。需要集保 15 級（含人數）資料。</dd>
-<dt>① 大戶籌碼</dt>
+<dt>② 大戶籌碼</dt>
 <dd><b>大戶</b>＝持股市值 ≥ 5,000 萬元的股東，每天用收盤價換算成張數門檻，加總集保 15 級裡門檻以上的各級（跨級時按對數比例內插，所以不會突然跳）。<b>大戶比例</b>＝大戶持股 ÷ 集保總股數；<b>大戶人數</b>＝門檻以上的人數；<b>大戶庫存張數</b>＝大戶比例 × 集保總股數 ÷ 1,000，也就是大戶手上合計幾張——股本變動時比看比例更不容易誤判。</dd>
-<dt>① 成交量能</dt>
+<dt>② 成交量能</dt>
 <dd><b>成交金額 ÷ 大戶人數 20 日（千元）</b>與<b>…排名</b>：20 日成交金額加總 ÷ 5,000 萬大戶人數。市場資金相對於大戶規模的熱度。<br>
 <b>成交金額 20 日佔全市場比例</b>、<b>成交資金佔比排名</b>、<b>成交金額 ÷ 資本額 20 日</b>：這一檔 20 日成交金額佔全市場的比重、它的名次，以及除以股本後的倍數。</dd>
-<dt>① 貪婪恐懼</dt>
+<dt>② 貪婪恐懼</dt>
 <dd>每根 K 線拆成往上（買盤）與往下（賣盤）的路徑：開盤跳空算一段；紅 K 假設走「開→低→高→收」，黑 K 假設走「開→高→低→收」。<b>買盤比例</b>＝往上的長度 ÷ 全部長度（0～1），一字線比昨收高記 1、低記 0。<br>
 <b>貪婪指標 1／2</b>＝買盤比例最近 20／60 天的<b>加總</b>；<b>恐懼指標 1／2</b>＝天數 − 貪婪（也就是賣盤比例的加總）。<br>
 <b>買盤比例 20／60 日 − 賣盤比例</b>＝貪婪 − 恐懼＝買賣盤力道；> 0 表示買方較主動。20 日力道轉正且比五天前強，就是 <b>T2 蓄勢</b>。它用來代替公開資料沒有的內外盤。</dd>
@@ -353,7 +426,7 @@ function resolve(q){
 function stock(code){ return getJSON("stock/" + code + ".json"); }
 function label(code){ var r = ROWS[code]; return code + " " + (r ? r.n : ""); }
 // ── 連結 ────────────────────────────────────────────────────────────────
-// 代號 → 本站的〔個股資訊頁〕；名稱 → 本頁的〔① 個股籌碼多圖〕；收盤價旁的小圖示 →
+// 代號 → 本站的〔個股資訊頁〕；名稱 → 本頁的〔② 個股籌碼多圖〕；收盤價旁的小圖示 →
 // Yahoo 股市技術分析（和評等清單同一個圖示、同一個網址格式：上市 .TW、上櫃 .TWO）。
 // 不另外加欄位：三種去處各自掛在「最自然會去點的那一格」，表頭的說明列講一次。
 function yahooTA(code){
@@ -364,7 +437,7 @@ function codeCell(code){
   return el("td", {cls: "l"}, el("a", {href: "stock/" + encodeURIComponent(code) + ".html", title: "個股資訊頁", text: code}));
 }
 function nameCell(code, name){
-  var a = el("a", {href: "#t1-" + code, title: "① 個股籌碼多圖", text: name || code});
+  var a = el("a", {href: "#t1-" + code, title: "② 個股籌碼多圖", text: name || code});
   a.onclick = function(e){ e.preventDefault(); open("t1", code); window.scrollTo(0, $("cf-tabs").getBoundingClientRect().top + window.pageYOffset - 8); };
   return el("td", {cls: "l"}, a);
 }
@@ -377,7 +450,7 @@ function stockLinks(code, extra){
     el("a", {href: "stock/" + encodeURIComponent(code) + ".html", text: "個股資訊頁"}), "　",
     el("a", {href: yahooTA(code), target: "_blank", rel: "noopener", text: "Yahoo 技術分析"}));
 }
-var LINK_NOTE = "點代號開個股資訊頁、點名稱看 ① 個股籌碼多圖、點收盤價旁的圖示開 Yahoo 技術分析。";
+var LINK_NOTE = "點代號開個股資訊頁、點名稱看 ② 個股籌碼多圖、點收盤價旁的圖示開 Yahoo 技術分析。";
 
 // ── 💡 名詞說明 ─────────────────────────────────────────────────────────
 // 和全站同一個燈泡（site.js 用事件委派處理，後來才畫出來的也有效）。內容是這裡寫死的
@@ -449,6 +522,8 @@ function chart(title, dates, series, opt){
   if (lo < 0 && hi > 0) svg.appendChild(svgel("line", {x1: L, x2: W - Rr, y1: Y(0), y2: Y(0), stroke: "var(--muted)", "stroke-dasharray": "3 3"}));
   var t1 = svgel("text", {x: L, y: H - 5}); t1.textContent = dates[0] || ""; svg.appendChild(t1);
   var t2 = svgel("text", {x: W - Rr, y: H - 5, "text-anchor": "end"}); t2.textContent = dates[n - 1] || ""; svg.appendChild(t2);
+  // ⑬ 個股走勢：淺色區塊＝回測的篩選日（opt.band = [起, 迄] 的索引）
+  if (opt.band){ var bx0 = X(opt.band[0]), bx1 = X(opt.band[1]); svg.appendChild(svgel("rect", {x: Math.min(bx0, bx1) - 1, y: T, width: Math.abs(bx1 - bx0) + 2, height: H - T - B, fill: "var(--tc,var(--accent))", opacity: .12})); }
   series.forEach(function(s){
     var col = s.c || "var(--accent)";
     if (opt.bar){
@@ -465,9 +540,13 @@ function chart(title, dates, series, opt){
         if (!isnum(v)){ pen = false; return; }
         d += (pen ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); pen = true;
       });
-      svg.appendChild(svgel("path", {d: d, fill: "none", stroke: col, "stroke-width": opt.thin ? 1.2 : 1.8}));
+      var pa = {d: d, fill: "none", stroke: col, "stroke-width": opt.thin || s.dash ? 1.2 : 1.8};
+      if (s.dash) pa["stroke-dasharray"] = "4 3";
+      svg.appendChild(svgel("path", pa));
     }
   });
+  // ⑬ 個股走勢：被篩中的那幾天（opt.dots = 索引清單，畫在第一條線上）
+  (opt.dots || []).forEach(function(i){ var v = series[0].v[i]; if (isnum(v)) svg.appendChild(svgel("circle", {cx: X(i), cy: Y(v), r: 3.5, fill: "var(--up)", stroke: "var(--surface)", "stroke-width": 1})); });
   var cur = svgel("line", {x1: 0, x2: 0, y1: T, y2: H - B, stroke: "var(--muted)", opacity: 0});
   svg.appendChild(cur);
   var ov = svgel("rect", {x: L, y: 0, width: W - L - Rr, height: H, fill: "transparent"});
@@ -558,7 +637,7 @@ function trail(host, items, opt){
 function logTicks(lo, hi){ var out = []; [1,2,3,5,10,20,30,50,100,200,300,500,1000,2000].forEach(function(v){ if (v >= lo && v <= hi) out.push(v); }); return out; }
 function symlog(v){ return v >= 0 ? Math.log10(1 + v) : -Math.log10(1 - v); }
 
-function rankTrail(host, codes, scale){
+function rankTrail(host, codes, scale, autoplay){
   Promise.all([getJSON("market.json")].concat(codes.map(stock))).then(function(res){
     var mk = res[0], docs = res.slice(1);
     var n = 60, ds = mk.dates.slice(-n);
@@ -569,7 +648,8 @@ function rankTrail(host, codes, scale){
     var f = function(v){ return lg ? Math.log10(Math.max(1, v)) : v; };
     trail(host, items, {tx: f, ty: f, yrev: true, xlab: "法人 60 日買超排名（左＝第 1 名）", ylab: "成交資金佔比排名（上＝第 1 名）",
       xticks: lg ? logTicks(1, 2000) : [1, 250, 500, 1000, 1500, 2000], yticks: lg ? logTicks(1, 2000) : [1, 250, 500, 1000, 1500, 2000],
-      fmtx: function(v){ return isnum(v) ? "法人第 " + v + " 名" : "—"; }, fmty: function(v){ return isnum(v) ? "資金第 " + v + " 名" : "—"; }});
+      fmtx: function(v){ return isnum(v) ? "法人第 " + v + " 名" : "—"; }, fmty: function(v){ return isnum(v) ? "資金第 " + v + " 名" : "—"; }, autoplay: autoplay});
+    sideList(host, docs, "rank");
     if (docs.some(function(d){ return !d.d; })) host.appendChild(el("p", {cls: "cf-note", text: "有的個股流動性不足（20 日均額 ≤ 5,000 萬），沒有產生每日序列。"}));
   }).catch(function(e){ host.textContent = "讀不到資料：" + e.message; });
 }
@@ -586,17 +666,18 @@ function amountTrail(host, codes, scale, autoplay, range){
       xzero: true, hline: hl, ext: range === "all" ? mk.ext : null, xlab: "外資投信買賣超 60 日累計（億元）", ylab: "20 日成交金額（億元）",
       xticks: lg ? [-1000,-300,-100,-30,-10,-3,0,3,10,30,100,300,1000] : null, yticks: lg ? [0.1,0.3,1,3,10,30,100,300,1000,3000] : null, xd: 0, yd: 1,
       fmtx: function(v){ return isnum(v) ? fmt(v, 1) + " 億" : "—"; }, fmty: function(v){ return isnum(v) ? fmt(v, 1) + " 億" : "—"; }, autoplay: autoplay});
+    sideList(host, docs, "amount");
     if (!lg){ /* 線性刻度時自動取刻度 */ }
   }).catch(function(e){ host.textContent = "讀不到資料：" + e.message; });
 }
 
-// ── ① 多圖看板 ─────────────────────────────────────────────────────────
+// ── ② 多圖看板（內部代號 t1）─────────────────────────────────────────────────────────
 function show1(code){
   var o = $("cf-o1"); o.textContent = "載入中…";
   Promise.all([getJSON("market.json"), stock(code)]).then(function(res){
     var mk = res[0], s = res[1]; o.innerHTML = "";
     o.appendChild(stockLinks(code, "　資料日 " + s.asof));
-    if (!s.d){ o.appendChild(el("p", {cls: "cf-note", text: "這一檔流動性不足（20 日均額 ≤ 5,000 萬），沒有產生每日序列；可改看 ② 大戶籌碼與 ③ 基本面。"})); return; }
+    if (!s.d){ o.appendChild(el("p", {cls: "cf-note", text: "這一檔流動性不足（20 日均額 ≤ 5,000 萬），沒有產生每日序列；可改看 ① 大戶籌碼與 ③ 基本面。"})); return; }
     var d = s.d, ds = mk.dates;
     o.appendChild(chart("收盤價", ds, [{v: d.cl, c: "var(--price)"}], {wide: true}));
     var g = group(o, "外資法人");
@@ -633,7 +714,7 @@ function show1(code){
   }).catch(function(e){ o.textContent = "讀不到 " + code + " 的資料：" + e.message; });
 }
 
-// ── ② 大戶籌碼看板 ─────────────────────────────────────────────────────
+// ── ① 大戶籌碼看板（內部代號 t2）─────────────────────────────────────────────────────
 function show2(code){
   var o = $("cf-o2"); o.textContent = "載入中…";
   Promise.all([getJSON("market.json"), stock(code)]).then(function(res){
@@ -725,27 +806,6 @@ function show3(code){
 }
 
 // ── ④⑤⑥ 篩選器 ─────────────────────────────────────────────────────────
-var F4 = [
-  {k: "hr", t: "大戶人數排名 ≤", note: "（1＝大戶人數最多；需 15 級資料）"},
-  {k: "z", t: "外資投信買賣超 ÷ 資本額 60 日（倍）≥"},
-  {k: "hp", t: "大戶比例本身 ≥（%）"},
-  {k: "hpd", t: "大戶比例較 N 週前增加 ≥（個百分點）", n: "hpn"},
-  {k: "shd", t: "總股東人數較 N 週前減少（填 N，1～" + 11 + "）", only: true},
-  {k: "wr", t: "外資投信買賣超 ÷ 大戶人數・60 日排名 ≤", note: "（需 15 級資料）"},
-  {k: "xr", t: "成交金額 ÷ 大戶人數・20 日排名 ≤", note: "（需 15 級資料）"},
-  {k: "yr", t: "外資投信買賣超金額・60 日累計排名 ≤"},
-  {k: "vr", t: "成交資金佔比（20 日）排名 ≤"},
-  {k: "vrd", t: "成交資金排名 20 日前進 ≥（名）"},
-  {k: "tex", t: "扣掉大戶之 20 日周轉率 ≥（%）"},
-  {k: "texc", t: "扣掉大戶之 20 日周轉率・20 日增減 ≥（個百分點）"},
-  {k: "ft", t: "外資投信 20 日市值周轉率 ≥（%）"},
-  {k: "ftc", t: "外資投信市值周轉率・20 日增減 ≥（個百分點）"},
-  {k: "d20", t: "買盤比例 − 賣盤比例 20 日 ≥"},
-  {k: "d20c", t: "買盤 − 賣盤 20 日・20 日增減 ≥"},
-  {k: "d60", t: "買盤比例 − 賣盤比例 60 日 ≥"},
-  {k: "d60c", t: "買盤 − 賣盤 60 日・20 日增減 ≥"},
-  {k: "win", t: "排名與倍數條件「近 N 日內任一天」符合（填 N，1～20；留空＝只看今天）", only: true, max: 20}
-];
 var F5 = [
   {g: "營收動能", k: "r1", t: "單月營收年增率（%）"}, {g: "營收動能", k: "r3", t: "3 月營收年增率（%）"}, {g: "營收動能", k: "r12", t: "12 月營收年增率（%）"},
   {g: "獲利成長", k: "e4y", t: "四季 EPS 年增率（%）"}, {g: "獲利成長", k: "oy", t: "營業利益年增率（%）"}, {g: "獲利成長", k: "e4", t: "四季 EPS（元）"}, {g: "獲利成長", k: "eq", t: "單季 EPS（元）"},
@@ -758,24 +818,11 @@ var F5 = [
 var FLAGS = [["e4h4", "四季 EPS 創近 4 季新高"], ["e4h8", "四季 EPS 創近 8 季新高"], ["eqh4", "單季 EPS 創近 4 季新高"], ["eqh8", "單季 EPS 創近 8 季新高"],
   ["omh4", "營益率創近 4 季新高"], ["omh8", "營益率創近 8 季新高"], ["nmh4", "稅後淨利率創近 4 季新高"], ["nmh8", "稅後淨利率創近 8 季新高"],
   ["rh12", "月營收創近 12 個月新高"], ["rh24", "月營收創近 24 個月新高"]];
-var has15 = false;
 
 function num(id){ var e = $(id); if (!e || e.value === "") return null; var v = +e.value; return isFinite(v) ? v : null; }
 function buildForms(){
-  var f = $("cf-f4");
-  F4.forEach(function(x){
-    var lab = el("label", null, x.t);
-    if (x.only){
-      lab.appendChild(el("input", {type: "number", id: "cf4-" + x.k, min: 1, max: x.max || 11, step: 1}));
-    } else {
-      lab.appendChild(el("input", {type: "number", id: "cf4-" + x.k, step: "any"}));
-      if (x.n){ lab.appendChild(document.createTextNode("N＝")); lab.appendChild(el("input", {type: "number", id: "cf4-" + x.n, min: 1, max: 11, step: 1})); }
-    }
-    if (x.note){ lab.appendChild(el("span", {cls: "cf-note", text: x.note})); if (!has15) lab.className = "cf-dis"; }
-    f.appendChild(lab);
-  });
-  f.appendChild(el("label", null, el("input", {type: "checkbox", id: "cf4-liq", checked: "checked"}), "只看流動性母體（股價 > 10、20 日均額 > 5,000 萬）", tipEl(G_L0)));
-  f.appendChild(el("label", null, el("input", {type: "checkbox", id: "cf4-noveto"}), "排除 E 財報否決名單"));
+  condForm($("cf4-f"), "cf4", {veto: true});
+  condForm($("cf13-f"), "cf13");
   var g5 = $("cf-f5"), cur = "";
   F5.forEach(function(x){
     if (x.g !== cur){ cur = x.g; g5.appendChild(el("div", {cls: "cf-grp", text: x.g})); }
@@ -789,33 +836,6 @@ function buildForms(){
   Object.keys(inds).sort().forEach(function(k){ box.appendChild(el("label", null, el("input", {type: "checkbox", "data-ind": k, checked: "checked"}), k + "（" + inds[k] + "）")); });
   $("cf-ind-all").onclick = function(){ box.querySelectorAll("input").forEach(function(i){ i.checked = true; }); };
   $("cf-ind-none").onclick = function(){ box.querySelectorAll("input").forEach(function(i){ i.checked = false; }); };
-}
-function pass4(r){
-  var v;
-  if (($("cf4-liq") || {}).checked && !r.liq) return false;
-  if (($("cf4-noveto") || {}).checked && r.veto) return false;
-  var lim = {hr: "le", wr: "le", xr: "le", yr: "le", vr: "le", z: "ge", hp: "ge", vrd: "ge",
-    tex: "ge", texc: "ge", ft: "ge", ftc: "ge", d20: "ge", d20c: "ge", d60: "ge", d60c: "ge"};
-  var win = num("cf4-win"), hist = {yr: "yrs", vr: "vrs", z: "zs"};
-  for (var k in lim){
-    v = num("cf4-" + k); if (v === null) continue;
-    var ok = function(x){ return isnum(x) && (lim[k] === "le" ? x <= v : x >= v); };
-    if (win && hist[k] && r[hist[k]]){
-      if (!r[hist[k]].slice(0, win).some(ok)) return false;
-    } else if (!ok(r[k])) return false;
-  }
-  var hpd = num("cf4-hpd"), hpn = num("cf4-hpn");
-  if (hpd !== null){
-    hpn = hpn || 4;
-    var a = (r.hps || [])[0], b = (r.hps || [])[hpn];
-    if (!isnum(a) || !isnum(b) || a - b < hpd) return false;
-  }
-  var shn = num("cf4-shd");
-  if (shn !== null){
-    var s0 = (r.shs || [])[0], s1 = (r.shs || [])[shn];
-    if (!isnum(s0) || !isnum(s1) || !(s0 < s1)) return false;
-  }
-  return true;
 }
 function pass5(r){
   var box = $("cf-inds"), on = {};
@@ -896,17 +916,6 @@ function table(host, rows, cols, opt){
   }
   render();
 }
-function run4(){ table($("cf-o4"), R.rows.filter(pass4), COLS4, {sort: "yr"}); }
-function run5(){ table($("cf-o5"), R.rows.filter(pass5), COLS5, {sort: "c"}); }
-function run6(){ table($("cf-o6"), R.rows.filter(function(r){ return pass4(r) && pass5(r); }), COLS6, {sort: "yr"}); }
-function sample4(){
-  F4.forEach(function(x){ var e = $("cf4-" + x.k); if (e) e.value = ""; if (x.n) $("cf4-" + x.n).value = ""; });
-  if (has15) $("cf4-hr").value = 300;
-  $("cf4-z").value = 0.05; $("cf4-hpd").value = 0.5; $("cf4-hpn").value = 4; $("cf4-shd").value = 4;
-  $("cf4-yr").value = 700;
-  if (has15){ $("cf4-wr").value = 700; $("cf4-xr").value = 700; }
-}
-
 // ── ⑨⑩ 排名榜 ─────────────────────────────────────────────────────────
 var mark9 = {}, list10 = [];
 function rankTables(host, marks, syncId){
@@ -945,8 +954,8 @@ function rankTables(host, marks, syncId){
     });
   }).catch(function(e){ host.textContent = "讀不到排名資料：" + e.message; });
 }
-function draw9(){ var m = {}; Object.keys(mark9).forEach(function(c){ m[c] = "#c9a400"; }); rankTables($("cf-o9"), m, "cf-sync9"); }
-function draw10(){ var m = {}; list10.forEach(function(c, i){ m[c] = COLORS[i % COLORS.length]; }); chips($("cf-c10"), list10, draw10); rankTables($("cf-o10"), m, "cf-sync10"); }
+function draw9(){ var m = {}; Object.keys(mark9).forEach(function(c){ m[c] = "#c9a400"; }); rankCards($("cf-k9"), Object.keys(mark9), ["#c9a400"]); rankTables($("cf-o9"), m, "cf-sync9"); }
+function draw10(){ var m = {}; list10.forEach(function(c, i){ m[c] = COLORS[i % COLORS.length]; }); chips($("cf-c10"), list10, draw10); rankCards($("cf-k10"), list10, COLORS); rankTables($("cf-o10"), m, "cf-sync10"); }
 
 // ── 多檔清單 ───────────────────────────────────────────────────────────
 var multi = {"8": [], "10": list10, "12": []};
@@ -1026,6 +1035,824 @@ function showVal(){
   }).catch(function(e){ o.textContent = "讀不到驗證資料：" + e.message; });
 }
 
+// ── 逐日歷史（④⑥⑬ 共用；資料見 chipflow/history.py）──────────────────────
+// hist.json 是表頭；hist_a.bin（較舊）與 hist_b.bin（最近 80 天）是 gzip 過的
+// 「欄位 × 個股 × 日期」序列：逐日差分、zigzag、varint，缺值是 int32 最小值。
+// ④⑥ 只要最近那一段；⑬ 兩段都要。瀏覽器內建的 DecompressionStream 負責解壓。
+var HS = null, HS_HEAD = null, HS_WAIT = {}, FD = null, FD_WAIT = null;
+var SENT = -2147483648;
+function gunzip(buf){
+  var u = new Uint8Array(buf);
+  if (u.length < 2 || u[0] !== 0x1f || u[1] !== 0x8b) return Promise.resolve(u);   // 伺服器已經解開了
+  if (typeof DecompressionStream === "undefined") return Promise.reject(new Error("這個瀏覽器太舊，不支援解壓縮（請更新瀏覽器）"));
+  return new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer().then(function(b){ return new Uint8Array(b); });
+}
+function getBin(name){
+  return fetch(window.CF_URL ? window.CF_URL(name) : BASE + name, window.CF_OPT || {cache: "no-cache"}).then(function(r){
+    if (!r.ok) throw new Error(name + " " + r.status);
+    return r.arrayBuffer();
+  }).then(gunzip);
+}
+function histHead(){ return HS_HEAD || (HS_HEAD = getJSON("hist.json")); }
+// 一條序列：varint → zigzag → 逐日累加（int32 環繞），寫進 A[base…base+len)，回傳讀到哪
+function readSeq(u, pos, A, base, len){
+  var prev = 0;
+  for (var j = 0; j < len; j++){
+    var byte = u[pos++], x = byte & 127, mul = 128;
+    while (byte >= 128){ byte = u[pos++]; x += (byte & 127) * mul; mul *= 128; }
+    prev = (prev + ((x % 2 === 1) ? -((x + 1) / 2) : x / 2)) | 0;   // x 可能大於 2^31，用浮點數算
+    A[base + j] = prev;
+  }
+  return pos;
+}
+// 把一段（a～b 天）解進 arrs[欄位][個股 × 總天數]
+function decodeInto(u, fields, arrs, nc, nd, a, b){
+  var pos = 0;
+  for (var f = 0; f < fields.length; f++){
+    var A = arrs[fields[f][0]];
+    for (var s = 0; s < nc; s++) pos = readSeq(u, pos, A, s * nd + a, b - a);
+  }
+}
+// need: "b"＝只要最近一段（④⑥）；"ab"＝兩段都要（⑬）
+function loadHist(need){
+  if (need === "ab"){
+    if (HS && HS.from === 0) return Promise.resolve(HS);
+    if (!HS_WAIT.ab){
+      HS_WAIT.ab = loadHist("b").then(function(){
+        var h = HS.h;
+        if (HS.from === 0 || h.split === 0){ HS.from = 0; return HS; }
+        return getBin("hist_a.bin").then(function(u){ decodeInto(u, h.fields, HS.a, HS.nc, HS.nd, 0, h.split); HS.from = 0; return HS; });
+      });
+      HS_WAIT.ab.catch(function(){ delete HS_WAIT.ab; });
+    }
+    return HS_WAIT.ab;
+  }
+  if (HS) return Promise.resolve(HS);
+  if (!HS_WAIT.b){
+    HS_WAIT.b = histHead().then(function(h){
+      return getBin("hist_b.bin").then(function(u){
+        var nc = h.codes.length, nd = h.dates.length, arrs = {}, idx = {}, sc = {};
+        h.fields.forEach(function(f){ arrs[f[0]] = new Int32Array(nc * nd).fill(SENT); sc[f[0]] = f[1]; });
+        h.codes.forEach(function(c, i){ idx[c] = i; });
+        decodeInto(u, h.fields, arrs, nc, nd, h.split, nd);
+        HS = {h: h, dates: h.dates, codes: h.codes, idx: idx, nc: nc, nd: nd, a: arrs, sc: sc, from: h.split, adj: h.adj || {}, whales: h.whales || [], mkt: {}};
+        return HS;
+      });
+    });
+    HS_WAIT.b.catch(function(){ delete HS_WAIT.b; });
+  }
+  return HS_WAIT.b;
+}
+function hv(k, s, d){ var v = HS.a[k][s * HS.nd + d]; return v === SENT ? null : v / HS.sc[k]; }
+function hvi(k, s, d){ var v = HS.a[k][s * HS.nd + d]; return v === SENT ? null : v; }   // 整數（排名、旗標）
+// 第 d 天收盤買、第 d+n 天收盤賣的報酬（%）。adj＝乘回除權息（和 AI 選股同一套還原報酬）。
+function retAt(s, d, n, adj){
+  var j = d + n;
+  if (j > HS.nd - 1) return null;
+  var p0 = hv("cl", s, d);
+  if (p0 == null || p0 <= 0) return null;
+  var p1 = null;
+  for (var k = j; k > d; k--){ p1 = hv("cl", s, k); if (p1 != null) break; }
+  if (p1 == null) return null;
+  var f = 1;
+  if (adj !== false){ var ev = HS.adj[HS.codes[s]]; if (ev) for (var e = 0; e < ev.length; e++){ if (ev[e][0] > d && ev[e][0] <= k) f *= ev[e][1]; } }
+  return (p1 / p0 * f - 1) * 100;
+}
+// 同一天流動性母體（旗標 1）的平均報酬與正報酬比例——「超額」的基準
+function mktAt(d, n, adj){
+  var key = d + ":" + n + ":" + (adj !== false);
+  if (HS.mkt[key]) return HS.mkt[key];
+  var sum = 0, cnt = 0, pos = 0;
+  for (var s = 0; s < HS.nc; s++){
+    var fl = hvi("fl", s, d); if (fl == null || !(fl & 1)) continue;
+    var r = retAt(s, d, n, adj); if (r == null) continue;
+    sum += r; cnt++; if (r >= 0) pos++;
+  }
+  return (HS.mkt[key] = {avg: cnt ? sum / cnt : null, win: cnt ? pos / cnt : null, n: cnt});
+}
+
+// ── 條件（④ 與 ⑬ 同一套欄位，⑥ 用 ④ 的）────────────────────────────────
+// 口徑照 BG〈籌碼回測檢視表〉：排名「≤ 名次」（第 1 名＝最大）；大戶比例、股東人數
+// 跟「N 個交易日前」比；倍數「大於」。留空＝不套用（排名填 9999 也等於不用）。
+var RANK_KEYS = [["wr", "外資投信買賣超 ÷ 大戶人數 60 日排名"], ["xr", "成交金額 ÷ 大戶人數 20 日排名"], ["yr", "外資投信買賣超金額 60 日累計排名"], ["vr", "成交資金（20 日）排名"], ["hr", "大戶人數排名"]];
+var CF = [
+  {g: "三項排名門檻（第 1 名＝最大）"},
+  {k: "wr", t: "外資投信買賣超 ÷ 大戶人數・60 日排名 ≤", type: "rank", w: 1},
+  {k: "xr", t: "成交金額 ÷ 大戶人數・20 日排名 ≤", type: "rank", w: 1},
+  {k: "yr", t: "外資投信買賣超金額・60 日累計排名 ≤", type: "rank"},
+  {g: "大戶比例、股東人數（跟 N 個交易日前比）"},
+  {k: "hpn", t: "大戶比例：跟幾個交易日前比較（1～60）", type: "days", max: 60},
+  {k: "hpd", t: "　…增加要大於幾個百分點（空白＝0，也就是比那天高）", type: "num"},
+  {k: "hpm", t: "大戶比例本身 >（%）", type: "num"},
+  {k: "shn", t: "總股東人數比幾個交易日前少（1～60）", type: "days", max: 60},
+  {g: "法人買超、大戶人數、排名進步"},
+  {k: "z", t: "外資投信買賣超 ÷ 資本額 60 日累計 >（倍；0＝60 日累計是買超）", type: "num"},
+  {k: "hr", t: "大戶人數排名 ≤（只看前幾名）", type: "rank", w: 1},
+  {k: "pk", t: "排名進步：", type: "prog"},
+  {g: "進階（BG 線上版沒有提供的 Excel 周轉率、買賣盤參數）"},
+  {k: "vr", t: "成交資金（20 日）排名 ≤", type: "rank"},
+  {k: "tex", t: "扣掉大戶之 20 日周轉率 ≥（%）", type: "num"},
+  {k: "texc", t: "　…比 20 日前增加 ≥（個百分點）", type: "num"},
+  {k: "ft", t: "外資投信 20 日市值周轉率 ≥（%）", type: "num"},
+  {k: "ftc", t: "　…比 20 日前增加 ≥（個百分點）", type: "num"},
+  {k: "d20", t: "買盤比例 − 賣盤比例 20 日 ≥", type: "num"},
+  {k: "d20c", t: "　…比 20 日前增加 ≥", type: "num"},
+  {k: "d60", t: "買盤比例 − 賣盤比例 60 日 ≥", type: "num"},
+  {k: "d60c", t: "　…比 20 日前增加 ≥", type: "num"},
+  {k: "win", t: "排名與倍數條件「近 N 日內任一天」符合即可（1～20；空白＝只看當天）", type: "days", max: 20}
+];
+var CF_TIP = {
+  wr: "外資＋投信 60 日累計買賣超金額 ÷ 5,000 萬大戶人數，在全市場（有 15 級人數的個股）裡的名次。同樣的買超，大戶越少的股票越容易被推動。",
+  xr: "20 日成交金額 ÷ 5,000 萬大戶人數的名次。",
+  yr: "外資＋投信 60 日累計買賣超金額（股數 × 當日均價）在全市場的名次，第 1 名＝買超最多。",
+  hpn: "大戶比例（持股市值 ≥ 5,000 萬的股東合計持股 ÷ 集保總股數）要比 N 個交易日前高。集保一週一次，所以 1～4 天前通常是同一週的分佈，只差在每天用收盤價重算門檻。",
+  shn: "總股東人數（集保）要比 N 個交易日前少——人數變少、股價沒跌，通常代表籌碼往少數人集中。",
+  z: "外資＋投信 60 日累計買賣超金額 ÷ 資本額。0.05 倍＝兩個多月法人淨買進股本 5% 的金額。",
+  hr: "5,000 萬大戶人數在全市場的名次，第 1 名＝大戶最多。",
+  pk: "篩選日當天的名次不能比 N 個交易日前差（持平也算）。",
+  win: "只作用在排名與倍數條件：近 N 個交易日裡任何一天符合就算。大戶比例、股東人數、周轉率、買賣盤仍看當天。"
+};
+function condForm(host, pre, opt){
+  opt = opt || {};
+  host.innerHTML = "";
+  CF.forEach(function(x){
+    if (x.g){ host.appendChild(el("div", {cls: "cf-grp", text: x.g, style: "grid-column:1/-1"})); return; }
+    var lab = el("label", {id: pre + "-l-" + x.k, cls: "cf-f"}, el("span", {text: x.t}));
+    if (x.type === "prog"){
+      var sel = el("select", {id: pre + "-pk"}, el("option", {value: "", text: "（不要求）"}));
+      RANK_KEYS.forEach(function(r){ sel.appendChild(el("option", {value: r[0], text: r[1]})); });
+      lab.className = "cf-f cf-fw";
+      lab.appendChild(el("span", {cls: "cf-in cf-wrap"}, sel, "較", el("input", {type: "number", id: pre + "-pkn", min: 1, max: 60, step: 1, placeholder: "N"}), "個交易日前進步（持平也算）"));
+    } else {
+      var a = {type: "number", id: pre + "-" + x.k, step: x.type === "num" ? "any" : 1};
+      if (x.type !== "num"){ a.min = 1; if (x.max) a.max = x.max; }
+      lab.appendChild(el("span", {cls: "cf-in"}, el("input", a)));
+    }
+    // 燈泡和輸入框黏在一起，不要單獨折到下一行
+    if (CF_TIP[x.k]) (lab.querySelector(".cf-in") || lab).appendChild(tipEl(CF_TIP[x.k] + (x.w ? "<br>需要集保 15 級（含人數）；還沒補到的個股碰到這個條件一律不符合。" : "")));
+    host.appendChild(lab);
+  });
+  host.appendChild(el("label", {cls: "cf-ck"}, el("input", {type: "checkbox", id: pre + "-liq", checked: "checked"}), el("span", {text: "只看流動性母體（股價 > 10、20 日均額 > 5,000 萬）"}), tipEl(G_L0)));
+  host.appendChild(el("label", {cls: "cf-ck"}, el("input", {type: "checkbox", id: pre + "-t1"}), el("span", {text: "趨勢成立（T1：收盤 > 60 日線且 20 日線 > 60 日線）"}), tipEl(G_TIME)));
+  if (opt.veto) host.appendChild(el("label", {cls: "cf-ck"}, el("input", {type: "checkbox", id: pre + "-noveto"}), el("span", {text: "排除 E 財報否決名單（只套用在今天）"}), tipEl(G_E)));
+}
+function readCond(pre){
+  var c = {}, err = [], bad = [];
+  document.querySelectorAll("[id^='" + pre + "-']").forEach(function(e){ e.classList.remove("cf-bad"); });
+  function num(id){ var e = $(pre + "-" + id); if (!e || e.value === "") return null; var v = +e.value; return isFinite(v) ? v : NaN; }
+  function fail(id, msg){ err.push(msg); bad.push(pre + "-" + id); }
+  CF.forEach(function(x){
+    if (!x.k || x.type === "prog") return;
+    var v = num(x.k);
+    if (v === null) return;
+    if (isNaN(v)) return fail(x.k, x.t.replace(/[（(].*$/, "") + "：不是數字");
+    if (x.type === "rank"){
+      if (v < 1 || Math.floor(v) !== v) return fail(x.k, x.t.replace(/[（(].*$/, "") + "：名次要是 1 以上的整數");
+      if (v >= 9999) return;          // 9999＝不用（和 BG 一樣）
+    }
+    if (x.type === "days" && (v < 1 || v > x.max || Math.floor(v) !== v)) return fail(x.k, x.t.replace(/[（(].*$/, "") + "：要填 1～" + x.max + " 的整數");
+    c[x.k] = v;
+  });
+  var pk = ($(pre + "-pk") || {}).value, pkn = num("pkn");
+  if (pk){
+    if (pkn === null || isNaN(pkn) || pkn < 1 || pkn > 60 || Math.floor(pkn) !== pkn) fail("pkn", "排名進步：天數要填 1～60 的整數");
+    else { c.pk = pk; c.pkn = pkn; }
+  }
+  if (c.hpd != null && c.hpn == null) fail("hpn", "大戶比例：填了「增加幾個百分點」，也要填跟幾個交易日前比較");
+  c.liq = !!($(pre + "-liq") || {}).checked;
+  c.t1 = !!($(pre + "-t1") || {}).checked;
+  c.noveto = !!($(pre + "-noveto") || {}).checked;
+  bad.forEach(function(id){ var e = $(id); if (e) e.classList.add("cf-bad"); });
+  return {c: c, err: err};
+}
+function condEmpty(c){ return !Object.keys(c).some(function(k){ return ["liq", "t1", "noveto"].indexOf(k) < 0; }); }
+function condLook(c){   // 這組條件最多要往回看幾天
+  var m = 0;
+  ["hpn", "shn", "pkn"].forEach(function(k){ if (c[k]) m = Math.max(m, c[k]); });
+  if (c.texc != null || c.ftc != null || c.d20c != null || c.d60c != null) m = Math.max(m, 20);
+  if (c.win) m = Math.max(m, c.win - 1);
+  return m;
+}
+function setCond(pre, v){
+  CF.forEach(function(x){ if (x.k && x.type !== "prog"){ var e = $(pre + "-" + x.k); if (e) e.value = v[x.k] != null ? v[x.k] : ""; } });
+  if ($(pre + "-pk")){ $(pre + "-pk").value = v.pk || ""; $(pre + "-pkn").value = v.pkn || ""; }
+  if ($(pre + "-liq")) $(pre + "-liq").checked = v.liq !== false;
+  if ($(pre + "-t1")) $(pre + "-t1").checked = !!v.t1;
+}
+// BG〈籌碼回測檢視表〉的「套用範例條件」：三項排名 700、大戶比例與股東人數都跟 20 日前比、
+// 買超 ÷ 資本額 > 0.05 倍、大戶人數前 300 名。只是示範操作，不是選股建議。
+var COND_SAMPLE = {wr: 700, xr: 700, yr: 700, hpn: 20, shn: 20, z: 0.05, hr: 300};
+function showErr(id, err){ var e = $(id); e.innerHTML = ""; if (err.length) e.appendChild(el("div", null, "請先修正：", el("ul", null, err.map(function(m){ return el("li", {text: m}); })))); }
+
+// 第 s 檔在第 d 天是否符合（HS 已載入、d 以前 condLook 天都在 HS.from 之後）
+function passAt(c, s, d){
+  var k;
+  if (c.liq || c.t1){ var fl = hvi("fl", s, d); if (fl == null) return false; if (c.liq && !(fl & 1)) return false; if (c.t1 && !(fl & 2)) return false; }
+  var from = Math.max(HS.from, d - (c.win ? c.win - 1 : 0));
+  function anyDay(test){ for (var j = d; j >= from; j--){ if (test(j)) return true; } return false; }
+  var ranks = ["wr", "xr", "yr", "vr", "hr"];
+  for (var r = 0; r < ranks.length; r++){
+    k = ranks[r]; if (c[k] == null) continue;
+    var lim = c[k], kk = k;
+    if (!anyDay(function(j){ var v = hvi(kk, s, j); return v != null && v <= lim; })) return false;
+  }
+  if (c.z != null){ var zl = c.z; if (!anyDay(function(j){ var v = hv("z", s, j); return v != null && v > zl; })) return false; }
+  var hp = null;
+  if (c.hpm != null || c.hpn != null){ hp = hv("hp", s, d); if (hp == null) return false; }
+  if (c.hpm != null && !(hp > c.hpm)) return false;
+  if (c.hpn != null){
+    if (d - c.hpn < HS.from) return false;
+    var hp0 = hv("hp", s, d - c.hpn); if (hp0 == null) return false;
+    if (!(hp - hp0 > (c.hpd || 0) + 1e-9)) return false;
+  }
+  if (c.shn != null){
+    if (d - c.shn < HS.from) return false;
+    var s1 = hvi("sh", s, d), s0 = hvi("sh", s, d - c.shn);
+    if (s1 == null || s0 == null || !(s1 < s0)) return false;
+  }
+  if (c.pk){
+    if (d - c.pkn < HS.from) return false;
+    var a1 = hvi(c.pk, s, d), a0 = hvi(c.pk, s, d - c.pkn);
+    if (a1 == null || a0 == null || a1 > a0) return false;
+  }
+  var ge = ["tex", "ft", "d20", "d60"];
+  for (var g = 0; g < ge.length; g++){
+    k = ge[g];
+    var v1 = null;
+    if (c[k] != null){ v1 = hv(k, s, d); if (v1 == null || v1 < c[k]) return false; }
+    if (c[k + "c"] != null){
+      if (d - 20 < HS.from) return false;
+      if (v1 == null) v1 = hv(k, s, d);
+      var v0 = hv(k, s, d - 20);
+      if (v1 == null || v0 == null || v1 - v0 < c[k + "c"]) return false;
+    }
+  }
+  return true;
+}
+// 逐日歷史載不到時 ④ 的退路：用今天的 radar 列（大戶比例、股東人數改用週資料，N 日 ≈ N／5 週）
+function passRow(c, r){
+  if (c.liq && !r.liq) return false;
+  if (c.t1 && !r.t1) return false;
+  var ok = true;
+  ["wr", "xr", "yr", "vr", "hr"].forEach(function(k){ if (c[k] != null && !(isnum(r[k]) && r[k] <= c[k])) ok = false; });
+  if (c.z != null && !(isnum(r.z) && r.z > c.z)) ok = false;
+  if (c.hpm != null && !(isnum(r.hp) && r.hp > c.hpm)) ok = false;
+  if (c.hpn != null){ var w = Math.max(1, Math.round(c.hpn / 5)), a = (r.hps || [])[0], b = (r.hps || [])[w]; if (!isnum(a) || !isnum(b) || !(a - b > (c.hpd || 0))) ok = false; }
+  if (c.shn != null){ var w2 = Math.max(1, Math.round(c.shn / 5)), s0 = (r.shs || [])[0], s1 = (r.shs || [])[w2]; if (!isnum(s0) || !isnum(s1) || !(s0 < s1)) ok = false; }
+  ["tex", "ft", "d20", "d60", "texc", "ftc", "d20c", "d60c"].forEach(function(k){ if (c[k] != null && !(isnum(r[k]) && r[k] >= c[k])) ok = false; });
+  return ok;
+}
+// 歷史某一天的一列（表格用）：籌碼取那一天的值，名稱、產業取今天的
+function histRow(s, d){
+  var c = HS.codes[s], base = ROWS[c] || {c: c, n: c};
+  var r = {c: c, n: base.n, ind: base.ind, mk: base.mk, liq: (hvi("fl", s, d) || 0) & 1};
+  r.p = hv("cl", s, d);
+  ["yr", "vr", "hr", "wr", "xr", "sh"].forEach(function(k){ r[k] = hvi(k, s, d); });
+  ["hp", "z", "tex", "ft", "d20", "d60"].forEach(function(k){ r[k] = hv(k, s, d); });
+  return r;
+}
+
+// ── 基本面的「那一天看得到的」版本（⑤ 24 個月回測、⑥ 篩選日）───────────────
+function loadFund(){
+  if (FD) return Promise.resolve(FD);
+  if (FD_WAIT) return FD_WAIT;
+  FD_WAIT = histHead().then(function(h){
+    var fh = h.fund; if (!fh) throw new Error("沒有基本面歷史");
+    return getBin("fund.bin").then(function(u){
+      var nc = fh.codes.length, blocks = {ann: fh.ann, days: fh.days}, pos = 0, out = {};
+      ["ann", "days"].forEach(function(b){
+        var nd = blocks[b].length, arrs = {};
+        fh.fields.forEach(function(f){ arrs[f[0]] = new Int32Array(nc * nd); });
+        for (var f = 0; f < fh.fields.length; f++){
+          var A = arrs[fh.fields[f][0]];
+          for (var s = 0; s < nc; s++) pos = readSeq(u, pos, A, s * nd, nd);
+        }
+        out[b] = {dates: blocks[b], nd: nd, a: arrs};
+      });
+      var idx = {}; fh.codes.forEach(function(c, i){ idx[c] = i; });
+      var sc = {}; fh.fields.forEach(function(f){ sc[f[0]] = f[1]; });
+      FD = {h: fh, codes: fh.codes, idx: idx, nc: nc, sc: sc, ann: out.ann, days: out.days, months: fh.months || []};
+      return FD;
+    });
+  });
+  FD_WAIT.catch(function(){ FD_WAIT = null; });
+  return FD_WAIT;
+}
+var FUND_PCT = {r1: 1, r3: 1, r12: 1, e4y: 1, oy: 1, om: 1, nm: 1, cl_rev: 1, cl_cap: 1, cx_cap: 1, inv_rev: 1, r20: 1, r60: 1};
+// 第 s 檔在 block（FD.ann 或 FD.days）第 j 期的基本面，欄位單位和 radar 列一樣（百分比已 × 100）
+function fundRow(block, s, j){
+  var c = FD.codes[s], base = ROWS[c] || {c: c, n: c}, r = {c: c, n: base.n, ind: base.ind, mk: base.mk};
+  FD.h.fields.forEach(function(f){
+    var v = block.a[f[0]][s * block.nd + j];
+    if (v === SENT) return;
+    r[f[0]] = f[0] === "fg" ? v : (FUND_PCT[f[0]] ? v / f[1] * 100 : v / f[1]);
+  });
+  (FD.h.flags || []).forEach(function(k, b){ if ((r.fg || 0) & (1 << b)) r[k] = 1; });
+  r.p = r.p0;
+  return r;
+}
+
+// ── 共用：CSV、報酬顏色、子分頁 ───────────────────────────────────────────
+function csvDownload(name, head, rows){
+  var esc = function(v){ v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  var text = "﻿" + [head].concat(rows).map(function(r){ return r.map(esc).join(","); }).join("\r\n");
+  var a = el("a", {href: URL.createObjectURL(new Blob([text], {type: "text/csv;charset=utf-8"})), download: name});
+  document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function pctTxt(v, d){ return isnum(v) ? (v > 0 ? "+" : "") + fmt(v, d == null ? 1 : d) + "%" : "—"; }
+function retCls(v){ return !isnum(v) ? "" : v > 0 ? "cf-up" : v < 0 ? "cf-dn" : "cf-flat"; }
+function subTabs(host, items, onPick, cur){
+  var bar = el("div", {cls: "cf-subs", role: "tablist"});
+  items.forEach(function(it){
+    var b = el("button", {type: "button", role: "tab", "aria-selected": it[0] === cur ? "true" : "false", text: it[1]});
+    b.onclick = function(){ bar.querySelectorAll("button").forEach(function(x){ x.setAttribute("aria-selected", x === b ? "true" : "false"); }); onPick(it[0]); };
+    bar.appendChild(b);
+  });
+  host.appendChild(bar);
+  return bar;
+}
+function histFail(host, e){
+  host.innerHTML = "";
+  host.appendChild(el("p", {cls: "cf-note", text: "讀不到逐日歷史（" + (e && e.message || e) + "）。這個功能要建站時產生的 chipflow/hist*.bin；下一次排程後會自動出現。"}));
+}
+
+// ── 個股 × 篩選日 彙整表（⑬ 個股彙整、④⑥ 20 天回測彙總共用）─────────────────
+// hits: {code: {dayIndex: true}}；cell(code, d) → {v: 數字, txt: 顯示}；cols: 額外欄 [[鍵, 標題, 小數], …]
+function hitGrid(host, days, hits, opt){
+  host.innerHTML = "";
+  var codes = Object.keys(hits);
+  var stats = codes.map(function(c){
+    var o = {c: c, n: (ROWS[c] || {}).n || c, k: Object.keys(hits[c]).length};
+    (opt.cols || []).forEach(function(col){ o[col[0]] = col[3](c); });
+    return o;
+  });
+  var state = {key: "k", dir: -1};
+  var wrap = el("div", {cls: "cf-scroll"});
+  host.appendChild(wrap);
+  function render(){
+    stats.sort(function(a, b){
+      var x = a[state.key], y = b[state.key];
+      if (x == null && y == null) return a.c < b.c ? -1 : 1; if (x == null) return 1; if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * state.dir || (a.c < b.c ? -1 : 1);
+    });
+    var t = el("table", {cls: "cf-tbl cf-hits"});
+    var tr = el("tr");
+    var heads = [["c", "代號", "l"], ["n", "名稱", "l"], ["k", "篩中天數"]].concat((opt.cols || []).map(function(x){ return [x[0], x[1]]; }));
+    heads.forEach(function(h){
+      var th = el("th", {cls: (h[2] || "") + (h[0] === "c" ? " fz" : ""), text: h[1] + (state.key === h[0] ? (state.dir > 0 ? " ▲" : " ▼") : "")});
+      th.onclick = function(){ if (state.key === h[0]) state.dir = -state.dir; else { state.key = h[0]; state.dir = h[0] === "c" || h[0] === "n" ? 1 : -1; } render(); };
+      tr.appendChild(th);
+    });
+    days.forEach(function(d){ tr.appendChild(el("th", {cls: "d", text: HS.dates[d].slice(5).replace("-", "/")})); });
+    t.appendChild(tr);
+    stats.forEach(function(o){
+      var row = el("tr");
+      var cc = codeCell(o.c); cc.className = "l fz"; row.appendChild(cc);
+      row.appendChild(nameCell(o.c, o.n));
+      row.appendChild(el("td", {text: String(o.k)}));
+      (opt.cols || []).forEach(function(col){ row.appendChild(el("td", {cls: retCls(o[col[0]]), text: col[2] === "%" ? pctTxt(o[col[0]]) : fmt(o[col[0]], col[2])})); });
+      days.forEach(function(d){
+        if (!hits[o.c][d]){ row.appendChild(el("td", {cls: "d"})); return; }
+        var x = opt.cell(o.c, d);
+        row.appendChild(el("td", {cls: "d hit " + retCls(x.r), text: x.txt, title: HS.dates[d] + " " + o.n + "：" + x.title}));
+      });
+      if (opt.onRow){ row.style.cursor = "pointer"; row.addEventListener("click", function(e){ if (e.target.tagName !== "A") opt.onRow(o.c); }); }
+      t.appendChild(row);
+    });
+    wrap.innerHTML = ""; wrap.appendChild(t);
+  }
+  render();
+  return stats;
+}
+
+// ── ④ 籌碼篩選：今天／20 天回測彙總表 ──────────────────────────────────────
+var V4 = "today", V5 = "today", V6 = "day", LAST = {};
+function tableCsv(name, rows, cols){
+  var head = cols.map(function(c){ return c[1]; }).concat(["標記"]);
+  csvDownload(name, head, rows.map(function(r){
+    return cols.map(function(c){ var v = r[c[0]]; return v == null ? "" : (typeof v === "number" && c[2] !== "l" ? +v.toFixed(Math.max(0, c[2] || 0)) : v); })
+      .concat([[r.pick ? "精選" : r.l1 ? "共振" : "", r.veto ? "E否決" : ""].filter(Boolean).join("、")]);
+  }));
+}
+function stamp(){ return (R && R.asof || "").replace(/-/g, ""); }
+function run4(){
+  var q = readCond("cf4"); showErr("cf-e4", q.err); if (q.err.length) return;
+  var c = q.c, o = $("cf-o4");
+  if (condEmpty(c) && V4 === "bt"){ showErr("cf-e4", ["至少要填一個條件"]); return; }
+  o.textContent = "載入逐日歷史…";
+  loadHist("b").then(function(){
+    if (V4 === "bt") return bt20(o, c, null, "cf4");
+    var d = HS.nd - 1, set = {};
+    for (var s = 0; s < HS.nc; s++) if (passAt(c, s, d)) set[HS.codes[s]] = 1;
+    var rows = R.rows.filter(function(r){ return set[r.c] && !(c.noveto && r.veto); });
+    LAST.t4 = {rows: rows, cols: COLS4, name: "籌碼篩選_" + stamp() + ".csv"};
+    table(o, rows, COLS4, {sort: "yr", extra: HS.dates[d] !== R.asof ? "（逐日歷史停在 " + HS.dates[d] + "，比今天的資料舊）" : ""});
+  }).catch(function(e){
+    if (V4 === "bt") return histFail(o, e);
+    var rows = R.rows.filter(function(r){ return passRow(c, r) && !(c.noveto && r.veto); });
+    LAST.t4 = {rows: rows, cols: COLS4, name: "籌碼篩選_" + stamp() + ".csv"};
+    table(o, rows, COLS4, {sort: "yr", extra: "（逐日歷史沒有載入，改用今天的資料近似：大戶比例、股東人數的 N 日 ≈ N／5 週；排名進步條件未套用）"});
+  });
+}
+// 最近 20 個交易日逐日重篩（④ 與 ⑥ 共用）。fund：⑥ 的基本面條件（每一天用那一天看得到的版本）
+function bt20(o, c, fund, pre){
+  o.innerHTML = "";
+  var last = HS.nd - 1, days = [];
+  for (var d = Math.max(HS.from + condLook(c), last - 19); d <= last; d++) days.push(d);
+  var fj = {};
+  if (fund) FD.days.dates.forEach(function(x, j){ fj[x] = j; });
+  var hits = {}, per = [];
+  days.forEach(function(d){
+    var list = [];
+    for (var s = 0; s < HS.nc; s++){
+      if (!passAt(c, s, d)) continue;
+      var code = HS.codes[s];
+      if (fund){
+        var fs = FD.idx[code], j = fj[HS.dates[d]];
+        if (fs == null || j == null || !pass5(fundRow(FD.days, fs, j))) continue;
+      }
+      list.push(s);
+      (hits[code] = hits[code] || {})[d] = true;
+    }
+    var rs = list.map(function(s){ return retAt(s, d, last - d); }).filter(isnum);
+    per.push({d: d, list: list, avg: rs.length ? rs.reduce(function(a, b){ return a + b; }, 0) / rs.length : null,
+      win: rs.length ? rs.filter(function(v){ return v >= 0; }).length / rs.length : null, mkt: mktAt(d, last - d).avg});
+  });
+  o.appendChild(el("p", {cls: "cf-note", text: "同一組條件套用在最近 " + days.length + " 個交易日，每一天各自用「那一天」的資料重篩一次" + (fund ? "（基本面也用那一天已經公布的版本）" : "") + "。至今報酬＝篩選日收盤到最新收盤（" + HS.dates[last] + "，還原除權息）；母體＝同一天的流動性母體平均。E 否決名單沒有逐日版本，這裡不套用。"}));
+  var t = el("table", {cls: "cf-tbl"});
+  t.appendChild(el("tr", null, el("th", {cls: "l", text: "篩選日"}), el("th", {text: "符合檔數"}), el("th", {text: "至今平均報酬"}), el("th", {text: "至今上漲比例"}), el("th", {text: "母體至今平均"}), el("th", {cls: "l", text: "名單"})));
+  per.slice().reverse().forEach(function(x){
+    var names = x.list.map(function(s){ return (ROWS[HS.codes[s]] || {}).n || HS.codes[s]; });
+    var cell = el("td", {cls: "l cf-names"});
+    if (names.length > 10){ var det = el("details", null, el("summary", {text: names.slice(0, 10).join("、") + "…（展開 " + names.length + " 檔）"}), el("div", {text: names.join("、")})); cell.appendChild(det); }
+    else cell.textContent = names.join("、") || "—";
+    t.appendChild(el("tr", null, el("td", {cls: "l", text: HS.dates[x.d]}), el("td", {text: String(x.list.length)}), el("td", {cls: retCls(x.avg), text: pctTxt(x.avg)}),
+      el("td", {text: isnum(x.win) ? fmt(x.win * 100, 0) + "%" : "—"}), el("td", {cls: retCls(x.mkt), text: pctTxt(x.mkt)}), cell));
+  });
+  o.appendChild(el("div", {cls: "cf-card"}, el("h4", {text: "每日篩出名單"}), el("div", {cls: "cf-scroll", style: "max-height:420px"}, t)));
+  var g = el("div");
+  o.appendChild(el("div", {cls: "cf-card"}, el("h4", null, el("span", {text: "個股彙整（有顏色＝那一天被篩中；數字＝那一天到今天的報酬）"})), el("p", {cls: "cf-note", text: "點表頭排序；點名稱看 ② 個股籌碼多圖。紅＝上漲、綠＝下跌。"}), g));
+  hitGrid(g, days, hits, {
+    cols: [["now", "第一次篩中至今", "%", function(code){ var s = HS.idx[code], d0 = Math.min.apply(null, Object.keys(hits[code]).map(Number)); return retAt(s, d0, last - d0); }]],
+    cell: function(code, d){ var r = retAt(HS.idx[code], d, last - d); return {r: r, txt: isnum(r) ? fmt(r, 1) : "✓", title: "至今 " + pctTxt(r)}; }
+  });
+  LAST[pre] = {csv: function(){
+    var rows = [];
+    per.forEach(function(x){ x.list.forEach(function(s){ var code = HS.codes[s]; rows.push([HS.dates[x.d], code, (ROWS[code] || {}).n || code, hv("cl", s, x.d), (function(v){ return isnum(v) ? +v.toFixed(2) : ""; })(retAt(s, x.d, last - x.d))]); }); });
+    csvDownload((fund ? "交叉檢索" : "籌碼篩選") + "_20天回測彙總_" + stamp() + ".csv", ["篩選日", "代號", "名稱", "篩選日收盤", "至今報酬%"], rows);
+  }};
+}
+
+// ── ⑤ 基本面篩選：範例、24 個月回測彙總表 ───────────────────────────────
+var EX5 = {
+  "1": {v: {r1: [10, null], r3: [10, null]}, t: "範例① 營收動能：單月營收年增率與 3 月營收年增率都 ≥ 10%"},
+  "2": {v: {e4y: [10, null], oy: [10, null]}, t: "範例② 獲利成長：四季 EPS 年增率與營業利益年增率都 ≥ 10%"},
+  "3": {v: {}, f: ["e4h4", "rh12"], t: "範例③ 創高動能：四季 EPS 創近 4 季新高、月營收創近 12 個月新高"}
+};
+function clear5(){
+  document.querySelectorAll("#cf-f5 input").forEach(function(i){ i.value = ""; });
+  document.querySelectorAll("#cf-f5b input").forEach(function(i){ i.checked = false; });
+}
+function set5(ex){
+  clear5();
+  Object.keys(ex.v || {}).forEach(function(k){ var r = ex.v[k]; if (r[0] != null) $("cf5-" + k + "-min").value = r[0]; if (r[1] != null) $("cf5-" + k + "-max").value = r[1]; });
+  (ex.f || []).forEach(function(k){ $("cf5f-" + k).checked = true; });
+}
+function run5(){
+  var o = $("cf-o5");
+  if (V5 === "today"){
+    var rows = R.rows.filter(pass5);
+    LAST.t5 = {rows: rows, cols: COLS5, name: "基本面篩選_" + stamp() + ".csv"};
+    table(o, rows, COLS5, {sort: "c"});
+    return;
+  }
+  o.textContent = "載入基本面歷史…";
+  loadFund().then(function(){
+    o.innerHTML = "";
+    var A = FD.ann, per = [];
+    for (var j = A.nd - 1; j >= 0; j--){
+      var list = [], all20 = [], all60 = [];
+      for (var s = 0; s < FD.nc; s++){
+        var r = fundRow(A, s, j);
+        if (isnum(r.r20)) all20.push(r.r20);
+        if (isnum(r.r60)) all60.push(r.r60);
+        if (pass5(r)) list.push(r);
+      }
+      var avg = function(xs){ return xs.length ? xs.reduce(function(a, b){ return a + b; }, 0) / xs.length : null; };
+      var w = function(xs){ return xs.length ? xs.filter(function(v){ return v >= 0; }).length / xs.length : null; };
+      var r20 = list.map(function(r){ return r.r20; }).filter(isnum), r60 = list.map(function(r){ return r.r60; }).filter(isnum);
+      per.push({date: A.dates[j], month: FD.months[j] || "", list: list, a20: avg(r20), w20: w(r20), a60: avg(r60), w60: w(r60), m20: avg(all20), m60: avg(all60)});
+    }
+    o.appendChild(el("p", {cls: "cf-note", text: "同一組基本面條件（含產業）套用在過去 " + per.length + " 次月營收公告日（次月 10 日，遇假日順延），每一次都只用「那一天已經公布」的月營收與財報（季報在法定期限之後才算數）。20／60 日後報酬是公告日收盤買進、還原除權息；母體＝那一天所有有資料的個股平均。還沒走完 20／60 個交易日的格子是「—」。"}));
+    var t = el("table", {cls: "cf-tbl"});
+    t.appendChild(el("tr", null, el("th", {cls: "l", text: "公告日"}), el("th", {cls: "l", text: "營收月份"}), el("th", {text: "符合檔數"}),
+      el("th", {text: "20 日後上漲比例"}), el("th", {text: "20 日平均"}), el("th", {text: "母體 20 日"}), el("th", {text: "60 日後上漲比例"}), el("th", {text: "60 日平均"}), el("th", {text: "母體 60 日"}), el("th", {cls: "l", text: "名單"})));
+    per.forEach(function(x){
+      var names = x.list.map(function(r){ return r.n; });
+      var cell = el("td", {cls: "l cf-names"});
+      if (names.length > 8) cell.appendChild(el("details", null, el("summary", {text: names.slice(0, 8).join("、") + "…（展開 " + names.length + " 檔）"}), el("div", {text: names.join("、")})));
+      else cell.textContent = names.join("、") || "—";
+      t.appendChild(el("tr", null, el("td", {cls: "l", text: x.date}), el("td", {cls: "l", text: x.month}), el("td", {text: String(x.list.length)}),
+        el("td", {text: isnum(x.w20) ? fmt(x.w20 * 100, 0) + "%" : "—"}), el("td", {cls: retCls(x.a20), text: pctTxt(x.a20)}), el("td", {cls: retCls(x.m20), text: pctTxt(x.m20)}),
+        el("td", {text: isnum(x.w60) ? fmt(x.w60 * 100, 0) + "%" : "—"}), el("td", {cls: retCls(x.a60), text: pctTxt(x.a60)}), el("td", {cls: retCls(x.m60), text: pctTxt(x.m60)}), cell));
+    });
+    var ok = per.filter(function(x){ return isnum(x.a20) && isnum(x.m20); });
+    var k = el("div", {cls: "cf-kpi"});
+    var sumN = per.reduce(function(a, x){ return a + x.list.length; }, 0);
+    k.appendChild(el("div", null, "有篩出個股的公告日", el("b", {text: per.filter(function(x){ return x.list.length; }).length + " / " + per.length})));
+    k.appendChild(el("div", null, "累計篩出檔次", el("b", {text: sumN.toLocaleString()})));
+    if (ok.length){
+      var ex = ok.reduce(function(a, x){ return a + x.a20 - x.m20; }, 0) / ok.length;
+      k.appendChild(el("div", null, "20 日後平均超額（逐次平均）", el("b", {cls: retCls(ex), text: pctTxt(ex, 2)}), el("span", {cls: "cf-note", text: ok.length + " 次、贏過母體 " + ok.filter(function(x){ return x.a20 > x.m20; }).length + " 次"})));
+    }
+    o.appendChild(k);
+    o.appendChild(el("div", {cls: "cf-card"}, el("h4", {text: "24 個月回測彙總表"}), el("div", {cls: "cf-scroll"}, t)));
+    LAST.bt5 = {csv: function(){
+      var rows = [];
+      per.forEach(function(x){ x.list.forEach(function(r){ rows.push([x.date, x.month, r.c, r.n, r.ind || "", isnum(r.p) ? r.p : "", isnum(r.r20) ? +r.r20.toFixed(2) : "", isnum(r.r60) ? +r.r60.toFixed(2) : ""]); }); });
+      csvDownload("基本面篩選_24個月回測彙總_" + stamp() + ".csv", ["公告日", "營收月份", "代號", "名稱", "產業", "公告日收盤", "20日後報酬%", "60日後報酬%"], rows);
+    }};
+  }).catch(function(e){ o.textContent = "讀不到基本面歷史（" + e.message + "）。下一次排程後會自動出現。"; });
+}
+
+// ── ⑥ 籌碼 × 基本面：篩選日、範例①②③、20 天回測彙總表 ─────────────────────
+var EX6 = {
+  "1": {c: COND_SAMPLE, f: null, t: "範例① 偏籌碼面：④ 的範例條件，不加基本面"},
+  "2": {c: {}, f: {v: {e4y: [10, null], r1: [10, null]}}, t: "範例② 基本面成長：四季 EPS 年增率、單月營收年增率都 ≥ 10%，不加籌碼條件"},
+  "3": {c: {yr: 700, hpn: 20, z: 0}, f: {v: {e4y: [10, null], r1: [10, null]}}, t: "範例③ 兩邊都要：法人 60 日買超排名前 700、60 日累計是買超、大戶比例比 20 日前高 ＋ 範例② 的基本面門檻"}
+};
+function fill6days(){
+  var sel = $("cf-d6");
+  if (sel.options.length > 1) return;
+  histHead().then(function(h){
+    var ds = ((h.fund || {}).days || h.dates.slice(-20)).slice().reverse();
+    sel.innerHTML = "";
+    ds.forEach(function(d, i){ sel.appendChild(el("option", {value: d, text: d + (i === 0 ? "（最新）" : "")})); });
+  }).catch(function(){});
+}
+function run6(){
+  var q = readCond("cf4"); showErr("cf-e6", q.err); if (q.err.length){ showErr("cf-e6", q.err.concat(["（條件在 ④ 分頁）"])); return; }
+  var c = q.c, o = $("cf-o6"), day = $("cf-d6").value;
+  o.textContent = "載入逐日歷史與基本面歷史…";
+  Promise.all([loadHist("b"), loadFund()]).then(function(){
+    if (V6 === "bt") return bt20(o, c, true, "cf6");
+    var d = day ? HS.dates.indexOf(day) : HS.nd - 1, j = FD.days.dates.indexOf(HS.dates[d]), latest = d === HS.nd - 1;
+    if (d < 0 || j < 0){ o.textContent = "這一天不在歷史資料裡。"; return; }
+    var rows = [];
+    for (var s = 0; s < HS.nc; s++){
+      if (!passAt(c, s, d)) continue;
+      var code = HS.codes[s], fs = FD.idx[code];
+      if (fs == null) continue;
+      var fr = fundRow(FD.days, fs, j);
+      if (!pass5(fr)) continue;
+      var r = latest && ROWS[code] ? Object.assign({}, ROWS[code]) : Object.assign(histRow(s, d), fr);
+      if (latest && c.noveto && r.veto) continue;
+      if (!latest){ r.p = hv("cl", s, d); r.now = retAt(s, d, HS.nd - 1 - d); }
+      rows.push(r);
+    }
+    var cols = latest ? COLS6 : COLS6.concat([["now", "至今報酬%", 1]]);
+    LAST.t6 = {rows: rows, cols: cols, name: "交叉檢索_" + HS.dates[d].replace(/-/g, "") + ".csv"};
+    table(o, rows, cols, {sort: "yr", extra: latest ? "" : "（篩選日 " + HS.dates[d] + "：籌碼與基本面都用那一天看得到的值；E 否決只套用在最新一天）"});
+  }).catch(function(e){
+    if (V6 === "bt" || (day && day !== R.asof)) return histFail(o, e);
+    var rows = R.rows.filter(function(r){ return passRow(c, r) && pass5(r) && !(c.noveto && r.veto); });
+    LAST.t6 = {rows: rows, cols: COLS6, name: "交叉檢索_" + stamp() + ".csv"};
+    table(o, rows, COLS6, {sort: "yr", extra: "（歷史資料沒有載入，改用今天的資料近似）"});
+  });
+}
+
+// ── ⑬ 籌碼回測檢視表 ────────────────────────────────────────────────────
+var B13 = null, V13 = "win", C13 = "r20", H13 = 20;
+function range13(h){
+  var nd = h.dates.length, last = nd - 1;
+  var per = $("cf13-per").value, n = +$("cf13-n").value || 50;
+  var lastS = last - (per === "recent" ? 20 : 60);
+  var firstS = lastS - n + 1;
+  return {first: Math.max(0, firstS), last: lastS, want: n, asof: h.dates[last]};
+}
+function info13(){
+  histHead().then(function(h){
+    var r = range13(h);
+    $("cf13-info").textContent = r.last < r.first ? "歷史不夠長。" : "回測篩選日：" + h.dates[r.first] + " ～ " + h.dates[r.last] + "（" + (r.last - r.first + 1) + " 天）　股價資料最新：" + r.asof +
+      "。" + ($("cf13-per").value === "recent" ? "篩選日只到 20 個交易日前，60 日後報酬只算得出最早那一段。" : "篩選日之後都還有 60 個交易日的股價，所以篩選日比最新資料早大約三個月。");
+  }).catch(function(e){ $("cf13-info").textContent = "讀不到逐日歷史：" + e.message; });
+}
+function run13(){
+  var q = readCond("cf13");
+  var dd = $("cf13-dd").value === "" ? null : +$("cf13-dd").value;
+  if (dd !== null && (!(dd >= 1 && dd <= 60) || Math.floor(dd) !== dd)){ q.err.push("同一檔幾日內只算一次：要填 1～60 的整數"); $("cf13-dd").classList.add("cf-bad"); } else $("cf13-dd").classList.remove("cf-bad");
+  if (!q.err.length && condEmpty(q.c)) q.err.push("至少要填一個條件（第一次使用可以先按「套用範例條件」）");
+  showErr("cf-e13", q.err);
+  if (q.err.length) return;
+  var c = q.c, adj = $("cf13-adj").checked, o = $("cf-o13");
+  o.textContent = "載入逐日歷史（第一次約 3～4 MB）…";
+  loadHist("ab").then(function(){
+    var rg = range13(HS.h), first = Math.max(rg.first, HS.from + condLook(c)), last = rg.last;
+    if (last < first){ o.textContent = "歷史不夠長，算不出回測。"; return; }
+    var days = [], picks = [], lastPick = {};
+    for (var d = first; d <= last; d++){
+      days.push(d);
+      for (var s = 0; s < HS.nc; s++){
+        if (!passAt(c, s, d)) continue;
+        if (dd && lastPick[s] != null && d - lastPick[s] < dd) continue;
+        lastPick[s] = d;
+        picks.push({d: d, s: s, c: HS.codes[s], r20: retAt(s, d, 20, adj), r60: retAt(s, d, 60, adj), p: hv("cl", s, d)});
+      }
+    }
+    var byDay = {};
+    days.forEach(function(d){ byDay[d] = {d: d, list: [], m20: mktAt(d, 20, adj), m60: mktAt(d, 60, adj)}; });
+    picks.forEach(function(p){ byDay[p.d].list.push(p); });
+    B13 = {c: c, adj: adj, days: days, picks: picks, byDay: byDay, cut: first > rg.first, dd: dd};
+    draw13();
+  }).catch(function(e){ histFail(o, e); });
+}
+function agg(list, key, mkey, byDay){
+  var xs = list.filter(function(p){ return isnum(p[key]); });
+  if (!xs.length) return {n: 0};
+  var sum = 0, pos = 0, ex = 0, exn = 0;
+  xs.forEach(function(p){ sum += p[key]; if (p[key] >= 0) pos++; var m = byDay[p.d][mkey].avg; if (isnum(m)){ ex += p[key] - m; exn++; } });
+  return {n: xs.length, avg: sum / xs.length, win: pos / xs.length, ex: exn ? ex / exn : null};
+}
+function draw13(){
+  var o = $("cf-o13"), B = B13; o.innerHTML = "";
+  var days = B.days, picks = B.picks;
+  var uniq = {}; picks.forEach(function(p){ uniq[p.c] = 1; });
+  var dayHit = days.filter(function(d){ return B.byDay[d].list.length; }).length;
+  o.appendChild(el("p", {cls: "cf-note"}, el("b", {text: "回測篩選日：" + HS.dates[days[0]] + " ～ " + HS.dates[days[days.length - 1]] + "（" + days.length + " 天）"}),
+    "　股價資料最新：" + HS.dates[HS.nd - 1] + "。報酬＝篩選日收盤買、20／60 個交易日後收盤賣" + (B.adj ? "（還原除權息）" : "（未還原除權息，同 BG）") + "；母體＝同一天的流動性母體平均。" +
+    (B.dd ? "同一檔 " + B.dd + " 個交易日內只算第一次。" : "同一檔連續好幾天被篩中，每一天都各算一次（同 BG）。") + (B.cut ? "（條件要往回比較的天數較多，最前面幾天沒有足夠的歷史，已略過。）" : "")));
+  var usesWhale = ["wr", "xr", "hr"].some(function(k){ return B.c[k] != null; }) || ["wr", "xr", "hr"].indexOf(B.c.pk) >= 0;
+  if (usesWhale){
+    var cov = days.map(function(d){ return HS.whales[d] || 0; }), lo = Math.min.apply(null, cov), hi = Math.max.apply(null, cov);
+    if (lo < 1500) o.appendChild(el("p", {cls: "cf-note cf-warn", text: "注意：這組條件用到大戶人數（集保 15 級、含人數）。回測期間有人數資料的個股只有 " + lo.toLocaleString() + "～" + hi.toLocaleString() + " 檔（逐檔回補中，依流動性由大到小），沒有資料的個股一律不符合——結果偏向大型、熱門股。"}));
+  }
+  var a20 = agg(picks, "r20", "m20", B.byDay), a60 = agg(picks, "r60", "m60", B.byDay);
+  var m20 = avgOf(days.map(function(d){ return B.byDay[d].m20.win; })), m60 = avgOf(days.map(function(d){ return B.byDay[d].m60.win; }));
+  var k = el("div", {cls: "cf-kpi cf-kpi4"});
+  k.appendChild(el("div", null, "有篩出個股的天數", el("b", {text: dayHit + " / " + days.length + " 天"}), el("span", {cls: "cf-note", text: days.length - dayHit ? (days.length - dayHit) + " 天一檔都沒有" : "每一天都有"})));
+  k.appendChild(el("div", null, "累計篩出檔次", el("b", {text: picks.length.toLocaleString() + " 檔次"}), el("span", {cls: "cf-note", text: "不重複 " + Object.keys(uniq).length + " 檔"})));
+  [["20 日後正報酬比例", a20, m20], ["60 日後正報酬比例", a60, m60]].forEach(function(x){
+    var a = x[1];
+    k.appendChild(el("div", null, x[0], el("b", {text: a.n ? fmt(a.win * 100, 1) + "%" : "—"}),
+      el("span", {cls: "cf-note", text: a.n ? "平均 " + pctTxt(a.avg, 2) + "；超額 " + pctTxt(a.ex, 2) + "（母體正報酬比例 " + (isnum(x[2]) ? fmt(x[2] * 100, 0) + "%" : "—") + "）" : "還沒有走完的篩選日"})));
+  });
+  o.appendChild(k);
+  var lab = days.map(function(d){ return HS.dates[d]; });
+  var two = el("div", {cls: "cf-two"});
+  two.appendChild(chart("每日篩出檔數", lab, [{v: days.map(function(d){ return B.byDay[d].list.length; }), c: "var(--tc)"}], {bar: true, d: 0}));
+  var w = function(d, key){ var xs = B.byDay[d].list.filter(function(p){ return isnum(p[key]); }); return xs.length ? xs.filter(function(p){ return p[key] >= 0; }).length / xs.length * 100 : null; };
+  two.appendChild(chart("每日正報酬比例（%）", lab, [{v: days.map(function(d){ return w(d, "r20"); }), c: "var(--up)", n: "20日"}, {v: days.map(function(d){ return w(d, "r60"); }), c: "var(--m4)", n: "60日"},
+    {v: days.map(function(d){ var m = B.byDay[d].m20.win; return isnum(m) ? m * 100 : null; }), c: "var(--muted)", n: "母體20日", dash: true}], {d: 0, note: "實線：篩出的股票；虛線：同一天流動性母體 20 日後的正報酬比例。"}));
+  o.appendChild(two);
+  var body = el("div");
+  var bar = subTabs(o, [["win", "每日勝率"], ["stk", "個股彙整"], ["trend", "個股走勢"]], function(v){ V13 = v; tab13(body); }, V13);
+  bar.appendChild(el("button", {type: "button", cls: "cf-btn cf-csv", text: "匯出 CSV", onclick: ""}));
+  bar.lastChild.onclick = function(){ csv13(); };
+  o.appendChild(body);
+  tab13(body);
+}
+function avgOf(xs){ xs = xs.filter(isnum); return xs.length ? xs.reduce(function(a, b){ return a + b; }, 0) / xs.length : null; }
+var BUCKETS = [["≥ +20%", function(v){ return v >= 20; }], ["+10～20%", function(v){ return v >= 10 && v < 20; }], ["0～+10%", function(v){ return v >= 0 && v < 10; }],
+  ["0～−10%", function(v){ return v < 0 && v > -10; }], ["−10～−20%", function(v){ return v <= -10 && v > -20; }], ["≤ −20%", function(v){ return v <= -20; }]];
+function tab13(host){
+  host.innerHTML = "";
+  var B = B13;
+  if (V13 === "win"){
+    var ctl = el("div", {cls: "cf-row"}, el("label", null, "報酬分布看 ", (function(){ var s = el("select", null, el("option", {value: "20", text: "20 日後"}), el("option", {value: "60", text: "60 日後"})); s.value = String(H13); s.onchange = function(){ H13 = +s.value; tab13(host); }; return s; })()),
+      el("span", {cls: "cf-note", text: "（BG 的分組是 0～50%、50～100%…，20 日報酬幾乎都落在第一格；這裡改成每 10 個百分點一格）"}));
+    host.appendChild(ctl);
+    var t = el("table", {cls: "cf-tbl"});
+    var tr = el("tr", null, el("th", {cls: "l", text: "篩選日"}), el("th", {text: "篩出檔數"}), el("th", {text: "20日正報酬比例"}), el("th", {text: "20日平均"}), el("th", {text: "母體20日"}), el("th", {text: "60日正報酬比例"}), el("th", {text: "60日平均"}), el("th", {text: "母體60日"}));
+    BUCKETS.forEach(function(b){ tr.appendChild(el("th", {text: b[0]})); });
+    t.appendChild(tr);
+    var key = "r" + H13;
+    function line(label, list, m20, m60, strong){
+      var a = agg(list, "r20", "m20", B.byDay), b = agg(list, "r60", "m60", B.byDay);
+      var row = el("tr", strong ? {cls: "cf-sum"} : null, el("td", {cls: "l", text: label}), el("td", {text: String(list.length)}),
+        el("td", {text: a.n ? fmt(a.win * 100, 0) + "%" : "—"}), el("td", {cls: retCls(a.avg), text: pctTxt(a.avg)}), el("td", {cls: retCls(m20), text: pctTxt(m20)}),
+        el("td", {text: b.n ? fmt(b.win * 100, 0) + "%" : "—"}), el("td", {cls: retCls(b.avg), text: pctTxt(b.avg)}), el("td", {cls: retCls(m60), text: pctTxt(m60)}));
+      BUCKETS.forEach(function(bk){ row.appendChild(el("td", {text: String(list.filter(function(p){ return isnum(p[key]) && bk[1](p[key]); }).length)})); });
+      t.appendChild(row);
+    }
+    line("全期間", B.picks, avgOf(B.days.map(function(d){ return B.byDay[d].m20.avg; })), avgOf(B.days.map(function(d){ return B.byDay[d].m60.avg; })), true);
+    B.days.slice().reverse().forEach(function(d){ var x = B.byDay[d]; line(HS.dates[d], x.list, x.m20.avg, x.m60.avg); });
+    host.appendChild(el("div", {cls: "cf-scroll"}, t));
+    return;
+  }
+  if (V13 === "stk"){
+    var hits = {}, per = {};
+    B.picks.forEach(function(p){ (hits[p.c] = hits[p.c] || {})[p.d] = true; (per[p.c] = per[p.c] || {})[p.d] = p; });
+    var sel = el("select", null, el("option", {value: "r20", text: "20 日報酬"}), el("option", {value: "r60", text: "60 日報酬"}), el("option", {value: "p", text: "篩選日收盤價"}));
+    sel.value = C13;
+    host.appendChild(el("div", {cls: "cf-row"}, el("label", null, "格子顯示 ", sel), el("span", {cls: "cf-note", text: "有顏色的格子＝那天被篩中（紅＝上漲、綠＝下跌）。點表頭排序、點一列看個股走勢。"})));
+    var g = el("div"); host.appendChild(g);
+    var draw = function(){
+      hitGrid(g, B.days, hits, {
+        cols: [["a20", "平均20日%", "%", function(c){ return avgOf(Object.keys(per[c]).map(function(d){ return per[c][d].r20; })); }],
+               ["a60", "平均60日%", "%", function(c){ return avgOf(Object.keys(per[c]).map(function(d){ return per[c][d].r60; })); }]],
+        cell: function(c, d){ var p = per[c][d]; if (C13 === "p") return {r: p.r20, txt: fmt(p.p, 1), title: "收盤 " + fmt(p.p, 2)}; var v = p[C13]; return {r: v, txt: isnum(v) ? fmt(v, 1) : "…", title: (C13 === "r20" ? "20" : "60") + " 日後 " + pctTxt(v)}; },
+        onRow: function(c){ T13 = c; V13 = "trend"; var bar = host.previousSibling; if (bar && bar.querySelectorAll) bar.querySelectorAll("button[role=tab]").forEach(function(b, i){ b.setAttribute("aria-selected", i === 2 ? "true" : "false"); }); tab13(host); }
+      });
+    };
+    sel.onchange = function(){ C13 = sel.value; draw(); };
+    draw();
+    return;
+  }
+  // 個股走勢
+  var cnt = {};
+  B.picks.forEach(function(p){ cnt[p.c] = (cnt[p.c] || 0) + 1; });
+  var codes = Object.keys(cnt).sort(function(a, b){ return cnt[b] - cnt[a] || (a < b ? -1 : 1); });
+  if (!codes.length){ host.appendChild(el("p", {cls: "cf-note", text: "這次回測沒有篩出任何股票。"})); return; }
+  if (!T13 || !cnt[T13]) T13 = codes[0];
+  var pick = el("select");
+  codes.forEach(function(c){ pick.appendChild(el("option", {value: c, text: label(c) + "（篩中 " + cnt[c] + " 天）"})); });
+  pick.value = T13;
+  pick.onchange = function(){ T13 = pick.value; tab13(host); };
+  host.appendChild(el("div", {cls: "cf-row"}, el("label", null, "個股 ", pick)));
+  var s = HS.idx[T13], d0 = Math.max(HS.from, B.days[0] - 20), d1 = HS.nd - 1, xs = [], labs = [];
+  for (var d = d0; d <= d1; d++){ xs.push(hv("cl", s, d)); labs.push(HS.dates[d]); }
+  var mine = B.picks.filter(function(p){ return p.c === T13; });
+  host.appendChild(stockLinks(T13));
+  host.appendChild(chart("收盤價（淺色區塊＝回測的篩選日，紅點＝被篩中的那幾天）", labs, [{v: xs, c: "var(--price)"}], {wide: true, band: [B.days[0] - d0, B.days[B.days.length - 1] - d0], dots: mine.map(function(p){ return p.d - d0; })}));
+  var t2 = el("table", {cls: "cf-tbl"});
+  t2.appendChild(el("tr", null, el("th", {cls: "l", text: "篩選日"}), el("th", {text: "篩選日收盤"}), el("th", {text: "20 日後"}), el("th", {text: "超額（20 日）"}), el("th", {text: "60 日後"}), el("th", {text: "超額（60 日）"})));
+  mine.forEach(function(p){
+    var m20 = B.byDay[p.d].m20.avg, m60 = B.byDay[p.d].m60.avg;
+    t2.appendChild(el("tr", null, el("td", {cls: "l", text: HS.dates[p.d]}), el("td", {text: fmt(p.p, 2)}), el("td", {cls: retCls(p.r20), text: pctTxt(p.r20)}),
+      el("td", {cls: retCls(p.r20 - m20), text: isnum(p.r20) && isnum(m20) ? pctTxt(p.r20 - m20) : "—"}), el("td", {cls: retCls(p.r60), text: pctTxt(p.r60)}),
+      el("td", {cls: retCls(p.r60 - m60), text: isnum(p.r60) && isnum(m60) ? pctTxt(p.r60 - m60) : "—"})));
+  });
+  host.appendChild(el("div", {cls: "cf-scroll", style: "max-height:360px"}, t2));
+}
+var T13 = null;
+function csv13(){
+  var B = B13; if (!B) return;
+  if (V13 === "win"){
+    var rows = B.days.map(function(d){
+      var x = B.byDay[d], a = agg(x.list, "r20", "m20", B.byDay), b = agg(x.list, "r60", "m60", B.byDay), key = "r" + H13;
+      return [HS.dates[d], x.list.length, a.n ? +(a.win * 100).toFixed(1) : "", isnum(a.avg) ? +a.avg.toFixed(2) : "", isnum(x.m20.avg) ? +x.m20.avg.toFixed(2) : "",
+        b.n ? +(b.win * 100).toFixed(1) : "", isnum(b.avg) ? +b.avg.toFixed(2) : "", isnum(x.m60.avg) ? +x.m60.avg.toFixed(2) : ""]
+        .concat(BUCKETS.map(function(bk){ return x.list.filter(function(p){ return isnum(p[key]) && bk[1](p[key]); }).length; }));
+    });
+    csvDownload("籌碼回測_每日勝率_" + stamp() + ".csv", ["篩選日", "篩出檔數", "20日正報酬比例%", "20日平均%", "母體20日%", "60日正報酬比例%", "60日平均%", "母體60日%"].concat(BUCKETS.map(function(b){ return b[0] + "（" + H13 + "日）"; })), rows);
+  } else {
+    csvDownload("籌碼回測_個股彙整_" + stamp() + ".csv", ["篩選日", "代號", "名稱", "篩選日收盤", "20日後報酬%", "60日後報酬%", "20日超額%", "60日超額%"], B.picks.map(function(p){
+      var m20 = B.byDay[p.d].m20.avg, m60 = B.byDay[p.d].m60.avg, f = function(v){ return isnum(v) ? +v.toFixed(2) : ""; };
+      return [HS.dates[p.d], p.c, (ROWS[p.c] || {}).n || p.c, p.p, f(p.r20), f(p.r60), f(isnum(p.r20) && isnum(m20) ? p.r20 - m20 : null), f(isnum(p.r60) && isnum(m60) ? p.r60 - m60 : null)];
+    }));
+  }
+}
+
+// ── ⑦⑨ 前 50 名快選、⑧⑫ 右側清單、⑨⑩ 名次卡片 ─────────────────────────────
+function quickTop(boxA, boxB, onPick){
+  var a = R.rows.filter(function(r){ return isnum(r.yr); }).sort(function(x, y){ return x.yr - y.yr; }).slice(0, 50);
+  var b = R.rows.filter(function(r){ return isnum(r.vr); }).sort(function(x, y){ return x.vr - y.vr; }).slice(0, 50);
+  [[a, boxA], [b, boxB]].forEach(function(p){
+    var box = $(p[1]); box.innerHTML = "";
+    p[0].forEach(function(r, i){ var btn = el("button", {type: "button", text: (i + 1) + " " + r.c + " " + r.n}); btn.onclick = function(){ onPick(r.c); }; box.appendChild(btn); });
+  });
+}
+// ⑧⑫：每檔最新一天的 X、Y 與前一交易日的差
+function sideList(host, docs, kind){
+  var t = el("table", {cls: "cf-tbl"});
+  var rank = kind === "rank";
+  t.appendChild(el("tr", null, el("th", {cls: "l", text: "個股"}), el("th", {text: rank ? "法人排名" : "法人買賣超(億)"}), el("th", {text: "較前一日"}), el("th", {text: rank ? "資金排名" : "20日成交金額(億)"}), el("th", {text: "較前一日"})));
+  docs.forEach(function(d, i){
+    if (!d.d) return;
+    var xs = rank ? d.d.yr : d.d.fa, ys = rank ? d.d.vr : d.d.va;
+    var n = (xs || []).length, x1 = (xs || [])[n - 1], x0 = (xs || [])[n - 2], y1 = (ys || [])[n - 1], y0 = (ys || [])[n - 2];
+    var dx = isnum(x1) && isnum(x0) ? (rank ? x0 - x1 : x1 - x0) : null, dy = isnum(y1) && isnum(y0) ? (rank ? y0 - y1 : y1 - y0) : null;
+    var sgn = function(v, dig){ return !isnum(v) ? "—" : v === 0 ? "持平" : (v > 0 ? "+" : "") + fmt(v, dig); };
+    t.appendChild(el("tr", null, el("td", {cls: "l"}, el("i", {cls: "cf-dot", style: "background:" + COLORS[i % COLORS.length]}), d.n),
+      el("td", {text: rank ? (isnum(x1) ? "第 " + x1 + " 名" : "—") : fmt(x1, 2)}), el("td", {cls: retCls(dx), text: sgn(dx, rank ? 0 : 2) + (rank && dx ? " 名" : "")}),
+      el("td", {text: rank ? (isnum(y1) ? "第 " + y1 + " 名" : "—") : fmt(y1, 2)}), el("td", {cls: retCls(dy), text: sgn(dy, rank ? 0 : 2) + (rank && dy ? " 名" : "")})));
+  });
+  host.appendChild(el("div", {cls: "cf-card"}, el("h4", {text: "最新一天與前一交易日" + (rank ? "（名次進步記 +）" : "")}), el("div", {cls: "cf-scroll"}, t)));
+}
+// ⑨⑩：今天第幾名、前一交易日第幾名、近 20 日最佳／最差（全市場名次，不只前 100 名）
+function rankCards(host, codes, colors){
+  if (!codes.length){ host.innerHTML = ""; return; }
+  Promise.all([getJSON("market.json")].concat(codes.map(stock))).then(function(res){
+    var mk = res[0]; host.innerHTML = "";
+    var n = 20, wrap = el("div", {cls: "cf-rcards"});
+    res.slice(1).forEach(function(s, i){
+      var card = el("div", {cls: "cf-rcard", style: "border-left-color:" + (colors[i] || "var(--accent)")}, el("b", {text: label(codes[i])}));
+      var t = el("table", {cls: "cf-tbl cf-mini"}, el("tr", null, el("th", {cls: "l", text: "名次"}), el("th", {text: "今天"}), el("th", {text: "前一交易日"}), el("th", {text: "近 " + n + " 日最佳"}), el("th", {text: "最差"})));
+      [["vr", "成交資金佔比"], ["yr", "外資投信買賣超"]].forEach(function(k){
+        var xs = s.d && s.d[k[0]] ? s.d[k[0]].slice(-n) : [];
+        var ok = xs.filter(isnum), now = xs[xs.length - 1], prev = xs[xs.length - 2];
+        var best = ok.length ? Math.min.apply(null, ok) : null, worst = ok.length ? Math.max.apply(null, ok) : null;
+        var tx = function(v){ return isnum(v) ? String(v) : "—"; };
+        t.appendChild(el("tr", null, el("td", {cls: "l", text: k[1]}), el("td", null, el("b", {text: tx(now)})), el("td", {text: tx(prev)}), el("td", {text: tx(best)}), el("td", {text: tx(worst)})));
+      });
+      card.appendChild(t);
+      if (!s.d) card.appendChild(el("div", {cls: "cf-note", text: "流動性不足，沒有每日序列；只能在下面的前 100 名表格裡找。"}));
+      wrap.appendChild(card);
+    });
+    host.appendChild(wrap);
+  }).catch(function(){ host.innerHTML = ""; });
+}
+
 // ── 分頁與事件 ─────────────────────────────────────────────────────────
 var done = {};
 function open(tab, code){
@@ -1049,22 +1876,36 @@ function open(tab, code){
     if (tab === "t9") draw9();
     if (tab === "t10") draw10();
     if (tab === "t11") quick11();
+    if (tab === "t7") quickTop("cf-q7a", "cf-q7b", function(c){ $("cf-q7").value = label(c); go("7", true); });
+    if (tab === "t9") quickTop("cf-q9a", "cf-q9b", function(c){ mark9 = {}; mark9[c] = 1; $("cf-q9").value = label(c); draw9(); });
+    if (tab === "t6") fill6days();
+    if (tab === "t13") info13();
+    if (tab === "t4" || tab === "t6") loadHist("b").catch(function(){});
     if (!code && ["t1", "t2", "t3", "t7"].indexOf(tab) >= 0){ var q = $("cf-q" + n); if (!q.value){ q.value = label(R.picks && R.picks[0] || "2330"); go(n); } }
   }
 }
-function go(n){
+function go(n, auto){
   var code = resolve($("cf-q" + n).value);
   if (!code) return;
   if (n === "1") show1(code); else if (n === "2") show2(code); else if (n === "3") show3(code);
-  else if (n === "7") rankTrail($("cf-o7"), [code], $("cf-s7").value);
+  else if (n === "7") rankTrail($("cf-o7"), [code], $("cf-s7").value, !!auto);
   else if (n === "9"){ mark9 = {}; mark9[code] = 1; draw9(); }
   else if (n === "11") amountTrail($("cf-o11"), [code], $("cf-s11").value, true, $("cf-r11").value);
 }
 function add(n){
-  var code = resolve($("cf-q" + n).value), list = multi[n];
-  if (!code || list.indexOf(code) >= 0) return;
-  if (list.length >= 8){ alert("最多 8 檔"); return; }
-  list.push(code); $("cf-q" + n).value = "";
+  // 可以一次輸入多檔（空白、逗號、頓號隔開），例如「3443 2330」
+  var list = multi[n], raw = $("cf-q" + n).value.trim(), parts = /^\d{4}\s+\S/.test(raw) || /[,，、]/.test(raw) ? raw.split(/[\s,，、]+/) : [raw];
+  var full = false, miss = [];
+  parts.forEach(function(q){
+    if (!q) return;
+    var code = resolve(q);
+    if (!code || !ROWS[code]){ miss.push(q); return; }
+    if (list.indexOf(code) >= 0) return;
+    if (list.length >= 8){ full = true; return; }
+    list.push(code);
+  });
+  $("cf-q" + n).value = miss.join(" ");
+  if (full) alert("最多 8 檔");
   if (n === "8") redraw8(); else if (n === "10") draw10(); else redraw12();
 }
 function quick11(){
@@ -1083,9 +1924,28 @@ function init(){
   ["1", "2", "3", "7", "9", "11"].forEach(function(n){ $("cf-q" + n).addEventListener("keydown", function(e){ if (e.key === "Enter") go(n); }); });
   ["8", "10", "12"].forEach(function(n){ $("cf-q" + n).addEventListener("keydown", function(e){ if (e.key === "Enter") add(n); }); });
   document.querySelectorAll("[data-run]").forEach(function(b){ b.addEventListener("click", function(){ var n = b.getAttribute("data-run"); if (n === "4") run4(); else if (n === "5") run5(); else run6(); }); });
-  document.querySelectorAll("[data-reset]").forEach(function(b){ b.addEventListener("click", function(){ var n = b.getAttribute("data-reset"); document.querySelectorAll("#cf-t" + n + " input[type=number]").forEach(function(i){ i.value = ""; }); document.querySelectorAll("#cf-f5b input").forEach(function(i){ if (n === "5") i.checked = false; }); }); });
-  $("cf-sample").onclick = function(){ sample4(); run4(); };
-  $("cf-sample6").onclick = function(){ sample4(); run6(); };
+  subTabs($("cf-s4"), [["today", "今天的結果"], ["bt", "20 天回測彙總表"]], function(v){ V4 = v; run4(); }, "today");
+  subTabs($("cf-s5"), [["today", "今天的結果"], ["bt", "24 個月回測彙總表"]], function(v){ V5 = v; run5(); }, "today");
+  subTabs($("cf-s6"), [["day", "篩選日的結果"], ["bt", "20 天回測彙總表"]], function(v){ V6 = v; run6(); }, "day");
+  document.querySelectorAll("[data-csv]").forEach(function(b){ b.addEventListener("click", function(){
+    var n = b.getAttribute("data-csv");
+    var x = n === "4" ? (V4 === "bt" ? LAST.cf4 : LAST.t4) : n === "5" ? (V5 === "bt" ? LAST.bt5 : LAST.t5) : (V6 === "bt" ? LAST.cf6 : LAST.t6);
+    if (!x){ alert("先按「開始篩選」產生結果，再匯出。"); return; }
+    if (x.csv) x.csv(); else tableCsv(x.name, x.rows, x.cols);
+  }); });
+  document.querySelectorAll("[data-ex5]").forEach(function(b){ b.addEventListener("click", function(){ var ex = EX5[b.getAttribute("data-ex5")]; set5(ex); $("cf-x5").textContent = ex.t + "。範例只是示範操作方式所預設的數值，不代表推薦。"; run5(); }); });
+  document.querySelectorAll("[data-ex6]").forEach(function(b){ b.addEventListener("click", function(){
+    var ex = EX6[b.getAttribute("data-ex6")];
+    setCond("cf4", ex.c); if (ex.f) set5(ex.f); else clear5();
+    $("cf-x6").textContent = ex.t + "（已改寫 ④、⑤ 兩頁的條件；只是示範操作，不是選股建議）。";
+    run6();
+  }); });
+  $("cf-run13").onclick = run13;
+  $("cf-sample13").onclick = function(){ setCond("cf13", COND_SAMPLE); run13(); };
+  $("cf-reset13").onclick = function(){ setCond("cf13", {}); $("cf13-dd").value = ""; showErr("cf-e13", []); };
+  $("cf13-per").onchange = info13; $("cf13-n").onchange = info13;
+  document.querySelectorAll("[data-reset]").forEach(function(b){ b.addEventListener("click", function(){ var n = b.getAttribute("data-reset"); if (n === "4"){ setCond("cf4", {}); showErr("cf-e4", []); } else clear5(); }); });
+  $("cf-sample").onclick = function(){ setCond("cf4", COND_SAMPLE); run4(); };
   $("cf-clear9").onclick = function(){ mark9 = {}; draw9(); };
   $("cf-clear10").onclick = function(){ list10.length = 0; draw10(); };
   $("cf-o9").addEventListener("pick", function(e){ mark9 = {}; mark9[e.detail] = 1; $("cf-q9").value = label(e.detail); draw9(); });
@@ -1117,7 +1977,7 @@ function unpackRows(doc){
 }
 getJSON("radar.json").then(function(doc){
   R = unpackRows(doc);
-  R.rows.forEach(function(r){ ROWS[r.c] = r; BYNAME[r.n] = r.c; if (isnum(r.hr)) has15 = true; });
+  R.rows.forEach(function(r){ ROWS[r.c] = r; BYNAME[r.n] = r.c; });
   // 代號清單（輸入框的下拉提示）一千九百多項：等第一次點進輸入框才建，不擋首頁顯示。
   var dl = $("cf-codes"), dlDone = false;
   document.addEventListener("focusin", function(e){

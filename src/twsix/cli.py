@@ -2323,7 +2323,7 @@ def cmd_backfill_levels(args: argparse.Namespace) -> int:
     """
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient  # noqa: PLC0415
-    from .ingest.tdcc_history import History  # noqa: PLC0415
+    from .ingest.tdcc_history import History, NoHistory  # noqa: PLC0415
     from .store import ownership as own  # noqa: PLC0415
 
     data_dir = Path(args.data or settings.data_dir)
@@ -2368,10 +2368,24 @@ def cmd_backfill_levels(args: argparse.Namespace) -> int:
         if not missing:
             continue
         got: list[Any] = []
-        for day in missing:
+        before = weeks_done
+        # 「查詢頁沒有回傳分級表」多半不是被擋，而是**那一週這檔還沒上市**（2026-09-29：
+        # 新上市股把「連續六次失敗」用完，整批停在 0 檔、夜夜如此）。週是由新到舊問的，
+        # 所以某一週沒有表、更舊的週也不會有：這一檔就到此為止，不算進被擋的次數。
+        # 只有「最新一週就沒有表」才可能是被擋——那種情況連續六檔才整批停下。
+        newest_missing = bool(available) and missing[0] == available[0]
+        for pos, day in enumerate(missing):
             try:
                 got.append(history.week(code, day))
                 streak = 0
+            except NoHistory as exc:
+                if pos == 0 and newest_missing:
+                    streak += 1
+                    if streak >= 6:
+                        print(f"::warning::集保查詢頁連續六檔最新一週都沒有表（多半是被擋），先停下：{exc}")
+                        print(f"原始 15 級：補了 {stocks} 檔、{weeks_done} 週")
+                        return EXIT_OK
+                break
             except Exception as exc:  # noqa: BLE001
                 streak += 1
                 if streak >= 6:
@@ -2386,7 +2400,7 @@ def cmd_backfill_levels(args: argparse.Namespace) -> int:
         own.save_level_history(root, code, got)
         weeks_done += len(got)
         stocks += 1
-        print(f"  {code}：補 {len(missing)} 週")
+        print(f"  {code}：補 {weeks_done - before} 週")
         if args.limit and stocks >= args.limit:
             break
     print(f"原始 15 級：補了 {stocks} 檔、{weeks_done} 週")
