@@ -1565,6 +1565,10 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
 .qf-indpanel[hidden]{display:none}
 .qf-indtools{grid-column:1/-1;display:flex;gap:6px;margin-bottom:4px}
 .qf-indpanel label{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--ink)}
+.qf-rrpanel{grid-template-columns:1fr;width:min(360px,90vw)}
+.qf-rrpanel .qf-rrrange{flex-wrap:wrap}
+.qf-rrpanel input[type=number]{width:5em}
+.qf-note{font-size:11.5px;color:var(--muted);margin:0 0 4px 22px;line-height:1.4}
 @media (max-width:640px){
   .ai-block{padding:12px 12px 14px}
   .ai-state{font-size:22px}

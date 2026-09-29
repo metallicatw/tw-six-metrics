@@ -188,16 +188,17 @@ def test_選股與財務健診的子分頁和全站同一種膠囊樣式():
 def test_清單多了籌碼雷達欄與五個快速篩選():
     T = ROOT / "src" / "twsix" / "report" / "templates"
     m = (T / "_macros.html.j2").read_text("utf-8")
-    for fid in ('id="f-indpanel"', 'data-inds="all"', 'data-inds="none"', 'id="f-smin"', 'id="f-smax"', 'id="only-picks"', 'id="f-rr"', 'id="f-ai"', 'id="f-cf"', 'id="f-reset"'):
+    for fid in ('id="f-indpanel"', 'data-inds="all"', 'data-inds="none"', 'id="f-smin"', 'id="f-smax"', 'id="only-picks"', 'id="f-rrpanel"', 'id="f-rrmin"', 'id="f-rrmax"', 'id="f-ai"', 'id="f-cf"', 'id="f-reset"'):
         assert fid in m, fid
-    for v in ('value="free">無風險', 'value="bear">空頭', 'value="ge2"', 'value="lt2"'):
+    for v in ('data-rr="range"', 'data-rr="free"', 'data-rr="bear"', 'data-rr="na"', 'data-f-rrv='):
         assert v in m, v
     assert 'data-f-rr="{{ reward_cat(r) }}"' in m and 'class="cf-cell mid"' in m
     for page in ("list.html.j2", "watchlist.html.j2"):
         src = (T / page).read_text("utf-8")
         assert "quick_filters(rows)" in src and "cf=cf_marks" in src, page
     js = (T / "site.js").read_text("utf-8")
-    assert "var QF = [['rr'" in js and "want === 'any' ? !got : got !== want" in js
+    assert "function rrPass(tr)" in js and "if(cat === 'free') return st.hi === null;" in js
+    assert "var QF = [" in js and "want === 'any' ? !got : got !== want" in js
     assert "INDS.has(tr.getAttribute('data-f-ind')" in js and "tr.getAttribute('data-f-score')" in js
     assert 'data-f-score=' in m
 

@@ -1056,7 +1056,7 @@ var TWSIXWatch = (function(){
   var onlyPicks = document.getElementById('only-picks');
   var tally = document.getElementById('tally');
   var watchOnlyPage = table.getAttribute('data-watchlist') === '1';
-  var QF = [['rr', document.getElementById('f-rr')],
+  var QF = [
             ['ai', document.getElementById('f-ai')], ['cf', document.getElementById('f-cf')]];
   var qfReset = document.getElementById('f-reset');
   /* 產業（複選）與綜合評分（範圍），2026-09-29。 */
@@ -1068,6 +1068,36 @@ var TWSIXWatch = (function(){
     var on = indBoxes.filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
     INDS = on.length === indBoxes.length ? null : new Set(on);
     if(indBtn) indBtn.textContent = (INDS === null ? '全部產業' : (on.length ? '已選 ' + on.length + ' 個產業' : '未選產業')) + ' ▾';
+  }
+  /* 報酬風險比（複選面板，2026-09-30）：勾了的任一成立就列。 */
+  var rrBtn = document.getElementById('f-rrbtn'), rrPanel = document.getElementById('f-rrpanel');
+  var rrBoxes = rrPanel ? [].slice.call(rrPanel.querySelectorAll('input[data-rr]')) : [];
+  var rrMin = document.getElementById('f-rrmin'), rrMax = document.getElementById('f-rrmax');
+  function rrState(){
+    var on = {}; rrBoxes.forEach(function(c){ on[c.getAttribute('data-rr')] = c.checked; });
+    var lo = num(rrMin), hi = num(rrMax);
+    var useRange = on.range && (lo !== null || hi !== null);
+    return {range: useRange, lo: lo, hi: hi, free: on.free, bear: on.bear, na: on.na,
+            active: useRange || on.free || on.bear || on.na};
+  }
+  function rrLabel(){
+    if(!rrBtn) return;
+    var st = rrState(), parts = [];
+    if(st.range) parts.push(st.lo !== null && st.hi !== null ? st.lo + '～' + st.hi : st.lo !== null ? '≥ ' + st.lo : '≤ ' + st.hi);
+    if(st.free) parts.push('無風險'); if(st.bear) parts.push('空頭'); if(st.na) parts.push('—');
+    rrBtn.textContent = (parts.length ? parts.join('、') : '全部') + ' ▾';
+  }
+  function rrPass(tr){
+    var st = rrState(); if(!st.active) return true;
+    var cat = tr.getAttribute('data-f-rr') || '', v = tr.getAttribute('data-f-rrv');
+    if(st.free && cat === 'free') return true;
+    if(st.bear && cat === 'bear') return true;
+    if(st.na && cat === 'na') return true;
+    if(st.range){
+      if(cat === 'free') return st.hi === null;          // 無風險＝∞：只設下限時一定篩到
+      if(v){ v = parseFloat(v); if((st.lo === null || v >= st.lo - 1e-9) && (st.hi === null || v <= st.hi + 1e-9)) return true; }
+    }
+    return false;
   }
   function num(el){ if(!el || el.value === '') return null; var v = parseFloat(el.value); return isFinite(v) ? v : null; }
 
@@ -1087,6 +1117,7 @@ var TWSIXWatch = (function(){
       if(pv && tr.getAttribute('data-f-pick') !== pv) return false;
     }
     if(INDS && !INDS.has(tr.getAttribute('data-f-ind') || '')) return false;
+    if(!rrPass(tr)) return false;
     var lo = num(sMin), hi = num(sMax);
     if(lo !== null || hi !== null){
       var sv = tr.getAttribute('data-f-score');
@@ -1120,6 +1151,21 @@ var TWSIXWatch = (function(){
     if(el) el.addEventListener(el.tagName === 'INPUT' && (el.type === 'search' || el.type === 'number') ? 'input' : 'change', apply);
   });
   indBoxes.forEach(function(c){ c.addEventListener('change', function(){ syncInds(); apply(); }); });
+  rrBoxes.forEach(function(c){ c.addEventListener('change', function(){ rrLabel(); apply(); }); });
+  [rrMin, rrMax].forEach(function(el){ if(el) el.addEventListener('input', function(){
+    var box = rrPanel.querySelector('input[data-rr=range]'); if(box && el.value !== '') box.checked = true;
+    rrLabel(); apply(); }); });
+  if(rrBtn && rrPanel){
+    rrBtn.addEventListener('click', function(e){
+      e.stopPropagation(); rrPanel.hidden = !rrPanel.hidden;
+      rrBtn.setAttribute('aria-expanded', rrPanel.hidden ? 'false' : 'true');
+    });
+    document.addEventListener('click', function(e){
+      if(!rrPanel.hidden && !rrPanel.contains(e.target) && e.target !== rrBtn){
+        rrPanel.hidden = true; rrBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
   if(indPanel) [].forEach.call(indPanel.querySelectorAll('button[data-inds]'), function(b){
     b.addEventListener('click', function(){
       var all = b.getAttribute('data-inds') === 'all';
@@ -1143,6 +1189,8 @@ var TWSIXWatch = (function(){
     if(q) q.value = '';
     indBoxes.forEach(function(c){ c.checked = true; }); syncInds();
     if(sMin) sMin.value = ''; if(sMax) sMax.value = '';
+    rrBoxes.forEach(function(c){ c.checked = c.getAttribute('data-rr') === 'range'; });
+    if(rrMin) rrMin.value = ''; if(rrMax) rrMax.value = ''; rrLabel();
     apply();
   });
   syncInds();
@@ -1165,7 +1213,7 @@ var TWSIXWatch = (function(){
    * 無害的），load 收「重新解析」那條路——它在表單還原之後才發生。另外重讀一次
    * 觀察清單，因為使用者很可能就是在剛才那一頁按了☆。 */
   function resync(){
-    syncInds();
+    syncInds(); rrLabel();
     TWSIXWatch.reload();
     [].forEach.call(table.querySelectorAll('button[data-star]'), paintStar);
     applyCustomOrder();

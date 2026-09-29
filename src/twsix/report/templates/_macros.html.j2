@@ -54,7 +54,7 @@
    顯示方式也不會讓篩選失靈。 #}
 {%- set sc = r.composite|float(default=none) %}
 <tr data-code="{{ r.stock_id }}" data-f-ind="{{ ind_key(r.industry) }}" data-f-score="{{ '%.4f'|format(sc) if sc is not none else '' }}" data-f-pick="{{ 1 if r.value_pick else 0 }}"
-    data-f-rr="{{ reward_cat(r) }}" data-f-ai="{{ mk.kind if mk else '' }}" data-f-cf="{{ cm.kind if cm else '' }}">
+    data-f-rr="{{ reward_cat(r) }}" data-f-rrv="{{ '%.6f'|format(r.reward_risk) if (r.reward_risk is not none and not r.risk_free) else '' }}" data-f-ai="{{ mk.kind if mk else '' }}" data-f-cf="{{ cm.kind if cm else '' }}">
   {# 流水號。內容留空，數字由 CSS 的計數器產生——這樣它數的是**畫面上的位置**：
      排序之後從 1 重新數，篩選之後跳過被隱藏的列。若改成建站時寫死的數字，排一次
      序就會變成一欄亂跳的號碼，比沒有還糟。 #}
@@ -173,8 +173,19 @@
   <label>綜合評分 <input type="number" id="f-smin" min="0" max="4" step="0.01" placeholder="最小" aria-label="綜合評分最小">
     ～ <input type="number" id="f-smax" min="0" max="4" step="0.01" placeholder="最大" aria-label="綜合評分最大"></label>
   <label>具投資價值 <select id="only-picks"><option value="">全部</option><option value="1">具投資價值</option><option value="0">不具</option></select></label>
-  <label>報酬風險比 <select id="f-rr"><option value="">全部</option><option value="free">無風險</option><option value="bear">空頭</option>
-    <option value="ge2">≥ 2</option><option value="lt2">&lt; 2</option><option value="na">— 算不出來</option></select></label>
+  {# 報酬風險比：勾選面板（複選，2026-09-30）。勾了的項目任一成立就列（OR）；都不勾＝不篩。
+     「自訂範圍」是 ≥ 下限（可再加 ≤ 上限）；無風險視為 ∞，所以只設下限時一定會一起篩到，
+     設了上限就不含它。 #}
+  <span class="qf-inds qf-rr">報酬風險比 <button type="button" id="f-rrbtn" class="qf-btn" aria-expanded="false">全部 ▾</button>
+    <span class="qf-indpanel qf-rrpanel" id="f-rrpanel" hidden>
+      <label class="qf-rrrange"><input type="checkbox" data-rr="range" checked> 自訂範圍 ≥
+        <input type="number" id="f-rrmin" min="0" step="0.1" placeholder="例 2" aria-label="報酬風險比下限">
+        ～ ≤ <input type="number" id="f-rrmax" min="0" step="0.1" placeholder="不限" aria-label="報酬風險比上限"></label>
+      <span class="qf-note">無風險視為 ∞：只設下限時一定會一起篩到；設了上限就不含它。</span>
+      <label><input type="checkbox" data-rr="free"> 無風險（∞）</label>
+      <label><input type="checkbox" data-rr="bear"> 空頭</label>
+      <label><input type="checkbox" data-rr="na"> — 算不出來</label>
+    </span></span>
   <label>AI <select id="f-ai"><option value="">全部</option><option value="held">持有中</option><option value="cand">候選</option>
     <option value="veto">財報否決</option><option value="any">任一標記</option></select></label>
   <label>籌碼雷達 <select id="f-cf"><option value="">全部</option><option value="pick">精選</option><option value="l1">共振</option>
