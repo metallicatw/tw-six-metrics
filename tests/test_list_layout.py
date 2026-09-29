@@ -192,20 +192,18 @@ def test_第一列的置頂要變灰():
 # 4. 十七欄看得完
 
 
-def test_清單那張表在寬螢幕上突出內容欄():
-    """夾住它的不是視窗，是 `.wrap` 的 `max-width:1240px`——所以「換一台大螢幕」
+def test_清單那張表左右切齊標題下方的分隔線():
+    """2026-09-29 使用者要求：表格左右必須切齊標題列下方的分隔線。
 
-    不會讓最右邊那兩欄跑出來。
+    原本寬螢幕上讓盒子「跟著表格寬」並置中（fit-content ＋ translateX(-50%)），
+    表格比內容欄窄時兩側縮進、比較寬時又突出去。現在盒子就是內容欄的寬、表格拉滿。
     """
     assert 'class="scroll wide"' in (TPL / "list.html.j2").read_text(encoding="utf-8")
     assert 'class="scroll wide"' in (TPL / "watchlist.html.j2").read_text(encoding="utf-8")
-    d = _decl(".scroll.wide")
-    assert "max-width:min(" in d and "100vw" in d, f"沒有跟著視窗放寬：{d}"
-    # 上限。再寬下去每一列會長到眼睛追不回行首。
-    assert "1600px" in d, d
-    # 兩側各留 8px：表格自然寬 1,256，1280 的筆電扣掉 32px 只剩 1,248——
-    # 差 8px 就要為了一欄橫向捲。
-    assert "100vw - 16px" in d, f"兩側留白太寬，1280 的螢幕會少一欄：{d}"
+    box = _decl(".scroll.wide")
+    assert "width:auto" in box and "transform:none" in box and "margin-left:0" in box, box
+    assert "fit-content" not in box and "translateX" not in box, box
+    assert "width:100%" in _decl("#t")
 
 
 def test_格子有收緊():
@@ -266,33 +264,6 @@ def test_左讀的那幾欄不置中():
         start = rows.rindex("<td", 0, i)
         opening = rows[start:rows.index(">", i)]
         assert "mid" not in opening, f"這一欄被置中了：{opening[:90]}"
-
-
-def test_表格不會被撐開():
-    """「每一欄的間距太大」真正的來源。
-
-    表格本來是 `width:100%`，而外面那個盒子在 1920 的螢幕上有 1,600px——多出來
-    的 377px 被平均塞進十七欄，每一欄憑空多 22px 的留白，而表格自己只需要
-    1,256px。改完之後 1920 與 1400 兩個寬度量到的都是「撐開 0px」。
-
-    兩件事要一起做，少一件就沒有效果：
-    """
-    d = _decl("#t")
-    assert "width:max-content" in d, (
-        f"表格沒有釘在自己需要的寬度上，會被容器撐開：{d}"
-    )
-    box = _decl(".scroll.wide")
-    assert "width:fit-content" in box, (
-        "盒子沒有跟著表格縮。注意**不能**寫 max-content——一個捲動容器的"
-        "max-content 和它裡面那張表的不是同一個數字（實測 4,079 對 1,256）"
-    )
-    assert "max-content" not in box.split("max-width")[0], box
-
-
-def test_表格置中而且不必事先知道寬度():
-    """寬度是內容決定的，所以算不出一個固定的負 margin。"""
-    d = _decl(".scroll.wide")
-    assert "margin-left:50%" in d and "translateX(-50%)" in d, d
 
 
 def test_燈泡和標題並排():
