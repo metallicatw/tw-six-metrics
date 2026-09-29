@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% from "_macros.html.j2" import row, table_head, tip, price_note %}
+{% from "_macros.html.j2" import row, table_head, tip, price_note, quick_filters %}
 {% block title %}台股觀察清單 — {{ site_title }}{% endblock %}
 {% block body %}
 <h2>台股觀察清單</h2>
@@ -15,6 +15,7 @@
 </p>
 <div class="filters">
   <input id="q" type="search" placeholder="在觀察清單裡篩選" aria-label="篩選">
+  {{ quick_filters(rows) }}
 </div>
 <p id="watch-empty" class="note" hidden>
   還沒有標記任何股票。到<a href="{{ rel }}index.html">評等清單</a>，
@@ -25,6 +26,6 @@
    讓 1280 以上的桌機不必橫向捲（見 site.css 的 #t.compact）。 #}
 <div class="scroll wide"><table id="t" class="compact" data-watchlist="1">
 {{ table_head(prices=True, price_date=price_date) }}
-<tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at, prices=True, price_date=price_date, ai=ai_marks) }}{% endfor %}</tbody>
+<tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at, prices=True, price_date=price_date, ai=ai_marks, cf=cf_marks) }}{% endfor %}</tbody>
 </table></div>
 {% endblock %}

@@ -1056,6 +1056,9 @@ var TWSIXWatch = (function(){
   var onlyPicks = document.getElementById('only-picks');
   var tally = document.getElementById('tally');
   var watchOnlyPage = table.getAttribute('data-watchlist') === '1';
+  var QF = [['ind', document.getElementById('f-ind')], ['rr', document.getElementById('f-rr')],
+            ['ai', document.getElementById('f-ai')], ['cf', document.getElementById('f-cf')]];
+  var qfReset = document.getElementById('f-reset');
 
   function visible(tr){
     if(watchOnlyPage || (onlyWatched && onlyWatched.checked)){
@@ -1065,7 +1068,19 @@ var TWSIXWatch = (function(){
        流水號就整排位移——那種錯不會報錯，只會讓「只看具投資價值」開始篩錯欄。 */
     var pick = tr.querySelector('td.pick-cell');
     var when = tr.querySelector('td.when-cell');
-    if(onlyPicks && onlyPicks.checked && (!pick || pick.getAttribute('data-s') !== '1')) return false;
+    /* 快速篩選（2026-09-29）：比對列上的 data-f-*（見 _macros.html.j2 的 row）。
+       〔具投資價值〕原本是勾選框，現在是下拉（全部／具投資價值／不具）；舊的勾選框
+       寫法也還認得。 */
+    if(onlyPicks){
+      var pv = onlyPicks.type === 'checkbox' ? (onlyPicks.checked ? '1' : '') : onlyPicks.value;
+      if(pv && tr.getAttribute('data-f-pick') !== pv) return false;
+    }
+    for(var fi = 0; fi < QF.length; fi++){
+      var sel = QF[fi][1], want = sel && sel.value;
+      if(!want) continue;
+      var got = tr.getAttribute('data-f-' + QF[fi][0]) || '';
+      if(want === 'any' ? !got : got !== want) return false;
+    }
     var v = q ? q.value.trim().toLowerCase() : '';
     return !v || tr.textContent.toLowerCase().indexOf(v) > -1;
   }
@@ -1082,8 +1097,14 @@ var TWSIXWatch = (function(){
     tally.textContent = watchOnlyPage || n === rows.length
       ? (n + ' 檔') : (n + ' / ' + rows.length + ' 檔');
   }
-  [q, onlyWatched, onlyPicks].forEach(function(el){
+  [q, onlyWatched, onlyPicks].concat(QF.map(function(x){ return x[1]; })).forEach(function(el){
     if(el) el.addEventListener(el.tagName === 'INPUT' && el.type === 'search' ? 'input' : 'change', apply);
+  });
+  if(qfReset) qfReset.addEventListener('click', function(){
+    QF.forEach(function(x){ if(x[1]) x[1].value = ''; });
+    if(onlyPicks){ if(onlyPicks.type === 'checkbox') onlyPicks.checked = false; else onlyPicks.value = ''; }
+    if(q) q.value = '';
+    apply();
   });
   applyCustomOrder();
   apply();

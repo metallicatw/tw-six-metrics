@@ -188,7 +188,10 @@ def test_the_listing_no_longer_offers_a_filter_that_filters_nothing():
     listing = (ROOT / "src/twsix/report/templates/list.html.j2").read_text("utf-8")
     assert "only-full" not in listing
     assert "only-watched" not in listing, "它和〔台股觀察清單〕分頁做同一件事"
-    assert "only-picks" in listing, "這一個要留著"
+    # 2026-09-29 起〔具投資價值〕是快速篩選那一列的下拉（_macros.html.j2 的 quick_filters）
+    assert "quick_filters(" in listing
+    macros = (ROOT / "src/twsix/report/templates/_macros.html.j2").read_text("utf-8")
+    assert 'id="only-picks"' in macros, "這一個要留著"
     assert "watchlist.html" in (
         ROOT / "src/twsix/report/templates/base.html.j2"
     ).read_text("utf-8"), "拿掉勾選框的前提是分頁還在"

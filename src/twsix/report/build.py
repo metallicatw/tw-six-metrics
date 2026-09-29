@@ -1003,6 +1003,14 @@ def build_site(
     except Exception as exc:  # noqa: BLE001 - 試行中的一欄不能讓清單畫不出來
         print(f"::warning::清單的 AI 欄讀不到（那一欄會是空白）：{exc!r}")
         base["ai_marks"] = {}
+    # 〔籌碼雷達〕那一欄：精選／籌碼共振（2026-09-29）。同上：讀不到就是一欄空白。
+    try:
+        from ..chipflow.marks import load_marks as load_cf_marks  # noqa: PLC0415
+
+        base["cf_marks"] = load_cf_marks(sheets_dir.parent if sheets_dir is not None else None)
+    except Exception as exc:  # noqa: BLE001 - 試行中的一欄不能讓清單畫不出來
+        print(f"::warning::清單的籌碼雷達欄讀不到（那一欄會是空白）：{exc!r}")
+        base["cf_marks"] = {}
 
 
     # 〔評等清單〕 is the front door.  It used to be 〔具投資價值〕, which ranks
@@ -1559,8 +1567,10 @@ def _write_ai_page(env: Any, base: dict[str, Any], out_dir: Path,
         print(f"::error::個股的 AI 摘要拆不出來（個股頁那個分頁會顯示沒有資料）：{exc!r}")
     try:
         ai = load_ai(data_dir)
+        # 有個股資訊頁的代號：名稱與代號只連到真的存在的頁面（見 ai.html.j2 的 sl）
+        ai_pages = {p.stem for p in (out_dir / "stock").glob("*.html")}
         env.get_template("ai.html.j2").stream(
-            **base, page="ai", rel="", ai=ai
+            **base, page="ai", rel="", ai=ai, ai_pages=ai_pages or None
         ).dump(str(out_dir / AI_PAGE))
         return 1
     except Exception as exc:  # noqa: BLE001 - 試行中的一頁不能讓整站建不起來

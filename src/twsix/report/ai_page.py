@@ -143,6 +143,31 @@ def _verdict(bt: dict) -> list[str]:
     return out
 
 
+def _fill_names(docs: list, data_dir: Path | None) -> None:
+    """把 `{"code": X, "name": X 或空}` 的名稱換成公司簡稱（就地修改）。"""
+    if data_dir is None:
+        return
+    from ..aipick.data import short_names  # noqa: PLC0415
+
+    names: dict[str, str] | None = None
+
+    def walk(o: Any) -> None:
+        nonlocal names
+        if isinstance(o, dict):
+            code = o.get("code")
+            if isinstance(code, str) and "name" in o and (not o.get("name") or o.get("name") == code):
+                if names is None:
+                    names = short_names(data_dir)
+                if names.get(code):
+                    o["name"] = names[code]
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+    walk(docs)
+
+
 def load_ai(data_dir: Path | None) -> dict:
     root = (data_dir / "aipick") if data_dir else None
     today = _read(root / "today.json") if root else None
@@ -152,10 +177,14 @@ def load_ai(data_dir: Path | None) -> dict:
                             "bt": bt or {}}
     if not today:
         return view
+    # 名稱只剩代號的（評等清單不收的金融股，例如 2882 國泰金）用公司簡稱補上——
+    # today.json 是上一趟 `twsix aipick` 寫的，這裡補的是畫面，下一趟起資料本身也對了。
+    _fill_names([today, port or {}], data_dir)
     flag_text = today.get("flag_text") or {}
     stext = today.get("strategy_text") or {}
     view["stext"] = stext
     view["journal"] = _journal(root / "journal.csv")
+    _fill_names([view["journal"]], data_dir)
     weights = sorted(((k, v) for k, v in (today.get("weights") or {}).items()), key=lambda kv: -kv[1])
     wsum = sum(v for _, v in weights) or 1
     view["weights"] = [(today["feature_text"].get(k, k), v / wsum) for k, v in weights]

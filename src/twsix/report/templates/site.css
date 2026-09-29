@@ -264,13 +264,13 @@ p{margin:0 0 10px;max-width:78ch}
 /* 2026-09-29 改：表格左右一律切齊標題下方那條分隔線（內容欄 1,200px）。
    原本在寬螢幕上讓盒子「跟著表格寬」並置中，結果表格比內容欄窄時兩側縮進、
    比較寬時又突出去——和標題對不齊。現在盒子就是內容欄的寬，表格拉滿盒子；
-   二十二欄的自然寬度約 1,160px（格子左右各 4px），1,280 以上的螢幕剛好放得下，
+   二十三欄（2026-09-29 加〔籌碼雷達〕）的自然寬度約 1,200px（格子左右各 3px），1,280 以上的螢幕剛好放得下，
    多出來的寬度平均分給各欄。更窄的視窗照舊在盒子裡橫向捲。 */
 .scroll.wide{width:auto;max-width:none;margin-left:0;margin-right:0;transform:none}
 #t{width:100%}
-#t th,#t td{padding:4px 4px}
-#t th:first-child,#t td:first-child{padding-left:8px}
-#t th:last-child,#t td:last-child{padding-right:8px}
+#t th,#t td{padding:4px 3px}
+#t th:first-child,#t td:first-child{padding-left:6px}
+#t th:last-child,#t td:last-child{padding-right:6px}
 /* ── 標題和數值要站在同一條軸上 ────────────────────────────────
    量 2026-09-20 那一份（1920 與 1400 兩個寬度都量過），標題那塊字的中心和
    數值的中心差了多少：
@@ -1196,7 +1196,10 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
  *      每一列本來就有兩行高（財報基準、上移下移），折成兩行不多佔一分高度。
  * ========================================================================= */
 #t.compact th,#t.compact td{padding:3px 3px}
-#t.compact th button.sortable{padding:4px 3px;font-size:11.5px}
+/* 2026-09-29 加〔籌碼雷達〕之後是二十三欄：字小半號、標題按鈕左右各 1px，
+   1,280 以上的螢幕仍然一眼看完、左右切齊標題分隔線。 */
+#t.compact{font-size:12px}
+#t.compact th button.sortable{padding:4px 1px;font-size:11px}
 /* 2026-09-24 再收一次（最右邊多了〔AI〕，1280 的筆電又要橫捲了，差 63px）：
    左右留白 4→3px、標題按鈕 5→3px、流水號那一格收窄、名稱超過五個字就折行
    （「臺灣化學纖維」這種名字讓整欄寬 93px，折成兩行不多佔高度——這張表每一列
@@ -1211,6 +1214,9 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 #t.compact .basis b{font-size:11px}
 #t.compact .pick{font-size:11px}
 #t.compact .g{min-width:24px;padding:1px 4px;font-size:11px}
+/* 「數據不足」「不評分」四個字把六個等第欄各撐到 49px（其他格只要 30px）：
+   在清單上折成兩行（數據／不足），欄寬回到由等第徽章決定（2026-09-29）。 */
+#t.compact .g-na{white-space:normal;width:2.3em;min-width:0;line-height:1.2;padding:1px 2px}
 /* 「數據不足」「不評分」這種字的徽章：六個等第欄的寬度是被它們撐開的（62px，
    字母徽章只要 54）。縮小字，不改字——改成「—」會和「沒有資料」混在一起。 */
 #t.compact .g.g-na{padding:1px 2px;font-size:9.5px;letter-spacing:-.02em}
@@ -1524,6 +1530,29 @@ html:not(.js) .ai-tabs{display:none}
   line-height:18px;white-space:nowrap;color:#fff;background:#7d2ae8}
 .ai-mk-held{background:#c2255c}
 .ai-mk-veto{background:transparent;color:var(--down);border:1px solid var(--down)}
+/* 〔籌碼雷達〕那一欄（2026-09-29）：精選實心、共振外框，和 AI 那一欄同一種小膠囊。
+   點了開〔籌碼雷達〕的〔① 個股籌碼多圖〕。 */
+#t thead th.cf-cell{vertical-align:middle}
+#t thead th.cf-cell .hdtip{justify-content:center}
+.cf-mk{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11.5px;font-weight:700;
+  line-height:18px;white-space:nowrap;text-decoration:none}
+a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
+.cf-mk-pick{color:#fff;background:#8a6d00}
+.cf-mk-l1{color:#8a6d00;border:1px solid #8a6d00;background:transparent}
+#t.compact .cf-mk{font-size:10.5px;padding:0 5px}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) .cf-mk-pick{background:#e3d35a;color:var(--ground)}
+  :root:not([data-theme=light]) .cf-mk-l1{color:#e3d35a;border-color:#e3d35a}
+}
+:root[data-theme=dark] .cf-mk-pick{background:#e3d35a;color:var(--ground)}
+:root[data-theme=dark] .cf-mk-l1{color:#e3d35a;border-color:#e3d35a}
+/* 快速篩選那一列：五個下拉＋一顆清除。 */
+.qf{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.qf label{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);white-space:nowrap}
+.qf select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--rule);border-radius:6px;
+  background:var(--surface);color:var(--ink);max-width:12em}
+.qf-reset{font:inherit;font-size:13px;padding:5px 12px;border:1px solid var(--rule);border-radius:6px;
+  background:var(--surface-2);color:var(--ink);cursor:pointer}
 @media (max-width:640px){
   .ai-block{padding:12px 12px 14px}
   .ai-state{font-size:22px}

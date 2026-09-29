@@ -5,6 +5,12 @@
 {# 這一頁有來自外部的文字（重大訊息主旨、LLM 摘要、公司名稱），一律跳脫。站上的
    樣板檔名是 .html.j2，select_autoescape 認不出來，所以在這裡明白打開。 #}
 {% autoescape true %}
+{# 代號與名稱都連到〔個股資訊頁〕（2026-09-29）。只有真的有那一頁的才連——評等清單不收
+   的金融股（例如 2882 國泰金）沒有個股資訊頁，連過去是 404，這時只寫字。 #}
+{% macro sl(code, text) -%}
+{%- if code and (not ai_pages or code in ai_pages) -%}<a href="{{ rel }}stock/{{ code }}.html">{{ text }}</a>
+{%- else -%}{{ text }}{%- endif -%}
+{%- endmacro %}
 {# 名詞解釋（2026-09-28）：同一段文字給燈泡與〔名詞解釋〕分頁共用，改一處就好。
    內容照程式碼寫：aipick/regime.py、revenue.py、links.py、chips.py、quality.py、
    news.py、talks.py、combo.py、sim.py、run.py。 #}
@@ -173,7 +179,7 @@
     <thead><tr><th>代號</th><th>名稱</th><th>方案</th><th>進場日</th><th class="num">進場價</th><th class="num">現價</th>
       <th class="num">報酬（扣成本）</th><th class="num">停損</th><th>法說</th><th>進場理由</th></tr></thead>
     <tbody>{% for p in ai.port.positions %}
-      <tr><td><a href="{{ rel }}stock/{{ p.code }}.html">{{ p.code }}</a></td><td>{{ p.name }}</td>
+      <tr><td>{{ sl(p.code, p.code) }}</td><td>{{ sl(p.code, p.name) }}</td>
         <td><span class="ai-s ai-s-{{ p.strategy or 'D' }}">{{ p.label }}</span></td><td>{{ p.entry_date }}</td>
         <td class="num">{{ p.entry_price }}</td><td class="num">{{ p.price }}<a class="yf" href="{{ yahoo_ta(p.code, p.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ p.code }} Yahoo 技術分析"></a></td>
         <td class="num {{ p.ret_tone }}">{{ p.ret_txt }}</td><td class="num">{{ '%.2f'|format(p.stop) }}</td>
@@ -191,7 +197,7 @@
     <div class="scroll"><table class="ai-t">
       <thead><tr><th>代號</th><th>名稱</th><th>方案</th><th>進場</th><th>出場</th><th class="num">天數</th><th class="num">報酬</th><th>出場理由</th></tr></thead>
       <tbody>{% for x in ai.port.trades|reverse %}
-        <tr><td>{{ x.code }}</td><td>{{ x.name }}</td><td class="muted">{{ x.label }}</td><td>{{ x.entry_date }}</td><td>{{ x.exit_date }}</td>
+        <tr><td>{{ sl(x.code, x.code) }}</td><td>{{ sl(x.code, x.name) }}</td><td class="muted">{{ x.label }}</td><td>{{ x.entry_date }}</td><td>{{ x.exit_date }}</td>
           <td class="num">{{ x.days }}</td><td class="num {{ x.ret_tone }}">{{ x.ret_txt }}</td><td>{{ x.reason_out }}</td></tr>
       {% endfor %}</tbody></table></div>
   </details>
@@ -212,7 +218,7 @@
   <div class="scroll"><table class="ai-t">
     <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th class="num">SUE</th><th class="num">年增</th><th class="num">收盤</th><th class="num">六大</th><th>法說</th><th class="ai-hide-m">理由</th></tr></thead>
     <tbody>{% for c in ai.a_cands %}
-      <tr><td><a href="{{ rel }}stock/{{ c.code }}.html">{{ c.code }}</a></td><td>{{ c.name }}</td><td class="muted">{{ c.industry }}</td>
+      <tr><td>{{ sl(c.code, c.code) }}</td><td>{{ sl(c.code, c.name) }}</td><td class="muted">{{ c.industry }}</td>
         <td class="num"><b>{{ '%+.1f'|format(c.extra.sue) }}</b></td>
         <td class="num {{ 'up' if c.extra.yoy > 0 else 'down' }}">{{ '%+.0f'|format(c.extra.yoy * 100) }}%</td>
         <td class="num">{{ c.close }}<a class="yf" href="{{ yahoo_ta(c.code, c.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ c.code }} Yahoo 技術分析"></a></td><td class="num">{{ c.six_txt }}</td>
@@ -230,11 +236,11 @@
   <div class="scroll"><table class="ai-t">
     <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th class="num">鄰居 20 日</th><th class="num">自己 20 日</th><th class="num">落後</th><th>主要鄰居</th><th>法說</th></tr></thead>
     <tbody>{% for c in ai.b_cands %}
-      <tr><td><a href="{{ rel }}stock/{{ c.code }}.html">{{ c.code }}</a></td><td>{{ c.name }}</td><td class="muted">{{ c.industry }}</td>
+      <tr><td>{{ sl(c.code, c.code) }}</td><td>{{ sl(c.code, c.name) }}</td><td class="muted">{{ c.industry }}</td>
         <td class="num {{ 'up' if c.extra.nm > 0 else 'down' }}">{{ '%+.1f'|format(c.extra.nm * 100) }}%</td>
         <td class="num {{ 'up' if c.extra.own > 0 else 'down' }}">{{ '%+.1f'|format(c.extra.own * 100) }}%</td>
         <td class="num"><b>{{ '%.1f'|format(c.extra.gap * 100) }}%</b></td>
-        <td class="ai-reasons">{% for n in (c.neighbors or [])[:4] %}<a href="{{ rel }}stock/{{ n.code }}.html">{{ n.name }}</a><span class="muted">（{{ '%.2f'|format(n.corr) if n.corr is not none else '—' }}{% if n.relation %}｜{{ n.relation }}{% endif %}）</span>{% if not loop.last %}、{% endif %}{% endfor %}</td>
+        <td class="ai-reasons">{% for n in (c.neighbors or [])[:4] %}{{ sl(n.code, n.name) }}<span class="muted">（{{ '%.2f'|format(n.corr) if n.corr is not none else '—' }}{% if n.relation %}｜{{ n.relation }}{% endif %}）</span>{% if not loop.last %}、{% endif %}{% endfor %}</td>
         <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td></tr>
     {% endfor %}</tbody></table></div>
   {% else %}<p class="stale">最近一次沒有符合全部條件的股票。</p>{% endif %}
@@ -249,7 +255,7 @@
     <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th class="num">共振分數</th>
       <th class="num">收盤</th><th class="num">20 日</th><th class="num">同業</th><th class="num">六大</th><th>法說</th><th>理由</th></tr></thead>
     <tbody>{% for c in ai.d_cands %}
-      <tr><td><a href="{{ rel }}stock/{{ c.code }}.html">{{ c.code }}</a></td><td>{{ c.name }}</td>
+      <tr><td>{{ sl(c.code, c.code) }}</td><td>{{ sl(c.code, c.name) }}</td>
         <td class="muted">{{ c.industry }}</td><td class="num"><b>{{ c.score_txt }}</b></td>
         <td class="num">{{ c.close }}<a class="yf" href="{{ yahoo_ta(c.code, c.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ c.code }} Yahoo 技術分析"></a></td><td class="num {{ c.ret20_tone }}">{{ c.ret20_txt }}</td>
         <td class="num muted">{{ c.ind_txt }}</td><td class="num">{{ c.six_txt }}</td>
@@ -281,7 +287,7 @@
   <div class="scroll"><table class="ai-t">
     <thead><tr><th>代號</th><th>名稱</th><th>法說日</th><th>轉折</th><th class="num">分數</th><th>讀法</th><th>摘要</th></tr></thead>
     <tbody>{% for x in ai.turns[:30] %}
-      <tr><td><a href="{{ rel }}stock/{{ x.code }}.html">{{ x.code }}</a></td><td>{{ x.name }}</td><td>{{ x.date }}</td>
+      <tr><td>{{ sl(x.code, x.code) }}</td><td>{{ sl(x.code, x.name) }}</td><td>{{ x.date }}</td>
         <td class="{{ 'down' if x.kind == '負轉折' else ('up' if x.kind == '正轉折' else 'muted') }}">{{ x.kind }}{% if not x.prev_date %}<span class="muted">（第一次，沒有可比）</span>{% endif %}</td>
         <td class="num">{{ '%+.1f'|format(x.score) }}</td><td class="muted">{{ 'LLM' if x.method == 'llm' else '規則' }}</td>
         <td class="ai-reasons">{{ x.summary or ('；'.join(x.highlights) if x.highlights else '—') }}</td></tr>
@@ -379,7 +385,7 @@
     <div class="scroll"><table class="ai-t">
       <thead><tr><th>日期</th><th>代號</th><th>名稱</th><th>警訊</th><th>主旨</th></tr></thead>
       <tbody>{% for n in ai.news_flags %}
-        <tr><td>{{ n.date }}</td><td><a href="{{ rel }}stock/{{ n.code }}.html">{{ n.code }}</a></td><td>{{ n.name }}</td>
+        <tr><td>{{ n.date }}</td><td>{{ sl(n.code, n.code) }}</td><td>{{ sl(n.code, n.name) }}</td>
           <td class="down">{{ n.label }}</td><td class="ai-reasons">{{ n.subject }}</td></tr>
       {% endfor %}</tbody></table></div>
   </details>
@@ -390,7 +396,7 @@
     <div class="scroll"><table class="ai-t">
       <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th>財報</th><th class="num">紅旗</th><th>明細</th></tr></thead>
       <tbody>{% for v in t.vetoes %}
-        <tr><td><a href="{{ rel }}stock/{{ v.code }}.html">{{ v.code }}</a></td><td>{{ v.name }}</td><td class="muted">{{ v.industry }}</td>
+        <tr><td>{{ sl(v.code, v.code) }}</td><td>{{ sl(v.code, v.name) }}</td><td class="muted">{{ v.industry }}</td>
           <td>{{ v.quarter }}</td><td class="num"><b>{{ v.score if v.score is defined else v.flags|length }}</b></td>
           <td class="ai-reasons">{{ v.details|join('；') }}</td></tr>
       {% endfor %}</tbody></table></div>
@@ -404,8 +410,8 @@
   <div class="scroll"><table class="ai-t">
     <thead><tr><th>日期</th><th>方案</th><th>動作</th><th>代號</th><th>名稱</th><th class="num">價格</th><th>說明</th></tr></thead>
     <tbody>{% for j in ai.journal %}
-      <tr><td>{{ j.date }}</td><td class="muted">{{ j.strategy }}</td><td>{{ j.action }}</td><td>{{ j.code }}</td>
-        <td>{{ j.name }}</td><td class="num">{{ j.price }}</td><td class="ai-reasons">{{ j.note }}</td></tr>
+      <tr><td>{{ j.date }}</td><td class="muted">{{ j.strategy }}</td><td>{{ j.action }}</td><td>{{ sl(j.code, j.code) }}</td>
+        <td>{{ sl(j.code, j.name) }}</td><td class="num">{{ j.price }}</td><td class="ai-reasons">{{ j.note }}</td></tr>
     {% endfor %}</tbody></table></div>
   {% else %}
   <p class="muted">還沒有紀錄。影子帳戶從 {{ ai.port.live_start }} 開始，第一筆會在下一個訊號日之後出現。</p>

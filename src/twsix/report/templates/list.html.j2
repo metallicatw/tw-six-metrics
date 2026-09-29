@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% from "_macros.html.j2" import row, table_head, tip, basis, price_note %}
+{% from "_macros.html.j2" import row, table_head, tip, basis, price_note, quick_filters %}
 {% block title %}台股評等清單 — {{ site_title }}{% endblock %}
 {% block body %}
 <h2>台股評等清單</h2>
@@ -56,7 +56,7 @@
    事裡的任何一件。 #}
 <div class="filters">
   <input id="q" type="search" placeholder="篩選：代號 / 名稱 / 產業" aria-label="篩選">
-  <label><input type="checkbox" id="only-picks"> 只看具投資價值</label>
+
   {# 燈泡就在〔只看具投資價值〕右邊，因為讀者是在**要不要勾它**的那一刻想知道
      它是什麼——那時候跳去〔評分規則〕那一頁再回來，多半就不勾了。
 
@@ -64,7 +64,10 @@
      未較上期跌逾 0.3」），而且只寫得下三個，第四個藏在 title 裡。問題是那一行
      既擠又不完整：它把篩選那一列撐成兩行，卻還是沒有把規則說完。整段收進燈泡
      之後，四個條件都寫得下，而那一列回到一行。 #}
+  {{ quick_filters(rows) }}
   {% call tip() %}
+  <b>快速篩選</b>：五個下拉和左邊的文字篩選同時作用（全部條件都要成立），上方的檔數跟著變。
+  〔清除篩選〕把它們一次歸零。<br><br>
   <b>「具投資價值」是什麼。</b>它是活頁簿自己的一條規則，不是這個網站發明的形容詞。
   四個條件<b>全部</b>成立才算：（1）六項指標都沒有 C 或 B，最低 BB；
   （2）綜合評分 ≥ 3；（3）本期綜合評分比上一期下滑不超過 0.3；
@@ -76,6 +79,6 @@
    ——那是「自訂順序」，這一頁的順序是綜合評分。 #}
 <div class="scroll wide"><table id="t" class="compact">
 {{ table_head(prices=True, price_date=price_date) }}
-<tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at, prices=True, price_date=price_date, ai=ai_marks) }}{% endfor %}</tbody>
+<tbody>{% for r in rows %}{{ row(r, rel, rich_ids, fetched_at, prices=True, price_date=price_date, ai=ai_marks, cf=cf_marks) }}{% endfor %}</tbody>
 </table></div>
 {% endblock %}

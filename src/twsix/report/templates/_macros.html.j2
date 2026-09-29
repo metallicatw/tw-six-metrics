@@ -44,10 +44,16 @@
    「+0.50」「—」「AA」照字串排會排出胡說，而把「怎麼比大小」放進 JS 去猜每一欄
    的型別，等於在兩個地方各寫一次規則。這裡一次寫好：數字就是數字，等第換成
    0~4，沒有值一律是最小的 -999——排序時沉到底，而不是插在中間。 #}
-{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False, price_date='', ai=None) -%}
+{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False, price_date='', ai=None, cf=None) -%}
 {% set when = (fetched_at or {}).get(r.stock_id) %}
 {% set has_full = when or (rich_ids and r.stock_id in rich_ids) %}
-<tr data-code="{{ r.stock_id }}">
+{%- set mk = (ai or {}).get(r.stock_id) %}
+{%- set cm = (cf or {}).get(r.stock_id) %}
+{# data-f-*：快速篩選用的分類（2026-09-29）。寫在列上而不是讓 JavaScript 去讀格子裡
+   的字——字是給人看的（「具投資價值」「1.46」），分類是給程式比對的，兩者分開，改了
+   顯示方式也不會讓篩選失靈。 #}
+<tr data-code="{{ r.stock_id }}" data-f-ind="{{ r.industry }}" data-f-pick="{{ 1 if r.value_pick else 0 }}"
+    data-f-rr="{{ reward_cat(r) }}" data-f-ai="{{ mk.kind if mk else '' }}" data-f-cf="{{ cm.kind if cm else '' }}">
   {# 流水號。內容留空，數字由 CSS 的計數器產生——這樣它數的是**畫面上的位置**：
      排序之後從 1 重新數，篩選之後跳過被隱藏的列。若改成建站時寫死的數字，排一次
      序就會變成一欄亂跳的號碼，比沒有還糟。 #}
@@ -114,9 +120,12 @@
   {# 〔AI〕：影子帳戶持有中／最近一次的候選／財報否決（見 report/ai_page.py 的
      load_marks）。排在最右邊：它是「另一套系統的意見」，不是評等的一部分，
      而且放最後才不會讓前面每一欄的欄號都往後推一格。 #}
-  {%- set mk = (ai or {}).get(r.stock_id) %}
   <td class="ai-cell mid" data-s="{{ mk.key if mk else 0 }}"
       {%- if mk %} title="{{ mk.title }}"{% endif %}>{% if mk %}<span class="ai-mk ai-mk-{{ mk.kind }}">{{ mk.label }}</span>{% endif %}</td>
+  {# 〔籌碼雷達〕：精選／籌碼共振（chipflow/marks.py）。排在 AI 右邊：兩欄都是「另一套
+     系統的意見」，放在評等的後面，也不會讓前面的欄號位移。 #}
+  <td class="cf-cell mid" data-s="{{ cm.key if cm else 0 }}"
+      {%- if cm %} title="{{ cm.title }}"{% endif %}>{% if cm %}<a class="cf-mk cf-mk-{{ cm.kind }}" href="{{ rel }}radar.html#t1-{{ r.stock_id }}">{{ cm.label }}</a>{% endif %}</td>
 </tr>
 {%- endmacro %}
 
@@ -131,7 +140,7 @@
                 全市場有 492 檔在這一類。排序鍵給一個大數，讓它排在最前面。
      空頭        預期報酬是負的（目標價低於現在的股價），估價那一層把它夾成 0。
                 印「0.00」會讀成「算出來剛好是零」，而真正的意思是往下。
-     —          算不出來（多半是還沒回補到〔年度交易資訊〕，沒有本益比區間；
+     —          算不出來（多半是歷年本益比不足、本益比區間算不出來；
                 也可能是預估 EPS 為負，本益比估價不適用）。排序鍵 -999，沉到底。
 
    把「無風險」和「—」混在一起是這個功能最容易犯的錯：拿 `> 2` 去篩會同時丟掉
@@ -139,6 +148,33 @@
 
    （以前「無風險」印的是 ∞。那個符號要先知道它代表什麼才看得懂，而清單上最常
    被問的就是「∞ 是好還是壞」。） #}
+{# ── 快速篩選（評等清單、觀察清單，2026-09-29）─────────────────────────────
+   五個下拉：產業、具投資價值、報酬風險比、AI、籌碼雷達。比對的是每一列的 data-f-*
+   （見 row），和上面的文字篩選、觀察清單同時作用（全部條件都要成立）。 #}
+{% macro quick_filters(rows) -%}
+<div class="qf" role="group" aria-label="快速篩選">
+  <label>產業 <select id="f-ind"><option value="">全部</option>
+    {%- for ind in rows|map(attribute='industry')|reject('none')|unique|sort %}<option>{{ ind }}</option>{% endfor %}</select></label>
+  <label>具投資價值 <select id="only-picks"><option value="">全部</option><option value="1">具投資價值</option><option value="0">不具</option></select></label>
+  <label>報酬風險比 <select id="f-rr"><option value="">全部</option><option value="free">無風險</option><option value="bear">空頭</option>
+    <option value="ge2">≥ 2</option><option value="lt2">&lt; 2</option><option value="na">— 算不出來</option></select></label>
+  <label>AI <select id="f-ai"><option value="">全部</option><option value="held">持有中</option><option value="cand">候選</option>
+    <option value="veto">財報否決</option><option value="any">任一標記</option></select></label>
+  <label>籌碼雷達 <select id="f-cf"><option value="">全部</option><option value="pick">精選</option><option value="l1">共振</option>
+    <option value="any">精選或共振</option></select></label>
+  <button type="button" id="f-reset" class="qf-reset">清除篩選</button>
+</div>
+{%- endmacro %}
+
+{# 快速篩選的分類：free 無風險、bear 空頭、ge2 ≥2、lt2 <2（大於 0）、na 算不出來。 #}
+{% macro reward_cat(r) -%}
+{%- if r.risk_free -%}free
+{%- elif r.reward_risk is none -%}na
+{%- elif r.reward_risk <= 0 -%}bear
+{%- elif r.reward_risk >= 2 -%}ge2
+{%- else -%}lt2{%- endif -%}
+{%- endmacro %}
+
 {% macro reward_key(r) -%}
 {%- if r.risk_free -%}999999
 {%- elif r.reward_risk is none -%}-999
@@ -315,8 +351,8 @@
   <p class="stop">中間那一欄是<b>損益兩平所需的最低勝率</b>＝ 1 ÷（1 ＋ 報酬風險比）。</p>
   <p class="stop"><b>無風險</b>＝股價已經低於下檔價，沒有下檔風險，比 3.0 還好。
   <b>空頭</b>＝預期報酬是負的（目標價低於現在的股價）。
-  <b>—</b>＝算不出來：多半是還沒回補到〔年度交易資訊〕（沒有本益比區間），
-  也可能是預估 EPS 為負、本益比估價不適用。<b>三者不是同一件事</b>。</p>
+  <b>—</b>＝算不出來：多半是<b>歷年本益比不足</b>（年度股價與 EPS 湊不滿五年，例如上市
+  未滿五年，本益比區間算不出來），也可能是預估 EPS 為負、本益比估價不適用。<b>三者不是同一件事</b>。</p>
   <p class="stop">{% for note in reward_risk_notes %}{{ note }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
 {% endcall %}</span></th>
   <th class="mid ai-cell"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 17 + o }}">AI</button>{% call tip() %}
@@ -333,6 +369,19 @@
   </ul>
   <p class="stop">點標題排序：持有 → 候選（同時符合越多套越前面）→ 空白 → 財報否決。</p>
   <p class="stop">⚠️ 試行中。這是一組規則的輸出，不是投資建議；回測與影子帳戶的成績見〔AI 選股〕頁。</p>
+{% endcall %}</span></th>
+  <th class="mid cf-cell"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 18 + o }}">籌碼<br>雷達</button>{% call tip() %}
+  <b>籌碼雷達</b>當天的漏斗結果（每個交易日收盤後更新，點標籤看那一檔的〔① 個股籌碼多圖〕）：
+  <ul class="rrguide">
+    <li><b>精選</b><em>整條漏斗</em>
+        <span>流動性母體、非財報否決 ＋ 共振分數前 5% 且法人／大戶／股東三根柱子至少兩根同向 ＋ 兩面以上成長旗標 ＋ 趨勢成立（收盤 &gt; 60 日線且 20 日線 &gt; 60 日線）。</span></li>
+    <li><b>共振</b><em>籌碼共振（L1）</em>
+        <span>共振分數前 10% 且三根柱子至少兩根同向，但沒有通過精選的其他條件；給人工複核。</span></li>
+    <li><b>空白</b><em>—</em>
+        <span>不在兩份名單上。</span></li>
+  </ul>
+  <p class="stop">點標題排序：精選 → 共振（同一級依共振分數）→ 空白。</p>
+  <p class="stop">⚠️ 試行中。清單由公開籌碼資料自動產生，不是投資建議；每週回頭驗證的成績見〔籌碼雷達〕的〔指標驗證〕。</p>
 {% endcall %}</span></th>
 </tr></thead>
 {%- endmacro %}

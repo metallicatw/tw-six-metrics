@@ -472,6 +472,35 @@ def load_meta(data_dir: Path) -> dict[str, Meta]:
     return out
 
 
+def short_names(data_dir: Path) -> dict[str, str]:
+    """`{代號: 公司簡稱}`，取自證交所／櫃買中心的公司基本資料（twse／tpex_companies.csv）。
+
+    評等清單不收金融保險業（六大指標不適用），所以 `load_meta` 找不到 2882 國泰金這類
+    公司——法說轉折、重大訊息裡出現它們時，頁面上的名稱就只剩代號（2026-09-29 使用者
+    回報）。這裡只補**名字**給畫面用，不加進 `load_meta`：選股的母體不能因此改變。
+    """
+    out: dict[str, str] = {}
+    for fname, code_col, name_col in (
+        ("twse_companies.csv", "公司代號", "公司簡稱"),
+        ("tpex_companies.csv", "SecuritiesCompanyCode", "CompanyAbbreviation"),
+    ):
+        path = data_dir / fname
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8-sig") as fh:
+            for r in csv.DictReader(fh):
+                code, name = (r.get(code_col) or "").strip(), (r.get(name_col) or "").strip()
+                if code and name:
+                    out[code] = name
+    return out
+
+
+def name_of(meta: dict[str, Meta], names: dict[str, str], code: str) -> str:
+    """評等清單的名稱優先，沒有就用公司簡稱，都沒有才回代號。"""
+    m = meta.get(code)
+    return (m.name if m and m.name else "") or names.get(code) or code
+
+
 # ---------------------------------------------------------------------------
 # 總經（來自 market-monitor）
 

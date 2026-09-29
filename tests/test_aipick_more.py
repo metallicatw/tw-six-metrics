@@ -863,3 +863,25 @@ def test_逾時也算忙碌_不是整個提示直接放棄():
 
     g = LL.Gemini("k", models=["slow", "fast"], post=post, sleep=lambda s: None)
     assert g.ask_json("x") == {"ok": True} and g.model_used == "fast"
+
+
+def test_金融股的名稱用公司簡稱補上_不改變選股母體():
+    """2026-09-29：法說轉折裡的 2882 只顯示代號——評等清單不收金融股。"""
+    from twsix.aipick import data as D
+    from twsix.report.ai_page import _fill_names
+
+    root = _tmp()
+    (root / "twse_companies.csv").write_text("公司代號,公司簡稱\n2882,國泰金\n", "utf-8")
+    names = D.short_names(root)
+    assert names == {"2882": "國泰金"}
+    assert D.name_of({}, names, "2882") == "國泰金" and D.name_of({}, names, "9999") == "9999"
+    doc = {"turns": [{"code": "2882", "name": "2882"}, {"code": "2330", "name": "台積電"}]}
+    _fill_names([doc], root)
+    assert [t["name"] for t in doc["turns"]] == ["國泰金", "台積電"]
+    assert "2882" not in D.load_meta(root), "只補名字，不加進母體"
+
+
+def test_AI頁的代號與名稱只連到真的有個股資訊頁的():
+    tpl = (ROOT / "src/twsix/report/templates/ai.html.j2").read_text("utf-8")
+    assert "{% macro sl(code, text)" in tpl and "not ai_pages or code in ai_pages" in tpl
+    assert "<td>{{ x.name }}</td>" not in tpl and "<td>{{ c.name }}</td>" not in tpl

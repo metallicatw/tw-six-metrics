@@ -183,3 +183,35 @@ def test_選股與財務健診的子分頁和全站同一種膠囊樣式():
     css = (T / "site.css").read_text("utf-8")
     sub = css.split(".subtab{", 1)[1].split("}", 1)[0]
     assert "border-radius:999px" in sub and "border-bottom:3px" not in sub
+
+
+def test_清單多了籌碼雷達欄與五個快速篩選():
+    T = ROOT / "src" / "twsix" / "report" / "templates"
+    m = (T / "_macros.html.j2").read_text("utf-8")
+    for fid in ('id="f-ind"', 'id="only-picks"', 'id="f-rr"', 'id="f-ai"', 'id="f-cf"', 'id="f-reset"'):
+        assert fid in m, fid
+    for v in ('value="free">無風險', 'value="bear">空頭', 'value="ge2"', 'value="lt2"'):
+        assert v in m, v
+    assert 'data-f-rr="{{ reward_cat(r) }}"' in m and 'class="cf-cell mid"' in m
+    for page in ("list.html.j2", "watchlist.html.j2"):
+        src = (T / page).read_text("utf-8")
+        assert "quick_filters(rows)" in src and "cf=cf_marks" in src, page
+    js = (T / "site.js").read_text("utf-8")
+    assert "var QF = [['ind'" in js and "want === 'any' ? !got : got !== want" in js
+
+
+def test_籌碼雷達標記_精選優先():
+    import gzip
+    import json
+
+    from twsix.chipflow.marks import load_marks
+
+    root = Path(tempfile.mkdtemp())
+    (root / "chipflow").mkdir()
+    doc = {"asof": "2026-09-29", "picks": ["1111"], "l1": ["1111", "2222"],
+           "rows": [{"c": "1111", "s": 0.99}, {"c": "2222", "s": 0.93}]}
+    (root / "chipflow" / "radar.json.gz").write_bytes(gzip.compress(json.dumps(doc).encode()))
+    mk = load_marks(root)
+    assert mk["1111"]["label"] == "精選" and mk["2222"]["label"] == "共振"
+    assert mk["1111"]["key"] > mk["2222"]["key"]
+    assert load_marks(Path(tempfile.mkdtemp())) == {}

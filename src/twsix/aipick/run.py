@@ -120,6 +120,7 @@ class Context:
         self.directors = D.load_directors(data_dir)
         self.statements = D.load_statements(data_dir)
         self.meta = D.load_meta(data_dir)
+        self.names = D.short_names(data_dir)
         self.macro = D.load_macro(data_dir)
         self.news = NW.NewsBook(NW.load_all(data_dir))
         self.quality = Q.QualityBook(self.statements, self.directors, self.news)
@@ -190,8 +191,7 @@ def _neighbors_json(ctx: Context, code: str, nb) -> list[dict]:
     for item in nb:
         b, corr = item if isinstance(item, tuple) else (item, None)
         rel = ctx.relations.get(RL.pair_key(code, b))
-        m = ctx.meta.get(b)
-        out.append({"code": b, "name": m.name if m else b, "corr": corr,
+        out.append({"code": b, "name": D.name_of(ctx.meta, ctx.names, b), "corr": corr,
                     "relation": rel.get("relation") if rel else None,
                     "confidence": rel.get("confidence") if rel else None,
                     "note": rel.get("note") if rel else None})
@@ -254,10 +254,9 @@ def today(ctx: Context, model: C.ChipsModel | None = None) -> dict:
     news_flags = []
     cutoff = _days_before(asof, 60)
     for code, evs in ctx.news.events.items():
-        m = ctx.meta.get(code)
         for d, flag, subject in evs:
             if cutoff <= d <= asof:
-                news_flags.append({"date": d, "code": code, "name": m.name if m else code,
+                news_flags.append({"date": d, "code": code, "name": D.name_of(ctx.meta, ctx.names, code),
                                    "flag": flag, "label": NW.FLAG_RULES[flag]["text"],
                                    "subject": subject})
     news_flags.sort(key=lambda r: (r["date"], r["code"]), reverse=True)
@@ -267,8 +266,7 @@ def today(ctx: Context, model: C.ChipsModel | None = None) -> dict:
         t = ctx.talks.latest(code, asof)
         if t is None or t.date < cutoff:
             continue
-        m = ctx.meta.get(code)
-        turns.append({"code": code, "name": m.name if m else code, **_turn_json(t)})
+        turns.append({"code": code, "name": D.name_of(ctx.meta, ctx.names, code), **_turn_json(t)})
     turns.sort(key=lambda r: (-abs(r["score"]), r["code"]))
     breadth_tail = [(p.dates[k], ctx.breadth[k]) for k in range(max(0, i - 249), i + 1)]
     return {
