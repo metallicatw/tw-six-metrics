@@ -1056,9 +1056,20 @@ var TWSIXWatch = (function(){
   var onlyPicks = document.getElementById('only-picks');
   var tally = document.getElementById('tally');
   var watchOnlyPage = table.getAttribute('data-watchlist') === '1';
-  var QF = [['ind', document.getElementById('f-ind')], ['rr', document.getElementById('f-rr')],
+  var QF = [['rr', document.getElementById('f-rr')],
             ['ai', document.getElementById('f-ai')], ['cf', document.getElementById('f-cf')]];
   var qfReset = document.getElementById('f-reset');
+  /* 產業（複選）與綜合評分（範圍），2026-09-29。 */
+  var indBtn = document.getElementById('f-indbtn'), indPanel = document.getElementById('f-indpanel');
+  var indBoxes = indPanel ? [].slice.call(indPanel.querySelectorAll('input[type=checkbox]')) : [];
+  var sMin = document.getElementById('f-smin'), sMax = document.getElementById('f-smax');
+  var INDS = null;   // null＝全部產業（不篩）
+  function syncInds(){
+    var on = indBoxes.filter(function(c){ return c.checked; }).map(function(c){ return c.value; });
+    INDS = on.length === indBoxes.length ? null : new Set(on);
+    if(indBtn) indBtn.textContent = (INDS === null ? '全部產業' : (on.length ? '已選 ' + on.length + ' 個產業' : '未選產業')) + ' ▾';
+  }
+  function num(el){ if(!el || el.value === '') return null; var v = parseFloat(el.value); return isFinite(v) ? v : null; }
 
   function visible(tr){
     if(watchOnlyPage || (onlyWatched && onlyWatched.checked)){
@@ -1074,6 +1085,14 @@ var TWSIXWatch = (function(){
     if(onlyPicks){
       var pv = onlyPicks.type === 'checkbox' ? (onlyPicks.checked ? '1' : '') : onlyPicks.value;
       if(pv && tr.getAttribute('data-f-pick') !== pv) return false;
+    }
+    if(INDS && !INDS.has(tr.getAttribute('data-f-ind') || '')) return false;
+    var lo = num(sMin), hi = num(sMax);
+    if(lo !== null || hi !== null){
+      var sv = tr.getAttribute('data-f-score');
+      if(!sv) return false;
+      sv = parseFloat(sv);
+      if((lo !== null && sv < lo - 1e-9) || (hi !== null && sv > hi + 1e-9)) return false;
     }
     for(var fi = 0; fi < QF.length; fi++){
       var sel = QF[fi][1], want = sel && sel.value;
@@ -1097,15 +1116,36 @@ var TWSIXWatch = (function(){
     tally.textContent = watchOnlyPage || n === rows.length
       ? (n + ' 檔') : (n + ' / ' + rows.length + ' 檔');
   }
-  [q, onlyWatched, onlyPicks].concat(QF.map(function(x){ return x[1]; })).forEach(function(el){
-    if(el) el.addEventListener(el.tagName === 'INPUT' && el.type === 'search' ? 'input' : 'change', apply);
+  [q, onlyWatched, onlyPicks, sMin, sMax].concat(QF.map(function(x){ return x[1]; })).forEach(function(el){
+    if(el) el.addEventListener(el.tagName === 'INPUT' && (el.type === 'search' || el.type === 'number') ? 'input' : 'change', apply);
   });
+  indBoxes.forEach(function(c){ c.addEventListener('change', function(){ syncInds(); apply(); }); });
+  if(indPanel) [].forEach.call(indPanel.querySelectorAll('button[data-inds]'), function(b){
+    b.addEventListener('click', function(){
+      var all = b.getAttribute('data-inds') === 'all';
+      indBoxes.forEach(function(c){ c.checked = all; }); syncInds(); apply();
+    });
+  });
+  if(indBtn && indPanel){
+    indBtn.addEventListener('click', function(e){
+      e.stopPropagation(); indPanel.hidden = !indPanel.hidden;
+      indBtn.setAttribute('aria-expanded', indPanel.hidden ? 'false' : 'true');
+    });
+    document.addEventListener('click', function(e){
+      if(!indPanel.hidden && !indPanel.contains(e.target) && e.target !== indBtn){
+        indPanel.hidden = true; indBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
   if(qfReset) qfReset.addEventListener('click', function(){
     QF.forEach(function(x){ if(x[1]) x[1].value = ''; });
     if(onlyPicks){ if(onlyPicks.type === 'checkbox') onlyPicks.checked = false; else onlyPicks.value = ''; }
     if(q) q.value = '';
+    indBoxes.forEach(function(c){ c.checked = true; }); syncInds();
+    if(sMin) sMin.value = ''; if(sMax) sMax.value = '';
     apply();
   });
+  syncInds();
   applyCustomOrder();
   apply();
 
@@ -1125,6 +1165,7 @@ var TWSIXWatch = (function(){
    * 無害的），load 收「重新解析」那條路——它在表單還原之後才發生。另外重讀一次
    * 觀察清單，因為使用者很可能就是在剛才那一頁按了☆。 */
   function resync(){
+    syncInds();
     TWSIXWatch.reload();
     [].forEach.call(table.querySelectorAll('button[data-star]'), paintStar);
     applyCustomOrder();

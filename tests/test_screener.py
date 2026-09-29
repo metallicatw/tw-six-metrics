@@ -188,7 +188,7 @@ def test_選股與財務健診的子分頁和全站同一種膠囊樣式():
 def test_清單多了籌碼雷達欄與五個快速篩選():
     T = ROOT / "src" / "twsix" / "report" / "templates"
     m = (T / "_macros.html.j2").read_text("utf-8")
-    for fid in ('id="f-ind"', 'id="only-picks"', 'id="f-rr"', 'id="f-ai"', 'id="f-cf"', 'id="f-reset"'):
+    for fid in ('id="f-indpanel"', 'data-inds="all"', 'data-inds="none"', 'id="f-smin"', 'id="f-smax"', 'id="only-picks"', 'id="f-rr"', 'id="f-ai"', 'id="f-cf"', 'id="f-reset"'):
         assert fid in m, fid
     for v in ('value="free">無風險', 'value="bear">空頭', 'value="ge2"', 'value="lt2"'):
         assert v in m, v
@@ -197,7 +197,9 @@ def test_清單多了籌碼雷達欄與五個快速篩選():
         src = (T / page).read_text("utf-8")
         assert "quick_filters(rows)" in src and "cf=cf_marks" in src, page
     js = (T / "site.js").read_text("utf-8")
-    assert "var QF = [['ind'" in js and "want === 'any' ? !got : got !== want" in js
+    assert "var QF = [['rr'" in js and "want === 'any' ? !got : got !== want" in js
+    assert "INDS.has(tr.getAttribute('data-f-ind')" in js and "tr.getAttribute('data-f-score')" in js
+    assert 'data-f-score=' in m
 
 
 def test_籌碼雷達標記_精選優先():

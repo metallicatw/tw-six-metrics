@@ -52,7 +52,8 @@
 {# data-f-*：快速篩選用的分類（2026-09-29）。寫在列上而不是讓 JavaScript 去讀格子裡
    的字——字是給人看的（「具投資價值」「1.46」），分類是給程式比對的，兩者分開，改了
    顯示方式也不會讓篩選失靈。 #}
-<tr data-code="{{ r.stock_id }}" data-f-ind="{{ r.industry }}" data-f-pick="{{ 1 if r.value_pick else 0 }}"
+{%- set sc = r.composite|float(default=none) %}
+<tr data-code="{{ r.stock_id }}" data-f-ind="{{ ind_key(r.industry) }}" data-f-score="{{ '%.4f'|format(sc) if sc is not none else '' }}" data-f-pick="{{ 1 if r.value_pick else 0 }}"
     data-f-rr="{{ reward_cat(r) }}" data-f-ai="{{ mk.kind if mk else '' }}" data-f-cf="{{ cm.kind if cm else '' }}">
   {# 流水號。內容留空，數字由 CSS 的計數器產生——這樣它數的是**畫面上的位置**：
      排序之後從 1 重新數，篩選之後跳過被隱藏的列。若改成建站時寫死的數字，排一次
@@ -153,8 +154,24 @@
    （見 row），和上面的文字篩選、觀察清單同時作用（全部條件都要成立）。 #}
 {% macro quick_filters(rows) -%}
 <div class="qf" role="group" aria-label="快速篩選">
-  <label>產業 <select id="f-ind"><option value="">全部</option>
-    {%- for ind in rows|map(attribute='industry')|reject('none')|unique|sort %}<option>{{ ind }}</option>{% endfor %}</select></label>
+  {# 產業：可複選（2026-09-29）。按鈕打開一個勾選面板，有〔全選〕〔全部取消〕；
+     全部勾著＝不篩。 #}
+  <span class="qf-inds">產業 <button type="button" id="f-indbtn" class="qf-btn" aria-expanded="false">全部產業 ▾</button>
+    <span class="qf-indpanel" id="f-indpanel" hidden>
+      <span class="qf-indtools"><button type="button" class="qf-reset" data-inds="all">全選</button><button type="button" class="qf-reset" data-inds="none">全部取消</button></span>
+      {#- 上市、上櫃的產業名稱寫法不一（「建材營造業」與「建材營造」、「其他業」與「其他」）：
+          用 ind_key 併成同一個勾選項，標籤取帶「業」的寫法；沒有產業的列在「未分類」。 #}
+      {%- set ns = namespace(m={}) %}
+      {%- for ind in rows|map(attribute='industry')|unique %}
+        {%- set k = ind_key(ind) %}
+        {%- if k not in ns.m or (ind or '')|length > ns.m[k]|length %}{% set _ = ns.m.update({k: ind or '未分類'}) %}{% endif %}
+      {%- endfor %}
+      {%- for k, label in ns.m|dictsort(by='value') %}
+      <label><input type="checkbox" value="{{ k }}" checked> {{ label }}</label>{% endfor %}
+    </span></span>
+  {# 綜合評分：自訂範圍（例如 2～4、3～4）。留空＝不限；算不出分數的一檔在設了範圍時不列。 #}
+  <label>綜合評分 <input type="number" id="f-smin" min="0" max="4" step="0.01" placeholder="最小" aria-label="綜合評分最小">
+    ～ <input type="number" id="f-smax" min="0" max="4" step="0.01" placeholder="最大" aria-label="綜合評分最大"></label>
   <label>具投資價值 <select id="only-picks"><option value="">全部</option><option value="1">具投資價值</option><option value="0">不具</option></select></label>
   <label>報酬風險比 <select id="f-rr"><option value="">全部</option><option value="free">無風險</option><option value="bear">空頭</option>
     <option value="ge2">≥ 2</option><option value="lt2">&lt; 2</option><option value="na">— 算不出來</option></select></label>
@@ -167,6 +184,12 @@
 {%- endmacro %}
 
 {# 快速篩選的分類：free 無風險、bear 空頭、ge2 ≥2、lt2 <2（大於 0）、na 算不出來。 #}
+{# 產業的比對鍵：去掉結尾的「業」，空的叫「未分類」。 #}
+{% macro ind_key(name) -%}
+{%- set n = (name or '')|trim -%}
+{{- '未分類' if not n else (n[:-1] if n.endswith('業') and n|length > 2 else n) -}}
+{%- endmacro %}
+
 {% macro reward_cat(r) -%}
 {%- if r.risk_free -%}free
 {%- elif r.reward_risk is none -%}na
