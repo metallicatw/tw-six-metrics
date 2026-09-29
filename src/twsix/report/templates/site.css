@@ -1309,12 +1309,22 @@ thead th .hsub{display:block;margin-top:1px;font-size:10px;font-weight:400;
 :root[data-theme=dark] .rrv-ok{color:var(--g3)}
 :root[data-theme=dark] .hl-badge.hl-ok{background:var(--g4);color:var(--ground)}
 :root[data-theme=dark] .ai-stats tr.ai-d th{color:#b39cff}
-.subtabs{display:flex;gap:4px;border-bottom:1px solid var(--rule);margin:0 0 12px}
-.subtab{appearance:none;border:none;background:none;font:inherit;font-size:14px;
-  padding:8px 14px;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;
-  margin-bottom:-1px}
-.subtab[aria-selected=true]{color:var(--accent-2);border-bottom-color:var(--accent-2);font-weight:700}
-.subtab:focus-visible{outline:2px solid var(--accent-2);outline-offset:-2px}
+/* 財務健診的子分頁（財務地雷／成長力分析）：和全站分頁同一種膠囊樣式（2026-09-29）。 */
+.subtabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.subtab{--tc:#c2255c;appearance:none;border:1.5px solid var(--tc);background:var(--surface);font:inherit;
+  font-size:14px;font-weight:700;padding:5px 14px;border-radius:999px;color:var(--tc);cursor:pointer}
+.subtab[data-sub=hl-growth]{--tc:#2b8a3e}
+.subtab:hover{background:var(--surface-2)}
+.subtab[aria-selected=true]{background:var(--tc);color:#fff}
+.subtab:focus-visible{outline:2px solid var(--tc);outline-offset:2px}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) .subtab{--tc:#f783ac}
+  :root:not([data-theme=light]) .subtab[data-sub=hl-growth]{--tc:#69db7c}
+  :root:not([data-theme=light]) .subtab[aria-selected=true]{color:var(--ground)}
+}
+:root[data-theme=dark] .subtab{--tc:#f783ac}
+:root[data-theme=dark] .subtab[data-sub=hl-growth]{--tc:#69db7c}
+:root[data-theme=dark] .subtab[aria-selected=true]{color:var(--ground)}
 table.hl-t{font-size:13px}
 table.hl-t th,table.hl-t td{padding:8px 12px;white-space:normal;vertical-align:middle}
 table.hl-t .st{white-space:nowrap;width:1%}

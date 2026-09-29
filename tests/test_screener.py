@@ -172,3 +172,14 @@ def test_亮色底不放白字_淺色底不放淺色字():
     assert "function heatInk(" in (T / "site.js").read_text("utf-8"), "目標價熱度格要依底色選字色"
     sc = (T / "screener.html.j2").read_text("utf-8")
     assert ":root[data-theme=dark] .sc-count,:root[data-theme=dark] .sc-btn.pri{color:var(--ground)}" in sc
+
+
+def test_選股與財務健診的子分頁和全站同一種膠囊樣式():
+    T = ROOT / "src" / "twsix" / "report" / "templates"
+    sc = (T / "screener.html.j2").read_text("utf-8")
+    rule = sc.split(".sc-tab{", 1)[1].split("}", 1)[0]
+    assert "border-radius:999px" in rule and "var(--tc)" in rule and "border-bottom:3px" not in rule
+    assert ":root[data-theme=dark] .sc-tab[aria-selected=true]{color:var(--ground)}" in sc
+    css = (T / "site.css").read_text("utf-8")
+    sub = css.split(".subtab{", 1)[1].split("}", 1)[0]
+    assert "border-radius:999px" in sub and "border-bottom:3px" not in sub

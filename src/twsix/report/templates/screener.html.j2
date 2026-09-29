@@ -25,9 +25,26 @@ window.SC_V = "{{ data_v|default('') }}";
    使用者填的天數超過 80 才下載），都由建站時的 report/screener.py 寫出來。樣式與程式只在這一頁、以 .sc 為前綴。 #}
 <style>
 .sc-note{color:var(--muted);font-size:13px;line-height:1.6;max-width:none}
-.sc-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:4px;margin:12px 0 14px;border-bottom:1px solid var(--rule)}
-.sc-tab{flex:0 0 auto;border:0;background:none;color:var(--ink-2);padding:8px 14px;font:inherit;font-size:15px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
-.sc-tab[aria-selected=true]{color:var(--accent-2);font-weight:700;border-bottom-color:var(--accent-2)}
+/* 四個子分頁：和 AI 選股、籌碼雷達的分頁同一種樣式（2026-09-29）——各自一色的膠囊，
+   沒選中是外框＋同色字，選中整顆填滿；深色底換亮一階的色調，選中那一顆用底色當字色。 */
+.sc-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;margin:12px 0 14px;padding:2px 0 6px;-webkit-overflow-scrolling:touch}
+.sc-tab{--tc:#1c62b8;flex:0 0 auto;border:1.5px solid var(--tc);background:var(--surface);color:var(--tc);border-radius:999px;padding:5px 14px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.sc-tab:hover{background:var(--surface-2)}
+.sc-tab:focus-visible{outline:2px solid var(--tc);outline-offset:2px}
+.sc-tab[aria-selected=true]{background:var(--tc);color:#fff}
+.sc-tab[data-t=fin]{--tc:#1c62b8}.sc-tab[data-t=trend]{--tc:#2b8a3e}.sc-tab[data-t=strong]{--tc:#c92a2a}.sc-tab[data-t=high]{--tc:#b25a00}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) .sc-tab[data-t=fin]{--tc:#6fb0f5}
+  :root:not([data-theme=light]) .sc-tab[data-t=trend]{--tc:#69db7c}
+  :root:not([data-theme=light]) .sc-tab[data-t=strong]{--tc:#ff8787}
+  :root:not([data-theme=light]) .sc-tab[data-t=high]{--tc:#ffa94d}
+  :root:not([data-theme=light]) .sc-tab[aria-selected=true]{color:var(--ground)}
+}
+:root[data-theme=dark] .sc-tab[data-t=fin]{--tc:#6fb0f5}
+:root[data-theme=dark] .sc-tab[data-t=trend]{--tc:#69db7c}
+:root[data-theme=dark] .sc-tab[data-t=strong]{--tc:#ff8787}
+:root[data-theme=dark] .sc-tab[data-t=high]{--tc:#ffa94d}
+:root[data-theme=dark] .sc-tab[aria-selected=true]{color:var(--ground)}
 .sc-panel[hidden]{display:none}
 .sc-card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;margin:0 0 14px}
 .sc-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:6px 0}
