@@ -419,7 +419,8 @@ def test_個股季報_合約負債與資本支出比例():
 
 
 def test_籌碼雷達的代號_名稱_收盤價各自連到該去的地方():
-    """代號 → 個股資訊頁、名稱 → ① 個股籌碼多圖、收盤價旁 → Yahoo 技術分析（.TW／.TWO）。"""
+    """代號 → ① 個股籌碼多圖、名稱 → 個股資訊頁、收盤價旁 → Yahoo 技術分析（.TW／.TWO）。
+    2026-09-29 使用者指定對調（原本代號 → 個股資訊頁、名稱 → ①）；①～⑬ 的表格也一樣。"""
     src = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
            / "radar.html.j2").read_text("utf-8")
     assert 'href: "stock/" + encodeURIComponent(code) + ".html"' in src
@@ -429,6 +430,18 @@ def test_籌碼雷達的代號_名稱_收盤價各自連到該去的地方():
     # 每一張有代號的表都走同一組 helper，不是各寫各的
     assert src.count("codeCell(") >= 3 and src.count("priceCell(") >= 2 and src.count("nameCell(") >= 3
     assert 'a.onclick = function(){ open("t1", r.c); }' not in src, "代號不再只連到本頁的 ①"
+    import re as _re
+    code = _re.search(r"function codeCell\(code\)\{(.*?)\n\}", src, _re.S).group(1)
+    name = _re.search(r"function nameCell\(code, name\)\{(.*?)\n\}", src, _re.S).group(1)
+    assert '"#t1-" + code' in code and "toT1(code)" in code and "stock/" not in code
+    assert '"stock/" + encodeURIComponent(code) + ".html"' in name and "#t1-" not in name
+    bg = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates" / "radar_bg"
+    api = (bg / "api.js").read_text("utf-8")
+    mods = (bg / "mods.js").read_text("utf-8")
+    assert "function bgCode(c)" in api and "function bgName(c, n)" in api and "yahooTA(c)" in api
+    assert mods.count("bgCode(") >= 8 and mods.count("bgName(") >= 8 and mods.count("bgYf(") >= 3
+    assert "yahooTA(code))" in mods, "③ 最新收盤價連到 Yahoo 技術分析"
+    assert 'closest(".bgm a.bg-t1, .bgm a.bg-lk")' in src, "①～⑬ 表格裡的連結要在捕捉階段攔下"
 
 
 def test_籌碼雷達釘住的表頭在最上層_圖示不會蓋過去():
@@ -654,7 +667,10 @@ def test_籌碼雷達十三項工具_版面照BG移植_預設台積電():
     # 預設個股：台積電
     assert 'var initial = "2330";' in mods and 'byCode["2330"]' in mods and 'D.codes["2330"]' in mods
     # 全站樣式在 .bgm 裡還原成預設（:where 不加權，BG 各頁樣式才蓋得過）
-    assert "#cf .bgm :where(" in src
+    assert "#cf .bgm :where(:not(svg, svg *)){all:revert}" in src
+    assert "#cf .bgm [hidden]{display:none}" in src, "all:revert 會連 hidden 一起抹掉"
+    # 本頁自己的 svg 規則不能滲進 BG 頁（③ 搜尋框的放大鏡曾被撐成整頁寬）
+    assert ".cf svg{" not in src and ".cf svg:not(.bgm svg){" in src
     # 資料轉接層；舊的分頁程式已經拿掉
     for t in ("API.stock(code)", "API.entry(code)", "API.rec(code)", "API.fundVal(", "API.fundFlag("):
         assert t in mods, t

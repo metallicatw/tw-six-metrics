@@ -11,6 +11,13 @@ function bgMemo(key, make){ return BG.cache[key] || (BG.cache[key] = make()); }
 BG.names = function(){
   return bgMemo("names", function(){ var m = {}; R.rows.forEach(function(r){ m[r.c] = r.n; }); return m; });
 };
+// ── 連結：代號 → ① 個股籌碼多圖（留在本頁）；名稱 → 個股資訊頁；收盤價旁的圖示 → Yahoo 技術分析。
+// 移植的程式用字串拼 HTML，所以這三個也回字串；點下去的動作由 init() 在 #cf 上統一處理
+// （捕捉階段就攔下來，不會同時觸發那一列原本的點擊）。
+function bgAttr(v){ return String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+function bgCode(c){ return '<a class="bg-t1" href="#t1-' + bgAttr(c) + '" title="① 個股籌碼多圖">' + c + '</a>'; }
+function bgName(c, n){ return '<a class="bg-lk" href="stock/' + encodeURIComponent(c) + '.html" title="個股資訊頁">' + (n || c) + '</a>'; }
+function bgYf(c){ return '<a class="yf bg-lk" href="' + bgAttr(yahooTA(c)) + '" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="' + bgAttr(c) + ' Yahoo 技術分析"></a>'; }
 BG.ind = function(c){ var r = ROWS[c]; return r && r.ind ? r.ind : "#N/A"; };
 // 匯出：移植過去的程式用 window.claude.use("downloads").save({filename, data})
 if (!window.claude) window.claude = {use: function(k){

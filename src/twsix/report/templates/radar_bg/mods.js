@@ -1231,7 +1231,7 @@ var __fetch = API.fetch;
     var kpiEl = __id("kpis");
     var lrYoy = lastValid(d.rev_yoy_m), leYoy = lastValid(d.eps4_yoy_q), lopm = lastValid(d.opm_q);
     kpiEl.innerHTML =
-      kpiPriceHtml("最新收盤價", d.price_latest, d.price_latest_date, "https://tw.stock.yahoo.com/quote/"+encodeURIComponent(code)) +
+      kpiPriceHtml("最新收盤價", d.price_latest, d.price_latest_date, yahooTA(code)) +
       kpiHtml("單月營收年增率", lrYoy!==null? fmtPct(lrYoy): "—", lrYoy>0?"up":lrYoy<0?"down":"") +
       kpiHtml("四季EPS年增率", leYoy!==null? fmtPct(leYoy): "—", leYoy>0?"up":leYoy<0?"down":"") +
       kpiHtml("最新營益率", lopm!==null? fmtPct(lopm): "—");
@@ -1551,9 +1551,9 @@ var __fetch = API.fetch;
 
     var html = slice.map(function(s){
       return '<tr>'+
-        '<td class="code num">'+s.c+'</td>'+
-        '<td class="name">'+s.n+'</td>'+
-        '<td class="num">'+fmtNum(valueAt(s,'price',STATE.dayIdx),2)+'</td>'+
+        '<td class="code num">'+bgCode(s.c)+'</td>'+
+        '<td class="name">'+bgName(s.c, s.n)+'</td>'+
+        '<td class="num">'+fmtNum(valueAt(s,'price',STATE.dayIdx),2)+bgYf(s.c)+'</td>'+
         '<td class="num">'+fmtNum(valueAt(s,'wr',STATE.dayIdx),0)+'</td>'+
         '<td class="num">'+fmtNum(valueAt(s,'xr',STATE.dayIdx),0)+'</td>'+
         '<td class="num">'+fmtNum(valueAt(s,'yr',STATE.dayIdx),0)+'</td>'+
@@ -1626,7 +1626,7 @@ var __fetch = API.fetch;
         if(i===day) cls.push('active-sort');
         return '<td'+(cls.length?' class="'+cls.join(' ')+'"':'')+' title="'+fmtDate(STATE.dates[i])+' '+m.s.n+' '+v+'">'+v+'</td>';
       }).join('');
-      return '<tr><td class="code num" title="'+c+' '+m.s.n+'">'+c+'</td><td class="name" title="'+m.s.n+'">'+m.s.n+'</td>'+cells+'</tr>';
+      return '<tr><td class="code num" title="'+c+' '+m.s.n+'">'+bgCode(c)+'</td><td class="name" title="'+m.s.n+'">'+bgName(c, m.s.n)+'</td>'+cells+'</tr>';
     }).join('');
     $('backtestBody').innerHTML = bodyHtml;
 
@@ -2119,13 +2119,13 @@ var __fetch = API.fetch;
     var shown = rows.slice(0, MAX_ROWS);
     var html = shown.map(function(r){
       return "<tr>" + TABLE_COLUMNS.map(function(c){
-        if(c.key === "code") return '<td class="left code">'+r.code+'</td>';
-        if(c.key === "name") return '<td class="left">'+escapeHtml(r.name||"")+'</td>';
+        if(c.key === "code") return '<td class="left code">'+bgCode(r.code)+'</td>';
+        if(c.key === "name") return '<td class="left">'+bgName(r.code, escapeHtml(r.name||""))+'</td>';
         if(c.key === "ind") return '<td class="left">'+escapeHtml((r.ind==="#N/A"||!r.ind)?"未分類":r.ind)+'</td>';
         var v = c.get(r, dayIdx);
         var cls = "";
         if(c.unit === "pct1" && v !== null && v !== undefined){ cls = v >= 0 ? "pos" : "neg"; }
-        return '<td class="'+cls+'">'+fmtVal(v, c.unit)+'</td>';
+        return '<td class="'+cls+'">'+fmtVal(v, c.unit)+(c.key === "price" && v != null ? bgYf(r.code) : "")+'</td>';
       }).join("") + "</tr>";
     }).join("");
     if(rows.length > MAX_ROWS){
@@ -2221,7 +2221,7 @@ var __fetch = API.fetch;
         if(i===day) cls.push("active-sort");
         return "<td"+(cls.length?' class="'+cls.join(" ")+'"':"")+' title="'+fmtDate(DATES[i])+" "+m.r.name+" "+v+'">'+v+"</td>";
       }).join("");
-      return '<tr><td class="left code num" title="'+c+" "+m.r.name+'">'+c+'</td><td class="left" title="'+m.r.name+'">'+escapeHtml(m.r.name||"")+"</td>"+cells+"</tr>";
+      return '<tr><td class="left code num" title="'+c+" "+m.r.name+'">'+bgCode(c)+'</td><td class="left" title="'+m.r.name+'">'+bgName(c, escapeHtml(m.r.name||""))+"</td>"+cells+"</tr>";
     }).join("");
     __id("backtestBody").innerHTML = bodyHtml;
 
@@ -2782,13 +2782,13 @@ var __fetch = API.fetch;
     var shown = rows.slice(0, MAX_ROWS);
     var html = shown.map(function(r){
       return "<tr>" + TABLE_COLUMNS.map(function(c){
-        if(c.key === "code") return '<td class="left code">'+r.code+'</td>';
-        if(c.key === "name") return '<td class="left">'+escapeHtml(r.name||"")+'</td>';
+        if(c.key === "code") return '<td class="left code">'+bgCode(r.code)+'</td>';
+        if(c.key === "name") return '<td class="left">'+bgName(r.code, escapeHtml(r.name||""))+'</td>';
         if(c.key === "ind") return '<td class="left">'+escapeHtml((r.ind==="#N/A"||!r.ind)?"未分類/僅籌碼資料":r.ind)+'</td>';
         var v = c.get(r, dayIdx);
         var cls = "";
         if(c.unit === "pct1" && v !== null && v !== undefined){ cls = v >= 0 ? "pos" : "neg"; }
-        return '<td class="'+cls+'">'+fmtVal(v, c.unit)+'</td>';
+        return '<td class="'+cls+'">'+fmtVal(v, c.unit)+(c.key === "price" && v != null ? bgYf(r.code) : "")+'</td>';
       }).join("") + "</tr>";
     }).join("");
     if(rows.length > MAX_ROWS){
@@ -2889,7 +2889,7 @@ var __fetch = API.fetch;
         if(i===day) cls.push("active-sort");
         return "<td"+(cls.length?' class="'+cls.join(" ")+'"':"")+' title="'+fmtDate(DATES[i])+" "+m.r.name+" "+v+'">'+v+"</td>";
       }).join("");
-      return '<tr><td class="left code num" title="'+c+" "+m.r.name+'">'+c+'</td><td class="left" title="'+m.r.name+'">'+escapeHtml(m.r.name||"")+"</td>"+cells+"</tr>";
+      return '<tr><td class="left code num" title="'+c+" "+m.r.name+'">'+bgCode(c)+'</td><td class="left" title="'+m.r.name+'">'+bgName(c, escapeHtml(m.r.name||""))+"</td>"+cells+"</tr>";
     }).join("");
     __id("backtestBody").innerHTML = bodyHtml;
 
@@ -3200,7 +3200,7 @@ function renderSide(){
     let rows = '';
     codes.forEach((code, si) => {
       const s = byCode[code]; if (!s) return;
-      rows += `<tr><td><span class="chip" style="background:${colorOf(si)}"></span>${s.c} ${s.n}</td>` +
+      rows += `<tr><td><span class="chip" style="background:${colorOf(si)}"></span>${bgCode(s.c)} ${bgName(s.c, s.n)}</td>` +
         `<td>${s.x[idx] ?? '—'}</td><td>${delta(s.x[0], s.x[idx])}</td><td>${s.y[idx] ?? '—'}</td><td>${delta(s.y[0], s.y[idx])}</td>` +
         `<td><button class="x" data-rm="${code}" aria-label="移除 ${s.n}">×</button></td></tr>`;
     });
@@ -3454,7 +3454,7 @@ function renderSide(){
     let rows = '';
     codes.forEach((code, si) => {
       const s = byCode[code]; if (!s) return;
-      rows += `<tr><td><span class="chip" style="background:${colorOf(si)}"></span>${s.c} ${s.n}</td>` +
+      rows += `<tr><td><span class="chip" style="background:${colorOf(si)}"></span>${bgCode(s.c)} ${bgName(s.c, s.n)}</td>` +
         `<td>${s.x[idx] ?? '—'}</td><td>${delta(s.x[0], s.x[idx])}</td><td>${s.y[idx] ?? '—'}</td><td>${delta(s.y[0], s.y[idx])}</td>` +
         `<td><button class="x" data-rm="${code}" aria-label="移除 ${s.n}">×</button></td></tr>`;
     });
@@ -4246,7 +4246,7 @@ function renderSide(){
     let rows = '';
     codes.forEach((code, si) => {
       const s = byCode[code]; if (!s) return;
-      rows += `<tr><td><span class="chip" style="background:${colorOf(si)}"></span>${s.c} ${s.n}</td>` +
+      rows += `<tr><td><span class="chip" style="background:${colorOf(si)}"></span>${bgCode(s.c)} ${bgName(s.c, s.n)}</td>` +
         `<td>${fX(s.x[idx])}</td><td>${dX(s.x[0], s.x[idx])}</td><td>${fY(s.y[idx])}</td><td>${dY(s.y[0], s.y[idx])}</td>` +
         `<td><button class="x" data-rm="${code}" aria-label="移除 ${s.n}">×</button></td></tr>`;
     });
@@ -4531,7 +4531,7 @@ function renderSide(){
     let rows = '';
     codes.forEach((code, si) => {
       const s = byCode[code]; if (!s) return;
-      rows += `<tr><td><span class="chip" style="background:${colorOf(si)}"></span>${s.c} ${s.n}</td>` +
+      rows += `<tr><td><span class="chip" style="background:${colorOf(si)}"></span>${bgCode(s.c)} ${bgName(s.c, s.n)}</td>` +
         `<td>${fX(s.x[idx])}</td><td>${dX(s.x[0], s.x[idx])}</td><td>${fY(s.y[idx])}</td><td>${dY(s.y[0], s.y[idx])}</td>` +
         `<td><button class="x" data-rm="${code}" aria-label="移除 ${s.n}">×</button></td></tr>`;
     });
@@ -4883,7 +4883,7 @@ var __fetch = API.fetch;
           else { txt = val==null ? '—' : sgn(val,1); c = val==null ? 'hit-flat' : (val>0 ? 'hit-up' : (val<0 ? 'hit-down' : 'hit-flat')); }
           return '<td class="cell '+c+sep+'">'+txt+'</td>';
         }).join('');
-        return '<tr data-code="'+esc(m.c)+'" tabindex="0"><td class="l stick">'+esc(m.c)+'</td><td class="l name stick2">'+esc(m.n)+'</td><td>'+m.hits+'</td>'+
+        return '<tr data-code="'+esc(m.c)+'" tabindex="0"><td class="l stick">'+bgCode(esc(m.c))+'</td><td class="l name stick2">'+bgName(esc(m.c), esc(m.n))+'</td><td>'+m.hits+'</td>'+
           '<td class="'+cls(m.avg20)+'">'+sgn(m.avg20,2)+'</td><td class="'+cls(m.avg60)+'">'+sgn(m.avg60,2)+'</td>'+cells+'</tr>';
       }).join('');
     }
