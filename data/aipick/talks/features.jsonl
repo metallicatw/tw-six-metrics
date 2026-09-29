@@ -780,3 +780,5 @@
 {"code":"6923","name":"中台","date":"2026-09-29","file":"692320260924M002.pdf","processed":"2026-09-29","source":"pdf","rules":{"pos":48,"neg":3,"tone":0.8036,"chars":8377},"llm":null,"model":""}
 {"code":"8422","name":"可寧衛*","date":"2026-09-29","file":"842220260922M002.pdf","processed":"2026-09-29","source":"pdf","rules":{"pos":6,"neg":4,"tone":0.1333,"chars":4707},"llm":null,"model":""}
 {"code":"9955","name":"佳龍","date":"2026-09-29","file":"995520260923M001.pdf","processed":"2026-09-29","source":"pdf","rules":{"pos":0,"neg":1,"tone":-0.1667,"chars":8387},"llm":null,"model":""}
+{"code":"4205","name":"中華食","date":"2026-09-29","file":"420520260929M001.pdf","processed":"2026-09-29","source":"pdf","rules":{"pos":10,"neg":0,"tone":0.6667,"chars":2480},"llm":null,"model":""}
+{"code":"5288","name":"豐祥-KY","date":"2026-09-29","file":"528820260929M001.pdf","processed":"2026-09-29","source":"pdf","rules":{"pos":5,"neg":0,"tone":0.5,"chars":6263},"llm":null,"model":""}
