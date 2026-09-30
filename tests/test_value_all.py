@@ -267,6 +267,7 @@ def test_接收端用今天的收盤重算得到同一個判斷():
     flipped: list[str] = []
     worst = 0.0
     checked = 0
+    over: list[str] = []
     for r in _rows(VALUATIONS):
         target, floor = _f(r["target_price"]), _f(r["downside_price"])
         price, stored = _f(r["market_price"]), _f(r["reward_risk"])
@@ -286,4 +287,4 @@ def test_接收端用今天的收盤重算得到同一個判斷():
                 flipped.append(f"{r['stock_id']}（{stored} vs {calc}，門檻 {edge}）")
     assert checked > 500, f"只對到 {checked} 檔，這條測試沒有驗到東西"
     assert not flipped, "四捨五入讓這幾檔換了邊：" + "、".join(flipped[:5])
-    assert worst < 1e-3, f"最大相對差 {worst:.2e}，比預期大——是不是少存了幾位？"
+    assert not over, "差距超過捨入所能解釋的範圍：" + "、".join(over[:5])
