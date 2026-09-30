@@ -795,3 +795,11 @@
 {"code":"7818","name":"溢泰實業","date":"2026-09-30","file":"781820260929M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":26,"neg":4,"tone":0.6286,"chars":8259},"llm":null,"model":""}
 {"code":"8147","name":"正淩","date":"2026-09-30","file":"814720260929M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":8,"neg":0,"tone":0.6154,"chars":2015},"llm":null,"model":""}
 {"code":"6919","name":"康霈*","date":"2026-09-29","file":"691920260929M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":196},"llm":null,"model":""}
+{"code":"1103","name":"嘉泥","date":"2026-09-30","file":"110320260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":13},"llm":null,"model":""}
+{"code":"2354","name":"鴻準","date":"2026-09-30","file":"235420260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":17},"llm":null,"model":""}
+{"code":"3563","name":"牧德","date":"2026-09-30","file":"356320260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":33},"llm":null,"model":""}
+{"code":"4580","name":"捷流閥業","date":"2026-09-30","file":"458020260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":19},"llm":null,"model":""}
+{"code":"4806","name":"桂田文創","date":"2026-09-30","file":"480620260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":32},"llm":null,"model":""}
+{"code":"5481","name":"新華","date":"2026-09-30","file":"548120260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":28},"llm":null,"model":""}
+{"code":"3717","name":"聯嘉投控","date":"2026-09-29","file":"371720260929M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":40},"llm":null,"model":""}
+{"code":"3164","name":"景岳","date":"2026-09-24","file":"316420260923M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":16},"llm":null,"model":""}
