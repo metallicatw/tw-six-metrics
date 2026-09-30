@@ -31,3 +31,12 @@
 {"a":"6789","b":"3711","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"供應商","confidence":0.85,"note":"日月光投控為半導體封測大廠，采鈺為台積電旗下精於晶圓級色彩濾光片及微透鏡製造廠，日月光提供采鈺相關後段封測代工服務。"}
 {"a":"6789","b":"2454","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆屬台股半導體產業供應鏈，常因半導體族群整體行情而同漲同跌。"}
 {"a":"6789","b":"4977","asked":"2026-09-29","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"采鈺為台積電旗下色彩濾光片及微透鏡廠，眾達-KY為光收發模組廠，兩者皆屬半導體與光通訊相關的台股科技股題材。"}
+{"a":"3661","b":"3443","asked":"2026-09-30","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"世芯-KY與創意均為台灣知名ASIC設計服務廠，主要業務高度重疊，常被市場歸為同一題材與競爭對手。"}
+{"a":"3661","b":"8227","asked":"2026-09-30","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"世芯-KY與巨有科技皆為台灣知名的ASIC（特殊應用晶片）設計服務公司，同屬IP與ASIC族群。"}
+{"a":"3661","b":"6643","asked":"2026-09-30","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"世芯-KY與M31皆為台灣知名的矽智財(SIP)與特殊應用晶片(ASIC)設計服務廠。"}
+{"a":"2486","b":"1595","asked":"2026-09-30","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.85,"note":"兩者皆屬台股散熱與半導體設備相關概念股，常隨題材同步波動。"}
+{"a":"2486","b":"3023","asked":"2026-09-30","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.85,"note":"兩者皆屬台股電子零組件與AI概念股，常隨題材同步波動。"}
+{"a":"2486","b":"6202","asked":"2026-09-30","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"一詮與盛群同屬台股電子股，常受大盤或半導體及AI題材連動影響。"}
+{"a":"2302","b":"2492","asked":"2026-09-30","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.3,"note":"兩者皆屬電子股，常因大盤或題材聯動而同步變動，無直接業務往來。"}
+{"a":"2302","b":"5299","asked":"2026-09-30","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.3,"note":"麗正與杰力皆屬於電子零組件相關產業，股價同步可能受大盤或半導體題材影響，無直接供應鏈關係。"}
+{"a":"2302","b":"2375","asked":"2026-09-30","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.6,"note":"兩者皆屬於電子零組件廠（被動元件或半導體相關），常因大盤或題材同步變動。"}

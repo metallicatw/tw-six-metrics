@@ -803,3 +803,9 @@
 {"code":"5481","name":"新華","date":"2026-09-30","file":"548120260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":28},"llm":null,"model":""}
 {"code":"3717","name":"聯嘉投控","date":"2026-09-29","file":"371720260929M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":40},"llm":null,"model":""}
 {"code":"3164","name":"景岳","date":"2026-09-24","file":"316420260923M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":16},"llm":null,"model":""}
+{"code":"1783","name":"和康生","date":"2026-09-30","file":"178320260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":19},"llm":null,"model":""}
+{"code":"2007","name":"燁興","date":"2026-09-30","file":"200720260930M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":3,"neg":1,"tone":0.2222,"chars":2611},"llm":null,"model":""}
+{"code":"2753","name":"八方雲集","date":"2026-09-30","file":"275320260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":31},"llm":null,"model":""}
+{"code":"4763","name":"材料*-KY","date":"2026-09-30","file":"476320260930M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":2,"neg":0,"tone":0.2857,"chars":1173},"llm":null,"model":""}
+{"code":"6901","name":"鑽石投資","date":"2026-09-30","file":"690120260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":46},"llm":null,"model":""}
+{"code":"8436","name":"大江","date":"2026-09-30","file":"843620260930M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":13,"neg":0,"tone":0.7222,"chars":6777},"llm":null,"model":""}
