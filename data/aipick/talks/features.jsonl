@@ -809,3 +809,4 @@
 {"code":"4763","name":"材料*-KY","date":"2026-09-30","file":"476320260930M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":2,"neg":0,"tone":0.2857,"chars":1173},"llm":null,"model":""}
 {"code":"6901","name":"鑽石投資","date":"2026-09-30","file":"690120260930M001.pdf","processed":"2026-09-30","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":46},"llm":null,"model":""}
 {"code":"8436","name":"大江","date":"2026-09-30","file":"843620260930M001.pdf","processed":"2026-09-30","source":"pdf","rules":{"pos":13,"neg":0,"tone":0.7222,"chars":6777},"llm":null,"model":""}
+{"code":"7818","name":"溢泰實業","date":"2026-09-30","file":"781820261001M001.pdf","processed":"2026-10-01","source":"pdf","rules":{"pos":26,"neg":4,"tone":0.6286,"chars":8259},"llm":null,"model":""}
