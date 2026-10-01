@@ -819,3 +819,4 @@
 {"code":"7689","name":"大鵬科CLMX","date":"2026-10-01","file":"768920261001M001.pdf","processed":"2026-10-01","source":"pdf","rules":{"pos":10,"neg":2,"tone":0.4706,"chars":9012},"llm":null,"model":""}
 {"code":"7743","name":"金利食安","date":"2026-10-01","file":"774320261001M001.pdf","processed":"2026-10-01","source":"pdf","rules":{"pos":5,"neg":0,"tone":0.5,"chars":4513},"llm":null,"model":""}
 {"code":"2546","name":"根基","date":"2026-10-01","file":"254620261001M001.pdf","processed":"2026-10-01","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":37},"llm":null,"model":""}
+{"code":"2399","name":"映泰","date":"2026-10-02","file":"239920261001M003.pdf","processed":"2026-10-02","source":"pdf","rules":{"pos":0,"neg":1,"tone":-0.1667,"chars":3441},"llm":null,"model":""}
