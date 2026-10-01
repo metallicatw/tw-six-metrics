@@ -60,3 +60,4 @@
 {"a":"3035","b":"2363","asked":"2026-10-01","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"智原與矽統皆為台灣知名的IC設計公司，常在IP矽智財與ASIC領域被市場歸類為同業競爭對手。"}
 {"a":"2426","b":"3714","asked":"2026-10-01","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"鼎元與富采皆為台灣知名的LED（發光二極體）廠，業務範圍重疊，同屬光電產業。"}
 {"a":"2426","b":"5386","asked":"2026-10-01","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"鼎元為LED及感測元件廠，青雲為板卡廠，兩者常因搭上電子股或特定科技題材而在股市中同步變動。"}
+{"a":"2426","b":"3437","asked":"2026-10-01","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"鼎元與榮創皆為台灣知名的LED（發光二極體）封裝及晶粒廠，屬於同業競爭關係。"}
