@@ -61,3 +61,23 @@
 {"a":"2426","b":"3714","asked":"2026-10-01","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"鼎元與富采皆為台灣知名的LED（發光二極體）廠，業務範圍重疊，同屬光電產業。"}
 {"a":"2426","b":"5386","asked":"2026-10-01","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"鼎元為LED及感測元件廠，青雲為板卡廠，兩者常因搭上電子股或特定科技題材而在股市中同步變動。"}
 {"a":"2426","b":"3437","asked":"2026-10-01","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"鼎元與榮創皆為台灣知名的LED（發光二極體）封裝及晶粒廠，屬於同業競爭關係。"}
+{"a":"2426","b":"1785","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬於台股光電及半導體相關之LED與薄膜靶材概念股，常隨題材同步波動。"}
+{"a":"6902","b":"8040","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆為台灣上市櫃資訊服務或通訊相關個股，常被市場歸類於小型股或特定題材而產生連動。"}
+{"a":"6902","b":"2241","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"Gogolook為數位防詐軟體公司，艾姆勒為車用散熱廠，基本面無直接業務往來，僅可能被歸類於台股櫃買市場或特定小型股題材"}
+{"a":"2020","b":"5013","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"兩者皆屬於台股傳統產業中的鋼鐵或金屬相關類股，常因盤面資金輪動或原物料題材同步變動。"}
+{"a":"2020","b":"2030","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"美亞與彰源皆為台灣知名的不鏽鋼管製造廠，屬於鋼鐵工業中的同業競爭關係。"}
+{"a":"2020","b":"5016","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.8,"note":"美亞與松和皆屬於鋼鐵工業類股，同屬金屬製品與鋼管相關領域。"}
+{"a":"2434","b":"3374","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"統懋為分離元件廠，精材為晶圓級封測廠，業務與題材皆無直接關聯。"}
+{"a":"2434","b":"5488","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"兩者皆為台股小型電子股，常因盤面資金輪動或題材炒作而出現股價短期同向波動現象。"}
+{"a":"2434","b":"1303","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"統懋為功率半導體廠，南亞屬塑膠與電子材料大廠，雖同屬電子/傳產板塊，但無直接業務或集團隸屬關係。"}
+{"a":"6462","b":"8054","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.95,"note":"安國為神盾集團成員，雙方在IC設計與矽智財領域深化合作，具備高度集團與題材聯動性。"}
+{"a":"6462","b":"6684","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.9,"note":"安格為神盾集團旗下的 IC 設計公司，兩者同屬神盾集團布局範圍。"}
+{"a":"6462","b":"6695","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.95,"note":"神盾（6462）為芯鼎（6695）之母公司，雙方同屬神盾集團。"}
+{"a":"3645","b":"8040","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"達邁為PI廠，九暘為網通IC設計，兩者皆屬台股中小尺寸電子股，常受資金輪動與相同題材牽動。"}
+{"a":"3645","b":"3294","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.7,"note":"兩者皆為台股中小型電子零組件或科技相關個股，常因盤面資金輪動或特定題材（如光學、PI膜或AI概念）而被歸類為同題材連動。"}
+{"a":"3645","b":"4960","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆屬台股面板或電子零組件相關概念股，常因盤面資金輪動或題材相近而出現股價連動現象。"}
+{"a":"6789","b":"6861","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.5,"note":"兩者皆屬半導體相關產業之光電與感測元件概念股，常被市場歸類在同一題材。"}
+{"a":"6789","b":"6526","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.5,"note":"兩者皆為台灣半導體產業的重要上市櫃公司，常被市場歸類於同一高價IC設計或半導體題材股。"}
+{"a":"6789","b":"3228","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬台股半導體族群，常受整體半導體景氣或AI題材帶動而同步變動。"}
+{"a":"1595","b":"6526","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.8,"note":"川寶主要業務為PCB曝光機等設備，達發則為網通及藍牙IC設計，兩者業務領域不同，無直接上下游或集團關係。"}
+{"a":"1595","b":"8040","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"川寶為曝光機設備廠，九暘為網通IC設計，基本面無直接上下游或集團關係，市場常歸類於小型電子股或特定題材連動。"}
