@@ -81,3 +81,4 @@
 {"a":"6789","b":"3228","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬台股半導體族群，常受整體半導體景氣或AI題材帶動而同步變動。"}
 {"a":"1595","b":"6526","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.8,"note":"川寶主要業務為PCB曝光機等設備，達發則為網通及藍牙IC設計，兩者業務領域不同，無直接上下游或集團關係。"}
 {"a":"1595","b":"8040","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"川寶為曝光機設備廠，九暘為網通IC設計，基本面無直接上下游或集團關係，市場常歸類於小型電子股或特定題材連動。"}
+{"a":"1595","b":"6695","asked":"2026-10-02","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"川寶與芯鼎皆屬台股電子零組件與半導體相關類股，常因盤面資金輪動或半導體題材而被歸類為同題材連動。"}
