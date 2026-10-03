@@ -432,6 +432,38 @@ def _ad(roc: str) -> str:
     return f"{int(parts[0]) + 1911}-{parts[1].zfill(2)}-{parts[2].zfill(2)}"
 
 
+def _carry_holdings(days: list[dict[str, Any]], official: dict[str, Any]) -> None:
+    """投信、自營商的估計持股：從分頁最後一個有數字的那天起，逐日加上當天的買賣超。
+
+    交易所只公告外資持股；投信、自營商的「估計持股」是券商（MoneyDJ）拿前一天的
+    持股加上當天買賣超累計出來的——2026-10-04 拿 300 檔、5,700 個相鄰交易日對過：
+    投信 99.0% 一張不差、自營商 87% 一張不差（其餘差 1 張，是自營商自行買賣＋避險
+    兩欄各自捨入），所以這裡用同一個算法往後接，不必再按「立即更新」。
+
+    * 分頁上有數字的那幾天照用分頁的（那是錨點；之後重抓報表會換新的錨點）。
+    * 外資持股用交易所公告的；沒有才用前一天＋買賣超。
+    * 三大法人合計＝三者相加；三大法人持股比重＝合計 ÷ 發行張數（交易所外資持股
+      統計裡的發行股數）。分頁上 2330 於 115/09/24：19,265,815 ÷ 25,932,370＝74.29%，
+      和分頁寫的一樣。
+    * 錨點之前、或某一天買賣超是空的，就停在那裡，不往後硬算。
+    """
+    prev: dict[str, Any] = {}
+    issued = None
+    for d in sorted(days, key=lambda x: x["date"]):
+        h, net = d["holding"], d["net"]
+        for k in ("外資", "投信", "自營商"):
+            if h[k] is None and prev.get(k) is not None and net[k] is not None:
+                h[k] = prev[k] + net[k]
+        parts = [h[k] for k in ("外資", "投信", "自營商")]
+        if h["合計"] is None and all(v is not None for v in parts):
+            h["合計"] = sum(parts)
+        e = official.get(d["date"])
+        issued = (getattr(e, "issued_lots", None) if e is not None else None) or issued  # 沒公告的那天沿用前一天
+        if d["share"]["三大法人"] is None and h["合計"] is not None and issued:
+            d["share"]["三大法人"] = h["合計"] / issued
+        prev = {k: h[k] for k in ("外資", "投信", "自營商")}
+
+
 def institutional(
     grid: Sequence[Sequence[str]],
     extra: Sequence[Any] | None = None,
@@ -497,7 +529,8 @@ def institutional(
         # 「尚未取得〔三大法人〕」更難讀——後者至少說得出下一步是什麼。
         return None
 
-    added = 0
+    for d in days:
+        d["daily"] = False
     if extra:
         seen = {d["date"] for d in days}
         for e in extra:
@@ -512,25 +545,13 @@ def institutional(
                         "外資": e.foreign, "投信": e.trust,
                         "自營商": e.dealer, "合計": e.total,
                     },
-                    # 開放資料沒有這兩組——留空，不要編。
                     "holding": dict.fromkeys(INST_HOLDING),
                     "share": dict.fromkeys(INST_SHARE),
+                    "daily": True,
                 }
             )
-            added += 1
-        if added:
-            # 新的排前面。`115/09/02` 這種寫法照字串排就是照日期排。
-            days.sort(key=lambda d: d["date"], reverse=True)
-            days = days[:INST_DAYS]
-            totals = {
-                k: sum(v for d in days if (v := d["net"][k]) is not None)
-                for k in INST_NET
-            }
-
-    # 外資持股與比重：分頁沒有、或分頁那一格是空的那幾天，用交易所的外資持股
-    # 統計補上（`InstDay.foreign_held／foreign_pct`）。投信、自營商的持股是券商
-    # 估的，官方沒有，那幾格照舊留空。
-    if extra:
+        # 外資持股與比重：分頁沒有、或分頁那一格是空的那幾天，用交易所的外資持股
+        # 統計補上（`InstDay.foreign_held／foreign_pct`）。
         official = {e.roc_label: e for e in extra}
         for d in days:
             e = official.get(d["date"])
@@ -540,6 +561,18 @@ def institutional(
                 d["share"]["外資"] = e.foreign_pct
             if d["holding"]["外資"] is None and e.foreign_held is not None:
                 d["holding"]["外資"] = e.foreign_held
+        _carry_holdings(days, official)
+
+    # 新的排前面，畫面上只放最近 INST_DAYS 天。`115/09/02` 照字串排就是照日期排。
+    days.sort(key=lambda d: d["date"], reverse=True)
+    days = days[:INST_DAYS]
+    added = sum(1 for d in days if d["daily"])
+    if added:
+        # 視窗一移動，交易所那個「近 20 日」footer 就不再是畫面上這 20 天。
+        totals = {
+            k: sum(v for d in days if (v := d["net"][k]) is not None)
+            for k in INST_NET
+        }
 
     labels = [d["date"][3:] for d in days]  # 「08/28」 — the year is on the page
 

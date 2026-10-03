@@ -890,8 +890,8 @@
     <thead>
       <tr><th>日期</th><th class="num">外資</th><th class="num">投信</th>
           <th class="num">自營商</th><th class="num">單日合計</th>
-          <th class="num">外資持股</th><th class="num">外資比重</th>
-          <th class="num">三大法人比重</th></tr>
+          <th class="num">外資持股</th><th class="num">投信持股</th><th class="num">自營商持股</th>
+          <th class="num">外資比重</th><th class="num">三大法人比重</th></tr>
     </thead>
     <tbody>
       {% for d in i.days %}
@@ -900,7 +900,9 @@
         {% for k in ["外資", "投信", "自營商", "合計"] %}
         <td class="num">{{ "{:,.0f}".format(d.net[k]) if d.net[k] is not none else "" }}</td>
         {% endfor %}
-        <td class="num">{{ "{:,.0f}".format(d.holding["外資"]) if d.holding["外資"] is not none else "" }}</td>
+        {% for k in ["外資", "投信", "自營商"] %}
+        <td class="num">{{ "{:,.0f}".format(d.holding[k]) if d.holding[k] is not none else "" }}</td>
+        {% endfor %}
         <td class="num">{{ "%.2f"|format(d.share["外資"] * 100) ~ "%" if d.share["外資"] is not none else "" }}</td>
         <td class="num">{{ "%.2f"|format(d.share["三大法人"] * 100) ~ "%" if d.share["三大法人"] is not none else "" }}</td>
       </tr>
@@ -909,11 +911,10 @@
   </table>
 </div>
 <p class="muted">
-  買賣超單位為張。投信與自營商的庫存交易所並未公告，MoneyDJ 的數值為估計值。
-  {% if i.from_daily %}
-  最新的 {{ i.from_daily }} 個交易日由每日排程從證交所／櫃買直接取得，所以不必按
-  「立即更新」也是新的；那幾列只有買賣超，估計持股與持股比重要等下一次重抓報表。
-  {% endif %}
+  買賣超與持股單位為張。外資持股與比重是證交所／櫃買每天公告的；投信、自營商的庫存
+  交易所不公告，這裡和券商（MoneyDJ）用同一個算法：前一天的持股加上當天的買賣超，
+  逐日累計（對過帳：投信 99% 一張不差），所以每天收盤後自動更新，不必按「立即更新」。
+  三大法人比重＝三者持股合計 ÷ 發行張數。
 </p>
 {% else %}
 <p class="stale">尚未取得〔三大法人〕，請執行 <code>twsix fetch-stock {{ p.stock_id }}</code>。</p>

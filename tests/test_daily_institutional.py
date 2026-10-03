@@ -151,7 +151,8 @@ def test_the_roc_label_matches_the_sheets_own_date_format():
 
 
 def test_a_day_the_sheet_does_not_have_is_added_with_only_the_net():
-    """補進來的那一列只有買賣超。持股與比重開放資料沒有——留空，不要編。"""
+    """補進來的那一列：買賣超照抄；持股是前一天的持股＋當天買賣超（2026-10-04 起，
+    見 sections._carry_holdings），外資比重要等交易所公告，沒有就留空。"""
     grid = sheet_store.read_grid(DATA / "sheets/5439", "三大法人")
     base = institutional(grid)
     assert base is not None
@@ -164,7 +165,10 @@ def test_a_day_the_sheet_does_not_have_is_added_with_only_the_net():
     top = merged.days[0]
     assert top["date"] == "188/12/31" and top["date"] > newest
     assert top["net"]["外資"] == 100.0
-    assert top["holding"]["外資"] is None and top["share"]["外資"] is None
+    prev = merged.days[1]
+    for k, n in (("外資", 100.0), ("投信", 5.0), ("自營商", -3.0)):
+        assert top["holding"][k] == prev["holding"][k] + n, k
+    assert top["share"]["外資"] is None            # 比重沒有公告就不編
     # 視窗長度不變：補一天就擠掉最舊的一天。
     assert len(merged.days) == min(len(base.days) + 1, INST_DAYS)
 
@@ -398,8 +402,37 @@ def test_official_foreign_share_fills_the_days_the_sheet_left_blank():
     assert merged is not None
     top = merged.days[0]
     assert top["share"]["外資"] == 0.1234 and top["holding"]["外資"] == 1234.0
-    assert top["holding"]["投信"] is None           # 投信持股官方沒有，不編
+    assert top["holding"]["投信"] == merged.days[1]["holding"]["投信"] + 5.0   # 前一天＋買賣超
     assert merged.latest_share is top
+
+
+def test_trust_and_dealer_holdings_follow_the_mirrors_own_arithmetic():
+    """券商的投信／自營商估計持股＝前一天＋當天買賣超。拿真實分頁逐日對：
+    隔天的持股從前一天接出來，要和分頁自己寫的一樣（投信幾乎全中）。"""
+    import random
+
+    names = sorted(p.name for p in (DATA / "sheets").iterdir() if (p / "三大法人.json.gz").exists())
+    random.seed(7)
+    ok = bad = 0
+    for code in random.sample(names, min(120, len(names))):
+        inst = institutional(sheet_store.read_grid(DATA / "sheets" / code, "三大法人"))
+        if not inst:
+            continue
+        for older, newer in zip(inst.days[1:], inst.days[:-1], strict=True):
+            h0, h1, n = older["holding"]["投信"], newer["holding"]["投信"], newer["net"]["投信"]
+            if None in (h0, h1, n):
+                continue
+            ok, bad = (ok + 1, bad) if abs(h0 + n - h1) < 0.5 else (ok, bad + 1)
+    assert ok > 500 and bad / (ok + bad) < 0.03, (ok, bad)
+
+
+def test_three_institution_share_is_total_over_issued():
+    grid = sheet_store.read_grid(DATA / "sheets/5439", "三大法人")
+    fake = InstDay("2099-12-31", 0.0, 0.0, 0.0, 0.0, foreign_held=1000.0, foreign_pct=0.1, issued_lots=10000.0)
+    top = institutional(grid, [fake]).days[0]
+    h = top["holding"]
+    assert h["合計"] == h["外資"] + h["投信"] + h["自營商"]
+    assert abs(top["share"]["三大法人"] - h["合計"] / 10000.0) < 1e-12
 
 
 def test_official_foreign_share_never_overrides_the_sheet():

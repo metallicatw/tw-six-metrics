@@ -146,6 +146,8 @@ class InstDay:
     #: （`market/daily/qfii/`），不是券商鏡像——那張分頁要按「立即更新」才會動。
     foreign_held: float | None = None
     foreign_pct: float | None = None
+    #: 發行張數（同一份外資持股統計），三大法人持股比重的分母。
+    issued_lots: float | None = None
 
     @property
     def roc_label(self) -> str:
@@ -182,20 +184,25 @@ def institutional_history(
         return {}
     qfii = qfii_by_day(data_dir, lookback=lookback)
     out: dict[str, list[InstDay]] = {}
+    seen: dict[str, set[str]] = {}
+    inst_dates: set[str] = set()
     for path in sorted(folder.glob("*.csv.gz"), reverse=True)[:lookback]:
         for row in _rows(path):
             code = (row.get("code") or "").strip()
             date = (row.get("date") or "").strip()
             if not code or not date:
                 continue
+            inst_dates.add(date)
             have = out.setdefault(code, [])
-            if len(have) >= days or any(d.date == date for d in have):
+            got = seen.setdefault(code, set())
+            if len(have) >= days or date in got:
                 continue
+            got.add(date)
             foreign = _lots(row.get("foreign", ""))
             trust = _lots(row.get("trust", ""))
             dealer = _lots(row.get("dealer", ""))
             parts = [v for v in (foreign, trust, dealer) if v is not None]
-            held, pct = qfii.get((date, code), (None, None))
+            held, pct, issued = qfii.get((date, code), (None, None, None))
             have.append(
                 InstDay(
                     date=date,
@@ -215,17 +222,33 @@ def institutional_history(
                     total=sum(parts) if len(parts) == 3 else _lots(row.get("total", "")),
                     foreign_held=held,
                     foreign_pct=pct,
+                    issued_lots=issued,
                 )
             )
+    # 三大法人的名單只列「當天有法人進出」的股票；沒列到的那天是三家都 0，不是
+    # 資料缺了（4413 在 2026-10-01、02 都有成交，法人一張都沒動）。有外資持股統計、
+    # 三大法人那一天也抓齊了的，就補一列 0——否則表格停在幾天前，看起來像漏抓。
+    # 只補四碼的：6 碼存託憑證（91xxxx）在 2026-10 以前根本沒被收進三大法人的檔案，
+    # 那些日子「沒列到」不代表 0。
+    for (date, code), (held, pct, issued) in qfii.items():
+        if len(code) != 4 or date not in inst_dates or date in seen.get(code, ()):
+            continue
+        have = out.setdefault(code, [])
+        seen.setdefault(code, set()).add(date)
+        have.append(InstDay(date=date, foreign=0.0, trust=0.0, dealer=0.0, total=0.0,
+                            foreign_held=held, foreign_pct=pct, issued_lots=issued))
+    for have in out.values():
+        have.sort(key=lambda d: d.date, reverse=True)
+        del have[days:]
     return out
 
 
 def qfii_by_day(
     data_dir: Path, *, lookback: int = INST_LOOKBACK
-) -> dict[tuple[str, str], tuple[float | None, float | None]]:
-    """`{(日期, 代號): (外資持有張數, 持股比率)}`，比率是小數（0.692）。"""
+) -> dict[tuple[str, str], tuple[float | None, float | None, float | None]]:
+    """`{(日期, 代號): (外資持有張數, 持股比率, 發行張數)}`，比率是小數（0.692）。"""
     folder = data_dir / "market" / "daily" / "qfii"
-    out: dict[tuple[str, str], tuple[float | None, float | None]] = {}
+    out: dict[tuple[str, str], tuple[float | None, float | None, float | None]] = {}
     if not folder.is_dir():
         return out
     for path in sorted(folder.glob("*.csv.gz"), reverse=True)[:lookback]:
@@ -235,7 +258,9 @@ def qfii_by_day(
             if not code or not date:
                 continue
             pct = _num(row.get("pct", ""))
-            out[(date, code)] = (_lots(row.get("held", "")), None if pct is None else pct / 100)
+            issued = _num(row.get("issued", ""))
+            out[(date, code)] = (_lots(row.get("held", "")), None if pct is None else pct / 100,
+                                 None if issued is None else issued / 1000)
     return out
 
 

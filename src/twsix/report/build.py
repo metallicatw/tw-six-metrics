@@ -163,6 +163,9 @@ def trend_rules_html(report: Path) -> str:
 #: 見 `_write_cross_feed`——那個**沒有**變，趨勢那支程式還是照樣讀它。
 CROSS_PAGE = "cross.html"
 
+#: 估計持股往回接幾個交易日（約一年）。
+INST_CARRY_DAYS = 160
+
 #: The site is about Taiwanese stocks, read in Taiwan, against 民國 quarters
 #: and 月營收 filed to a Taiwanese calendar.  Stamping it in UTC — or in
 #: whatever zone the build machine happens to sit in, which for GitHub Actions
@@ -786,7 +789,10 @@ def build_site(
     # 每日全市場三大法人買賣超，同樣一次讀進來給所有頁共用。一頁一頁去翻三十個
     # 壓縮檔會把建站時間翻好幾倍，而讀出來的是同一份東西。
     inst_history = (
-        institutional_history(sheets_dir.parent) if sheets_dir is not None else {}
+        # 往回讀約八個月：投信／自營商的估計持股要從分頁最後一天（錨點）一路累加買賣超
+        # 接到今天，而錨點可能是幾個月前抓的（見 sections._carry_holdings）。
+        institutional_history(sheets_dir.parent, lookback=INST_CARRY_DAYS, days=INST_CARRY_DAYS)
+        if sheets_dir is not None else {}
     )
     # 每日收盤的**整段**（不是只有最新一筆）。〔外資投信〕那兩張圖下面接的
     # 股價走勢用它。和上面兩個一樣：一次讀進來給 1,769 頁共用，一頁一頁去翻
