@@ -18,7 +18,7 @@ repo secret `SITE_LOGIN_USER` 與 `SITE_LOGIN_PASSWORD`。建站時從環境變�
 
 登入成功後把雜湊存在瀏覽器（勾「記住我」用 localStorage，否則 sessionStorage，
 關掉分頁就要重登）。密碼一改，雜湊跟著變，舊的登入自動失效。網址加 `?logout`
-就登出。
+就登出；登入後頁首右上角（「切換手機版」右邊）有登出圖示，沒有站內頁首的頁面則固定在畫面右上角。
 
 用法：``python scripts/site_gate.py site``（build-site action 在上傳 Pages 之前跑）。
 """
@@ -69,6 +69,13 @@ color:#06231d;background:linear-gradient(135deg,#34d399,#22c1a8);box-shadow:0 10
 #tg .tg-err{min-height:20px;margin:12px 0 0;text-align:center;font-size:13px;color:#ff9a8f}
 #tg .tg-foot{margin:18px 0 0;text-align:center;font-size:11px;color:#6f8a94}
 #tg .tg-shake{animation:tgs .35s}
+#tg-out{position:absolute;top:8px;right:20px;z-index:6;width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+appearance:none;cursor:pointer;border-radius:999px;border:1px solid var(--rule,#d2dee5);background:var(--surface-2,#e3ecf1);color:var(--ink-2,#33424f)}
+#tg-out:hover{border-color:var(--up,#cf3327);color:var(--up,#cf3327)}
+#tg-out:focus-visible{outline:2px solid var(--accent-2,#127a8f);outline-offset:2px}
+#tg-out.tg-float{position:fixed;top:10px;right:12px;z-index:2147483646;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+html.tg-in header.top button.viewmode{right:60px}
+html.tg-in header.top h1{padding-right:146px}
 @keyframes tgs{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
 """
 
@@ -76,8 +83,14 @@ JS = r"""
 (function(){var H=%(hash)s,S=%(salt)s,K="twsix-gate",d=document.documentElement;
 function get(s){try{return s.getItem(K)}catch(e){return null}}
 function put(s,v){try{s.setItem(K,v)}catch(e){}}
+function out(){try{localStorage.removeItem(K);sessionStorage.removeItem(K)}catch(e){}location.reload()}
+function exit(){if(document.getElementById("tg-out"))return;var x=document.createElement("button"),h=document.querySelector("header.top .in");
+x.id="tg-out";x.type="button";x.title="登出";x.setAttribute("aria-label","登出");
+x.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>';
+x.addEventListener("click",out);if(h){h.appendChild(x);d.classList.add("tg-in")}else{x.className="tg-float";document.body.appendChild(x)}}
+function later(f){if(document.body)f();else document.addEventListener("DOMContentLoaded",f)}
 if(/[?&]logout\b/.test(location.search)){try{localStorage.removeItem(K);sessionStorage.removeItem(K)}catch(e){}}
-else if(get(localStorage)===H||get(sessionStorage)===H)return;
+else if(get(localStorage)===H||get(sessionStorage)===H){later(exit);return}
 d.classList.add("tg-lock");
 function hex(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return("0"+x.toString(16)).slice(-2)}).join("")}
 function show(){if(document.getElementById("tg"))return;var w=document.createElement("div");w.id="tg";
@@ -94,9 +107,9 @@ f.addEventListener("submit",function(ev){ev.preventDefault();
 if(!(window.crypto&&crypto.subtle)){e.textContent="這個瀏覽器不支援安全登入，請改用 https 開啟";return}
 var u=w.querySelector("#tg-u").value.trim(),p=w.querySelector("#tg-p").value;b.disabled=true;e.textContent="";
 crypto.subtle.digest("SHA-256",new TextEncoder().encode(S+u+"\n"+p)).then(function(r){b.disabled=false;
-if(hex(r)===H){put(w.querySelector("#tg-r").checked?localStorage:sessionStorage,H);d.classList.remove("tg-lock");w.remove()}
+if(hex(r)===H){put(w.querySelector("#tg-r").checked?localStorage:sessionStorage,H);d.classList.remove("tg-lock");w.remove();exit()}
 else{e.textContent="帳號或密碼不正確";f.classList.remove("tg-shake");void f.offsetWidth;f.classList.add("tg-shake");w.querySelector("#tg-p").select()}})})}
-if(document.body)show();else document.addEventListener("DOMContentLoaded",show)})();
+later(show)})();
 """
 
 
