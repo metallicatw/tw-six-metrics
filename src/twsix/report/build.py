@@ -798,7 +798,10 @@ def build_site(
     # 股價走勢用它。和上面兩個一樣：一次讀進來給 1,769 頁共用，一頁一頁去翻
     # 三十個壓縮檔會把建站時間翻好幾倍。
     close_hist = (
-        close_history(sheets_dir.parent) if sheets_dir is not None else {}
+        # 圖畫近 120 個交易日（sections.CHART_DAYS），股價線也要同一段長度——
+        # 原本只讀 20 天，圖上的股價只有最右邊那一小段（2026-10-04 修）。
+        close_history(sheets_dir.parent, lookback=INST_CARRY_DAYS, days=INST_CARRY_DAYS)
+        if sheets_dir is not None else {}
     )
     # 〔股價健診〕〔推估三年目標價〕要的長歷史（最多 760 個交易日）。
     long_hist = price_history(sheets_dir.parent) if sheets_dir is not None else {}

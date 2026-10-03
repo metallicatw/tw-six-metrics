@@ -34,6 +34,7 @@ than usual, since the whole point of the workbook is the numbers.
 from __future__ import annotations
 
 import itertools
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from html import escape
@@ -75,7 +76,7 @@ LINE_WIDTH = 2.0
 #: 切成假虛線——看起來像資料有斷，其實沒有。留四倍標記直徑的間距反推：繪圖區
 #: 1122 寬、標記 9 寬，1122 / (4 × 9) ≈ 31。
 #: 一年的週線（51 點）因此不畫標記，兩年的季線（8 點）會畫。標記沒畫的時候，
-#: 每一點仍然查得到值——見 _hover_slots()。
+#: 每一點仍然查得到值——見 _hover_attr()。
 MARKER_LIMIT = 30
 MARKER_R = 4.5  # 9px across
 
@@ -203,38 +204,6 @@ def _grid(frame: Frame, lo: float, hi: float, digits: int) -> list[str]:
         out.append(
             f'<text x="{frame.left - 8:.1f}" y="{y + 3.5:.1f}" text-anchor="end" '
             f'font-size="11" fill="var(--muted)">{escape(_axis_label(value, digits))}</text>'
-        )
-    return out
-
-
-def _hover_slots(
-    frame: Frame,
-    labels: Sequence[str],
-    values: Sequence[Number],
-    unit: str,
-    digits: int,
-) -> list[str]:
-    """每一期一塊透明的滑鼠感應區，帶原生 tooltip。
-
-    密的序列不畫標記（見 MARKER_LIMIT），但「不畫點」不該等於「查不到值」。
-    整欄透明矩形的命中範圍比點本身大得多，滑過任何高度都讀得到那一期的數字，
-    而且不需要一行 JavaScript——``<title>`` 是瀏覽器自己的 tooltip。
-    """
-    out: list[str] = []
-    n = len(values)
-    if not n:
-        return out
-    slot = frame.plot_w / n
-    for i, raw in enumerate(values):
-        if raw is None:
-            continue
-        x = frame.left + slot * i
-        label = escape(labels[i] if i < len(labels) else "")
-        text = escape(_fmt(float(raw), digits)) + escape(unit)
-        out.append(
-            f'<rect x="{x:.1f}" y="{frame.top:.1f}" width="{slot:.1f}" '
-            f'height="{frame.plot_h:.1f}" fill="transparent">'
-            f"<title>{label}　{text}</title></rect>"
         )
     return out
 
@@ -368,19 +337,60 @@ def _price_overlay(
         out.append(
             f'<circle cx="{min(f.left + slot * (newest + 0.5), right):.1f}" '
             f'cy="{y_of(float(prices[newest])):.1f}" r="3.5" fill="var(--price)" '
-            f'stroke="var(--surface)" stroke-width="1.5">'
-            f"<title>收盤價　{escape(_fmt(float(prices[newest]), digits))}"
-            f"{escape(unit)}</title></circle>"
+            f'stroke="var(--surface)" stroke-width="1.5" />'
         )
     return out
 
 
-def _open(frame: Frame, title: str, desc: str) -> list[str]:
+#: 滑鼠移過（手機是手指滑過）的即時資訊：一個序列一組
+#: ``(名稱, 顏色, 單位, 小數位, 數列)``，數列和 x 軸標籤同一個順序（舊到新）。
+HoverSeries = tuple[str, str, str, int, Sequence[Number]]
+
+
+def _hover_attr(frame: Frame, labels: Sequence[str], series: Sequence[HoverSeries]) -> str:
+    """把每一期每個序列的值放進 ``<svg data-hover>``，由 site.js 畫十字線＋浮動資訊窗。
+
+    2026-10-04 以前用的是每一根長條、每一個點各自的 ``<title>``（瀏覽器原生
+    tooltip）：要停一秒才出現、一次只講一個序列（股價那條線完全查不到）、手機上
+    根本沒有。改成和〔股價健診〕那幾張 JS 圖同一個樣子：一條垂直十字線，旁邊一個
+    小窗列出那一期**每一個**序列的值。沒有 JavaScript 的時候，圖下面的〔數值〕表
+    仍然有全部的數字。
+    """
+    def num(v: Number, d: int) -> float | int | None:
+        if v is None:
+            return None
+        r = round(float(v), d)
+        return int(r) if d == 0 else r
+
+    payload = {
+        "l": round(frame.left, 1), "w": round(frame.plot_w, 1),
+        "t": round(frame.top, 1), "h": round(frame.plot_h, 1),
+        "x": [str(x) for x in labels],
+        "s": [
+            [name, colour, unit.strip() and unit, digits, [num(v, digits) for v in values]]
+            for name, colour, unit, digits, values in series
+        ],
+    }
+    return escape(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
+def _tip_labels(
+    labels: Sequence[str], full: Sequence[str] | None, newest_first: bool
+) -> Sequence[str]:
+    """浮動資訊窗用的期別：軸上為了省位置只印「08/24」，資訊窗裡要寫完整的「115/08/24」。"""
+    if not full or len(full) != len(labels):
+        return labels
+    return list(reversed(full)) if newest_first else list(full)
+
+
+def _open(frame: Frame, title: str, desc: str, hover: str = "") -> list[str]:
     return [
         f'<svg viewBox="0 0 {frame.width:.0f} {frame.height:.0f}" '
         f'preserveAspectRatio="none" role="img" class="chart" '
-        f'aria-label="{escape(title)}">',
-        f"<title>{escape(title)}</title>",
+        f'aria-label="{escape(title)}"'
+        + (f' data-hover="{hover}"' if hover else "") + ">",
+        # 不放 `<title>`：它在整張圖上會跳出瀏覽器原生的 tooltip（只寫著圖名），
+        # 和 site.js 的浮動資訊窗疊在一起。圖名已經在 aria-label 裡。
         f"<desc>{escape(desc)}</desc>",
     ]
 
@@ -490,6 +500,7 @@ def bars(
     price: Sequence[Number] | None = None,
     price_unit: str = " 元",
     price_digits: int = 2,
+    hover_labels: Sequence[str] | None = None,
     robust: bool = False,
 ) -> str:
     """Magnitude over an ordered axis, oldest on the left.
@@ -498,9 +509,7 @@ def bars(
 
     *price* 給了的話，同一張圖上多一條股價走勢，用右邊那條軸（見 _price_overlay）。
 
-    Each bar carries its own ``<title>``, which is the browser's native
-    tooltip — a hover layer that costs no JavaScript and works when scripting
-    is off.
+    滑鼠移過的即時資訊見 _hover_attr()；沒有 JavaScript 時，下面的〔數值〕表有全部數字。
     """
     labels, values = _chronological(labels, values, newest_first)
     if price is not None:
@@ -513,9 +522,13 @@ def bars(
     if price:
         f = replace(f, right=max(f.right, PRICE_RIGHT))
     lo, hi = _robust_bounds(present) if robust else _nice_bounds(present)
+    hover: list[HoverSeries] = [(title, colour, unit, digits, values)]
+    if price and sum(v is not None for v in price) >= 2:   # 和 _price_overlay 同一個門檻
+        hover.append(("收盤價", "var(--price)", price_unit, price_digits, price))
     parts = _open(
         f, title,
         f"{len(present)} 期{unit}，{_fmt(min(present), digits)} 至 {_fmt(max(present), digits)}",
+        _hover_attr(f, _tip_labels(labels, hover_labels, newest_first), hover),
     )
     parts += _grid(f, lo, hi, digits)
     # 股價畫在長條**之前**——它是背景，不該蓋在資料上面。
@@ -553,9 +566,7 @@ def bars(
         )
         parts.append(
             f'<rect x="{x:.1f}" y="{top:.1f}" width="{width:.1f}" height="{height:.1f}" '
-            f'rx="{radius:.1f}" {skin}>'
-            f"<title>{escape(labels[i] if i < len(labels) else '')}　"
-            f"{escape(_fmt(value, digits))}{escape(unit)}</title></rect>"
+            f'rx="{radius:.1f}" {skin} />'
         )
         if clipped:
             # 超出軸的那一根要說出來，不能只是畫到邊界為止——不然讀者會以為它
@@ -572,9 +583,7 @@ def bars(
             parts.append(
                 f'<path d="M{cx - w:.1f},{edge:.1f} L{cx - w / 2:.1f},{edge + depth:.1f} '
                 f'L{cx:.1f},{edge:.1f} L{cx + w / 2:.1f},{edge + depth:.1f} '
-                f'L{cx + w:.1f},{edge:.1f} Z" fill="var(--surface)">'
-                f"<title>{escape(labels[i] if i < len(labels) else '')}　"
-                f"{escape(_fmt(value, digits))}{escape(unit)}（超出座標範圍）</title></path>"
+                f'L{cx + w:.1f},{edge:.1f} Z" fill="var(--surface)" class="clipped" />'
             )
     parts += _x_labels(f, labels, label_every)
     parts.append("</svg>")
@@ -605,6 +614,7 @@ def line(
     price: Sequence[Number] | None = None,
     price_unit: str = " 元",
     price_digits: int = 2,
+    hover_labels: Sequence[str] | None = None,
 ) -> str:
     """A rate over an ordered axis, oldest on the left.
 
@@ -633,7 +643,11 @@ def line(
     # 零線沒有被丟掉：序列跨越零的時候（年增率那一類）零仍然落在範圍內，_grid
     # 會把它畫成實線加粗。
     lo, hi = _nice_bounds(present, include_zero=False)
-    parts = _open(f, title, f"{len(present)} 期{unit}")
+    hover: list[HoverSeries] = [(title, colour, unit, digits, values)]
+    if price and sum(v is not None for v in price) >= 2:   # 和 _price_overlay 同一個門檻
+        hover.append(("收盤價", "var(--price)", price_unit, price_digits, price))
+    parts = _open(f, title, f"{len(present)} 期{unit}",
+                  _hover_attr(f, _tip_labels(labels, hover_labels, newest_first), hover))
     parts += _grid(f, lo, hi, digits)
     # 股價畫在主線**之前**——它是背景，不該蓋在資料上面。
     over = _price_overlay(f, labels, price, unit=price_unit,
@@ -647,8 +661,6 @@ def line(
             f.left + slot * (i + 0.5),
             f.top + f.plot_h * (1 - (value - lo) / (hi - lo)),
         )
-
-    parts += _hover_slots(f, labels, values, unit, digits)
 
     run: list[str] = []
     for i, raw in enumerate(values):
@@ -694,9 +706,7 @@ def line(
         x, y = point(i, float(raw))
         parts.append(
             f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{MARKER_R if newest else 2.5:.1f}" '
-            f'fill="{colour}" stroke="var(--surface)" stroke-width="2">'
-            f"<title>{escape(labels[i] if i < len(labels) else '')}　"
-            f"{escape(_fmt(float(raw), digits))}{escape(unit)}</title></circle>"
+            f'fill="{colour}" stroke="var(--surface)" stroke-width="2" />'
         )
         if newest:
             # Anchored above the point with a surface-coloured halo: the line
@@ -814,12 +824,15 @@ def combo(
     def axis_of(side: str, unit: str) -> str:
         return side + (" " + unit.strip() if unit.strip() else "")
 
+    hover: list[HoverSeries] = [(bar_name, bar_colour, bar_unit, bar_digits, bar_values)]
+    hover += [(n, c, line_unit, line_digits, v) for n, v, c in line_data]
     parts = _open(
         f,
         title,
         f"{len(shown_labels)} 期；{bar_name}（長條，{axis_of(sides[0], bar_unit)}）"
         f"與{'、'.join(n for n, _, _ in line_data)}"
         f"（折線，{axis_of(sides[1], line_unit)}）",
+        _hover_attr(f, shown_labels, hover),
     )
     parts += _grid(f, left[0], left[1], left[2])
 
@@ -860,14 +873,11 @@ def combo(
         parts.append(
             f'<rect x="{x:.1f}" y="{top:.1f}" width="{width:.1f}" '
             f'height="{height:.1f}" rx="{min(BAR_RADIUS, width / 2, height):.1f}" '
-            f"{skin}>"
-            f"<title>{escape(shown_labels[i] if i < len(shown_labels) else '')}　"
-            f"{escape(bar_name)} {escape(_fmt(value, bar_digits))}"
-            f"{escape(bar_unit)}</title></rect>"
+            f"{skin} />"
         )
 
     markers = len(shown_labels) <= MARKER_LIMIT
-    for name, values, colour in line_data:
+    for _name, values, colour in line_data:
         run: list[str] = []
 
         def flush(run: list[str] = run, colour: str = colour) -> None:
@@ -896,10 +906,7 @@ def combo(
             parts.append(
                 f'<circle cx="{f.left + slot * (i + 0.5):.1f}" '
                 f'cy="{y_on(float(raw), line_scale):.1f}" r="2.8" fill="{colour}" '
-                f'stroke="var(--surface)" stroke-width="1.5">'
-                f"<title>{escape(shown_labels[i] if i < len(shown_labels) else '')}　"
-                f"{escape(name)} {escape(_fmt(float(raw), line_digits))}"
-                f"{escape(line_unit)}</title></circle>"
+                f'stroke="var(--surface)" stroke-width="1.5" />'
             )
 
     parts += _x_labels(f, shown_labels, label_every)
@@ -1036,10 +1043,18 @@ def river(
         return f.top + f.plot_h * (1 - (value - lo) / span)
 
     last = series[-1][1]
+    hover: list[HoverSeries] = [("收盤價", "var(--accent)", " 元", 2, [v for _, v in series])]
+    # 由上往下列（貴的在上），和圖上河流的上下一致。
+    hover += [
+        (f"{zone_names[j]}上緣" if j < len(zone_names) else f"第 {j + 1} 條",
+         f"var(--zone-{j})", " 元", 0, list(band_series[j]))
+        for j in reversed(range(len(band_series)))
+    ]
     parts = _open(
         f,
         title,
         f"{series[0][0]} 至 {series[-1][0]} 共 {n} 週，收盤 {_fmt(last, 2)}",
+        _hover_attr(f, [label for label, _ in series], hover),
     )
 
     # -- the ribbons -------------------------------------------------------

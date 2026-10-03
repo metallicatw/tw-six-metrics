@@ -104,7 +104,7 @@ def test_revenue_seasonality_averages_only_complete_years():
     partial = next(r for r in season.rows if r["year"] == "115")
     assert partial["complete"] is False
     # Every month of the one complete year is 1/12 of it.
-    assert "8.3%" in season.figure
+    assert '<td class="num">8.3</td>' in season.figure
 
 
 def test_profit_seasonality_skips_loss_making_years():
@@ -115,7 +115,7 @@ def test_profit_seasonality_skips_loss_making_years():
     )
     assert season is not None
     assert {r["year"] for r in season.rows} == {"114", "113"}
-    assert "25.0%" in season.figure  # only 114 fed the average
+    assert '<td class="num">25.0</td>' in season.figure  # only 114 fed the average
 
 
 def test_the_seasonal_table_stays_readable():
@@ -537,10 +537,9 @@ def test_a_ratio_that_explodes_does_not_flatten_the_other_twenty_quarters():
     # 穩健範圍：刻度回到十的量級，那十期才有高度可言
     assert axis(robust) == ["-10", "-3", "3", "10"]
 
-    # 出界的那一根仍然是資料：畫到邊界、加三角形、完整數值留在 tooltip 裡
-    assert "超出座標範圍" in robust
-    assert "<path" in robust
-    assert "1,100（超出座標範圍）" in robust
+    # 出界的那一根仍然是資料：畫到邊界、加鋸齒，完整數值留在滑鼠移過的資訊裡
+    assert 'class="clipped"' in robust
+    assert "[1100," in robust
 
 
 def test_a_short_series_keeps_the_plain_axis():
@@ -548,4 +547,38 @@ def test_a_short_series_keeps_the_plain_axis():
     from twsix.report import charts
 
     svg = charts.bars(["a", "b", "c"], [1.0, 2.0, 90.0], title="短", robust=True)
-    assert "超出座標範圍" not in svg
+    assert 'class="clipped"' not in svg
+
+
+def test_every_chart_carries_its_hover_payload_including_the_price():
+    """滑鼠移過的資訊窗（site.js）讀 <svg data-hover>：每一個序列都要在裡面，收盤價也是。"""
+    import html
+    import json
+    import re
+
+    from twsix.report import charts
+
+    svg = charts.bars(["115/10/02", "115/10/01"], [5.0, -3.0], title="外資買賣超",
+                      unit=" 張", price=[2500.0, 2480.0],
+                      hover_labels=["115/10/02", "115/10/01"])
+    payload = json.loads(html.unescape(re.search(r'data-hover="([^"]+)"', svg).group(1)))
+    assert payload["x"] == ["115/10/01", "115/10/02"]          # 舊到新，和圖一致
+    names = [s[0] for s in payload["s"]]
+    assert names == ["外資買賣超", "收盤價"]
+    assert payload["s"][1][4] == [2480.0, 2500.0]
+    assert "<title>" not in svg, "原生 tooltip 會和資訊窗疊在一起"
+
+    combo = charts.combo(["a", "b"], bar=("營收", [1.0, 2.0]),
+                         lines=[("年增率", [3.0, 4.0], "var(--g1)")], title="營收")
+    assert "data-hover=" in combo and "年增率" in combo
+
+
+def test_the_header_is_frozen_and_the_stock_bar_sits_below_it():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "src/twsix/report/templates"
+    css = (root / "site.css").read_text("utf-8")
+    js = (root / "site.js").read_text("utf-8")
+    assert "header.top{position:sticky;top:0" in css
+    assert ".ident.sticky{position:sticky;top:var(--head-h,0px)" in css
+    assert "--head-h" in js and "svg.chart[data-hover]" in js

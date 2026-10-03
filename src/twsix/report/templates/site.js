@@ -2567,3 +2567,84 @@ function reveal(bar, el){
   if(tab) tab.addEventListener('click', load);
   if(!panel.hidden) load();
 })();
+
+/* 伺服器端畫的圖（charts.py：〈個股資訊〉的長條、折線、組合圖、河流圖）滑鼠移過／
+   手指滑過的即時資訊。和〔股價健診〕那幾張 JS 圖同一個樣子（.pxtip）：一條垂直
+   十字線，旁邊一個小窗列出那一期每一個序列的值——包含右軸的收盤價。
+   資料在 <svg data-hover>（見 charts._hover_attr），x 是 viewBox 座標。 */
+(function(){
+  var svgs = document.querySelectorAll('svg.chart[data-hover]');
+  if(!svgs.length) return;
+  var NS = 'http://www.w3.org/2000/svg';
+  function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function fmt(v, d){ return Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d}); }
+  var open = [];
+  Array.prototype.forEach.call(svgs, function(svg){
+    var o;
+    try{ o = JSON.parse(svg.getAttribute('data-hover')); }catch(e){ return; }
+    var n = o.x.length;
+    if(!n || !svg.viewBox || !svg.viewBox.baseVal) return;
+    var W = svg.viewBox.baseVal.width, slot = o.w / n;
+    var wrap = document.createElement('div');
+    wrap.className = 'chart-hover';
+    svg.parentNode.insertBefore(wrap, svg);
+    wrap.appendChild(svg);
+    var cross = document.createElementNS(NS, 'line');
+    cross.setAttribute('y1', o.t); cross.setAttribute('y2', o.t + o.h);
+    cross.setAttribute('stroke', 'var(--muted)'); cross.setAttribute('stroke-dasharray', '3 3');
+    cross.setAttribute('pointer-events', 'none'); cross.setAttribute('visibility', 'hidden');
+    svg.appendChild(cross);
+    var tip = document.createElement('div');
+    tip.className = 'pxtip'; tip.hidden = true;
+    wrap.appendChild(tip);
+    function show(clientX, clientY){
+      var r = svg.getBoundingClientRect();
+      if(!r.width) return;
+      var x = (clientX - r.left) * W / r.width;
+      var i = Math.max(0, Math.min(n - 1, Math.floor((x - o.l) / slot)));
+      var X = o.l + slot * (i + 0.5);
+      cross.setAttribute('x1', X); cross.setAttribute('x2', X);
+      cross.setAttribute('visibility', 'visible');
+      var h = '<b>' + esc(o.x[i]) + '</b>', any = false;
+      o.s.forEach(function(s){
+        var v = s[4][i];
+        if(v === null || v === undefined) return;
+        any = true;
+        h += '<span><i style="background:' + esc(s[1]) + '"></i>' + esc(s[0]) +
+             '<em>' + fmt(v, s[3]) + esc(s[2] || '') + '</em></span>';
+      });
+      if(!any) h += '<span>這一期沒有資料</span>';
+      tip.innerHTML = h; tip.hidden = false;
+      var px = X * r.width / W, left = px + 12;
+      if(left + tip.offsetWidth > r.width - 4) left = px - 12 - tip.offsetWidth;
+      tip.style.left = Math.max(4, left) + 'px';
+      /* 跟著游標的高度、放在它上方（手機上手指會擋住下方）。圖的上緣可能被凍結的
+         頁首蓋住，固定貼在圖頂的話，往下捲一點資訊窗就看不見了。 */
+      var y = clientY - r.top, top = y - tip.offsetHeight - 14;
+      if(top < 4) top = Math.min(y + 18, r.height - tip.offsetHeight - 4);
+      tip.style.top = Math.max(4, top) + 'px';
+      if(open.indexOf(hide) < 0) open.push(hide);
+    }
+    function hide(){ cross.setAttribute('visibility', 'hidden'); tip.hidden = true; }
+    svg.addEventListener('mousemove', function(e){ show(e.clientX, e.clientY); });
+    svg.addEventListener('mouseleave', hide);
+    function touch(e){ var t = e.touches[0]; if(t) show(t.clientX, t.clientY); }
+    svg.addEventListener('touchstart', touch, {passive: true});
+    svg.addEventListener('touchmove', touch, {passive: true});
+  });
+  // 手機上沒有 mouseleave：點圖以外的地方就收起來。
+  document.addEventListener('touchstart', function(e){
+    if(e.target.closest && e.target.closest('.chart-hover')) return;
+    open.forEach(function(f){ f(); }); open = [];
+  }, {passive: true});
+})();
+
+/* 凍結的頁首有多高：寫進 --head-h，給股名列與錨點跳轉讓位（見 site.css 的 header.top）。 */
+(function(){
+  var h = document.querySelector('header.top');
+  if(!h) return;
+  function set(){ document.documentElement.style.setProperty('--head-h', h.offsetHeight + 'px'); }
+  set();
+  if(window.ResizeObserver) new ResizeObserver(set).observe(h);
+  else window.addEventListener('resize', set);
+})();

@@ -111,6 +111,7 @@ def close_history(
     if not folder.is_dir():
         return {}
     out: dict[str, list[Quote]] = {}
+    seen: dict[str, set[str]] = {}
     for path in sorted(folder.glob("*.csv.gz"), reverse=True)[:lookback]:
         for row in _rows(path):
             code = (row.get("code") or "").strip()
@@ -118,9 +119,11 @@ def close_history(
             if not code or close is None:
                 continue
             have = out.setdefault(code, [])
+            got = seen.setdefault(code, set())
             date = (row.get("date") or path.stem).strip()
-            if len(have) >= days or any(q.date == date for q in have):
+            if len(have) >= days or date in got:
                 continue
+            got.add(date)
             have.append(Quote(date=date, close=close))
     return out
 

@@ -605,7 +605,10 @@ def institutional(
 
     # 圖畫近 120 個交易日（和籌碼雷達的〔個股籌碼多圖〕同一段，2026-10-04），表格與
     # 卡片仍是近 20 日。20 天只看得到最近一個月，看不出法人是在布局還是在倒貨。
-    labels = [d["date"][3:] for d in chart_days]  # 「08/28」 — the year is on the page
+    # 軸上印「08/28」（原本是 [3:]，民國年是三位數，切出來變成「/08/28」）；
+    # 浮動資訊窗裡寫完整日期，120 天會跨年。
+    labels = [d["date"].split("/", 1)[-1] for d in chart_days]
+    full = [d["date"] for d in chart_days]
     every = max(3, len(chart_days) // 6)
 
     # 每一天的收盤，對齊圖上的每一天。
@@ -628,6 +631,7 @@ def institutional(
             digits=0,
             label_every=every,
             price=price_line,
+            hover_labels=full,
         ),
         "foreign_share": charts.line(
             labels,
@@ -640,6 +644,7 @@ def institutional(
             digits=2,
             label_every=every,
             price=price_line,
+            hover_labels=full,
         ),
     }
     return Institutional(

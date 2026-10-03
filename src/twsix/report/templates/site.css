@@ -168,6 +168,10 @@ a:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
    橫向捲動——而那幾像素在桌機上永遠看不到。 */
 .wrap{--pad:20px;max-width:1240px;margin:0 auto;padding:0 var(--pad) 44px}
 header.top{background:var(--surface);border-bottom:1px solid var(--rule);margin-bottom:14px}
+/* 頁首（站名＋導覽列）凍結在畫面最上面（2026-10-04）。它的實際高度會隨視窗寬度
+   換行而變，所以由 site.js 量好寫進 --head-h，個股頁的股名列、錨點跳轉都往下讓這麼多。 */
+header.top{position:sticky;top:0;z-index:40}
+html{scroll-padding-top:calc(var(--head-h,0px) + 8px)}
 header.top .in{max-width:1240px;margin:0 auto;padding:12px 20px 10px;position:relative}
 /* 檢視模式切換：頁首右上角。用 absolute 而不是 flex，因為 .in 裡面已經有標題、
    導覽列、搜尋框三塊各自排版的東西，加一層 flex 會把它們全部重排。 */
@@ -481,7 +485,7 @@ td.pv .p{display:block;font-size:10.5px;color:var(--muted);
 td.pv .v{display:block;font-variant-numeric:tabular-nums;
   font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
 /* -- 個股頁：固定頁首與分頁 ------------------------------------------ */
-.ident.sticky{position:sticky;top:0;z-index:30;background:var(--ground);
+.ident.sticky{position:sticky;top:var(--head-h,0px);z-index:30;background:var(--ground);
   margin:0 calc(-1 * var(--pad)) 16px;padding:12px var(--pad) 0;
   box-shadow:0 1px 0 var(--rule),0 6px 14px -12px rgba(0,0,0,.4)}
 .ident.sticky h2{margin:0;font-size:19px;border:none;padding:0;letter-spacing:-.01em}
@@ -744,6 +748,9 @@ figure.chart-fig figcaption .muted{font-size:12.5px;font-weight:500}
    桌機上完全不變形。 */
 svg.chart{display:block;width:100%;height:240px;background:var(--surface);
   border:1px solid var(--rule);border-radius:5px}
+/* site.js 把每張 svg.chart[data-hover] 包進這一層：浮動資訊窗（.pxtip）以圖為座標原點。 */
+.chart-hover{position:relative}
+.chart-hover svg.chart{cursor:crosshair;touch-action:pan-y}
 details.chart-data{margin-top:8px;font-size:12.5px}
 details.chart-data summary{cursor:pointer;color:var(--muted)}
 details.chart-data table{min-width:0}

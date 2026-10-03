@@ -5,7 +5,7 @@
 #cf .bg1 *{box-sizing:border-box;}
 #cf .bg1{background:var(--bg); color:var(--ink); font-family:"Noto Sans TC","IBM Plex Mono",system-ui,sans-serif; padding-inline:16px; padding-block:0 28px;}
 #cf .bg1 .mono{font-family:"IBM Plex Mono","Noto Sans TC",monospace; font-variant-numeric:tabular-nums;}
-#cf .bg1 header.top{position:sticky; top:env(safe-area-inset-top,0px); z-index:20; background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(8px); margin-inline:-16px; padding:14px 16px 12px; border-bottom:1px solid var(--border);}
+#cf .bg1 header.top{position:sticky; top:calc(var(--head-h,0px) + env(safe-area-inset-top,0px)); z-index:20; background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(8px); margin-inline:-16px; padding:14px 16px 12px; border-bottom:1px solid var(--border);}
 #cf .bg1 .top-row{max-width:1180px; margin:0 auto; display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
 #cf .bg1 .brand{display:flex; flex-direction:column; gap:2px; margin-right:auto;}
 #cf .bg1 .brand .name{font-weight:900; font-size:1.15rem; letter-spacing:.01em;}
@@ -124,9 +124,9 @@
 #cf .bg3 h1,#cf .bg3 h2,#cf .bg3 h3{font-weight:600; text-wrap:balance; margin:0;}
 #cf .bg3 a{color:inherit;}
 #cf .bg3 .wrap{max-width:1080px; margin:0 auto;}
-#cf .bg3 header.top{position:sticky; top:env(safe-area-inset-top,0px); z-index:20; background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(10px); padding-block:14px 10px; margin-inline:-16px; padding-inline:16px; border-bottom:1px solid var(--border);}
+#cf .bg3 header.top{position:sticky; top:calc(var(--head-h,0px) + env(safe-area-inset-top,0px)); z-index:20; background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(10px); padding-block:14px 10px; margin-inline:-16px; padding-inline:16px; border-bottom:1px solid var(--border);}
 @media (max-width:680px){#cf .bg3 header.top{position:static; background:none; backdrop-filter:none; border-bottom:none; padding-block:0; margin-inline:0; padding-inline:0;}
-#cf .bg3 .sticky-bar{position:sticky; top:env(safe-area-inset-top,0px); z-index:21; background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(10px); padding-block:14px 10px; margin-inline:-16px; padding-inline:16px; border-bottom:1px solid var(--border);}
+#cf .bg3 .sticky-bar{position:sticky; top:calc(var(--head-h,0px) + env(safe-area-inset-top,0px)); z-index:21; background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(10px); padding-block:14px 10px; margin-inline:-16px; padding-inline:16px; border-bottom:1px solid var(--border);}
 #cf .bg3 .stock-info{padding-inline:0;}}
 #cf .bg3 .brand{display:flex; align-items:baseline; gap:8px; margin-bottom:10px;}
 #cf .bg3 .brand .name{font-size:15px; font-weight:700; letter-spacing:.01em;}
