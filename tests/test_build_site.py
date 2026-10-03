@@ -200,45 +200,6 @@ def test_the_score_is_rounded_in_the_file_not_in_the_browser():
     assert "6666666" not in text
 
 
-def test_the_search_box_is_on_the_pages_it_can_act_on(tmp_path=None):
-    """搜尋框原本每一頁都有，而它在多數頁面上是**騙人的**。
-
-    它做的事只有一件：跳到某一檔的個股頁。從〔台股評等清單〕和個股頁按下去，
-    那正是讀者要的；從〔市場監控〕或〔趨勢選股〕按下去，等於把人踢出他正在讀
-    的那一頁——那兩頁講的是全市場，不是某一檔。
-
-    所以它留在「以個股為單位」的那兩種頁面上，其他頁不放。不放不等於走不到：
-    導覽列每一頁都有，第一項就是清單。
-    """
-    tmp = tmp_path or _tmp()
-    out = tmp / "site"
-    build_site(_records(), out, sheets_dir=_sheets(tmp))
-
-    page = served(out, "index.html")
-    assert 'id="find"' in page, "評等清單沒有搜尋框"
-    assert "search.json" in page, "評等清單沒有載入索引"
-    for code in ("5439", "2330"):
-        page = served(out, f"stock/{code}.html")
-        assert 'id="find"' in page, f"{code} 的頁面沒有搜尋框"
-    for name in ("picks.html", "stats.html", "about.html"):
-        page = served(out, name)
-        assert 'id="find"' not in page, f"{name} 不該有搜尋框"
-        # 但一定要走得回去。
-        assert "台股評等清單" in page, f"{name} 沒有導覽列"
-
-
-def test_the_search_box_still_goes_somewhere_without_javascript():
-    """A form wrapping the input, pointing at a page that lists everything.
-
-    The combobox is an enhancement; with scripting off, submitting must still
-    reach 評等清單, which has its own filter and every stock in it.
-    """
-    tmp = _tmp()
-    out = tmp / "site"
-    build_site(_records(), out, sheets_dir=_sheets(tmp))
-    page = (out / "index.html").read_text(encoding="utf-8")
-    assert 'action="index.html"' in page
-    assert 'name="q"' in page
 
 
 def test_the_stock_page_search_box_resolves_paths_from_its_own_depth():
@@ -249,7 +210,6 @@ def test_the_stock_page_search_box_resolves_paths_from_its_own_depth():
     page = (out / "stock" / "5439.html").read_text(encoding="utf-8")
     # rel 現在由每頁一行的 window.TWSIX 帶進來，腳本本身是全站共用的靜態檔。
     assert 'window.TWSIX={rel:"../"' in page
-    assert 'action="../index.html"' in page
     assert 'href="../assets/site.css' in page and 'src="../assets/site.js' in page
     assert "base=TWSIX.rel" in served(out, "stock/5439.html")
 
@@ -463,39 +423,6 @@ def test_every_function_the_page_calls_is_a_function_the_page_defines():
         missing = sorted(called - defined - _JS_GLOBALS)
         assert not missing, f"{name} 呼叫了沒有定義的函式：{missing}"
 
-
-def test_the_fetch_button_sits_next_to_the_search_box():
-    """一顆按鈕，一個對象：搜尋框裡的那一檔。
-
-    上一版把它放在個股頁最底下，離「要抓哪一檔」最遠的地方，而搜尋結果旁邊那顆
-    小標籤又壞著——所以正常的路徑（打代號、按抓取）是死的，只有捲到頁尾才找得到
-    活的入口。現在只剩頁首那一顆。
-    """
-    tmp = _tmp()
-    out = tmp / "site"
-    build_site(_records(), out, sheets_dir=_sheets(tmp), repo="owner/repo")
-
-    index = (out / "index.html").read_text("utf-8")
-    assert 'id="grabnow"' in index
-    # 在搜尋表單裡面，不是頁面某處
-    form = index.split('class="find"', 1)[1].split("</form>", 1)[0]
-    assert 'id="grabnow"' in form
-
-    thin = (out / "stock" / "2330.html").read_text("utf-8")
-    assert 'data-grab="2330"' in thin  # 停在這一頁時按鈕預設指這一檔
-    assert 'data-full="1"' not in thin  # 還沒有完整報告（腳本裡的 getAttribute 不算）
-    assert 'id="grab-btn"' not in thin  # 底部那顆已經沒了
-    assert "GitHub issue" not in thin  # 連同那句說明
-
-    # 已經完整的那一檔也要能重抓：資料會過期，而且後來新增的區塊（大戶持股、
-    # 董監持股）只能靠重抓補上。上一版把它當成「沒有對象」，按鈕就消失了——
-    # 於是成功抓過一次的股票反而是唯一補不到新東西的。
-    #
-    # 字是「立即更新」不是「重新抓取」：按鈕上該寫的是按下去會發生什麼事。
-    full = (out / "stock" / "5439.html").read_text("utf-8")
-    assert 'data-grab="5439"' in full
-    assert 'data-full="1"' in full
-    assert "立即更新" in served(out, "stock/5439.html")
 
 
 def test_the_mark_is_the_update_date_when_the_fetch_left_one(tmp_path=None):
@@ -1083,42 +1010,6 @@ def test_the_narrow_layout_is_written_once_and_the_toggle_reuses_it():
     assert "prefers-reduced-motion" in js
 
 
-def test_the_progress_panel_is_a_bar_that_does_not_lie():
-    """進度條會騙人的話，比沒有進度條糟。
-
-    格數照實測的時間比例分給四段（送出 1、排隊 3、執行 7、CDN 3），所以「走到
-    一半大概還有一半」是真的。段只能往前——輪詢會重複看到同一個狀態，GitHub 也
-    偶爾在 in_progress 之後又回報一次 queued，讓條子倒退回去看起來就是壞了。
-    """
-    root = Path(__file__).resolve().parents[1] / "src/twsix/report/templates"
-    js = (root / "site.js").read_text("utf-8")
-    css = (root / "site.css").read_text("utf-8")
-    html = (root / "base.html.j2").read_text("utf-8")
-
-    import re
-
-    cells = [int(n) for n in re.findall(r"cells:\s*(\d+)", js)]
-    assert cells == [1, 3, 7, 3], f"分段權重被改了：{cells}"
-    assert "if(i > phaseAt)" in js, "段可以倒退回去"
-
-    # 三層：在做什麼＋等了多久、跑到哪一段、條子。
-    for sel in ('class="head"', 'class="stage"', 'class="bar"'):
-        assert sel in html, sel
-    # 每一步第幾秒沒有被丟掉，只是收起來；出事的時候自動展開。
-    assert 'class="detail"' in html and 'class="log"' in html
-    assert "d.open = true" in js
-
-    # 日誌記的是狀態改變，不是輪詢次數。去重原本比「時間戳＋文字」，而時間戳
-    # 每兩秒就不一樣——runner 跑一分鐘會印出三十行一模一樣的「runner 開始跑」，
-    # 把面板撐得比它要說的事還長。
-    assert "last.text !== text" in js
-    assert "steps.join" not in js
-
-    assert "@keyframes twsix-pulse" in css
-    # 前庭敏感的人不該為了一條進度條付代價。
-    reduced = css[css.index("prefers-reduced-motion") :][:200]
-    assert "animation:none" in reduced
-
 
 def test_the_chart_windows_match_the_tables_below_them():
     """圖和表看同一段時間，而且那段時間是資料天生的長度。
@@ -1639,9 +1530,7 @@ def test_頁首那兩件事各自貼著它有關的東西(tmp_path=None):
 
     # 「設定抓取權杖」2026-10-04 隨線上抓取一起退役：頁首那一列只剩搜尋框（抓取按鈕
     # 只在本機 twsix serve 才會顯示）。
-    row = page[page.index('class="findrow"'):]
-    row = row[: row.index("</div>")]
-    assert 'id="tokenlink"' not in row and "抓取權杖" not in page
+    assert 'class="findrow"' not in page and "抓取權杖" not in page
 
 
 def test_線上抓取已退役_網站不再要權杖():
@@ -2056,3 +1945,28 @@ def test_排序和自訂順序不會打架(tmp_path=None):
         "按上移的時候沒有先切回自訂順序——在別的排序下按，存起來的順序會和"
         "畫面上看到的對不起來"
     )
+
+
+def test_隱藏的抓取按鈕真的看不見():
+    """`.btn-grab{display:inline-block}` 會蓋過 [hidden]，上線版的「抓取」因此一直露出來。"""
+    css = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.css").read_text("utf-8")
+    assert ".btn-grab[hidden]{display:none}" in css
+
+
+def test_觀察清單不再有文字篩選框(tmp_path=None):
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "watchlist.html").read_text(encoding="utf-8")
+    assert "在觀察清單裡篩選" not in page and 'id="find"' not in page
+
+
+def test_頁首搜尋框與抓取已全站拿掉(tmp_path=None):
+    """2026-10-04：抓取退役後，頁首那一列只剩重複的功能——清單頁有「篩選」，個股頁點導覽列回清單。"""
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    for name in ("index.html", "watchlist.html", "stock/5439.html", "stock/2330.html"):
+        page = served(out, name)
+        assert 'id="find"' not in page and 'id="grabnow"' not in page, name
+        assert "台股評等清單" in page, f"{name} 沒有導覽列"

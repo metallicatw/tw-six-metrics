@@ -24,7 +24,7 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 | `metallicatw/tw-trend-filter` | 一整份自足的 HTML（`report` 分支） | 〔台股趨勢選股〕`trend.html` |
 
 兩份外來報告是**用 iframe 嵌進來**的，一個位元組都沒有被改過。它們每天重新產生，
-改它遲早會壞；而嵌進來讀者還留在這個網站上，頁首、導覽、搜尋框都在。
+改它遲早會壞；而嵌進來讀者還留在這個網站上，頁首、導覽都在。
 
 ### 最重要的一件事
 

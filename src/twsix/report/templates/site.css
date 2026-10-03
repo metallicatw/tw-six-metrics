@@ -448,6 +448,9 @@ button.tokenlink:hover{color:var(--accent-2)}
   background:var(--accent);color:#fff;font:inherit;font-size:14px;font-weight:600;
   cursor:pointer}
 .btn-grab:hover{background:var(--accent-2)}
+/* `display:inline-block` 會蓋過瀏覽器預設的 [hidden]{display:none}，上線版的「抓取」
+   因此一直露出來（2026-10-04 修）。和星號欄 ▲▼ 那段是同一類錯。 */
+.btn-grab[hidden]{display:none}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]) .btn-grab{color:#10161c}}
 ul.how{padding-left:20px;font-size:13.5px;line-height:1.9}
 ul.how code{background:var(--surface-2);padding:1px 6px;border-radius:3px;

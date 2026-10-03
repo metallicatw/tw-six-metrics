@@ -93,58 +93,9 @@
      n＝導覽列，K＝存在 sessionStorage 的鍵；先照原位擺，再看目前這一頁那一顆有沒有被
      切掉、有的話捲最少讓它露出來；點任何一顆（要換頁了）就記下現在的位置。 #}
   <script>(function(){var n=document.currentScript.previousElementSibling,K='twsix-nav-x';try{n.scrollLeft=+sessionStorage.getItem(K)||0}catch(e){}var c=n.querySelector('[aria-current]'),a=n.getBoundingClientRect(),b=c&&c.getBoundingClientRect();if(b&&b.left<a.left)n.scrollLeft-=a.left-b.left+12;if(b&&b.right>a.right)n.scrollLeft+=b.right-a.right+12;n.addEventListener('click',function(){try{sessionStorage.setItem(K,n.scrollLeft)}catch(e){}})})()</script>
-  {# 頁首這一塊（搜尋框 ＋ 抓取）只出現在〔台股評等清單〕與個股頁。
-     它在〔趨勢選股〕〔全球市場監控〕那兩頁完全沒有作用——那裡是別的 repo 產的
-     報告嵌進來的 iframe，輸入代號按抓取跟那一頁講的事情沒有關係；而〔觀察清單〕
-     的篩選框就在下面一行，頁首再放一個輸入框只是兩個框互相搶。
-
-     個股頁保留，是因為那顆按鈕在那裡指的是**這一檔**（見 body 的 data-grab），
-     而那是唯一能把一檔資料換成最新的入口。拿掉它等於那一頁只能讀、不能更新。
-
-     site.js 的搜尋／抓取整個模組第一行就是 `if(!box) return;`——沒有這個表單的
-     頁面直接跳過，不必再加任何判斷。 #}
-  {% if page in ('list', 'stock') %}
-  <form class="find" role="search" action="{{ rel }}index.html" method="get">
-    {# The form's action is the fallback, and it is a real one: with scripting
-       off, submitting takes the reader to 評等清單, which has its own filter
-       and lists every stock.  The combobox below is an enhancement on top of
-       a page that already worked. #}
-    <div class="findrow">
-      <input id="find" name="q" type="search" autocomplete="off" spellcheck="false"
-             placeholder="輸入代號或名稱…　（按 / 跳到這裡）" aria-label="搜尋個股"
-             role="combobox" aria-expanded="false" aria-controls="find-list"
-             aria-autocomplete="list">
-      {# 「抓取／立即更新」與「設定抓取權杖」2026-10-04 退役：個股資料全部由排程
-         自動更新（每日行情與法人、月營收、季報補課、股權、新聞，以及補課排程的
-         輪替重抓——三週內把每一檔的分頁換新一次）。這顆按鈕只在本機
-         `twsix serve` 底下還會出現（site.js 的 live）。 #}
-      <button type="button" id="grabnow" class="btn-grab" hidden>抓取</button>
-    </div>
-    <ul id="find-list" role="listbox" aria-label="搜尋結果" hidden></ul>
-    {# 進度面板要跟搜尋框對齊，所以必須待在 .find 裡面——它是 position:relative
-       的那一層。放在外面會拿 header 當定位基準，掉到畫面上量不到的地方去。
-       只有在 `twsix serve` 底下才會用到：載入時問一次 /api/ping，GitHub Pages
-       上問不到就永遠不顯示。同一份 HTML，兩種行為。 #}
-    <div id="grab" class="grab" hidden>
-      {# 面板蓋在搜尋結果上面。跑完會自己換頁，但失敗或逾時的時候它會一直留著，
-         把搜尋框整個擋住——所以要給一個關得掉的辦法。 #}
-      <button type="button" class="x" id="grab-x" aria-label="關閉進度">✕</button>
-      {# 三層：這在做什麼（含已經等了多久）、現在跑到哪一段、一條分段進度條。
-         條子本身 aria-hidden——它講的事情 .stage 那一行已經用文字講過一次了，
-         螢幕閱讀器不需要聽到十四個方塊。 #}
-      <p class="head"></p>
-      <p class="stage" aria-live="polite"></p>
-      <div class="bar" aria-hidden="true"></div>
-      {# 每一步第幾秒。預設收起來——平常看的人只要知道「還在跑、跑到哪」，
-         但這段等待橫跨三個我們管不到的東西（GitHub 排隊、workflow、Pages CDN），
-         而「總共兩分鐘」沒辦法告訴任何人該修哪一段。出事的時候自動展開。 #}
-      <details class="detail">
-        <summary>詳細</summary>
-        <pre class="log" aria-live="polite"></pre>
-      </details>
-    </div>
-  </form>
-  {% endif %}
+  {# 頁首搜尋框＋「抓取」2026-10-04 全站拿掉：抓取已退役，跳到某一檔改用〔台股評等清單〕
+     表格上方的「篩選」（或在任何頁點代號）。site.js 的搜尋模組第一行就是
+     `if(!box) return;`，沒有這個表單就整段不跑。本機 `twsix serve` 的抓取也跟著停用。 #}
   {# 這一行原本擠了四件事：產生時間、檔數、財報季別、營收月份。後面三件在別的
      地方各自說過一次了——檔數與季別在〔評等清單〕的第一句，落後多久在下面那條
      ⚠ 橫幅——所以留在這裡只是把最上面那一行讀成一串參數。

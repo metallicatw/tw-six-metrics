@@ -14,7 +14,8 @@
   {% endcall %}
 </p>
 <div class="filters">
-  <input id="q" type="search" placeholder="在觀察清單裡篩選" aria-label="篩選">
+  {# 文字篩選框 2026-10-04 拿掉：清單只有幾十檔，一眼看得完；快篩按鈕留著。
+     site.js 裡讀 #q 的地方都先判斷有沒有這個元素。 #}
   {{ quick_filters(rows) }}
 </div>
 <p id="watch-empty" class="note" hidden>
