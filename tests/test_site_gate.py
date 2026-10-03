@@ -76,6 +76,10 @@ def test_every_page_gets_one_script_tag_at_its_depth():
     (tmp_path / "stock" / "2330.html").write_text(PAGE, "utf-8")
     old = dict(os.environ)
     try:
+        # CI 的建站步驟本身就帶著真正的 FIREBASE_CONFIG／帳密（2026-10-03 那次就是因為
+        # 沒清掉它們，「拿掉設定」那一段永遠拿不掉）。測試只用自己給的設定。
+        for key in ("FIREBASE_CONFIG", "SITE_LOGIN_USERS", "SITE_LOGIN_USER", "SITE_LOGIN_PASSWORD"):
+            os.environ.pop(key, None)
         os.environ["SITE_LOGIN_USERS"] = "egg:pw"
         sg.main([str(tmp_path)])
         sg.main([str(tmp_path)])                      # 重跑不疊加
