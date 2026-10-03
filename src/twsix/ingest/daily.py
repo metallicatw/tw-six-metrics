@@ -113,7 +113,10 @@ INSTITUTIONAL_COLUMNS: tuple[str, ...] = (
 #: 外資持股：發行股數、外資持有股數、持股比率（%，例如 69.2 表示 69.2%）。
 QFII_COLUMNS: tuple[str, ...] = ("date", "code", "market", "issued", "held", "pct")
 
-_CODE = re.compile(r"^\d{4}$")
+#: 四碼普通股，加上 6 碼的存託憑證（91xxxx，例如 912000 晨訊科-DR）。
+#: 原本只收四碼，於是評等清單上的 912000 從來沒有每日收盤——個股頁的市價停在
+#: 券商鏡像抓到的那一天。4 碼的 DR（9103、9105…）本來就收得到。
+_CODE = re.compile(r"^(?:\d{4}|91\d{4})$")
 
 
 def _key(name: str) -> str:

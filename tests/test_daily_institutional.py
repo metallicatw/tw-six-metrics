@@ -365,7 +365,8 @@ def test_qfii_parsers_read_the_real_responses():
     assert tsmc["date"] == "2026-10-02" and tsmc["market"] == "上市"
     assert 60 < tsmc["pct"] < 80                   # 69.17（%），不是 0.6917
     assert abs(tsmc["held"] / tsmc["issued"] * 100 - tsmc["pct"]) < 0.05
-    assert all(len(r["code"]) == 4 for r in twse)  # ETF（00400A…）不收
+    assert all(r["code"].isdigit() and len(r["code"]) in (4, 6) for r in twse)  # 00400A… 不收
+    assert any(r["code"] == "912000" for r in twse)          # 6 碼的 DR 要收
     top = next(r for r in tpex if r["code"] == "8455")
     assert top["date"] == "2026-09-03" and top["pct"] == 87.85
 
