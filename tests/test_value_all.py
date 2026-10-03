@@ -282,6 +282,11 @@ def test_接收端用今天的收盤重算得到同一個判斷():
         calc = 0.0 if ret <= 0 else abs(ret / (round(floor, 4) / price - 1))
         checked += 1
         worst = max(worst, abs(calc - stored) / max(stored, 1e-9))
+        gap_up, gap_dn = target - price, price - floor
+        if stored > 0 and gap_up > 0:
+            tol = 1.5 * 5e-5 * (1 / gap_up + 1 / gap_dn) + 1e-6
+            if abs(calc - stored) / stored > tol:
+                over.append(f"{r['stock_id']}（{stored} vs {calc}，容許 {tol:.1e}）")
         for edge in (1.0, 2.0, 3.0):
             if (calc > edge) != (stored > edge):
                 flipped.append(f"{r['stock_id']}（{stored} vs {calc}，門檻 {edge}）")

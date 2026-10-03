@@ -241,11 +241,19 @@ def save_directors(root: Path, market: dict[str, ins.Company]) -> Path:
     """一個月的全市場董監持股。檔名是資料年月。"""
     month = next(iter(market.values())).month  # 2026/07
     path = root / DIRECTORS_DIR / f"{month.replace('/', '')}.csv.gz"
-    rows = [
-        [c.stock_id, c.name, str(c.held), str(c.pledged), str(c.independent_held)]
-        for _, c in sorted(market.items())
-    ]
-    _write(path, _DIRECTOR_FIELDS, rows)
+    # 和同月份既有的那一份合併，同一家以這次的為準。
+    #
+    # `Insiders.fetch()` 一邊交易所掛掉時只回另一邊（上市約 1,080 家）。直接覆寫
+    # 的話，週一抓到的完整 1,975 家會被週四那次抓到一半的結果蓋掉——2026-10-01
+    # 的 202608 就是這樣從 1,975 家掉到 1,084 家。官方同一個月內只會補不會刪，
+    # 所以合併是安全的；換月時檔名不同，不會把上個月的帶過來。
+    merged: dict[str, list[str]] = {}
+    if path.exists():
+        for r in _read(path):
+            merged[r["code"]] = [r[f] for f in _DIRECTOR_FIELDS]
+    for code, c in market.items():
+        merged[code] = [c.stock_id, c.name, str(c.held), str(c.pledged), str(c.independent_held)]
+    _write(path, _DIRECTOR_FIELDS, [merged[k] for k in sorted(merged)])
     return path
 
 

@@ -338,6 +338,11 @@ def check_ownership(data_dir: Path, today: date, report: Report) -> None:
     """
     root = data_dir / "ownership"
     per_period = _period_coverage(root / "stock", root / "holders", "date")
+    # 抓得到原始 15 級的那幾週存在 levels/（＋逐檔 levels_stock/），這時候就**不再**
+    # 另存一份八級到 holders/。只看 holders 的話，心跳會把「改存 15 級」誤判成
+    # 「集保停更」——2026-10-03 就是這樣：levels 有 20260924，卻喊 20260918 落後 15 天。
+    for period, n in _period_coverage(root / "levels_stock", root / "levels", "date").items():
+        per_period[period] = max(per_period.get(period, 0), n)
     if not per_period:
         report.bad("股權分散", f"{root} 底下一期都沒有")
         return

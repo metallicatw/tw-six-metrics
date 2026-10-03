@@ -719,3 +719,16 @@ def test_two_directors_with_different_names_both_count():
     )
     assert only == 141_697_024 + 49_916_266
     assert company.held > only
+
+
+def test_a_half_market_directors_fetch_does_not_shrink_the_month():
+    """一邊交易所掛掉時只回另一邊；那一半不能蓋掉同月份已經存好的整份。"""
+    root = _tmp() / "ownership"
+    full = _insiders()
+    path = own.save_directors(root, full)
+    before = own._read(path)
+    half = dict(list(sorted(full.items()))[: len(full) // 2])
+    own.save_directors(root, half)
+    after = own._read(path)
+    assert len(after) == len(before) == len(full)
+    assert after == before
