@@ -1970,3 +1970,21 @@ def test_頁首搜尋框與抓取已全站拿掉(tmp_path=None):
         page = served(out, name)
         assert 'id="find"' not in page and 'id="grabnow"' not in page, name
         assert "台股評等清單" in page, f"{name} 沒有導覽列"
+
+
+def test_網站圖示與加到主畫面的名稱(tmp_path=None):
+    """站名「股海神偵情報站」與網站圖示：每一頁都連到同一組圖示，根目錄有 favicon.ico。"""
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    for name in ("favicon.ico", "favicon.svg", "apple-touch-icon.png", "icon-192.png",
+                 "icon-512.png", "icon-maskable-512.png", "site.webmanifest"):
+        assert (out / name).is_file() and (out / name).stat().st_size > 0, name
+    manifest = json.loads((out / "site.webmanifest").read_text("utf-8"))
+    assert manifest["name"] == "股海神偵情報站" and manifest["short_name"] == "股海神偵"
+    index = (out / "index.html").read_text("utf-8")
+    assert "<title>股海神偵情報站｜台股評等清單</title>" in index
+    assert 'href="favicon.svg"' in index and 'content="股海神偵情報站"' in index
+    stock = (out / "stock" / "5439.html").read_text("utf-8")
+    assert 'href="../favicon.ico"' in stock and 'href="../site.webmanifest"' in stock
+    assert "台股與全球市場觀測站" not in index + stock

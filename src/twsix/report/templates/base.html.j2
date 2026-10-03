@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ site_title }}{% endblock %}</title>
+{# 網站圖示與「加到主畫面／書籤」的名稱（2026-10-04）。檔案在網站根目錄，見 build.ICON_FILES。 #}
+<link rel="icon" href="{{ rel }}favicon.svg" type="image/svg+xml">
+<link rel="icon" href="{{ rel }}favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="{{ rel }}apple-touch-icon.png">
+<link rel="manifest" href="{{ rel }}site.webmanifest">
+<meta name="application-name" content="{{ site_title }}">
+<meta name="apple-mobile-web-app-title" content="{{ site_title }}">
+<meta name="theme-color" content="#0b1016">
 {# 要讀大型 JSON 的頁面（籌碼雷達、選股功能）在這裡**先開始下載**：放在樣式表之前，
    瀏覽器一讀到就發出請求，不必等樣式表、site.js 與整頁解析完（2026-09-28）。 #}
 {% block head_early %}{% endblock %}

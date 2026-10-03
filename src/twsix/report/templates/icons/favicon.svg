@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f3a47"/><stop offset="1" stop-color="#05121a"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#0b6b60"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe9a3"/><stop offset=".55" stop-color="#f4c043"/><stop offset="1" stop-color="#c98b14"/>
+    </linearGradient>
+    <clipPath id="lens"><circle cx="27" cy="31" r="15.5"/></clipPath>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <circle cx="27" cy="31" r="15.5" fill="#06202a"/>
+  <g clip-path="url(#lens)">
+    <path d="M8 38 Q14 33.5 20 38 T32 38 T44 38 V52 H8 Z" fill="url(#sea)"/>
+    <path d="M8 43 Q14 39 20 43 T32 43 T44 43" fill="none" stroke="#a7f3e8" stroke-width="1.5" opacity=".5"/>
+    <polyline points="15,35 21,29 26,32 34,21" fill="none" stroke="#ff4d5e" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M28.6 20 L36.4 19 L35.4 26.8 Z" fill="#ff4d5e"/>
+  </g>
+  <circle cx="27" cy="31" r="15.5" fill="none" stroke="url(#gold)" stroke-width="5"/>
+  <path d="M38.8 42.8 L52.5 56.5" stroke="url(#gold)" stroke-width="7.5" stroke-linecap="round"/>
+  <!-- 偵探帽：斜戴在鏡框上 -->
+  <g transform="rotate(-14 27 13)">
+    <path d="M12.5 15.5 Q27 10.5 41.5 15.5 Q27 19 12.5 15.5 Z" fill="#e8eef2"/>
+    <path d="M18 14.6 Q18.5 4.5 27 4.2 Q35.5 4.5 36 14.6 Q27 12.6 18 14.6 Z" fill="#e8eef2"/>
+    <path d="M18.3 12.2 Q27 10.2 35.7 12.2 L35.9 14.4 Q27 12.4 18.1 14.4 Z" fill="#ff4d5e"/>
+  </g>
+  <path d="M53 6 L54.4 9.8 L58.2 11.2 L54.4 12.6 L53 16.4 L51.6 12.6 L47.8 11.2 L51.6 9.8 Z" fill="#ffe08a"/>
+</svg>

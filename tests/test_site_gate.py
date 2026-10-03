@@ -141,3 +141,9 @@ def test_every_build_site_caller_passes_the_login_secrets():
 def test_a_page_without_head_is_left_alone_even_with_a_header_tag():
     frag = "<header class='top'>x</header>"
     assert sg.apply(frag, sg.tag("")) == frag
+
+
+def test_登入卡片用網站圖示當站徽():
+    logo = sg.logo_svg()
+    assert logo.startswith("<svg") and 'id="tgf-bg"' in logo and "url(#tgf-gold)" in logo
+    assert sg.TITLE == "股海神偵情報站"

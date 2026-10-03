@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import json
 import shutil
 from collections import Counter, defaultdict
 from collections.abc import Iterable
@@ -412,11 +413,49 @@ def write_build_state(
     )
 
 
-def write_assets(out_dir: Path) -> None:
+#: 網站圖示（2026-10-04）：放大鏡＋偵探帽＋股海浪花＋紅色上漲線，對應站名「股海神偵情報站」。
+#: 原稿是 icons/favicon.svg，其餘是由它轉出的 PNG／ICO。放在網站**根目錄**：瀏覽器
+#: 沒看到 <link rel="icon"> 時會自己去要 /favicon.ico。
+ICON_DIR = TEMPLATE_DIR / "icons"
+ICON_FILES = (
+    "favicon.ico", "favicon.svg", "apple-touch-icon.png",
+    "icon-192.png", "icon-512.png", "icon-maskable-512.png",
+)
+
+
+def web_manifest(site_title: str) -> str:
+    """「加到主畫面」用的名稱與圖示（Android／Chrome；iOS 讀 apple-* 那幾個 meta）。"""
+    short = site_title[:4] if len(site_title) > 6 else site_title
+    return json.dumps(
+        {
+            "name": site_title,
+            "short_name": short,
+            "start_url": "index.html",
+            "scope": "./",
+            "display": "standalone",
+            "background_color": "#0b1016",
+            "theme_color": "#0b1016",
+            "icons": [
+                {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+                {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+                {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png",
+                 "purpose": "maskable"},
+                {"src": "favicon.svg", "sizes": "any", "type": "image/svg+xml"},
+            ],
+        },
+        ensure_ascii=False,
+        indent=1,
+    )
+
+
+def write_assets(out_dir: Path, site_title: str = "股海神偵情報站") -> None:
     target = out_dir / "assets"
     target.mkdir(parents=True, exist_ok=True)
     for name in ASSET_FILES:
         (target / name).write_text(asset_text(name), encoding="utf-8")
+    for name in ICON_FILES:
+        (out_dir / name).write_bytes((ICON_DIR / name).read_bytes())
+    (out_dir / "site.webmanifest").write_text(web_manifest(site_title), encoding="utf-8")
 
 
 def _float(text: str) -> float | None:
@@ -738,7 +777,7 @@ def build_site(
     records: list[dict[str, str]],
     out_dir: Path,
     *,
-    site_title: str = "台股與全球市場觀測站",
+    site_title: str = "股海神偵情報站",
     rules: Any = None,
     repo: str = "",
     top_n: int = 50,
@@ -781,7 +820,7 @@ def build_site(
             r.risk_free = view["risk_free"]
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "stock").mkdir(exist_ok=True)
-    write_assets(out_dir)
+    write_assets(out_dir, site_title)
 
     # 每日全市場行情：一次讀進來，1,742 頁共用。價格是頁面上唯一每天都變的東西，
     # 而它現在來自一天四個請求的排程，不是「有沒有人按過那一檔的更新」。
@@ -1630,7 +1669,7 @@ def build_stock_page(
     page: Any,
     out_file: Path,
     *,
-    site_title: str = "台股與全球市場觀測站",
+    site_title: str = "股海神偵情報站",
     generated_at: str = "",
     rel: str = "",
     repo: str = "",

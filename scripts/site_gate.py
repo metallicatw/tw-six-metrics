@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 
 BEGIN, END = "<!--twsix-gate-->", "<!--/twsix-gate-->"
-TITLE = "台股與全球市場觀測站"
+TITLE = "股海神偵情報站"
 HOME = "https://metallicatw.github.io/tw-six-metrics/index.html"
 #: 系統管理員：永遠在名單上、永遠是管理員（Firestore 規則裡也寫死這一個）。
 OWNER = "eggeggyang2005@gmail.com"
@@ -45,6 +45,8 @@ OWNER = "eggeggyang2005@gmail.com"
 DEFAULT_USERS = ("eggeggyang2005@gmail.com", "nirvanatw@gmail.com", "doris.yang1108@gmail.com")
 FIREBASE_SDK = "11.0.2"
 GATE_JS = Path(__file__).with_name("gate.js")
+#: 登入卡片上的站徽＝網站圖示（2026-10-04）。
+LOGO_SVG = Path(__file__).resolve().parents[1] / "src/twsix/report/templates/icons/favicon.svg"
 _BLOCK = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.S)
 _HEAD = re.compile(r"<head(?:\s[^>]*)?>", re.I)  # 不能吃到 <header>
 
@@ -59,8 +61,9 @@ radial-gradient(900px 500px at 90% 90%,rgba(18,122,143,.45),transparent 60%),#0b
 #tg .tg-card{width:100%;max-width:380px;background:rgba(255,255,255,.06);backdrop-filter:blur(14px);
 -webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.14);border-radius:18px;
 padding:32px 28px 26px;box-shadow:0 24px 60px rgba(0,0,0,.45)}
-#tg .tg-mark{width:52px;height:52px;border-radius:14px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
-background:linear-gradient(135deg,#10b981,#127a8f);box-shadow:0 8px 24px rgba(16,185,129,.35)}
+#tg .tg-mark{width:64px;height:64px;border-radius:15px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
+box-shadow:0 10px 28px rgba(244,192,67,.28),0 0 0 1px rgba(255,255,255,.12)}
+#tg .tg-mark svg{display:block}
 #tg h1{margin:0 0 4px;font-size:20px;font-weight:700;text-align:center;letter-spacing:.04em;color:#fff}
 #tg h1 a{color:inherit;text-decoration:none;border-bottom:1px dashed rgba(255,255,255,.35)}
 #tg h1 a:hover{color:#5eead4;border-bottom-color:#5eead4}
@@ -118,9 +121,22 @@ def parse_users(text: str) -> list[tuple[str, str]]:
     return out
 
 
+def logo_svg() -> str:
+    """站徽的 SVG，內嵌進登入卡片。漸層的 id 加上前綴，免得和頁面上其他 SVG 撞名。"""
+    try:
+        svg = LOGO_SVG.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    svg = re.sub(r"<!--.*?-->", "", svg, flags=re.S)
+    svg = re.sub(r'id="([\w-]+)"', r'id="tgf-\1"', svg)
+    svg = re.sub(r"url\(#([\w-]+)\)", r"url(#tgf-\1)", svg)
+    svg = svg.replace("<svg ", '<svg width="64" height="64" aria-hidden="true" ', 1)
+    return re.sub(r">\s+<", "><", svg).strip()
+
+
 def config_from_env(env: dict[str, str] | None = None) -> dict | None:
     env = dict(os.environ if env is None else env)
-    common = {"title": TITLE, "home": HOME}
+    common = {"title": TITLE, "home": HOME, "logo": logo_svg()}
     fb = (env.get("FIREBASE_CONFIG") or "").strip()
     if fb:
         if "{" in fb and "}" in fb:   # 整段「const firebaseConfig = {...};」貼進來也可以

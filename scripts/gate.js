@@ -53,7 +53,7 @@
   function card(inner) {
     var w = document.getElementById("tg");
     if (!w) { w = document.createElement("div"); w.id = "tg"; document.body.appendChild(w); }
-    w.innerHTML = '<div class="tg-card"><div class="tg-mark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-8"/><path d="M14 8h6v6"/></svg></div>' +
+    w.innerHTML = '<div class="tg-card"><div class="tg-mark">' + (C.logo || '') + '</div>' +
       '<h1></h1>' + inner + '<p class="tg-foot">僅限授權使用者</p></div>';
     var a = w.querySelector("h1").appendChild(document.createElement("a"));
     a.href = C.home; a.textContent = C.title;
