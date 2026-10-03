@@ -59,6 +59,8 @@ jobs:
           case "$IN_DAYS" in ''|*[!0-9]*) IN_DAYS=800 ;; esac
           twsix backfill-prices --days "$IN_DAYS" --pause 5 --minutes 30 || true
           twsix backfill-institutional --days "$IN_DAYS" --minutes 60 || true
+          # 外資持股比重（個股頁〔外資投信〕圖畫近 120 個交易日；已補過的日子會跳過）
+          twsix backfill-qfii --days 125 --minutes 20 || true
       - name: 集保原始 15 級（逐檔）
         env:
           IN_MIN: ${{ inputs.levels_minutes || '200' }}

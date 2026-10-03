@@ -404,6 +404,9 @@ INST_FOOTER = "合計買賣超"
 #: 表上畫幾天。和 `store.daily.INST_DAYS` 同一個數字，理由寫在那裡。
 INST_DAYS = 20
 
+#: 〔外資投信〕兩張圖畫幾個交易日——和籌碼雷達〔個股籌碼多圖〕一樣是 120。
+CHART_DAYS = 120
+
 
 @dataclass
 class Institutional:
@@ -418,6 +421,8 @@ class Institutional:
     latest_share: dict[str, Any] | None = None
     #: 有幾天是每日開放資料補上來的（券商鏡像那張分頁還沒有的）。
     from_daily: int = 0
+    #: 圖上畫了幾個交易日（最多 CHART_DAYS）。
+    chart_span: int = 0
 
 
 def _ad(roc: str) -> str:
@@ -445,23 +450,46 @@ def _carry_holdings(days: list[dict[str, Any]], official: dict[str, Any]) -> Non
     * 三大法人合計＝三者相加；三大法人持股比重＝合計 ÷ 發行張數（交易所外資持股
       統計裡的發行股數）。分頁上 2330 於 115/09/24：19,265,815 ÷ 25,932,370＝74.29%，
       和分頁寫的一樣。
-    * 錨點之前、或某一天買賣超是空的，就停在那裡，不往後硬算。
+    * 錨點之前的日子反過來推：前一天＝當天持股－當天買賣超（圖要畫 120 天）。
+    * 某一天買賣超是空的，就停在那裡，不硬算過去。
     """
+    order = sorted(days, key=lambda x: x["date"])
+    keys = ("外資", "投信", "自營商")
+    # 往後：前一天＋當天買賣超。
     prev: dict[str, Any] = {}
-    issued = None
-    for d in sorted(days, key=lambda x: x["date"]):
+    for d in order:
         h, net = d["holding"], d["net"]
-        for k in ("外資", "投信", "自營商"):
+        for k in keys:
             if h[k] is None and prev.get(k) is not None and net[k] is not None:
                 h[k] = prev[k] + net[k]
-        parts = [h[k] for k in ("外資", "投信", "自營商")]
+        prev = {k: h[k] for k in keys}
+    # 往前（錨點之前的日子，圖要畫 120 天）：前一天＝當天持股－當天買賣超。
+    nxt: dict[str, Any] | None = None
+    for d in reversed(order):
+        h = d["holding"]
+        if nxt is not None:
+            for k in keys:
+                if h[k] is None and nxt["h"][k] is not None and nxt["n"][k] is not None:
+                    h[k] = nxt["h"][k] - nxt["n"][k]
+        nxt = {"h": h, "n": d["net"]}
+    # 發行張數：當天沒公告就用最近一次（先往後補、再往前補）。
+    issued: list[Any] = []
+    last = None
+    for d in order:
+        e = official.get(d["date"])
+        last = (getattr(e, "issued_lots", None) if e is not None else None) or last
+        issued.append(last)
+    last = None
+    for i in range(len(order) - 1, -1, -1):
+        last = issued[i] or last
+        issued[i] = issued[i] or last
+    for d, iss in zip(order, issued, strict=True):
+        h = d["holding"]
+        parts = [h[k] for k in keys]
         if h["合計"] is None and all(v is not None for v in parts):
             h["合計"] = sum(parts)
-        e = official.get(d["date"])
-        issued = (getattr(e, "issued_lots", None) if e is not None else None) or issued  # 沒公告的那天沿用前一天
-        if d["share"]["三大法人"] is None and h["合計"] is not None and issued:
-            d["share"]["三大法人"] = h["合計"] / issued
-        prev = {k: h[k] for k in ("外資", "投信", "自營商")}
+        if d["share"]["三大法人"] is None and h["合計"] is not None and iss:
+            d["share"]["三大法人"] = h["合計"] / iss
 
 
 def institutional(
@@ -565,6 +593,7 @@ def institutional(
 
     # 新的排前面，畫面上只放最近 INST_DAYS 天。`115/09/02` 照字串排就是照日期排。
     days.sort(key=lambda d: d["date"], reverse=True)
+    chart_days = days[:CHART_DAYS]
     days = days[:INST_DAYS]
     added = sum(1 for d in days if d["daily"])
     if added:
@@ -574,43 +603,47 @@ def institutional(
             for k in INST_NET
         }
 
-    labels = [d["date"][3:] for d in days]  # 「08/28」 — the year is on the page
+    # 圖畫近 120 個交易日（和籌碼雷達的〔個股籌碼多圖〕同一段，2026-10-04），表格與
+    # 卡片仍是近 20 日。20 天只看得到最近一個月，看不出法人是在布局還是在倒貨。
+    labels = [d["date"][3:] for d in chart_days]  # 「08/28」 — the year is on the page
+    every = max(3, len(chart_days) // 6)
 
-    # 每一天的收盤，對齊上面那 20 列。
+    # 每一天的收盤，對齊圖上的每一天。
     #
     # 這兩張圖問的是「外資在買還是在賣」，而讀者接著一定會問「那時候股價在哪」。
     # 那個答案原本要跳到另一個分頁、再自己把日期對起來——而它就是一條線的事。
     #
     # 對不上的日期留 None（例如那一天的快照還沒抓到），圖上就是斷的。
     by_date = {q.date: q.close for q in (prices or [])}
-    price_line = [by_date.get(_ad(d["date"])) for d in days]
+    price_line = [by_date.get(_ad(d["date"])) for d in chart_days]
     if not any(v is not None for v in price_line):
         price_line = None
 
     figures = {
         "foreign_net": charts.bars(
             labels,
-            [d["net"]["外資"] for d in days],
+            [d["net"]["外資"] for d in chart_days],
             title="外資買賣超",
             unit=" 張",
             digits=0,
-            label_every=3,
+            label_every=every,
             price=price_line,
         ),
         "foreign_share": charts.line(
             labels,
             [
                 None if d["share"]["外資"] is None else d["share"]["外資"] * 100
-                for d in days
+                for d in chart_days
             ],
             title="外資持股比重",
             unit="%",
             digits=2,
-            label_every=3,
+            label_every=every,
             price=price_line,
         ),
     }
     return Institutional(
+        chart_span=len(chart_days),
         days=days,
         totals=totals,
         latest=days[0],

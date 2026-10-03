@@ -446,3 +446,63 @@ def test_official_foreign_share_never_overrides_the_sheet():
     assert merged is not None
     again = next(d for d in merged.days if d["date"] == day["date"])
     assert again["share"]["外資"] == day["share"]["外資"]
+
+
+def _older_days(grid, n: int) -> list[InstDay]:
+    """分頁最舊那天之前的 n 個平日（假資料，只有買賣超）。"""
+    from datetime import date, timedelta
+
+    base = institutional(grid)
+    y, m, d = base.days[-1]["date"].split("/")
+    day = date(int(y) + 1911, int(m), int(d))
+    out = []
+    while len(out) < n:
+        day -= timedelta(days=1)
+        if day.weekday() < 5:
+            out.append(InstDay(day.isoformat(), 10.0, 2.0, -1.0, 11.0))
+    return out
+
+
+def test_the_charts_cover_120_days_while_the_table_stays_at_20():
+    """圖和籌碼雷達 ① 對齊畫近 120 個交易日；表格與卡片仍是近 20 日。"""
+    from twsix.report.sections import CHART_DAYS
+
+    grid = sheet_store.read_grid(DATA / "sheets/5439", "三大法人")
+    merged = institutional(grid, _older_days(grid, 150))
+    assert merged is not None
+    assert merged.chart_span == CHART_DAYS == 120
+    assert len(merged.days) == INST_DAYS
+    assert merged.from_daily == 0, "只補了更舊的日子，表格那 20 天沒變"
+    assert merged.totals == institutional(grid).totals
+
+
+def test_holdings_before_the_anchor_are_walked_back_from_the_net():
+    """錨點之前：前一天的持股＝當天持股－當天買賣超。"""
+    from twsix.report.sections import _carry_holdings
+
+    days = [
+        {"date": f"115/09/0{i}", "net": {"外資": None, "投信": n, "自營商": 0.0, "合計": None},
+         "holding": dict.fromkeys(("外資", "投信", "自營商", "合計")),
+         "share": {"外資": None, "三大法人": None}}
+        for i, n in ((1, 5.0), (2, 7.0), (3, -4.0))
+    ]
+    days[2]["holding"]["投信"] = 100.0          # 錨點：09/03 收盤 100 張
+    _carry_holdings(days, {})
+    assert [d["holding"]["投信"] for d in days] == [97.0, 104.0, 100.0]
+    # 自營商沒有錨點，就一直是空的——不從零開始編。
+    assert all(d["holding"]["自營商"] is None for d in days)
+
+
+def test_a_missing_net_stops_the_backward_walk():
+    from twsix.report.sections import _carry_holdings
+
+    days = [
+        {"date": f"115/09/0{i}", "net": {"外資": None, "投信": n, "自營商": None, "合計": None},
+         "holding": dict.fromkeys(("外資", "投信", "自營商", "合計")),
+         "share": {"外資": None, "三大法人": None}}
+        for i, n in ((1, 5.0), (2, None), (3, -4.0))
+    ]
+    days[2]["holding"]["投信"] = 100.0
+    _carry_holdings(days, {})
+    assert days[1]["holding"]["投信"] == 104.0
+    assert days[0]["holding"]["投信"] is None   # 09/02 的買賣超是空的，推不回 09/01
