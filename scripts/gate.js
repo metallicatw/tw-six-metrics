@@ -182,9 +182,26 @@
       ref.get().then(function (snap) {
         var r = snap.exists ? snap.data() : null, m = meta();
         if (!m || m.uid !== user.uid) {
-          if (m && m.uid && m.uid !== user.uid) clearLocal();  // 這台瀏覽器上一位是別的帳號：不要把他的資料帶過來
-          if (r && r.kv) { replaceLocal(r.kv); setMeta({ uid: user.uid, rev: r.rev || 0 }); reloadOnce(r.rev || 0); }
-          else push();                                        // 這個帳號第一次登入：把這台瀏覽器原有的清單搬上去
+          var other = m && m.uid && m.uid !== user.uid;
+          if (other) clearLocal();                             // 這台瀏覽器上一位是別的帳號：不要把他的資料帶過來
+          if (!r || !r.kv) { push(); return; }                 // 這個帳號第一次登入：把這台瀏覽器原有的清單搬上去
+          // 這台裝置第一次登入、雲端已經有資料（例如先在手機登入過）：合併，不是覆蓋。
+          // 觀察清單取聯集（雲端的順序在前），其他設定以雲端為準、雲端沒有的保留本機的。
+          var mine = other ? {} : localKv(), kv = {}, k;
+          for (k in mine) kv[k] = mine[k];
+          for (k in r.kv) kv[k] = r.kv[k];
+          if (mine["twsix.watchlist"] && r.kv["twsix.watchlist"]) {
+            try {
+              var a = JSON.parse(r.kv["twsix.watchlist"]) || [], b = JSON.parse(mine["twsix.watchlist"]) || [];
+              b.forEach(function (c) { if (a.indexOf(c) < 0) a.push(c); });
+              kv["twsix.watchlist"] = JSON.stringify(a);
+            } catch (e) {}
+          }
+          replaceLocal(kv);
+          var same = JSON.stringify(kv) === JSON.stringify(r.kv);
+          setMeta({ uid: user.uid, rev: r.rev || 0, seq: same ? 0 : 1, synced: 0 });
+          if (!same) push();                                   // 合併出新東西：傳回雲端
+          reloadOnce(r.rev || 0);
           return;
         }
         // 本機有還沒上傳的改動：以本機為準（那是剛剛才做的事），蓋回雲端。
