@@ -7,8 +7,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import yaml
-
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("site_gate", ROOT / "scripts" / "site_gate.py")
 sg = importlib.util.module_from_spec(_spec)
@@ -40,18 +38,43 @@ def test_same_credentials_give_the_same_hash_across_builds():
     assert sg.credentials("egg", "pw") != sg.credentials("egg2", "pw")
 
 
+def _build_site_steps(text: str) -> list[str]:
+    """每一個 `uses: ./.github/actions/build-site` 那一步的整段文字。
+
+    不用 yaml：ci 的第一步是「零相依測試」，那台機器上沒有 PyYAML（2026-10-03
+    這條測試就是因為 `import yaml` 在那一步紅掉）。一步從 `- ` 開頭到下一個同縮排
+    的 `- ` 為止。
+    """
+    lines = text.splitlines()
+    out = []
+    for i, line in enumerate(lines):
+        if "uses: ./.github/actions/build-site" not in line:
+            continue
+        start = i
+        while start > 0 and not lines[start].lstrip().startswith("- "):
+            start -= 1
+        indent = len(lines[start]) - len(lines[start].lstrip())
+        end = i + 1
+        while end < len(lines):
+            cur = lines[end]
+            if cur.strip() and len(cur) - len(cur.lstrip()) <= indent:
+                break
+            end += 1
+        out.append("\n".join(lines[start:end]))
+    return out
+
+
 def test_every_build_site_caller_passes_the_login_secrets():
     """action 讀不到 secrets。漏傳的那一條一建站，就會把整站的門拿掉。"""
     missing = []
+    seen = 0
     for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
-        doc = yaml.safe_load(wf.read_text("utf-8"))
-        for job in (doc.get("jobs") or {}).values():
-            for step in job.get("steps") or []:
-                if "actions/build-site" in str(step.get("uses", "")):
-                    env = step.get("env") or {}
-                    for key in ("SITE_LOGIN_USER", "SITE_LOGIN_PASSWORD"):
-                        if f"secrets.{key}" not in str(env.get(key, "")):
-                            missing.append(f"{wf.name}: {key}")
+        for step in _build_site_steps(wf.read_text("utf-8")):
+            seen += 1
+            for key in ("SITE_LOGIN_USER", "SITE_LOGIN_PASSWORD"):
+                if f"{key}: ${{{{ secrets.{key} }}}}" not in step:
+                    missing.append(f"{wf.name}: {key}")
+    assert seen >= 7, f"只找到 {seen} 個建站步驟，解析可能壞了"
     assert not missing, "這些建站步驟沒有把登入帳密傳進去：\n  " + "\n  ".join(missing)
 
 
