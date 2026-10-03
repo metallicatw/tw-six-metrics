@@ -114,13 +114,11 @@
              placeholder="輸入代號或名稱…　（按 / 跳到這裡）" aria-label="搜尋個股"
              role="combobox" aria-expanded="false" aria-controls="find-list"
              aria-autocomplete="list">
-      {# 只有在「這一檔還沒有完整報告，而且抓得到」的時候才出現。沒東西可抓時
-         留一顆按不動的按鈕，比沒有按鈕更難懂。 #}
+      {# 「抓取／立即更新」與「設定抓取權杖」2026-10-04 退役：個股資料全部由排程
+         自動更新（每日行情與法人、月營收、季報補課、股權、新聞，以及補課排程的
+         輪替重抓——三週內把每一檔的分頁換新一次）。這顆按鈕只在本機
+         `twsix serve` 底下還會出現（site.js 的 live）。 #}
       <button type="button" id="grabnow" class="btn-grab" hidden>抓取</button>
-      {# 權杖的設定就在「抓取」旁邊，因為那是它唯一會被想到的時刻——按下抓取、
-         發現要權杖。它原本在頁首另一行，離那顆按鈕三十幾個像素遠，而且那一行
-         平常是空的。 #}
-      <button type="button" id="tokenlink" class="linkish tokenlink" hidden>設定抓取權杖</button>
     </div>
     <ul id="find-list" role="listbox" aria-label="搜尋結果" hidden></ul>
     {# 進度面板要跟搜尋框對齊，所以必須待在 .find 裡面——它是 position:relative

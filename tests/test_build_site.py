@@ -1637,10 +1637,18 @@ def test_頁首那兩件事各自貼著它有關的東西(tmp_path=None):
     h1 = page[page.index("<h1"):page.index("</h1>")]
     assert 'class="built"' in h1, "建站時間沒有跟在站名那一行"
 
+    # 「設定抓取權杖」2026-10-04 隨線上抓取一起退役：頁首那一列只剩搜尋框（抓取按鈕
+    # 只在本機 twsix serve 才會顯示）。
     row = page[page.index('class="findrow"'):]
     row = row[: row.index("</div>")]
-    assert 'id="grabnow"' in row and 'id="tokenlink"' in row, "權杖沒有跟抓取按鈕同一列"
-    assert row.index("grabnow") < row.index("tokenlink"), "權杖要在抓取後面"
+    assert 'id="tokenlink"' not in row and "抓取權杖" not in page
+
+
+def test_線上抓取已退役_網站不再要權杖():
+    """所有資料都由排程更新：網頁上不該再出現「立即更新」的線上路徑，也要清掉舊權杖。"""
+    js = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.js").read_text("utf-8")
+    assert "var repo = '';" in js
+    assert "localStorage.removeItem('twsix.token')" in js
 
 
 def test_評等清單的燈泡接在那句話後面(tmp_path=None):

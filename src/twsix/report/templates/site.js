@@ -119,7 +119,12 @@
    * 「立即抓取」放進搜尋結果，問不到就當作沒有這回事。
    */
   var live=false, grab=document.getElementById('grab');
-  var repo = TWSIX.repo;
+  /* 線上抓取（GitHub Actions＋瀏覽器裡的權杖）2026-10-04 退役：所有資料都由排程
+     自動更新，網頁上不再需要「立即更新」，也不再需要在瀏覽器存 GitHub 權杖。
+     repo 留空，下面每一條線上抓取的路就都不會出現；本機 `twsix serve`（live）照舊。
+     以前存過的權杖順手清掉——它已經沒有用途，留在瀏覽器裡只是風險。 */
+  var repo = '';
+  try{ localStorage.removeItem('twsix.token'); }catch(e){}
   fetch(base+'api/ping').then(function(r){return r.ok?r.json():null;})
     .then(function(j){ live = !!(j && j.service==='twsix'); refreshOffer(); })
     .catch(function(){ live=false; refreshOffer(); });

@@ -2033,6 +2033,33 @@ def sheetless_codes(root: Path, *, universe: set[str] | None = None) -> list[str
     )
 
 
+def rotation_codes(
+    root: Path, *, older_than_days: int, universe: set[str] | None = None,
+    today: date | None = None,
+) -> list[str]:
+    """輪替重抓：分頁抓取日早於 *older_than_days* 天前的股票，最舊的在前。
+
+    「立即更新」退役之後（2026-10-04），分頁上只有券商才有、而且不跟著財報季換的
+    那幾張——〔股利〕（董事會一決議就變）、〔基本資料〕、〔個股新聞〕的長歷史——
+    靠這條保持新鮮：每一班補課在處理完真正過期的之後，用剩下的名額照抓取日由舊到新
+    輪一圈。一天 100 檔，全市場大約三週輪一次。
+    """
+    today = today or datetime.now(_TAIPEI).date()
+    cutoff = (today - timedelta(days=older_than_days)).isoformat()
+    out: list[tuple[str, str]] = []
+    sheets = root / "sheets"
+    if not sheets.is_dir():
+        return []
+    for folder in sheets.iterdir():
+        if not folder.is_dir() or (universe is not None and folder.name not in universe):
+            continue
+        stamp = folder / "_fetched.txt"
+        when = stamp.read_text("utf-8").strip()[:10] if stamp.exists() else ""
+        if when < cutoff:
+            out.append((when, folder.name))
+    return [code for _, code in sorted(out)]
+
+
 def cmd_refresh(args: argparse.Namespace) -> int:
     """一批一批把清單上過期的評等重算，**並且把原始分頁留下來**。
 
@@ -2073,6 +2100,14 @@ def cmd_refresh(args: argparse.Namespace) -> int:
         ]
         if market is not None:
             queue += [(code, "新上市") for code in new_listings(root, market)]
+        rotate = getattr(args, "rotate_days", 0) or 0
+        if rotate:
+            seen = {code for code, _ in queue}
+            queue += [
+                (code, "輪替")
+                for code in rotation_codes(root, older_than_days=rotate, universe=universe)
+                if code not in seen
+            ]
     known = {r.get("stock_id", "") for r in Store(root).read("ratings")}
     total = len(queue)
     # `--pending`：只回答「有沒有事做」，不連網。refresh.yml 用它決定這一班要不要
@@ -2145,7 +2180,7 @@ def cmd_refresh(args: argparse.Namespace) -> int:
         # 期別在 snapshots[0]（期別 1 ＝ 最新的那一期），不在 rating 上。
         snaps = getattr(rating, "snapshots", None) or []
         now_q = str(getattr(snaps[0], "fiscal_quarter", "") if snaps else "")
-        if was and was != "新上市" and now_q and now_q <= was:
+        if was and was not in ("新上市", "輪替") and now_q and now_q <= was:
             print(f"  （補完還是 {now_q}，上游就到這裡了——先跳過它，"
                   "等全市場換季再問）")
             mark_refresh_stuck(root, code, was)
@@ -4142,6 +4177,10 @@ def build_parser() -> argparse.ArgumentParser:
     rf.add_argument(
         "--any-code", dest="any_code", action="store_true",
         help="不先跟官方名單交集（預設會跳過已下市的代號）",
+    )
+    rf.add_argument(
+        "--rotate-days", dest="rotate_days", type=int, default=0,
+        help="佇列之外，再把分頁超過幾天沒抓的股票排進來輪替重抓（0＝不輪替）",
     )
     rf.add_argument(
         "--pending", action="store_true",

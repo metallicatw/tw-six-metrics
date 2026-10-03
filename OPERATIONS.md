@@ -47,7 +47,7 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 | 時間 | 排程 | repo | 做什麼 | 發布網站？ |
 | --- | --- | --- | --- | --- |
 | 00:53（每天） | 籌碼雷達回補 | tw-six-metrics | `twsix consolidate-data`（一次性）＋`backfill-prices`／`backfill-institutional`（成交金額、法人含自營商與買賣明細，補回 2023-08）＋`backfill-levels`（集保 15 級）；補齊後幾秒就結束 | ❌ 下一次建站用上 |
-| 02:23（旺季） | 評等補課 | tw-six-metrics | `twsix refresh --limit 100`；佇列空就不跑 | ✅ 有變動才 |
+| 02:23（旺季） | 評等補課 | tw-six-metrics | `twsix refresh --limit 100 --rotate-days 21`：先補過期的，剩下的名額輪替重抓分頁超過 21 天的（股利、基本資料、新聞歷史靠這條保持新鮮） | ✅ 有變動才 |
 | **06:23**（二–六） | 每日更新報告 | **market-monitor** | 美／日／台股與總經，產生報告 | ✅ 自己的 Pages |
 | **07:03**（二–六） | 每日更新報告（保險） | **market-monitor** | 06:23 那班今天已發布就直接結束 | ✅ 自己的 Pages |
 | **07:37**（二–六） | pages | tw-six-metrics | 全站重建，帶進市場監控 | ✅ |
@@ -74,6 +74,9 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 tw-trend-filter、tw-six-metrics 三個可以**同時按**，這裡會看上游的 Actions 還有沒有
 在跑、Pages 上是不是今天的，等它們發布完才往下（最多 50 分鐘），手動觸發一定建站。
 只按這一個、不想等的話把 `wait_upstream` 取消勾選。
+
+**「立即更新」已退役（2026-10-04）**：網頁上不再有抓取按鈕與權杖設定，個股資料全部由
+上面的排程更新。要強制重抓某一檔時，到 Actions 手動跑〔加一檔個股〕（stock.yml）。
 
 手動才跑的：〔回補歷史股價〕（history.yml，只需要一次）、〔加一檔個股〕、
 〔存一份真實回應〕、兩個衛星 repo 的手動按鈕。

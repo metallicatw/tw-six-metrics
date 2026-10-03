@@ -101,7 +101,9 @@ jobs:
       - name: 有沒有要補的
         id: gate
         run: |
-          n="$(twsix refresh --pending | tail -1)"
+          # --rotate-days：「立即更新」退役（2026-10-04）後，分頁超過 21 天沒抓的也算
+          # 有事做——股利、基本資料這幾張只有券商有，靠輪替保持新鮮。
+          n="$(twsix refresh --pending --rotate-days 21 | tail -1)"
           legacy="$(ls data/sheets/*/_stuck.json 2>/dev/null | wc -l)"
           echo "待補 $n 檔；舊名字的記號 $legacy 個"
           if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "$n" = "0" ] && [ "$legacy" = "0" ]; then
@@ -142,7 +144,7 @@ jobs:
               echo "::error::「這一批補幾檔」只能是正整數，收到的是：$IN_LIMIT"
               exit 1 ;;
           esac
-          twsix refresh --limit "$IN_LIMIT"
+          twsix refresh --limit "$IN_LIMIT" --rotate-days 21
 
       - name: Commit
         if: steps.gate.outputs.skip != 'yes'
