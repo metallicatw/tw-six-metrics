@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// tw-six-metrics 網站登入（scripts/site_gate.py 的 Google 帳號模式）的 Firestore 規則。
+// 貼到 Firebase 主控台 → Firestore Database → 規則 → 發布。
+//
+//   config/allowlist   授權名單 {emails: [...], admins: [...]}
+//                      名單上的人讀得到；只有管理員改得到。系統管理員寫死在這裡，
+//                      永遠是管理員，也不能被移出 admins。
+//   users/{uid}        每個人自己的觀察清單與設定 {email, kv, rev, updated}
+//                      只有本人、而且仍在名單上才讀寫得到。
+//   其他一律拒絕。
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function email() { return request.auth.token.email.lower(); }
+    function owner() { return signedIn() && email() == 'eggeggyang2005@gmail.com'; }
+    function listPath() { return /databases/$(database)/documents/config/allowlist; }
+    function hasList() { return exists(listPath()); }
+    function admin() {
+      return owner() || (signedIn() && hasList() && email() in get(listPath()).data.admins);
+    }
+    function allowed() {
+      return admin() || (signedIn() && hasList() && email() in get(listPath()).data.emails);
+    }
+
+    match /config/allowlist {
+      allow read: if allowed();
+      allow write: if admin()
+        && request.resource.data.keys().hasOnly(['emails', 'admins'])
+        && request.resource.data.emails is list
+        && request.resource.data.admins is list
+        && request.resource.data.emails.size() <= 200
+        && 'eggeggyang2005@gmail.com' in request.resource.data.admins;
+    }
+
+    match /users/{uid} {
+      allow read: if allowed() && request.auth.uid == uid;
+      allow write: if allowed() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email', 'kv', 'rev', 'updated'])
+        && request.resource.data.kv is map;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

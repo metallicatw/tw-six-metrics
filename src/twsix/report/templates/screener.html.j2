@@ -633,6 +633,34 @@ function runHigh(){
 var RUN = {fin: runFin, trend: runTrend, strong: runStrong, high: runHigh}, done = {};
 function preset(tab, clear){ if (tab === "fin") presetFin(clear); else presetFields(tab, clear); }
 
+// ── 記住條件（2026-10-03）───────────────────────────────────────────────
+// 每次掃描、按預設或清除，把四個分頁的條件記在瀏覽器（twsix.form.screener）；
+// 下次打開就是上次那一組，而不是預設值。有雲端登入時會跟著帳號同步。
+var FORM_KEY = "twsix.form.screener";
+function formSave(){
+  var st = {v: {}, off: []};
+  ["fin", "trend", "strong", "high"].forEach(function(t){
+    $("sc-" + t).querySelectorAll("input[id]:not([type=checkbox]), select[id]").forEach(function(e){ st.v[e.id] = e.value; });
+  });
+  $("f-indpanel").querySelectorAll("input[type=checkbox]").forEach(function(c){ if (!c.checked) st.off.push(c.value); });
+  try { localStorage.setItem(FORM_KEY, JSON.stringify(st)); } catch (e) {}
+}
+function formLoad(){
+  var st = null;
+  try { st = JSON.parse(localStorage.getItem(FORM_KEY) || "null"); } catch (e) {}
+  if (!st || !st.v) return;
+  Object.keys(st.v).forEach(function(id){
+    var e = $(id); if (!e) return;
+    if (e.tagName === "SELECT" && ![].some.call(e.options, function(o){ return o.value === st.v[id]; })) return;  // 那一季已經不在選項裡
+    e.value = st.v[id];
+  });
+  var off = new Set(st.off || []), boxes = $("f-indpanel").querySelectorAll("input[type=checkbox]"), n = 0;
+  boxes.forEach(function(c){ c.checked = !off.has(c.value); if (c.checked) n++; });
+  if (n !== boxes.length){ INDS = new Set(); boxes.forEach(function(c){ if (c.checked) INDS.add(c.value); }); }
+  indLabel();
+}
+Object.keys(RUN).forEach(function(t){ var f = RUN[t]; RUN[t] = function(){ var r = f.apply(this, arguments); formSave(); return r; }; });
+
 // ── 分頁 ───────────────────────────────────────────────────────────────
 var bar = $("sc-tabs"), tabs = [].slice.call(bar.querySelectorAll(".sc-tab"));
 function open(name, push){
@@ -650,10 +678,11 @@ grab("data.json").then(function(doc){
   $("sc-msg").textContent = "資料日 " + D.asof + "；基準季 " + D.base_q + "（" + D.qcount[D.base_q] + " 家）、基準月 " + D.base_m + "（" + D.mcount[D.base_m] + " 家）；共 " + D.rows.length + " 檔。篩選在你的瀏覽器裡進行。不構成任何投資建議。";
   buildFin();
   ["fin", "trend", "strong", "high"].forEach(function(t){ preset(t, false); });
+  formLoad();
   document.querySelectorAll("[data-run]").forEach(function(b){ b.onclick = function(){ RUN[b.getAttribute("data-run")](); }; });
   document.querySelectorAll("[data-preset]").forEach(function(b){ b.onclick = function(){ var t = b.getAttribute("data-preset"); preset(t, false); RUN[t](); }; });
-  document.querySelectorAll("[data-clear]").forEach(function(b){ b.onclick = function(){ preset(b.getAttribute("data-clear"), true); }; });
-  $("s-adv").onclick = function(){ presetFields("strong2", false); runStrong(); };
+  document.querySelectorAll("[data-clear]").forEach(function(b){ b.onclick = function(){ preset(b.getAttribute("data-clear"), true); formSave(); }; });
+  $("s-adv").onclick = function(){ presetFields("strong2", false); RUN.strong(); };
   document.querySelectorAll(".sc input").forEach(function(i){ i.addEventListener("keydown", function(e){
     if (e.key === "Enter"){ var p = i.closest(".sc-panel"); if (p) RUN[p.id.slice(3)](); } }); });
   var want = (location.hash || "").slice(1);

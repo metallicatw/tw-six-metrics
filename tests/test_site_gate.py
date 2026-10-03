@@ -17,25 +17,80 @@ _spec.loader.exec_module(sg)
 PAGE = "<!doctype html><html><head><meta charset='utf-8'><title>台股｜x</title></head><body>hi</body></html>"
 
 
-def test_the_page_carries_only_a_hash_never_the_password():
-    out = sg.apply(PAGE, sg.block("egg", "s3cret-pw"))
-    assert "s3cret-pw" not in out
+def test_password_mode_ships_only_hashes_never_passwords():
+    cfg = sg.config_from_env({"SITE_LOGIN_USERS": "egg:s3cret-pw\nDoris:pa:ss"})
+    assert cfg is not None and cfg["mode"] == "password"
+    js = sg.gate_js(cfg)
+    assert "s3cret-pw" not in js and "pa:ss" not in js
     salt, digest = sg.credentials("egg", "s3cret-pw")
     assert digest == hashlib.sha256(f"{salt}egg\ns3cret-pw".encode()).hexdigest()
-    assert digest in out and out.index(sg.BEGIN) > out.index("<head>")
+    assert digest in js
+    assert sg.credentials("Doris", "pa:ss") == sg.credentials("doris", "pa:ss")   # 帳號不分大小寫
+    assert [u["u"] for u in cfg["users"]] == ["egg", "doris"]
 
 
-def test_reapplying_replaces_instead_of_stacking():
-    once = sg.apply(PAGE, sg.block("egg", "a"))
-    twice = sg.apply(once, sg.block("egg", "b"))
-    assert twice.count(sg.BEGIN) == 1
-    assert sg.credentials("egg", "b")[1] in twice and sg.credentials("egg", "a")[1] not in twice
-    assert sg.apply(twice, None) == PAGE           # 沒設帳密：整段拿掉，頁面回原樣
+def test_legacy_single_user_secrets_still_work():
+    cfg = sg.config_from_env({"SITE_LOGIN_USER": "egg", "SITE_LOGIN_PASSWORD": "pw"})
+    assert cfg and cfg["mode"] == "password" and len(cfg["users"]) == 1
 
 
-def test_same_credentials_give_the_same_hash_across_builds():
-    assert sg.credentials("egg", "pw") == sg.credentials("egg", "pw")
-    assert sg.credentials("egg", "pw") != sg.credentials("egg2", "pw")
+def test_firebase_config_wins_and_accepts_the_console_snippet():
+    snippet = """const firebaseConfig = {
+      apiKey: "AIzaFake",
+      authDomain: "tw-six.firebaseapp.com",
+      projectId: "tw-six",
+      storageBucket: "tw-six.appspot.com",
+      messagingSenderId: "123",
+      appId: "1:123:web:abc"
+    };"""
+    cfg = sg.config_from_env({"FIREBASE_CONFIG": snippet, "SITE_LOGIN_USERS": "a:b"})
+    assert cfg and cfg["mode"] == "firebase"
+    assert cfg["fb"]["projectId"] == "tw-six" and cfg["owner"] == sg.OWNER
+    assert sg.OWNER in cfg["defaults"]
+
+
+def test_nothing_configured_means_no_gate():
+    assert sg.config_from_env({}) is None
+
+
+def test_the_token_and_the_view_mode_are_never_synced():
+    """GitHub 權杖只能留在這台瀏覽器（專案的安全規則），手機／電腦版是裝置的事。"""
+    js = sg.GATE_JS.read_text("utf-8")
+    assert 'k !== "twsix.token"' in js and 'k !== "twsix.viewmode"' in js
+
+
+def test_rules_pin_the_owner_and_scope_user_data_to_its_owner():
+    rules = (ROOT / "reference" / "firestore.rules").read_text("utf-8")
+    assert sg.OWNER in rules
+    assert "request.auth.uid == uid" in rules
+    assert "allow read, write: if false;" in rules
+
+
+def test_every_page_gets_one_script_tag_at_its_depth():
+    import os
+    import tempfile
+
+    tmp_path = Path(tempfile.mkdtemp(prefix="twsix-gate-"))
+    (tmp_path / "stock").mkdir()
+    (tmp_path / "index.html").write_text(PAGE, "utf-8")
+    (tmp_path / "stock" / "2330.html").write_text(PAGE, "utf-8")
+    old = dict(os.environ)
+    try:
+        os.environ["SITE_LOGIN_USERS"] = "egg:pw"
+        sg.main([str(tmp_path)])
+        sg.main([str(tmp_path)])                      # 重跑不疊加
+        top = (tmp_path / "index.html").read_text("utf-8")
+        deep = (tmp_path / "stock" / "2330.html").read_text("utf-8")
+        assert top.count(sg.BEGIN) == 1 and '<script src="gate.js">' in top
+        assert '<script src="../gate.js">' in deep
+        assert (tmp_path / "gate.js").exists()
+        os.environ.pop("SITE_LOGIN_USERS")
+        sg.main([str(tmp_path)])                      # 拿掉設定：整段與 gate.js 都拿掉
+        assert (tmp_path / "index.html").read_text("utf-8") == PAGE
+        assert not (tmp_path / "gate.js").exists()
+    finally:
+        os.environ.clear()
+        os.environ.update(old)
 
 
 def _build_site_steps(text: str) -> list[str]:
@@ -71,8 +126,9 @@ def test_every_build_site_caller_passes_the_login_secrets():
     for wf in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
         for step in _build_site_steps(wf.read_text("utf-8")):
             seen += 1
-            for key in ("SITE_LOGIN_USER", "SITE_LOGIN_PASSWORD"):
-                if f"{key}: ${{{{ secrets.{key} }}}}" not in step:
+            for key, src in (("SITE_LOGIN_USER", "secrets"), ("SITE_LOGIN_PASSWORD", "secrets"),
+                             ("SITE_LOGIN_USERS", "secrets"), ("FIREBASE_CONFIG", "vars")):
+                if f"{key}: ${{{{ {src}.{key} }}}}" not in step:
                     missing.append(f"{wf.name}: {key}")
     assert seen >= 7, f"只找到 {seen} 個建站步驟，解析可能壞了"
     assert not missing, "這些建站步驟沒有把登入帳密傳進去：\n  " + "\n  ".join(missing)
@@ -80,4 +136,4 @@ def test_every_build_site_caller_passes_the_login_secrets():
 
 def test_a_page_without_head_is_left_alone_even_with_a_header_tag():
     frag = "<header class='top'>x</header>"
-    assert sg.apply(frag, sg.block("u", "p")) == frag
+    assert sg.apply(frag, sg.tag("")) == frag

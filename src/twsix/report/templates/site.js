@@ -1134,9 +1134,45 @@ var TWSIXWatch = (function(){
     var v = q ? q.value.trim().toLowerCase() : '';
     return !v || tr.textContent.toLowerCase().indexOf(v) > -1;
   }
+  /* 篩選條件記在瀏覽器（2026-10-03）：下次打開還是上次設的那一組。鍵是
+     `twsix.form.*`——有雲端登入時會跟著帳號同步（見 scripts/site_gate.py），
+     沒有的話就只是這台瀏覽器記得。搜尋框不記：那是當下找一檔用的，不是設定。 */
+  var FORM_KEY = 'twsix.form.' + (watchOnlyPage ? 'watch' : 'list');
+  var restoring = false;
+  function formState(){
+    var st = {pick: onlyPicks ? (onlyPicks.type === 'checkbox' ? (onlyPicks.checked ? '1' : '') : onlyPicks.value) : '',
+              watched: !!(onlyWatched && onlyWatched.checked),
+              off: indBoxes.filter(function(c){ return !c.checked; }).map(function(c){ return c.value; }),
+              smin: sMin ? sMin.value : '', smax: sMax ? sMax.value : '',
+              rr: {}, rrmin: rrMin ? rrMin.value : '', rrmax: rrMax ? rrMax.value : '', qf: {}};
+    rrBoxes.forEach(function(c){ st.rr[c.getAttribute('data-rr')] = c.checked; });
+    QF.forEach(function(x){ if(x[1]) st.qf[x[0]] = x[1].value; });
+    return st;
+  }
+  function saveForm(){
+    if(restoring) return;
+    try{ localStorage.setItem(FORM_KEY, JSON.stringify(formState())); }catch(e){}
+  }
+  function loadForm(){
+    var st = null;
+    try{ st = JSON.parse(localStorage.getItem(FORM_KEY) || 'null'); }catch(e){}
+    if(!st || typeof st !== 'object') return;
+    restoring = true;
+    if(onlyPicks){ if(onlyPicks.type === 'checkbox') onlyPicks.checked = st.pick === '1'; else onlyPicks.value = st.pick || ''; }
+    if(onlyWatched) onlyWatched.checked = !!st.watched;
+    var off = new Set(st.off || []);
+    indBoxes.forEach(function(c){ c.checked = !off.has(c.value); });
+    if(sMin) sMin.value = st.smin || ''; if(sMax) sMax.value = st.smax || '';
+    rrBoxes.forEach(function(c){ var k = c.getAttribute('data-rr'); if(st.rr && k in st.rr) c.checked = !!st.rr[k]; });
+    if(rrMin) rrMin.value = st.rrmin || ''; if(rrMax) rrMax.value = st.rrmax || '';
+    QF.forEach(function(x){ if(x[1] && st.qf && x[0] in st.qf) x[1].value = st.qf[x[0]] || ''; });
+    restoring = false;
+  }
+
   function apply(){
     rows.forEach(function(tr){ tr.hidden = !visible(tr); });
     count();
+    saveForm();
   }
   function count(){
     if(!tally) return;
@@ -1193,7 +1229,8 @@ var TWSIXWatch = (function(){
     if(rrMin) rrMin.value = ''; if(rrMax) rrMax.value = ''; rrLabel();
     apply();
   });
-  syncInds();
+  loadForm();
+  syncInds(); rrLabel();
   applyCustomOrder();
   apply();
 

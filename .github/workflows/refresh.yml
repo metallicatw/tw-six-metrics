@@ -244,6 +244,8 @@ jobs:
         env:
           SITE_LOGIN_USER: ${{ secrets.SITE_LOGIN_USER }}
           SITE_LOGIN_PASSWORD: ${{ secrets.SITE_LOGIN_PASSWORD }}
+          SITE_LOGIN_USERS: ${{ secrets.SITE_LOGIN_USERS }}
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
         with:
           test: "false"
           setup: "false"   # 上面已經 setup 過了

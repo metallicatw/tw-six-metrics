@@ -1,24 +1,28 @@
-"""在網站每一頁加上登入畫面（帳號＋密碼）。
+"""網站登入：每一頁 <head> 第一個載入 site/gate.js。
 
-## 它擋得住什麼、擋不住什麼
+## 兩種模式（看建站時有什麼設定）
 
-這是**純前端**的門：密碼對了才把頁面內容顯示出來。它擋的是「拿到網址的一般人」，
-擋不住懂技術的人——網站是 GitHub Pages、repo 是公開的，原始資料（data/ 底下的
-CSV、網站的 JSON）本來就能直接下載，看網頁原始碼也繞得過去。2026-10-03 討論過
-三個等級（純前端／整頁加密／Cloudflare Access），使用者選了這一個。
+1. **Google 帳號＋雲端同步**（repo variable ``FIREBASE_CONFIG`` 有設定時）
+   * 只有授權名單上的 Gmail 進得來。名單存在 Firestore 的 ``config/allowlist``，
+     管理員登入後頁首右上角有「授權名單管理」圖示，可以直接新增／移除。
+   * 觀察清單、持有成本、清單與選股的篩選條件（瀏覽器裡 ``twsix.*`` 的鍵）存到
+     Firestore 的 ``users/<uid>``，同一個帳號在電腦、手機上看到同一份。
+   * 名單與每個人的資料由 Firestore 規則把關（``reference/firestore.rules``）：
+     別人的資料讀不到也改不到。網頁本身仍是公開 repo 建出來的靜態頁，懂技術的人
+     還是拿得到**頁面上的公開資料**；擋住的是名單外的人使用、以及每個人的私人設定。
+   * GitHub 權杖（``twsix.token``）與手機版／電腦版切換（``twsix.viewmode``）不上傳。
 
-## 帳號密碼放哪裡
+2. **帳號＋密碼**（repo secret ``SITE_LOGIN_USERS``：一行一組 ``帳號:密碼``；舊的
+   ``SITE_LOGIN_USER``＋``SITE_LOGIN_PASSWORD`` 也還認得）
+   * 純前端，只擋一般人，頁面上只有雜湊。設定不同步。
 
-repo secret `SITE_LOGIN_USER` 與 `SITE_LOGIN_PASSWORD`。建站時從環境變數讀，頁面上
-只放**雜湊**（SHA-256，帳號決定 salt），不放明文；兩個都沒設就把門拿掉（本機建站、
-測試都不受影響）。改密碼只要改 secret，下一次建站全站一起換——包括增量建站沿用
-快取、這一次沒有重畫的那些頁面：這支每一次都重寫每一頁的那一段。
+兩個都沒設就沒有登入。
 
-## 怎麼記住登入
+## 為什麼是一支獨立的 gate.js 而不是每頁內嵌
 
-登入成功後把雜湊存在瀏覽器（勾「記住我」用 localStorage，否則 sessionStorage，
-關掉分頁就要重登）。密碼一改，雜湊跟著變，舊的登入自動失效。網址加 `?logout`
-就登出；登入後頁首右上角（「切換手機版」右邊）有登出圖示，沒有站內頁首的頁面則固定在畫面右上角。
+內嵌的話 1,950 頁每頁多 10 KB；而且增量建站沿用快取、這一次沒重畫的舊頁面也要
+換成這一次的設定。所以每一頁只放一行 ``<script src=".../gate.js">``（這支每次建站
+都重寫那一行），設定與程式都在 gate.js 裡，換設定只重寫一個檔。
 
 用法：``python scripts/site_gate.py site``（build-site action 在上傳 Pages 之前跑）。
 """
@@ -35,6 +39,12 @@ from pathlib import Path
 BEGIN, END = "<!--twsix-gate-->", "<!--/twsix-gate-->"
 TITLE = "台股與全球市場觀測站"
 HOME = "https://metallicatw.github.io/tw-six-metrics/index.html"
+#: 系統管理員：永遠在名單上、永遠是管理員（Firestore 規則裡也寫死這一個）。
+OWNER = "eggeggyang2005@gmail.com"
+#: 第一次啟用時的預設名單（2026-09-30 使用者指定）。之後由管理員在網頁上改。
+DEFAULT_USERS = ("eggeggyang2005@gmail.com", "nirvanatw@gmail.com", "doris.yang1108@gmail.com")
+FIREBASE_SDK = "11.0.2"
+GATE_JS = Path(__file__).with_name("gate.js")
 _BLOCK = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.S)
 _HEAD = re.compile(r"<head(?:\s[^>]*)?>", re.I)  # 不能吃到 <header>
 
@@ -69,64 +79,84 @@ color:#06231d;background:linear-gradient(135deg,#34d399,#22c1a8);box-shadow:0 10
 #tg .tg-err{min-height:20px;margin:12px 0 0;text-align:center;font-size:13px;color:#ff9a8f}
 #tg .tg-foot{margin:18px 0 0;text-align:center;font-size:11px;color:#6f8a94}
 #tg .tg-shake{animation:tgs .35s}
-#tg-out{position:absolute;top:8px;right:20px;z-index:6;width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+#tg-icons{position:absolute;top:8px;right:20px;z-index:6;display:flex;gap:8px}
+#tg-icons.tg-float{position:fixed;top:10px;right:12px;z-index:2147483646}
+#tg-icons .tg-ic{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center;
 appearance:none;cursor:pointer;border-radius:999px;border:1px solid var(--rule,#d2dee5);background:var(--surface-2,#e3ecf1);color:var(--ink-2,#33424f)}
-#tg-out:hover{border-color:var(--up,#cf3327);color:var(--up,#cf3327)}
-#tg-out:focus-visible{outline:2px solid var(--accent-2,#127a8f);outline-offset:2px}
-#tg-out.tg-float{position:fixed;top:10px;right:12px;z-index:2147483646;box-shadow:0 2px 8px rgba(0,0,0,.18)}
-html.tg-in header.top button.viewmode{right:60px}
-html.tg-in header.top h1{padding-right:146px}
-@keyframes tgs{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+#tg-icons.tg-float .tg-ic{box-shadow:0 2px 8px rgba(0,0,0,.18)}
+#tg-icons .tg-ic:hover{border-color:var(--accent,#0e7c6f);color:var(--accent,#0e7c6f)}
+#tg-icons #tg-out:hover{border-color:var(--up,#cf3327);color:var(--up,#cf3327)}
+#tg-icons .tg-ic:focus-visible{outline:2px solid var(--accent-2,#127a8f);outline-offset:2px}
+#tg .tg-google{display:flex;align-items:center;justify-content:center;gap:10px;letter-spacing:.06em;background:#fff;color:#1f2937;box-shadow:0 10px 24px rgba(0,0,0,.3)}
+#tg.tg-modal{background:rgba(5,15,20,.72)}
+#tg textarea{width:100%;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.25);color:#fff;
+font:14px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;padding:10px 12px;margin:0 0 14px;outline:none;resize:vertical}
+#tg textarea:focus{border-color:#22c1a8;box-shadow:0 0 0 3px rgba(34,193,168,.25)}
+#tg .tg-btns{display:flex;gap:10px}
+#tg .tg-btns button{flex:1}
+#tg .tg-ghost{background:transparent!important;color:#e8f1f4!important;border:1px solid rgba(255,255,255,.25)!important;box-shadow:none!important}
 """
-
-JS = r"""
-(function(){var H=%(hash)s,S=%(salt)s,K="twsix-gate",d=document.documentElement;
-function get(s){try{return s.getItem(K)}catch(e){return null}}
-function put(s,v){try{s.setItem(K,v)}catch(e){}}
-function out(){try{localStorage.removeItem(K);sessionStorage.removeItem(K)}catch(e){}location.reload()}
-function exit(){if(document.getElementById("tg-out"))return;var x=document.createElement("button"),h=document.querySelector("header.top .in");
-x.id="tg-out";x.type="button";x.title="登出";x.setAttribute("aria-label","登出");
-x.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>';
-x.addEventListener("click",out);if(h){h.appendChild(x);d.classList.add("tg-in")}else{x.className="tg-float";document.body.appendChild(x)}}
-function later(f){if(document.body)f();else document.addEventListener("DOMContentLoaded",f)}
-if(/[?&]logout\b/.test(location.search)){try{localStorage.removeItem(K);sessionStorage.removeItem(K)}catch(e){}}
-else if(get(localStorage)===H||get(sessionStorage)===H){later(exit);return}
-d.classList.add("tg-lock");
-function hex(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return("0"+x.toString(16)).slice(-2)}).join("")}
-function show(){if(document.getElementById("tg"))return;var w=document.createElement("div");w.id="tg";
-w.innerHTML='<form class="tg-card" autocomplete="on"><div class="tg-mark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 4 8-8"/><path d="M14 8h6v6"/></svg></div>'+
-'<h1></h1><p class="tg-sub">請登入後繼續</p>'+
-'<label for="tg-u">帳號</label><input id="tg-u" type="text" name="username" autocomplete="username" required>'+
-'<label for="tg-p">密碼</label><input id="tg-p" type="password" name="password" autocomplete="current-password" required>'+
-'<div class="tg-row"><label><input id="tg-r" type="checkbox" checked>記住我</label></div>'+
-'<button type="submit">登入</button><p class="tg-err" role="alert"></p><p class="tg-foot">僅限授權使用者</p></form>';
-var t=w.querySelector("h1").appendChild(document.createElement("a"));t.href=%(home)s;t.textContent=%(title)s;
-document.body.appendChild(w);var f=w.querySelector("form"),e=w.querySelector(".tg-err"),b=w.querySelector("button");
-setTimeout(function(){w.querySelector("#tg-u").focus()},30);
-f.addEventListener("submit",function(ev){ev.preventDefault();
-if(!(window.crypto&&crypto.subtle)){e.textContent="這個瀏覽器不支援安全登入，請改用 https 開啟";return}
-var u=w.querySelector("#tg-u").value.trim(),p=w.querySelector("#tg-p").value;b.disabled=true;e.textContent="";
-crypto.subtle.digest("SHA-256",new TextEncoder().encode(S+u+"\n"+p)).then(function(r){b.disabled=false;
-if(hex(r)===H){put(w.querySelector("#tg-r").checked?localStorage:sessionStorage,H);d.classList.remove("tg-lock");w.remove();exit()}
-else{e.textContent="帳號或密碼不正確";f.classList.remove("tg-shake");void f.offsetWidth;f.classList.add("tg-shake");w.querySelector("#tg-p").select()}})})}
-later(show)})();
-"""
-
 
 def credentials(user: str, password: str) -> tuple[str, str]:
     """(salt, hash)。salt 由帳號決定：同一組帳密每次建站得到同一個雜湊，
-    讀者不會因為網站重建就被登出。"""
+    讀者不會因為網站重建就被登出。帳號不分大小寫。"""
+    user = user.strip().lower()
     salt = hashlib.sha256(f"twsix-gate|{user}".encode()).hexdigest()[:16]
     digest = hashlib.sha256(f"{salt}{user}\n{password}".encode()).hexdigest()
     return salt, digest
 
 
-def block(user: str, password: str) -> str:
-    salt, digest = credentials(user, password)
-    js = JS % {"hash": json.dumps(digest), "salt": json.dumps(salt),
-               "title": json.dumps(TITLE, ensure_ascii=False), "home": json.dumps(HOME)}
+def parse_users(text: str) -> list[tuple[str, str]]:
+    """``帳號:密碼`` 一行一組（也接受逗號或分號分隔）。密碼裡可以有冒號。"""
+    out = []
+    for line in re.split(r"[\r\n;,]+", text or ""):
+        if ":" not in line:
+            continue
+        user, password = line.split(":", 1)
+        if user.strip() and password:
+            out.append((user.strip(), password))
+    return out
+
+
+def config_from_env(env: dict[str, str] | None = None) -> dict | None:
+    env = dict(os.environ if env is None else env)
+    common = {"title": TITLE, "home": HOME}
+    fb = (env.get("FIREBASE_CONFIG") or "").strip()
+    if fb:
+        if "{" in fb and "}" in fb:   # 整段「const firebaseConfig = {...};」貼進來也可以
+            fb = fb[fb.index("{"): fb.rindex("}") + 1]
+        try:
+            cfg = json.loads(fb)
+        except json.JSONDecodeError:
+            # 從 Firebase 主控台複製來的常是 JS 物件寫法（key 沒有引號）。
+            cfg = json.loads(re.sub(r"([{,]\s*)([A-Za-z_]\w*)\s*:", r'\1"\2":', fb.rstrip(";")))
+        need = ("apiKey", "authDomain", "projectId", "appId")
+        missing = [k for k in need if not cfg.get(k)]
+        if missing:
+            raise SystemExit(f"FIREBASE_CONFIG 少了 {', '.join(missing)}")
+        return {"mode": "firebase", "fb": cfg, "owner": OWNER, "defaults": list(DEFAULT_USERS),
+                "sdk": FIREBASE_SDK, **common}
+    users = parse_users(env.get("SITE_LOGIN_USERS", ""))
+    if env.get("SITE_LOGIN_USER", "").strip() and env.get("SITE_LOGIN_PASSWORD"):
+        users.append((env["SITE_LOGIN_USER"].strip(), env["SITE_LOGIN_PASSWORD"]))
+    if users:
+        rows = []
+        for user, password in users:
+            salt, digest = credentials(user, password)
+            rows.append({"u": user.lower(), "s": salt, "h": digest})
+        return {"mode": "password", "users": rows, **common}
+    return None
+
+
+def gate_js(config: dict) -> str:
     css = " ".join(line.strip() for line in CSS.strip().splitlines())
-    return f"{BEGIN}<style>{css}</style><script>{js.strip()}</script>{END}"
+    src = GATE_JS.read_text("utf-8")
+    return (src.replace("__CONFIG__", json.dumps(config, ensure_ascii=False))
+               .replace("__CSS__", json.dumps(css, ensure_ascii=False)))
+
+
+def tag(rel: str) -> str:
+    return f'{BEGIN}<script src="{rel}gate.js"></script>{END}'
 
 
 def apply(html: str, gate: str | None) -> str:
@@ -143,17 +173,24 @@ def apply(html: str, gate: str | None) -> str:
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     root = Path(args[0] if args else "site")
-    user = os.environ.get("SITE_LOGIN_USER", "").strip()
-    password = os.environ.get("SITE_LOGIN_PASSWORD", "")
-    gate = block(user, password) if user and password else None
+    config = config_from_env()
+    js = root / "gate.js"
+    if config:
+        js.write_text(gate_js(config), "utf-8")
+    elif js.exists():
+        js.unlink()
     changed = 0
     for path in root.rglob("*.html"):
+        depth = len(path.relative_to(root).parts) - 1
         text = path.read_text("utf-8", errors="replace")
-        new = apply(text, gate)
+        new = apply(text, tag("../" * depth) if config else None)
         if new != text:
             path.write_text(new, "utf-8")
             changed += 1
-    state = "加上登入畫面" if gate else "沒有設定 SITE_LOGIN_USER／SITE_LOGIN_PASSWORD，不加登入"
+    state = {"firebase": "Google 帳號登入＋雲端同步", "password": "帳號密碼登入"}.get(
+        (config or {}).get("mode", ""), "沒有設定登入，不加")
+    if config and config["mode"] == "password":
+        state += f"（{len(config['users'])} 組帳號）"
     print(f"登入畫面：{state}（改了 {changed} 頁）")
     return 0
 
