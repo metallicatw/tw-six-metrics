@@ -142,6 +142,10 @@ class InstDay:
     trust: float | None
     dealer: float | None
     total: float | None
+    #: 外資持有張數與持股比率（0.692 ＝ 69.2%）。來自證交所／櫃買的外資持股統計
+    #: （`market/daily/qfii/`），不是券商鏡像——那張分頁要按「立即更新」才會動。
+    foreign_held: float | None = None
+    foreign_pct: float | None = None
 
     @property
     def roc_label(self) -> str:
@@ -176,6 +180,7 @@ def institutional_history(
     folder = data_dir / "market" / "daily" / "institutional"
     if not folder.is_dir():
         return {}
+    qfii = qfii_by_day(data_dir, lookback=lookback)
     out: dict[str, list[InstDay]] = {}
     for path in sorted(folder.glob("*.csv.gz"), reverse=True)[:lookback]:
         for row in _rows(path):
@@ -190,6 +195,7 @@ def institutional_history(
             trust = _lots(row.get("trust", ""))
             dealer = _lots(row.get("dealer", ""))
             parts = [v for v in (foreign, trust, dealer) if v is not None]
+            held, pct = qfii.get((date, code), (None, None))
             have.append(
                 InstDay(
                     date=date,
@@ -207,8 +213,29 @@ def institutional_history(
                     # 過的三欄，讀者自己加得出 49。表格寫 50 的話，一行裡的四個
                     # 數字彼此矛盾——那種錯不會報錯，只會讓人以為自己算錯了。
                     total=sum(parts) if len(parts) == 3 else _lots(row.get("total", "")),
+                    foreign_held=held,
+                    foreign_pct=pct,
                 )
             )
+    return out
+
+
+def qfii_by_day(
+    data_dir: Path, *, lookback: int = INST_LOOKBACK
+) -> dict[tuple[str, str], tuple[float | None, float | None]]:
+    """`{(日期, 代號): (外資持有張數, 持股比率)}`，比率是小數（0.692）。"""
+    folder = data_dir / "market" / "daily" / "qfii"
+    out: dict[tuple[str, str], tuple[float | None, float | None]] = {}
+    if not folder.is_dir():
+        return out
+    for path in sorted(folder.glob("*.csv.gz"), reverse=True)[:lookback]:
+        for row in _rows(path):
+            code = (row.get("code") or "").strip()
+            date = (row.get("date") or "").strip()
+            if not code or not date:
+                continue
+            pct = _num(row.get("pct", ""))
+            out[(date, code)] = (_lots(row.get("held", "")), None if pct is None else pct / 100)
     return out
 
 
@@ -261,6 +288,7 @@ def merge_day_rows(
 COMPLETE_FIELDS = {
     "prices": ("close", "value"),
     "institutional": ("foreign", "trust", "dealer", "f_buy", "t_buy"),
+    "qfii": ("held", "pct"),
 }
 
 

@@ -348,3 +348,67 @@ def test_a_non_trading_day_is_empty_not_an_error():
 
     assert parse_tpex_institutional_dated({"tables": [{"date": "115/08/15", "data": []}]}) == []
     assert parse_tpex_institutional_dated({}) == []
+
+
+# ---------------------------------------------------------------------------
+# 外資持股比重：交易所的外資持股統計，每天自己更新
+# ---------------------------------------------------------------------------
+
+
+def test_qfii_parsers_read_the_real_responses():
+    from twsix.ingest.daily import parse_tpex_qfii, parse_twse_qfii
+
+    twse = parse_twse_qfii(_raw_sample("twse_qfii_dated"))
+    tpex = parse_tpex_qfii(_raw_sample("tpex_qfii_dated"))
+    assert len(twse) > 1000 and len(tpex) > 800
+    tsmc = next(r for r in twse if r["code"] == "2330")
+    assert tsmc["date"] == "2026-10-02" and tsmc["market"] == "上市"
+    assert 60 < tsmc["pct"] < 80                   # 69.17（%），不是 0.6917
+    assert abs(tsmc["held"] / tsmc["issued"] * 100 - tsmc["pct"]) < 0.05
+    assert all(len(r["code"]) == 4 for r in twse)  # ETF（00400A…）不收
+    top = next(r for r in tpex if r["code"] == "8455")
+    assert top["date"] == "2026-09-03" and top["pct"] == 87.85
+
+
+def test_qfii_holiday_is_empty_not_an_error():
+    from twsix.ingest.daily import parse_tpex_qfii, parse_twse_qfii
+
+    assert parse_tpex_qfii(_raw_sample("tpex_qfii_dated_holiday")) == []
+    assert parse_twse_qfii({"stat": "很抱歉，沒有符合條件的資料!"}) == []
+
+
+def test_qfii_with_shifted_columns_is_rejected_whole():
+    """欄序變了的時候（持有 ÷ 發行 對不上比率），整批不收，而不是收一堆錯的比重。"""
+    from twsix.ingest.daily import parse_twse_qfii
+
+    payload = _raw_sample("twse_qfii_dated")
+    fields = payload["fields"]
+    a, b = fields.index("全體外資及陸資持股比率"), fields.index("外資及陸資尚可投資比率")
+    fields[a], fields[b] = fields[b], fields[a]
+    assert parse_twse_qfii(payload) == []
+
+
+def test_official_foreign_share_fills_the_days_the_sheet_left_blank():
+    grid = sheet_store.read_grid(DATA / "sheets/5439", "三大法人")
+    base = institutional(grid)
+    assert base is not None
+    fake = InstDay("2099-12-31", 100.0, 5.0, -3.0, 102.0, foreign_held=1234.0, foreign_pct=0.1234)
+    merged = institutional(grid, [fake])
+    assert merged is not None
+    top = merged.days[0]
+    assert top["share"]["外資"] == 0.1234 and top["holding"]["外資"] == 1234.0
+    assert top["holding"]["投信"] is None           # 投信持股官方沒有，不編
+    assert merged.latest_share is top
+
+
+def test_official_foreign_share_never_overrides_the_sheet():
+    grid = sheet_store.read_grid(DATA / "sheets/5439", "三大法人")
+    base = institutional(grid)
+    assert base is not None
+    day = next(d for d in base.days if d["share"]["外資"] is not None)
+    y, m, dd = day["date"].split("/")
+    same = InstDay(f"{int(y) + 1911}-{m}-{dd}", 0.0, 0.0, 0.0, 0.0, foreign_pct=0.999)
+    merged = institutional(grid, [same])
+    assert merged is not None
+    again = next(d for d in merged.days if d["date"] == day["date"])
+    assert again["share"]["外資"] == day["share"]["外資"]

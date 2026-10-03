@@ -56,12 +56,12 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 | 09:19（3/16–3/31） | 全市場官方資料 | tw-six-metrics | 同上（年報截止 3/31） | ✅ 有新一期才 |
 | 09:21（每月 18、25 日） | 全市場官方資料 | tw-six-metrics | 同上（保險、更正與晚交） | ✅ 有新一期才 |
 | 09:37（一、四） | 股權資料 | tw-six-metrics | 集保股權分散（週）＋董監持股（月） | ✅ 有新資料才 |
-| 10:13（一–六） | 心跳 | tw-six-metrics | `scripts/heartbeat.py`，只讀不寫 | ❌ |
 | 14:23（旺季） | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
 | **15:07**（一–五） | 每日篩選 | **tw-trend-filter** | 掃全市場約 1,900 檔 | ✅ 自己的 Pages |
-| 15:41（一–五） | 每日全市場 | tw-six-metrics | `twsix fetch-daily`：收盤＋三大法人 | ✅ 有變動才 |
+| 15:41（一–五） | 每日全市場 | tw-six-metrics | 先等上游（趨勢選股今天 14:30 後那份，最多 30 分）；`twsix fetch-daily`：收盤＋三大法人＋外資持股比率 | ✅ 有變動才 |
 | **16:47**（一–五） | pages | tw-six-metrics | 全站重建，帶進趨勢報告 | ✅ |
 | **18:17**（一–五） | 每日篩選（保險） | **tw-trend-filter** | 15:07 那班今天已發布就直接結束 | ✅ 自己的 Pages |
+| 19:13（一–六） | 心跳 | tw-six-metrics | `scripts/heartbeat.py`，只讀不寫（2026-10-03 從 10:13 移來：早上看不到當天收盤，而早上那幾班常被延到下午） | ❌ |
 | 20:23（旺季） | 評等補課 | tw-six-metrics | 同上 | ✅ 有變動才 |
 | 20:29（淡季） | 評等補課 | tw-six-metrics | 同上，一天一班 | ✅ 有變動才 |
 | 21:47（一–五） | 每日全市場（第二次） | tw-six-metrics | 同上；三大法人晚上才齊，也是 15:41 的保險 | ✅ 有變動才 |
@@ -69,6 +69,11 @@ tw-trend-filter   ──→ index.html（report 分支）     ┘
 **旺季**＝ 3～6、8～9、11～12 月（財報截止日之後、券商鏡像跟上的那幾週），
 一天四班；**淡季**＝ 1、2、7、10 月，一天一班。任何一班開頭先問
 `twsix refresh --pending`，佇列是空的就到此為止。
+
+**手動跑每日全市場（daily.yml）**：`wait_upstream` 預設 true——market-monitor、
+tw-trend-filter、tw-six-metrics 三個可以**同時按**，這裡會看上游的 Actions 還有沒有
+在跑、Pages 上是不是今天的，等它們發布完才往下（最多 50 分鐘），手動觸發一定建站。
+只按這一個、不想等的話把 `wait_upstream` 取消勾選。
 
 手動才跑的：〔回補歷史股價〕（history.yml，只需要一次）、〔加一檔個股〕、
 〔存一份真實回應〕、兩個衛星 repo 的手動按鈕。

@@ -85,6 +85,9 @@ jobs:
         with:
           ref: main
       - uses: ./.github/actions/build-site
+        env:
+          SITE_LOGIN_USER: ${{ secrets.SITE_LOGIN_USER }}
+          SITE_LOGIN_PASSWORD: ${{ secrets.SITE_LOGIN_PASSWORD }}
         with:
           incremental: "true"
 

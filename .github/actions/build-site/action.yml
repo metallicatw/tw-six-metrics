@@ -176,6 +176,14 @@ runs:
     - name: 籌碼雷達（網站資料）
       run: twsix chipflow-site || echo "::warning::籌碼雷達的網站資料沒產生"
       shell: bash
+
+    # 登入畫面（純前端，擋一般人）。帳密來自 repo secret SITE_LOGIN_USER／
+    # SITE_LOGIN_PASSWORD——action 讀不到 secrets，所以每個呼叫端都要在 `uses:`
+    # 那一步用 env 傳進來（test_site_gate 會檢查）。兩個都沒設就不加。
+    # 排在存快取之前：增量建站沿用的舊頁面也要換成這一次的帳密。
+    - name: 登入畫面
+      run: python scripts/site_gate.py site
+      shell: bash
     - if: inputs.incremental == 'true' && inputs.save_cache == 'true'
       uses: actions/cache/save@v4
       with:

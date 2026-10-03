@@ -52,6 +52,11 @@ on:
         description: "年度交易資訊：這一輪最多補幾檔（預設 40。要一次排乾就填 300）"
         required: false
         default: "40"
+      wait_upstream:
+        description: "先等 market-monitor 與 tw-trend-filter 這一次的報告發布（三個一起按就選 true；只按這一個選 false）"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -69,7 +74,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    timeout-minutes: 40
+    # 40 → 100：多了「等上游」那一步（手動最多等 50 分鐘、排程最多 30 分鐘）。
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
 
@@ -93,6 +99,28 @@ jobs:
       - name: 測試
         run: python scripts/run_tests.py
 
+
+      # 〔等上游〕下面的 AI 選股吃 market-monitor 的總經資料、建站帶進 tw-trend-filter
+      # 的〔趨勢選股〕。以前靠排程時間猜先後（上游 15:07、這裡 15:41），GitHub 一
+      # 延遲就交叉；手動跑也得一個一個按、等前一個跑完。現在直接看兩個 Pages 上的
+      # 時間戳，夠新才往下，等到上限就照樣往下（留 warning，不擋今天的行情）。
+      #
+      #   手動（wait_upstream=true）：上游還在跑就等它跑完（三個一起按就好），最多 50 分鐘
+      #   15:41 那一班：上游是今天的（趨勢選股要 14:30 以後篩的），最多等 30 分鐘
+      #   21:47 那一班：不等（上游當天早就跑完了）
+      - name: 等上游
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.wait_upstream) ||
+          github.event.schedule == '41 7 * * 1-5'
+        env:
+          # 只用來讀兩個公開 repo 的 Actions 狀態（有沒有在跑），不寫任何東西。
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python scripts/wait_upstream.py --manual --max-minutes 50
+          else
+            python scripts/wait_upstream.py --max-minutes 30
+          fi
 
       - name: 抓取
         run: twsix fetch-daily
@@ -120,6 +148,9 @@ jobs:
         run: |
           twsix backfill-prices --days 5 || true
           twsix backfill-institutional --days 5 || true
+          # 外資持股比率（個股頁〔外資持股比重〕）。25 天蓋得住 20 日的視窗；
+          # 已經齊的日子不連網，所以穩定狀態下每天只問今天那一天。
+          twsix backfill-qfii --days 25 --minutes 8 || true
 
       # 〔年度交易資訊〕與〔季財報〕：從 ownership-drain.yml 搬過來的。
       #
@@ -249,9 +280,14 @@ jobs:
         uses: ./.github/actions/push-with-retry
 
       # 價格進了 repo，網頁還沒換。這兩步讓今天的收盤當天就出現在個股頁上。
+      # 手動觸發一定建站：那是「上游剛更新、要把它們帶進網站」的時候按的，
+      # 這裡的資料就算沒變，〔市場監控〕〔趨勢選股〕那兩頁也要換。
       - name: 建站
-        if: steps.commit.outputs.changed == 'yes'
+        if: steps.commit.outputs.changed == 'yes' || github.event_name == 'workflow_dispatch'
         uses: ./.github/actions/build-site
+        env:
+          SITE_LOGIN_USER: ${{ secrets.SITE_LOGIN_USER }}
+          SITE_LOGIN_PASSWORD: ${{ secrets.SITE_LOGIN_PASSWORD }}
         with:
           test: "false"
           setup: "false"   # 上面已經 setup 過了
@@ -259,5 +295,5 @@ jobs:
 
       - name: 發布
         id: deployment
-        if: steps.commit.outputs.changed == 'yes'
+        if: steps.commit.outputs.changed == 'yes' || github.event_name == 'workflow_dispatch'
         uses: actions/deploy-pages@v4

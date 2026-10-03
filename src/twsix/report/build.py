@@ -337,7 +337,7 @@ def stock_signature(
     # 三大法人也是每天換的，理由同上。只算最新那一天就夠：那一天一變，整段視窗
     # 就跟著移動；那一天沒變，補進來的也是同一批。
     if inst:
-        h.update(f"inst|{inst[0].date}|{inst[0].total}".encode())
+        h.update(f"inst|{inst[0].date}|{inst[0].total}|{inst[0].foreign_pct}".encode())
     # 新聞也是每天換的。最新那一則的連結（裡面就是 newsId）加上則數就夠：新的一則
     # 進來，兩者至少變一個。
     if news:

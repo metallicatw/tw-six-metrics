@@ -1,0 +1,10 @@
+{
+  "bytes": 1039,
+  "expect": "已驗證：非交易日（2026-09-25 中秋）回 tables[0] 但 data 是空的。",
+  "fetched_at": "2026-10-03T13:40:56+00:00",
+  "form": {},
+  "group": "daily",
+  "head": "{\"tables\":[{\"title\":\"櫃檯買賣股票僑外資及陸資持股比例排行表\",\"date\":\"115/09/25\",\"totalCount\":0,\"fields\":[\"排行\",\"代號\",\"名稱\",\"發行股數(A)\",\"僑外資及陸資尚可投資股數B=A*F-C\",\"僑外資及陸資持有股數(C)\",\"僑外資及陸資尚可投資比率(D=B/A)\",\"�",
+  "name": "tpex_qfii_dated_holiday",
+  "url": "https://www.tpex.org.tw/www/zh-tw/insti/qfii?date=2026%2F09%2F25&response=json"
+}

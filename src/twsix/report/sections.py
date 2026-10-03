@@ -527,6 +527,20 @@ def institutional(
                 for k in INST_NET
             }
 
+    # 外資持股與比重：分頁沒有、或分頁那一格是空的那幾天，用交易所的外資持股
+    # 統計補上（`InstDay.foreign_held／foreign_pct`）。投信、自營商的持股是券商
+    # 估的，官方沒有，那幾格照舊留空。
+    if extra:
+        official = {e.roc_label: e for e in extra}
+        for d in days:
+            e = official.get(d["date"])
+            if e is None:
+                continue
+            if d["share"]["外資"] is None and e.foreign_pct is not None:
+                d["share"]["外資"] = e.foreign_pct
+            if d["holding"]["外資"] is None and e.foreign_held is not None:
+                d["holding"]["外資"] = e.foreign_held
+
     labels = [d["date"][3:] for d in days]  # 「08/28」 — the year is on the page
 
     # 每一天的收盤，對齊上面那 20 列。

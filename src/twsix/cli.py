@@ -376,6 +376,22 @@ def _downgrades(store: Any, table: str, rows: list[dict[str, str]]) -> str:
     )
 
 
+def _recount_manifest(store: Any, manifest: Any) -> None:
+    """把 manifest 上每一個數字換成檔案裡**現在**的列數。
+
+    manifest 只在這支指令寫入時更新，但同一批檔案之後還會被別的路改到：
+    `backfill-statements`（daily.yml）把最新一季從開放資料的子集合補成完整版、
+    `refresh`（refresh.yml）改寫 ratings.csv。那兩條都不碰 manifest，於是心跳
+    每天報「manifest 寫 884，實際 891」——數字是舊的，資料其實是對的。
+    這裡每次寫 manifest 前重數一次，計法和心跳一樣（行數減表頭）。
+    """
+    for key in list(manifest.counts):
+        f = store.root / f"{key}.csv"
+        if f.is_file():
+            with f.open(encoding="utf-8") as fh:
+                manifest.counts[key] = sum(1 for _ in fh) - 1
+
+
 def cmd_fetch(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient
@@ -466,6 +482,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         manifest.sources.append({"name": name, "period": period, "rows": n})
         print(f"  {name:<18} {period or '（無期別）':<8} {n} 列 -> {store.path(table)}")
 
+    _recount_manifest(store, manifest)
     store.save_manifest(manifest)
 
     # 抓回來還要**攤回每一檔**，否則個股頁看不到。
@@ -2660,6 +2677,73 @@ def cmd_backfill_institutional(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_backfill_qfii(args: argparse.Namespace) -> int:
+    """回補過去 N 個交易日的全市場外資持股比率 → `market/daily/qfii/`。
+
+    個股頁〔外資投信〕的「外資持股比重」原本只來自券商鏡像那張分頁，要按「立即
+    更新」才會動；這一份讓它每天自己往前走。形狀和 `backfill-institutional` 一樣：
+    只補還沒齊的日子、合併不覆蓋、拿到零列就當那天沒開市。每日排程用 `--days 5`
+    接住當天與前幾天，`chipflow-backfill.yml` 每晚把 20 日的視窗補滿。
+
+    上市那支和 T86 同一個 WAF（打太密回 307），所以間隔至少 3 秒。
+    """
+    from datetime import timedelta  # noqa: PLC0415
+
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient  # noqa: PLC0415
+    from .ingest.daily import QFII_COLUMNS, Daily, by_date  # noqa: PLC0415
+    from .store.daily import day_complete, merge_day_rows, read_day_rows  # noqa: PLC0415
+
+    started = time.monotonic()
+    budget = (getattr(args, "minutes", 0) or 0) * 60
+    http = HttpClient(
+        cache_dir=None, cache_ttl=0,
+        min_interval=max(3.0, settings.ingest.min_interval_seconds),
+        retries=settings.ingest.retries,
+        timeout=90.0,
+    )
+    store = Store(args.out or settings.data_dir)
+    daily = Daily(http)
+    folder = "qfii"
+    # 只問行情裡有的交易日：國定假日不必問，也不會把「那天沒開市」誤當成失敗。
+    prices = store.root / "market" / "daily" / "prices"
+    trading = {p.name[:10] for p in prices.glob("*.csv.gz")} if prices.is_dir() else set()
+
+    want = args.days
+    day = datetime.now(_TAIPEI).date() + timedelta(days=1)
+    filled = skipped = missing = 0
+    for _ in range(want * 2 + 20):
+        if filled + skipped + missing >= want:
+            break
+        day -= timedelta(days=1)
+        if day.weekday() >= 5:
+            continue
+        iso = day.isoformat()
+        if trading and iso not in trading:
+            continue
+        if budget and time.monotonic() - started > budget:
+            print(f"  跑滿 {args.minutes} 分鐘，其餘下次再補")
+            break
+        had = read_day_rows(store.root, folder, iso)
+        if had and day_complete(had, folder):
+            skipped += 1
+            continue
+        rows = daily.qfii_on(iso)
+        if not rows:
+            missing += 1
+            print(f"  {iso} 外資持股沒拿到（下次再補）")
+            continue
+        for d2, group in sorted(by_date(rows).items()):
+            group = merge_day_rows(read_day_rows(store.root, folder, d2), group)
+            store.write_gz(
+                f"market/daily/{folder}/{d2}", group, QFII_COLUMNS, sort_by=("code",),
+            )
+            print(f"  {d2} 外資持股 {len(group)} 檔")
+        filled += 1
+    print(f"\n外資持股：新增 {filled} 天，原本就有 {skipped} 天，沒拿到 {missing} 天")
+    return EXIT_OK
+
+
 def cmd_fetch_daily(args: argparse.Namespace) -> int:
     """每日全市場：收盤行情與三大法人買賣超。**四個請求，換到整個市場。**
 
@@ -4177,6 +4261,16 @@ def build_parser() -> argparse.ArgumentParser:
     bi.add_argument("--out", help="資料目錄")
     bi.add_argument("--minutes", type=float, default=0.0, help="時間預算（分鐘），0＝不限")
     bi.set_defaults(func=cmd_backfill_institutional)
+
+    bq = sub.add_parser(
+        "backfill-qfii",
+        help="回補過去 N 個交易日的全市場外資持股比率（只補還沒有的日期）",
+    )
+    bq.add_argument("--days", type=int, default=25,
+                    help="要補幾個交易日（預設 25，蓋得住 20 日的視窗）")
+    bq.add_argument("--out", help="資料目錄")
+    bq.add_argument("--minutes", type=float, default=0.0, help="時間預算（分鐘），0＝不限")
+    bq.set_defaults(func=cmd_backfill_qfii)
 
     cd = sub.add_parser(
         "consolidate-data",

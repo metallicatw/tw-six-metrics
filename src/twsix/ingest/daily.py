@@ -80,6 +80,19 @@ TPEX_INSTITUTIONAL_DATED = (
     "https://www.tpex.org.tw/www/zh-tw/insti/dailyTrade?type=Daily&sect=EW&date={y}/{m}/{d}"
 )
 
+#: 外資持股比率（全市場、帶日期）。三大法人買賣超只給**淨額**，持股與比重要另外問。
+#: 原本個股頁的〔外資持股比重〕只來自券商鏡像那張分頁——按「立即更新」才會動，
+#: 於是多數個股停在批次補課那一天（2026-09-02／03），沒補過的連一天都沒有。
+#:
+#: 上市：證交所 MI_QFIIS（外資及陸資投資持股統計），欄名對欄位。
+#: 上櫃：櫃買「僑外資及陸資持股比例排行表」，tables[0] 的 fields／data。
+#: 兩支都吃日期，非交易日回空表（上櫃）或 stat 不是 OK（上市）。
+#: ⚠️ 上市那支和 T86 同一個 WAF：打太密回 307「FOR SECURITY REASONS」，要拉開間隔。
+TWSE_QFII_DATED = (
+    "https://www.twse.com.tw/rwd/zh/fund/MI_QFIIS?date={ymd}&selectType=ALLBUT0999&response=json"
+)
+TPEX_QFII_DATED = "https://www.tpex.org.tw/www/zh-tw/insti/qfii?date={y}%2F{m}%2F{d}&response=json"
+
 #: 交易日以台北時間為準。排程跑在 UTC 的 runner 上，直接用 `date.today()`
 #: 會在台北時間深夜跨日時指到前一天。
 TAIPEI = timezone(timedelta(hours=8))
@@ -96,6 +109,9 @@ INSTITUTIONAL_COLUMNS: tuple[str, ...] = (
     "date", "code", "market", "foreign", "trust", "dealer", "total",
     "f_buy", "f_sell", "t_buy", "t_sell",
 )
+
+#: 外資持股：發行股數、外資持有股數、持股比率（%，例如 69.2 表示 69.2%）。
+QFII_COLUMNS: tuple[str, ...] = ("date", "code", "market", "issued", "held", "pct")
 
 _CODE = re.compile(r"^\d{4}$")
 
@@ -443,6 +459,94 @@ def parse_tpex_institutional_dated(payload: Any) -> list[dict[str, Any]]:
     return _check_gross(out, f"上櫃三大法人 {day}")
 
 
+def _pct(value: Any) -> float | None:
+    """`69.2%`、`69.20`、`0%` → 69.2。看不懂就是 None。"""
+    return _num(str(value or "").replace("%", ""))
+
+
+def _qfii_row(day: str, code: str, market: str, issued: Any, held: Any, pct: Any) -> dict[str, Any]:
+    return {
+        "date": day, "code": code, "market": market,
+        "issued": _num(issued), "held": _num(held), "pct": _pct(pct),
+    }
+
+
+def _qfii_sane(rows: list[dict[str, Any]], label: str) -> list[dict[str, Any]]:
+    """持股比率要和「持有 ÷ 發行」對得上。超過一成對不上就整批不收——欄序變了。"""
+    checked = bad = 0
+    for r in rows:
+        if r["issued"] and r["held"] is not None and r["pct"] is not None:
+            checked += 1
+            if abs(r["held"] / r["issued"] * 100 - r["pct"]) > 0.6:
+                bad += 1
+    if checked and bad / checked > 0.10:
+        print(f"    ⚠️ {label}：{bad}/{checked} 筆「持有 ÷ 發行 ≠ 持股比率」，整批不採用。")
+        return []
+    return rows
+
+
+def parse_twse_qfii(payload: Any) -> list[dict[str, Any]]:
+    """證交所 MI_QFIIS：`fields` + `data`，欄位靠名字對。stat 不是 OK 就是沒有資料。"""
+    payload = payload or {}
+    if str(payload.get("stat") or "").upper() != "OK":
+        return []
+    fields = [_key(f) for f in payload.get("fields") or ()]
+    index = {name: i for i, name in enumerate(fields)}
+
+    def at(row: list[Any], *names: str) -> Any:
+        for n in names:
+            i = index.get(_key(n))
+            if i is not None and i < len(row):
+                return row[i]
+        return None
+
+    day = _date(payload.get("date"))
+    out = []
+    for row in payload.get("data") or ():
+        code = str(at(row, "證券代號") or "").strip()
+        if not _CODE.match(code):
+            continue
+        out.append(_qfii_row(
+            day, code, "上市",
+            at(row, "發行股數"),
+            at(row, "全體外資及陸資持有股數"),
+            at(row, "全體外資及陸資持股比率"),
+        ))
+    return _qfii_sane(out, f"上市外資持股 {day}")
+
+
+def parse_tpex_qfii(payload: Any) -> list[dict[str, Any]]:
+    """櫃買「僑外資及陸資持股比例排行表」：tables[0] 的 fields／data，日期是民國。
+
+    欄名帶著公式（`僑外資及陸資持股比率(E=C/A)`），所以比對的是**開頭**，
+    不是整個字串——公式寫法改一個字也不該讓整欄消失。
+    """
+    tables = (payload or {}).get("tables") or []
+    if not tables:
+        return []
+    table = tables[0] or {}
+    fields = [_key(f) for f in table.get("fields") or ()]
+
+    def col(prefix: str) -> int | None:
+        p = _key(prefix)
+        return next((i for i, f in enumerate(fields) if f.startswith(p)), None)
+
+    i_code, i_issued = col("代號"), col("發行股數")
+    i_held, i_pct = col("僑外資及陸資持有股數"), col("僑外資及陸資持股比率")
+    if None in (i_code, i_issued, i_held, i_pct):
+        return []
+    day = _date(table.get("date"))
+    out = []
+    for row in table.get("data") or ():
+        if len(row) <= max(i_code, i_issued, i_held, i_pct):  # type: ignore[type-var]
+            continue
+        code = str(row[i_code] or "").strip()
+        if not _CODE.match(code):
+            continue
+        out.append(_qfii_row(day, code, "上櫃", row[i_issued], row[i_held], row[i_pct]))
+    return _qfii_sane(out, f"上櫃外資持股 {day}")
+
+
 def _check_gross(rows: list[dict[str, Any]], label: str) -> list[dict[str, Any]]:
     """買進 − 賣出 ＝ 買賣超。對不上超過一成就把**買進／賣出**那四欄清掉。
 
@@ -596,4 +700,18 @@ class Daily:
                 out += parse(self._json(url))
             except Exception as exc:  # noqa: BLE001
                 print(f"    （{url.split('/')[2]} {day} 沒拿到：{exc}）")
+        return out
+
+    def qfii_on(self, day: str) -> list[dict[str, Any]]:
+        """某一個交易日的全市場外資持股比率。形狀同 `institutional_on`。"""
+        y, m, d = day.split("-")
+        out: list[dict[str, Any]] = []
+        for url, parse in (
+            (TWSE_QFII_DATED.format(ymd=f"{y}{m}{d}"), parse_twse_qfii),
+            (TPEX_QFII_DATED.format(y=y, m=m, d=d), parse_tpex_qfii),
+        ):
+            try:
+                out += parse(self._json(url))
+            except Exception as exc:  # noqa: BLE001
+                print(f"    （{url.split('/')[2]} {day} 外資持股沒拿到：{exc}）")
         return out
