@@ -298,7 +298,12 @@
       .then(function () {
         firebase.initializeApp(C.fb);
         firebase.auth().onAuthStateChanged(function (u) {
-          if (!u) { if (lget(K)) { clearLocal(); lrm(K); lrm(M); } showLogin(denied); denied = ""; return; }
+          // 沒有登入：只顯示登入卡片，**不動本機的資料**。
+          // 2026-10-04 的教訓：這裡原本會在「這台瀏覽器之前登入過」時清掉本機清單，而
+          // 「之前登入過」是看 twsix-gate 這個鍵——帳號密碼模式也用同一個鍵存雜湊，於是
+          // 從帳號密碼切到 Google 登入的那一刻，還沒登入就先把觀察清單清掉了，也就沒有
+          // 東西可以搬上雲端。清掉本機資料只在按「登出」時做（見 logout）。
+          if (!u) { if ((lget(K) || "").indexOf("fb:") === 0) lrm(K); showLogin(denied); denied = ""; return; }
           allowed(u).then(function (res) {
             if (!res.ok) {
               lrm(K);
