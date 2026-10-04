@@ -1985,7 +1985,9 @@ def test_網站圖示與加到主畫面的名稱(tmp_path=None):
     assert manifest["name"] == "股海神偵情報站" and manifest["short_name"] == "股海神偵"
     index = (out / "index.html").read_text("utf-8")
     assert "<title>股海神偵情報站｜台股評等清單</title>" in index
-    assert 'href="favicon.svg"' in index and 'content="股海神偵情報站"' in index
+    assert 'href="favicon.ico"' in index and 'content="股海神偵情報站"' in index
+    # 站名前面的站徽
+    assert '<img class="brand" src="favicon.svg"' in index
     stock = (out / "stock" / "5439.html").read_text("utf-8")
     assert 'href="../favicon.ico"' in stock and 'href="../site.webmanifest"' in stock
     assert "台股與全球市場觀測站" not in index + stock

@@ -146,4 +146,6 @@ def test_a_page_without_head_is_left_alone_even_with_a_header_tag():
 def test_登入卡片用網站圖示當站徽():
     logo = sg.logo_svg()
     assert logo.startswith("<svg") and 'id="tgf-bg"' in logo and "url(#tgf-gold)" in logo
+    js = (ROOT / "scripts" / "gate.js").read_text("utf-8")
+    assert 'querySelector("h1").textContent = C.title' in js, "登入頁的站名不加連結"
     assert sg.TITLE == "股海神偵情報站"

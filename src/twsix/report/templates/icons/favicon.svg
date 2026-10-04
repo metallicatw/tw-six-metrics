@@ -1,31 +1,66 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0f3a47"/><stop offset="1" stop-color="#05121a"/>
+      <stop offset="0" stop-color="#103d4b"/><stop offset="1" stop-color="#06131b"/>
     </linearGradient>
+    <radialGradient id="glass" cx=".38" cy=".32" r=".8">
+      <stop offset="0" stop-color="#14465a"/><stop offset="1" stop-color="#061922"/>
+    </radialGradient>
     <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#0b6b60"/>
+      <stop offset="0" stop-color="#3fe0cc"/><stop offset="1" stop-color="#0b6e7a"/>
+    </linearGradient>
+    <linearGradient id="sea2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f9fc4"/><stop offset="1" stop-color="#0a4d6e"/>
     </linearGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffe9a3"/><stop offset=".55" stop-color="#f4c043"/><stop offset="1" stop-color="#c98b14"/>
+      <stop offset="0" stop-color="#ffeaa6"/><stop offset=".5" stop-color="#f2be45"/><stop offset="1" stop-color="#c4860f"/>
     </linearGradient>
-    <clipPath id="lens"><circle cx="27" cy="31" r="15.5"/></clipPath>
+    <!-- 折線漸層：沿著上漲方向由深紅 → 正紅 → 珊瑚橘，箭頭是最亮的那一端 -->
+    <linearGradient id="red" gradientUnits="userSpaceOnUse" x1="15" y1="38" x2="37" y2="22">
+      <stop offset="0" stop-color="#a3122e"/><stop offset=".5" stop-color="#ff3550"/><stop offset="1" stop-color="#ffa26b"/>
+    </linearGradient>
+    <linearGradient id="felt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e6c895"/><stop offset="1" stop-color="#b58548"/>
+    </linearGradient>
+    <clipPath id="lens"><circle cx="28" cy="34" r="15.2"/></clipPath>
   </defs>
   <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-  <circle cx="27" cy="31" r="15.5" fill="#06202a"/>
+
+  <!-- 握把（先畫，讓鏡框壓在上面） -->
+  <path d="M39.6 45.6 L49.5 55.5" stroke="#7a5410" stroke-width="8.6" stroke-linecap="round"/>
+  <path d="M39.6 45.6 L49.5 55.5" stroke="url(#gold)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M43.6 49.6 L48.6 54.6" stroke="#8a5d12" stroke-width="2" stroke-linecap="round" opacity=".55"/>
+
+  <!-- 鏡片 -->
+  <circle cx="28" cy="34" r="15.2" fill="url(#glass)"/>
   <g clip-path="url(#lens)">
-    <path d="M8 38 Q14 33.5 20 38 T32 38 T44 38 V52 H8 Z" fill="url(#sea)"/>
-    <path d="M8 43 Q14 39 20 43 T32 43 T44 43" fill="none" stroke="#a7f3e8" stroke-width="1.5" opacity=".5"/>
-    <polyline points="15,35 21,29 26,32 34,21" fill="none" stroke="#ff4d5e" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M28.6 20 L36.4 19 L35.4 26.8 Z" fill="#ff4d5e"/>
+    <!-- 後浪（深） -->
+    <path d="M10 39.5 C14 36.5 18 36.5 22 39 S30 41.5 34 38.5 S42 36 46 38.5 V52 H10 Z" fill="url(#sea2)"/>
+    <!-- 前浪（亮） -->
+    <path d="M10 43.5 C14.5 40.5 19 40.8 23 43 S31.5 45.6 36 42.6 S43 40.6 46 42.4 V52 H10 Z" fill="url(#sea)"/>
+    <path d="M12 44.2 C15.5 42 19 42.2 22.4 44" fill="none" stroke="#c9fbf2" stroke-width="1.1" stroke-linecap="round" opacity=".75"/>
+    <!-- 紅色上漲折線（深色描邊，和浪分開） -->
+    <polyline points="15.5,38 21,32.2 25.6,35.4 33.6,25.4" fill="none" stroke="#061922" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="15.5,38 21,32.2 25.6,35.4 33.6,25.4" fill="none" stroke="url(#red)" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M28.6 23.6 L37.2 21.8 L35.6 30.4 Z" fill="#061922" stroke="#061922" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M29.4 24.2 L36.4 22.6 L35 29.6 Z" fill="url(#red)"/>
+    <!-- 鏡片反光 -->
+    <path d="M18.4 26.6 A11 11 0 0 1 24.6 21.6" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".55"/>
   </g>
-  <circle cx="27" cy="31" r="15.5" fill="none" stroke="url(#gold)" stroke-width="5"/>
-  <path d="M38.8 42.8 L52.5 56.5" stroke="url(#gold)" stroke-width="7.5" stroke-linecap="round"/>
-  <!-- 偵探帽：斜戴在鏡框上 -->
-  <g transform="rotate(-14 27 13)">
-    <path d="M12.5 15.5 Q27 10.5 41.5 15.5 Q27 19 12.5 15.5 Z" fill="#e8eef2"/>
-    <path d="M18 14.6 Q18.5 4.5 27 4.2 Q35.5 4.5 36 14.6 Q27 12.6 18 14.6 Z" fill="#e8eef2"/>
-    <path d="M18.3 12.2 Q27 10.2 35.7 12.2 L35.9 14.4 Q27 12.4 18.1 14.4 Z" fill="#ff4d5e"/>
+  <!-- 鏡框 -->
+  <circle cx="28" cy="34" r="15.2" fill="none" stroke="#7a5410" stroke-width="5.6"/>
+  <circle cx="28" cy="34" r="15.2" fill="none" stroke="url(#gold)" stroke-width="4.4"/>
+
+  <!-- 偵探帽（紳士帽：中間捏出凹痕、深棕帽帶、帽簷前低後高），斜戴在鏡框上 -->
+  <g transform="rotate(-13 28 15)">
+    <ellipse cx="28" cy="17.6" rx="15.8" ry="3.3" fill="#3b2614"/>
+    <path d="M12.6 17.4 Q28 12.2 43.4 17.4 Q28 21.2 12.6 17.4 Z" fill="url(#felt)"/>
+    <path d="M18.6 16.2 C18.4 10 20.2 6.2 23.6 5.6 C25.4 5.3 26.4 7 28 7 C29.6 7 30.6 5.3 32.4 5.6 C35.8 6.2 37.6 10 37.4 16.2 Q28 14.4 18.6 16.2 Z" fill="url(#felt)"/>
+    <path d="M18.7 13 Q28 11.2 37.3 13 L37.4 16.1 Q28 14.3 18.6 16.1 Z" fill="#4a2c15"/>
+    <path d="M28 7.4 Q27.2 9.6 27.8 12" fill="none" stroke="#9c6b33" stroke-width="1.1" stroke-linecap="round"/>
+    <path d="M21 13.2 C20.6 10.2 21.4 7.8 23 7" fill="none" stroke="#fff3d6" stroke-width="1" stroke-linecap="round" opacity=".55"/>
   </g>
-  <path d="M53 6 L54.4 9.8 L58.2 11.2 L54.4 12.6 L53 16.4 L51.6 12.6 L47.8 11.2 L51.6 9.8 Z" fill="#ffe08a"/>
+
+  <!-- 靈光一閃 -->
+  <path d="M53.5 7 L54.8 10.6 L58.4 11.9 L54.8 13.2 L53.5 16.8 L52.2 13.2 L48.6 11.9 L52.2 10.6 Z" fill="#ffe08a"/>
 </svg>

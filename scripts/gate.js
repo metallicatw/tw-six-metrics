@@ -55,8 +55,7 @@
     if (!w) { w = document.createElement("div"); w.id = "tg"; document.body.appendChild(w); }
     w.innerHTML = '<div class="tg-card"><div class="tg-mark">' + (C.logo || '') + '</div>' +
       '<h1></h1>' + inner + '<p class="tg-foot">僅限授權使用者</p></div>';
-    var a = w.querySelector("h1").appendChild(document.createElement("a"));
-    a.href = C.home; a.textContent = C.title;
+    w.querySelector("h1").textContent = C.title;   // 純文字，不加連結（2026-10-04）
     return w;
   }
   function icon(id, title, path, onClick) {

@@ -65,8 +65,6 @@ padding:32px 28px 26px;box-shadow:0 24px 60px rgba(0,0,0,.45)}
 box-shadow:0 10px 28px rgba(244,192,67,.28),0 0 0 1px rgba(255,255,255,.12)}
 #tg .tg-mark svg{display:block}
 #tg h1{margin:0 0 4px;font-size:20px;font-weight:700;text-align:center;letter-spacing:.04em;color:#fff}
-#tg h1 a{color:inherit;text-decoration:none;border-bottom:1px dashed rgba(255,255,255,.35)}
-#tg h1 a:hover{color:#5eead4;border-bottom-color:#5eead4}
 #tg .tg-sub{margin:0 0 22px;text-align:center;font-size:13px;color:#9fb6bf}
 #tg label{display:block;font-size:12px;color:#b9ccd3;margin:0 0 6px;letter-spacing:.06em}
 #tg input[type=text],#tg input[type=password]{width:100%;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.18);

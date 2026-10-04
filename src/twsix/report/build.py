@@ -413,9 +413,9 @@ def write_build_state(
     )
 
 
-#: 網站圖示（2026-10-04）：放大鏡＋偵探帽＋股海浪花＋紅色上漲線，對應站名「股海神偵情報站」。
-#: 原稿是 icons/favicon.svg，其餘是由它轉出的 PNG／ICO。放在網站**根目錄**：瀏覽器
-#: 沒看到 <link rel="icon"> 時會自己去要 /favicon.ico。
+#: 網站圖示與站徽（2026-10-04）：金色放大鏡戴著偵探紳士帽，鏡片裡是股海浪花與紅色上漲折線。
+#: 原稿是 icons/favicon.svg，PNG／ICO 由 scripts/make_icons.py 轉出。放在網站**根目錄**：
+#: 瀏覽器沒看到 <link rel="icon"> 時會自己去要 /favicon.ico。頁首站名前的站徽用的也是那張 SVG。
 ICON_DIR = TEMPLATE_DIR / "icons"
 ICON_FILES = (
     "favicon.ico", "favicon.svg", "apple-touch-icon.png",
