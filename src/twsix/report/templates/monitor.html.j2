@@ -12,13 +12,14 @@
    CORS 的問題，也不必請對方配合任何事。 #}
 {# 頁面標題和導覽列重複，畫面上不顯示；說明燈泡改放在這一行小字後面（2026-10-04）。 #}
 <h2 class="sr">全球市場監控＋日股觀察</h2>
-<p class="muted note-s embed-cap">每天台北 06:30 更新・<a href="{{ rel }}{{ report }}" target="_blank" rel="noopener">單獨開啟 ↗</a> {% call tip() %}
+{# <div> 不是 <p>：燈泡裡有 <ol>，放在 <p> 裡瀏覽器會提早把段落關掉，整段說明就攤在頁面上（2026-10-04）。 #}
+<div class="muted note-s embed-cap">每天台北 06:30 更新 {% call tip() %}
   台股加權、VIX、日經 225、密大消費者信心、村田 B/B Ratio 與一組日本焦點個股。
   <br><br>
   由 <a href="https://github.com/metallicatw/market-monitor" rel="noopener">market-monitor</a>
   每天台北 06:30 產生，這裡嵌的是同一份。
   <a href="{{ rel }}{{ report }}" target="_blank" rel="noopener">單獨開啟這份報告 ↗</a>
-{% endcall %}</p>
+{% endcall %}</div>
 {# `fit` 是「把 iframe 拉到跟內容一樣高」的開關（見 site.js）。只有這一份報告
    可以這樣做：它是一份會流動的文件，高度由內容決定。趨勢選股那份是釘在視窗裡的
    應用程式，高度反過來由 iframe 決定，套同一招會變成無限往下長。 #}

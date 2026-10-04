@@ -30,7 +30,8 @@
    不另寫一份。抽不到的時候退回下面那段不帶數字的說明。 #}
 {# 頁面標題和導覽列重複，畫面上不顯示；說明燈泡改放在這一行小字後面（2026-10-04）。 #}
 <h2 class="sr">趨勢×六大×報酬</h2>
-<p class="muted note-s embed-cap">每個交易日台北 15:10 更新・<a href="{{ rel }}{{ report }}#cross" target="_blank" rel="noopener">單獨開啟 ↗</a> {% call tip() %}
+{# <div> 不是 <p>：燈泡裡有 <ol>，放在 <p> 裡瀏覽器會提早把段落關掉，整段說明就攤在頁面上（2026-10-04）。 #}
+<div class="muted note-s embed-cap">每個交易日台北 15:10 更新 {% call tip() %}
   <b>技術面四關全過，再加兩個基本面的條件。</b>全市場約 1,900 檔先過這四關：
   {% if rules_html %}
   <span class="trend-rules" role="group" aria-label="預設篩選條件">
@@ -73,7 +74,7 @@
   由 <a href="https://github.com/metallicatw/tw-trend-filter" rel="noopener">tw-trend-filter</a>
   每個交易日台北 15:10 產生，這裡嵌的是同一份。
   <a href="{{ rel }}{{ report }}#cross" target="_blank" rel="noopener">單獨開啟這份報告 ↗</a>
-{% endcall %}</p>
+{% endcall %}</div>
 {# `.tall`：桌機上 iframe 幾乎一整個視窗高（見 site.css）。78vh 的時候圖被
    壓到約 4:1，使用者說「壓太扁平了，看不出變化」。 #}
 <iframe id="trend-frame" class="embed tall" src="{{ rel }}{{ report }}#cross"

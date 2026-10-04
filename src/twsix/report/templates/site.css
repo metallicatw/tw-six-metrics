@@ -627,7 +627,7 @@ button.bulb:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
   border-left:3px solid var(--accent);border-radius:5px;
   box-shadow:0 6px 20px rgba(0,0,0,.18);padding:10px 13px;
   font-size:13px;line-height:1.65;color:var(--ink-2);text-align:left;
-  white-space:normal}
+  white-space:normal;max-height:70vh;overflow-y:auto;overscroll-behavior:contain}
 .tip.open .tipbox{display:block}
 /* 靠右邊界的那幾顆，往左展開，不然說明會被切掉。由 site.js 量出來後加上。 */
 .tip.flip .tipbox{left:auto;right:0}

@@ -2004,3 +2004,20 @@ def test_大分頁不再顯示和導覽列重複的標題(tmp_path=None):
     index = (out / "index.html").read_text("utf-8")
     end = index[index.index('class="qf-end"'):]
     assert end.index('id="f-reset"') < end.index('class="bulb"') < end.index("</span></span>") + 400
+
+
+def test_嵌入頁的燈泡在_div_裡_單獨開啟收進燈泡(tmp_path=None):
+    """燈泡裡有 <ol>（趨勢的預設篩選條件）：放在 <p> 裡會被瀏覽器提早關掉段落，整段說明攤在頁面上。"""
+    from twsix.report.build import MONITOR_PAGE, MONITOR_REPORT
+
+    tmp = tmp_path or _tmp()
+    out = _with_trend(tmp)
+    (out / MONITOR_REPORT).write_text("<html>報告</html>", encoding="utf-8")
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    for name in ("trend.html", MONITOR_PAGE):
+        page = (out / name).read_text("utf-8")
+        assert '<div class="muted note-s embed-cap">' in page, name
+        assert '<p class="muted note-s embed-cap">' not in page, name
+        cap = page[page.index('embed-cap'):page.index("<iframe")]
+        before, inside = cap.split('class="tipbox"', 1)
+        assert "單獨開啟" not in before and "單獨開啟這份報告" in inside, name
