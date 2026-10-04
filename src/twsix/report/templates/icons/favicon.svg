@@ -39,11 +39,11 @@
     <!-- 前浪（亮） -->
     <path d="M10 43.5 C14.5 40.5 19 40.8 23 43 S31.5 45.6 36 42.6 S43 40.6 46 42.4 V52 H10 Z" fill="url(#sea)"/>
     <path d="M12 44.2 C15.5 42 19 42.2 22.4 44" fill="none" stroke="#c9fbf2" stroke-width="1.1" stroke-linecap="round" opacity=".75"/>
-    <!-- 紅色上漲折線（深色描邊，和浪分開） -->
-    <polyline points="15.5,38 21,32.2 25.6,35.4 33.6,25.4" fill="none" stroke="#061922" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round"/>
-    <polyline points="15.5,38 21,32.2 25.6,35.4 33.6,25.4" fill="none" stroke="url(#red)" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M28.6 23.6 L37.2 21.8 L35.6 30.4 Z" fill="#061922" stroke="#061922" stroke-width="2" stroke-linejoin="round"/>
-    <path d="M29.4 24.2 L36.4 22.6 L35 29.6 Z" fill="url(#red)"/>
+    <!-- 紅色上漲折線（漸層、無描邊），置於鏡片正中央 -->
+    <g transform="translate(1.6 4)">
+      <polyline points="15.5,38 21,32.2 25.6,35.4 33.6,25.4" fill="none" stroke="url(#red)" stroke-width="3.3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M29.4 24.2 L36.4 22.6 L35 29.6 Z" fill="url(#red)" stroke="url(#red)" stroke-width=".8" stroke-linejoin="round"/>
+    </g>
     <!-- 鏡片反光 -->
     <path d="M18.4 26.6 A11 11 0 0 1 24.6 21.6" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".55"/>
   </g>
