@@ -1,4 +1,5 @@
 {% extends "base.html.j2" %}
+{% from "_macros.html.j2" import tip %}
 {% block title %}選股功能｜{{ site_title }}{% endblock %}
 {% block head_early %}
 {# 先開始下載（2026-09-28，頁面載入太久）：data.json 一定要；直接開到趨勢選股或近期強勢股
@@ -105,8 +106,9 @@ window.SC_V = "{{ data_v|default('') }}";
 </style>
 
 <div class="sc">
-<h2>選股功能</h2>
-<p class="sc-note" id="sc-msg">載入中…</p>
+{# 頁面標題和導覽列上目前那一顆重複，畫面上不再顯示（2026-10-04）；留給螢幕閱讀器與頁內大綱。 #}
+<h2 class="sr">選股功能</h2>
+<p class="sc-note"><span id="sc-msg">載入中…</span> {% call tip() %}篩選在你的瀏覽器裡進行，條件不會送到任何地方；四個分頁的條件會記住（登入時跟著帳號）。<br><br>不構成任何投資建議。{% endcall %}</p>
 
 <div class="sc-tabs" role="tablist" id="sc-tabs">
   <button class="sc-tab" role="tab" data-t="fin">財務選股</button>
@@ -675,7 +677,7 @@ tabs.forEach(function(t){ t.addEventListener("click", function(){ open(t.getAttr
 
 grab("data.json").then(function(doc){
   D = unpackData(doc);
-  $("sc-msg").textContent = "資料日 " + D.asof + "；基準季 " + D.base_q + "（" + D.qcount[D.base_q] + " 家）、基準月 " + D.base_m + "（" + D.mcount[D.base_m] + " 家）；共 " + D.rows.length + " 檔。篩選在你的瀏覽器裡進行。不構成任何投資建議。";
+  $("sc-msg").textContent = "資料日 " + D.asof + "；基準季 " + D.base_q + "（" + D.qcount[D.base_q] + " 家）、基準月 " + D.base_m + "（" + D.mcount[D.base_m] + " 家）；共 " + D.rows.length + " 檔。";
   buildFin();
   ["fin", "trend", "strong", "high"].forEach(function(t){ preset(t, false); });
   formLoad();

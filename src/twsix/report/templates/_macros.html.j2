@@ -190,7 +190,10 @@
     <option value="veto">財報否決</option><option value="any">任一標記</option></select></label>
   <label>籌碼雷達 <select id="f-cf"><option value="">全部</option><option value="pick">精選</option><option value="l1">共振</option>
     <option value="any">精選或共振</option></select></label>
-  <button type="button" id="f-reset" class="qf-reset">清除篩選</button>
+  {#- 呼叫端可以把說明燈泡接在〔清除篩選〕右邊，不必自己再佔一列（2026-10-04）；
+      兩個包在一起，窄螢幕換行時才不會只剩燈泡掉到下一列。 -#}
+  <span class="qf-end"><button type="button" id="f-reset" class="qf-reset">清除篩選</button>
+  {%- if caller %}{{ caller() }}{% endif %}</span>
 </div>
 {%- endmacro %}
 
@@ -402,7 +405,7 @@
         <span>不在任何名單上。</span></li>
   </ul>
   <p class="stop">點標題排序：持有 → 候選（同時符合越多套越前面）→ 空白 → 財報否決。</p>
-  <p class="stop">⚠️ 試行中。這是一組規則的輸出，不是投資建議；回測與影子帳戶的成績見〔AI 選股〕頁。</p>
+  <p class="stop">⚠️ 這是一組規則的輸出，不是投資建議；回測與影子帳戶的成績見〔AI 選股〕頁。</p>
 {% endcall %}</span></th>
   <th class="mid cf-cell"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 18 + o }}">籌碼<br>雷達</button>{% call tip() %}
   <b>籌碼雷達</b>當天的漏斗結果（每個交易日收盤後更新，點標籤看那一檔的〔① 個股籌碼多圖〕）：
@@ -415,7 +418,7 @@
         <span>不在兩份名單上。</span></li>
   </ul>
   <p class="stop">點標題排序：精選 → 共振（同一級依共振分數）→ 空白。</p>
-  <p class="stop">⚠️ 試行中。清單由公開籌碼資料自動產生，不是投資建議；每週回頭驗證的成績見〔籌碼雷達〕的〔指標驗證〕。</p>
+  <p class="stop">⚠️ 清單由公開籌碼資料自動產生，不是投資建議；每週回頭驗證的成績見〔籌碼雷達〕的〔指標驗證〕。</p>
 {% endcall %}</span></th>
 </tr></thead>
 {%- endmacro %}

@@ -93,7 +93,9 @@
 {# 〔AI 選股〕：A 營收驚喜、B 供應鏈連動、C 法說轉折、D 籌碼共振、E 財報品質否決、
    F 市場狀態，合併影子帳戶與回測。每一個數字都來自 data/aipick/*.json（<code>twsix aipick</code>
    與 <code>twsix aipick-fetch</code> 每天寫的），這一頁不算任何東西，見 report/ai_page.py。 #}
-<h2>AI 選股 <span class="ai-beta">試行</span>　{% call tip() %}
+{# 頁面標題和導覽列上目前那一顆重複，畫面上不再顯示（2026-10-04）；說明燈泡移到資料日那一行。 #}
+<h2 class="sr">AI 選股</h2>
+{% macro ai_intro() %}{% call tip() %}
   六套機制，全部用公開資料：<br>
   <b>A 營收驚喜</b>：每家公司自己的營收模型，這個月比預期好很多的。<br>
   <b>B 供應鏈連動</b>：和它一起動的那幾家已經漲了、它還沒。<br>
@@ -103,7 +105,7 @@
   <b>F 市場狀態</b>：決定現在最多可以持有幾檔。<br><br>
   A、B、D 共用一個<b>影子帳戶</b>，從上線那天起照規則實際記帳——回測好看不算數，影子帳戶跑得出來才算。<br><br>
   這不是投資建議：這一頁列的是「符合這組規則的清單」與它過去的表現，不是買賣的理由。
-{% endcall %}</h2>
+{% endcall %}{% endmacro %}
 
 {% if not ai.ready %}
 {% if ai.error %}
@@ -115,7 +117,7 @@
 {% set t = ai.today %}
 {% set rn = t.regime_now %}
 {% set rf = t.regime_in_force %}
-<p class="muted ai-asof">資料日 {{ t.asof }}｜產生於 {{ t.generated_at }}</p>
+<p class="muted ai-asof">資料日 {{ t.asof }}｜產生於 {{ t.generated_at }} {{ ai_intro() }}</p>
 
 {# 各段是**獨立的分頁**（2026-09-24），不是同一頁裡的定位點：一次只顯示一段，
    網址 #regime、#backtest… 可以直接開到那一段。切換由 site.js 的 AI 分頁那一段負責；

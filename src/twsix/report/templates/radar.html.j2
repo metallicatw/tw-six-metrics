@@ -1,4 +1,5 @@
 {% extends "base.html.j2" %}
+{% from "_macros.html.j2" import tip %}
 {% block title %}籌碼雷達｜{{ site_title }}{% endblock %}
 {% block head_early %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,7 +28,6 @@ window.CF_V = "@@CFV@@";
    以 .cf 為前綴，不動 site.css / site.js——壞了只影響這一頁。 #}
 <style>
 .cf{--cf-hl:#ffe45c;--cf-hl-ink:#1b1b00}
-.cf h2 .cf-beta{font-size:12px;border:1px solid var(--rule);border-radius:999px;padding:1px 8px;margin-left:6px;color:var(--muted);vertical-align:middle}
 .cf-note{color:var(--muted);font-size:13px;line-height:1.6}
 .cf-tabs{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;margin:12px 0;padding-bottom:4px}
 /* 每一顆分頁一個顏色（2026-09-28）：沒選中的是那個顏色的外框與字，選中的整顆填滿。
@@ -121,9 +121,10 @@ window.CF_V = "@@CFV@@";
 </style>
 
 <div class="cf" id="cf">
-<h2>籌碼雷達 <span class="cf-beta">試行</span></h2>
-<p class="cf-note">法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面。十三項工具的設計參考 BG財報公開的方法，數字全部由本站用政府資料開放平臺（證交所、櫃買中心、集保結算所、公開資訊觀測站）自行計算。
-<span id="cf-asof"></span></p>
+{# 頁面標題和導覽列上目前那一顆重複，畫面上不再顯示（2026-10-04）；留給螢幕閱讀器與頁內大綱。 #}
+<h2 class="sr">籌碼雷達</h2>
+{# 開頭那段介紹收進燈泡，畫面上只留資料日（2026-10-04）。 #}
+<p class="cf-note"><span id="cf-asof"></span> {% call tip() %}<b>法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面。</b>十三項工具的設計參考 BG財報公開的方法，數字全部由本站用政府資料開放平臺（證交所、櫃買中心、集保結算所、公開資訊觀測站）自行計算。完整說明在最後一個分頁〔說明〕。<br><br>不構成任何投資建議；清單由公開資料自動產生，不代表推薦。{% endcall %}</p>
 <p class="cf-note" id="cf-msg">載入中…</p>
 
 <div class="cf-tabs" role="tablist" id="cf-tabs">
@@ -713,7 +714,7 @@ getJSON("radar.json").then(function(doc){
     dl.appendChild(frag);
   });
   $("cf-asof").textContent = "資料日 " + R.asof + "（產生於 " + R.generated_at + "）。";
-  $("cf-msg").textContent = "不構成任何投資建議；清單由公開資料自動產生，不代表推薦。";
+  $("cf-msg").hidden = true;   // 免責那一句已經在資料日旁邊的燈泡裡
   init();
 }).catch(function(){
   $("cf-msg").textContent = "還沒有資料：籌碼雷達的每日計算（twsix chipflow）尚未跑過，或這次建站沒有產生 chipflow/ 資料。下一次排程後會自動出現。";

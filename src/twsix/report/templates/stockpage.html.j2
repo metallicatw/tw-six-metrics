@@ -681,9 +681,9 @@
       <button type="button" class="btn-grab" id="pxh-run">重新健診</button>
       <button type="button" class="btn-grab alt" id="pxh-short">短期預設值</button>
       <button type="button" class="btn-grab alt" id="pxh-mid">中期預設值</button>
+      {% call tip() %}短期 ＝ 1 月內 10%／1 月內 10%／前 20 日低點；中期 ＝ 3 月內 20%／3 月內 20%／前 60 日低點。按下即帶入條件並重新健診。
+      一個月以 21 個交易日計。本頁股價皆使用「收盤價」計算（含高低點、回檔幅度與月線／季線／年線），<b>未還原除權息</b>。{% endcall %}
     </div>
-    <p class="note-s">短期 ＝ 1 月內 10%／1 月內 10%／前 20 日低點；中期 ＝ 3 月內 20%／3 月內 20%／前 60 日低點。按下即帶入條件並重新健診。
-      一個月以 21 個交易日計。本頁股價皆使用「收盤價」計算（含高低點、回檔幅度與月線／季線／年線），<b>未還原除權息</b>。</p>
   </div>
   <div id="pxh-out"></div>
   <h4 class="pxh-h">股價與月／季／年線</h4>
@@ -771,12 +771,12 @@
 <h3 id="river">河流圖（本益比）</h3>
 {% if p.river %}
 {% if p.river.figure %}
-{% call tip() %}
+{% set river_tip %}
   本益比倍數取自<b>年度</b>資料——每年的收盤均價除以當年 EPS，2.5%～97.5%
   信任區間切成六區。分區<b>會彎</b>，因為它們是那組固定倍數乘上<b>當時</b>的
   近四季 EPS，而 EPS 每季會變；季報要等公布才算數（Q1 五月中、Q2 八月中、
   Q3 十一月中、年報隔年三月底），所以邊界是階梯而不是平滑曲線。
-{% endcall %}
+{% endset %}
 {{ p.river.figure }}
 {% else %}
 <p class="stale">
@@ -789,7 +789,8 @@
   <div class="card"><b>{{ "%.2f"|format(p.river.current) if p.river.current else "—" }}</b>
     <span>目前本益比</span></div>
   <div class="card"><b>{{ p.river.zone_name }}</b><span>所在分區</span></div>
-  <div class="card"><b>{{ p.river.years }}</b><span>採計年數</span></div>
+  {# 說明燈泡掛在〔採計年數〕這張卡上，不再自己佔一列（2026-10-04）。 #}
+  <div class="card"><b>{{ p.river.years }}</b><span>採計年數{% if river_tip is defined %}{% call tip() %}{{ river_tip }}{% endcall %}{% endif %}</span></div>
   {% if p.river.weeks %}
   <div class="card"><b>{{ p.river.weeks }}</b><span>週線點數</span></div>
   {% endif %}
@@ -883,8 +884,7 @@
   <div class="card"><b>{{ "%.2f"|format(ls.share["三大法人"] * 100) if ls and ls.share["三大法人"] is not none else "—" }}%</b>
     <span>三大法人持股比重</span></div>
 </div>
-<p class="muted">圖：近 {{ i.chart_span }} 個交易日（與籌碼雷達 ① 對齊）；表格：近 {{ i.days|length }} 個交易日。
-  <a href="{{ rel }}radar.html#t1-{{ p.stock_id }}">看完整籌碼多圖 →</a></p>
+<p class="muted note-s">圖近 {{ i.chart_span }} 日・表近 {{ i.days|length }} 日・<a href="{{ rel }}radar.html#t1-{{ p.stock_id }}">看完整籌碼多圖 →</a></p>
 {{ i.figures.foreign_net|safe }}
 {{ i.figures.foreign_share|safe }}
 <div class="scroll">
@@ -930,10 +930,8 @@
 {% if p.news %}
 {% set n = p.news %}
 {% if n.items %}
-{% call tip() %}
-  鉅亨網，近 {{ n.days }} 天共 <b>{{ n.items|length }}</b> 則，最新 {{ n.latest }}。
-  {%- if n.dropped %}　更早的 {{ n.dropped }} 則未列出。{% endif %}
-{% endcall %}
+<p class="muted note-s">鉅亨網・近 {{ n.days }} 天 {{ n.items|length }} 則・最新 {{ n.latest }}
+  {%- if n.dropped %}（更早的 {{ n.dropped }} 則未列出）{% endif %}</p>
 <ol class="news">
   {% for it in n.items %}
   <li>
@@ -1092,9 +1090,7 @@
 </section>
 {% endif %}
 
-<p class="muted">
-  本頁為資料整理，非投資建議。估價模型的輸入與門檻見〈評分規則〉。
-</p>
+{# 「本頁為資料整理，非投資建議」和頁尾那一句重複，拿掉（2026-10-04）。 #}
 
 <script>
 /* 分頁切換。

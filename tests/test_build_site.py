@@ -1562,12 +1562,13 @@ def test_市場監控的說明也收進燈泡(tmp_path=None):
     build_site(_records(), out, sheets_dir=_sheets(tmp))
 
     page = (out / MONITOR_PAGE).read_text(encoding="utf-8")
-    h2 = page[page.index("<h2>"):page.index("</h2>")]
-    assert 'class="bulb"' in h2, "燈泡不在標題那一行"
+    # 2026-10-04：和導覽列重複的標題不再顯示，燈泡接在 iframe 上面那一行小字後面。
+    assert '<h2 class="sr">全球市場監控＋日股觀察</h2>' in page
+    cap = page[page.index('class="muted note-s embed-cap"'):page.index("<iframe")]
+    assert 'class="bulb"' in cap, "燈泡不在說明那一行"
     assert "村田" in page, "說明內容不見了"
-    # 標題和 iframe 之間不該再有一整段說明文字。
-    between = page[page.index("</h2>"):page.index("<iframe")]
-    assert "台股加權" not in between
+    # iframe 上面不該有一整段攤開的說明文字（都在燈泡的 tipbox 裡）。
+    assert "台股加權" in cap.split('class="tipbox"', 1)[1]
 
 
 def test_the_eight_periods_are_real_table_columns(tmp_path=None):
@@ -1823,7 +1824,7 @@ def test_那一頁預設就帶_cross(tmp_path=None):
     # 漏掉的症狀很安靜：頁面上寫著新名字，書籤和分頁上還是舊的。
     title = page.split("<title>")[1].split("</title>")[0]
     assert title.startswith("趨勢×六大×報酬"), f"分頁標題還是舊的：{title}"
-    assert "<h2>趨勢×六大×報酬" in page, "頁面上的標題沒改"
+    assert '<h2 class="sr">趨勢×六大×報酬</h2>' in page, "頁面上的標題沒改"
     # 兩個門檻預設是 0（＝不啟用），而這一頁的名字寫著六大和報酬——不說清楚的話
     # 讀者會以為名單已經篩過那兩關了。
     assert "只顯示、不篩" in page, "燈泡沒有說那兩個數字預設不拿來篩"
@@ -1988,3 +1989,18 @@ def test_網站圖示與加到主畫面的名稱(tmp_path=None):
     stock = (out / "stock" / "5439.html").read_text("utf-8")
     assert 'href="../favicon.ico"' in stock and 'href="../site.webmanifest"' in stock
     assert "台股與全球市場觀測站" not in index + stock
+
+
+def test_大分頁不再顯示和導覽列重複的標題(tmp_path=None):
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    for name, title in (("index.html", "台股評等清單"), ("watchlist.html", "台股觀察清單")):
+        page = (out / name).read_text("utf-8")
+        assert f'<h2 class="sr">{title}</h2>' in page and f"<h2>{title}</h2>" not in page, name
+    watch = (out / "watchlist.html").read_text("utf-8")
+    # 雲端同步那段說明收進燈泡：在 tipbox 裡，不在攤開的段落裡。
+    assert "跟著帳號存在雲端" in watch.split('class="tipbox"', 1)[1]
+    index = (out / "index.html").read_text("utf-8")
+    end = index[index.index('class="qf-end"'):]
+    assert end.index('id="f-reset"') < end.index('class="bulb"') < end.index("</span></span>") + 400

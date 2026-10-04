@@ -612,6 +612,7 @@ table.rev th .u{display:block;font-size:10.5px;font-weight:500;color:var(--muted
 h2 .tip,h3 .tip{margin:0 0 0 4px;vertical-align:middle}
 /* 篩選那一列是 flex：燈泡由 gap 決定間距，自己不要再帶邊距。 */
 .filters .tip{margin:0}
+.qf-end{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
 h2 .tipbox,h3 .tipbox{font-weight:400}
 button.bulb{appearance:none;border:1px solid var(--rule);background:var(--surface);
   border-radius:999px;cursor:pointer;font:inherit;font-size:14px;line-height:1;
@@ -1226,10 +1227,12 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 #t.compact .g{min-width:24px;padding:1px 4px;font-size:11px}
 /* 「數據不足」「不評分」四個字把六個等第欄各撐到 49px（其他格只要 30px）：
    在清單上折成兩行（數據／不足），欄寬回到由等第徽章決定（2026-09-29）。 */
-#t.compact .g-na{white-space:normal;width:2.3em;min-width:0;line-height:1.2;padding:1px 2px}
+#t.compact .g-na{white-space:nowrap;width:auto;min-width:0;line-height:1.2;padding:1px 2px}
 /* 「數據不足」「不評分」這種字的徽章：六個等第欄的寬度是被它們撐開的（62px，
    字母徽章只要 54）。縮小字，不改字——改成「—」會和「沒有資料」混在一起。 */
-#t.compact .g.g-na{padding:1px 2px;font-size:9.5px;letter-spacing:-.02em}
+#t.compact .g.g-na{padding:1px 2px;font-size:9px;letter-spacing:-.04em;vertical-align:middle}
+/* 等第那幾格垂直置中：名稱欄折成兩三行時，徽章原本貼在上緣（2026-10-04）。 */
+#t td.mid{vertical-align:middle}
 /* 收盤價：數字靠右，走勢圖圖示貼在數字右邊。 */
 #t td.px{font-weight:600;font-variant-numeric:tabular-nums}
 #t td.px .pxv.flat{color:var(--ink)}
@@ -1334,6 +1337,9 @@ table.hl-t th.num,table.hl-t td.num{text-align:right;font-variant-numeric:tabula
 .hl-na{color:var(--muted)}
 .hl-sub{margin:0 0 8px;font-size:12.5px;color:var(--muted);max-width:none}
 .note-s{margin:6px 0 0;font-size:11.5px;color:var(--muted);max-width:none;line-height:1.65}
+.embed-cap{margin:0 0 8px}
+/* 表格下方「註：…」那一行：原本沒有樣式，在手機上是一整段內文字級（2026-10-04）。 */
+p.foot{margin:8px 0 0;font-size:12px;color:var(--muted);line-height:1.6}
 /* 股價健診 */
 .pxh-form label{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0 0 8px;
   font-size:13.5px;color:var(--ink-2)}
@@ -1403,8 +1409,6 @@ table.hl-t{min-width:0}
  * 五個區塊各一個識別色小方塊（F 市場狀態、D 籌碼共振、影子帳戶、回測、E 否決），
  * 顏色只當「認位置」用；漲跌仍然是 --up／--down（紅漲綠跌）。
  * ========================================================================= */
-.ai-beta{display:inline-block;vertical-align:middle;font-size:11px;font-weight:700;
-  padding:2px 8px;border-radius:999px;margin-left:4px;color:#fff;background:#6d3fd1}
 .ai-asof{margin:-4px 0 12px}
 .ai-block{background:var(--surface);border:1px solid var(--rule);border-radius:8px;
   padding:14px 16px 16px;margin:0 0 16px}

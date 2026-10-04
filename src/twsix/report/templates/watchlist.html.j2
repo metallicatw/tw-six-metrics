@@ -2,15 +2,16 @@
 {% from "_macros.html.j2" import row, table_head, tip, price_note, quick_filters %}
 {% block title %}台股觀察清單 — {{ site_title }}{% endblock %}
 {% block body %}
-<h2>台股觀察清單</h2>
+{# 頁面標題和導覽列上目前那一顆重複，畫面上不再顯示（2026-10-04）；留給螢幕閱讀器與頁內大綱。 #}
+<h2 class="sr">台股觀察清單</h2>
 {# 這一頁和〔評等清單〕是同一張表，只是預設只顯示加過星的那幾列。
    為什麼不在建站時就只放那幾列：清單存在讀者自己的瀏覽器裡，建站的時候我們
    不知道、也不該知道他標了哪幾檔。所以整張表都送過去，由瀏覽器自己篩。 #}
 <p class="muted">
   你標記的股票，共 <span id="tally">0 檔</span>。
-  用 Google 帳號登入時，清單與篩選條件跟著帳號存在雲端，電腦、手機看到同一份；
-  沒有登入功能時只存在這台瀏覽器。清單不會進到這個網站的原始碼裡。
-  {% call tip() %}{{ price_note() }}
+  {% call tip() %}<b>清單存在哪裡。</b>用 Google 帳號登入時，清單與篩選條件跟著帳號存在雲端，
+  電腦、手機看到同一份；沒有登入功能時只存在這台瀏覽器。清單不會進到這個網站的原始碼裡。
+  <br><br>{{ price_note() }}
   {% endcall %}
 </p>
 <div class="filters">
