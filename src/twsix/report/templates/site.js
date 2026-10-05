@@ -2829,7 +2829,7 @@ function reveal(bar, el){
   function render(){
     var gs = TWSIXWatch.groups(), cur = TWSIXWatch.current().id;
     /* 一列左右滑動：群組一多，換行排成好幾列在手機上會佔掉半個螢幕。重畫時保留捲動
-       位置，切換群組時把選中的那一顆捲進畫面。 */
+       位置；只有剛載入時把選中的那一顆捲進畫面，之後不自動挪。 */
     var old = host.querySelector('.wg-tabs'), keep = old ? old.scrollLeft : 0;
     var oldRows = host.querySelector('.wg-rows'), keepY = oldRows ? oldRows.scrollTop : 0;
     var h = '<div class="wg-bar"><div class="wg-tabs" role="tablist" aria-label="觀察清單群組">', nHid = 0;
@@ -2857,7 +2857,8 @@ function reveal(bar, el){
     strip.scrollLeft = keep;
     var rows = host.querySelector('.wg-rows');
     if(rows) rows.scrollTop = keepY;
-    if(cur !== lastCur){
+    /* 只在剛打開頁面時把選中的那一顆捲進畫面；之後使用者點哪一顆、滑到哪裡，列都不自己動。 */
+    if(lastCur === null){
       var sel = strip.querySelector('[aria-selected="true"]');
       if(sel){
         var a = sel.closest('.wg-item') || sel, L = a.offsetLeft - strip.offsetLeft, R = L + a.offsetWidth;

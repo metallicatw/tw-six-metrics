@@ -219,17 +219,18 @@ header.top h1 .brand{width:34px;height:34px;flex:0 0 auto;border-radius:8px}
  * 的形狀都不變。捲動條刻意不藏（只調細），因為看不見的捲動等於沒有捲動：
  * 讀者不會去滑一個看起來已經完整的東西。
  *
- * `scroll-snap` 讓每一顆停得整齊，`-webkit-overflow-scrolling` 是 iOS 的慣性。
+ * 不用 `scroll-snap`（2026-10-05 拿掉）：放手後瀏覽器會自己再挪一下去對齊某一顆，
+ * 讀者覺得是「滑到一半被拉回去」。滑到哪就停在哪。`-webkit-overflow-scrolling` 是 iOS 的慣性。
  * 兩側的 padding 與負 margin 是為了讓第一顆與最後一顆捲到底時不貼著螢幕邊。 */
 nav{display:flex;gap:8px;flex-wrap:nowrap;margin-top:10px;font-size:15px;
   font-weight:600;overflow-x:auto;overscroll-behavior-x:contain;
-  -webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;
+  -webkit-overflow-scrolling:touch;
   padding:2px 12px 8px;margin-left:-12px;margin-right:-12px}
 nav::-webkit-scrollbar{height:5px}
 nav::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
 nav{scrollbar-width:thin}
 nav a{color:var(--nav-c,var(--ink-2));text-decoration:none;
-  flex:0 0 auto;white-space:nowrap;scroll-snap-align:start;
+  flex:0 0 auto;white-space:nowrap;
   padding:7px 14px;border-radius:999px;line-height:1.2;
   border:1.5px solid color-mix(in srgb,var(--nav-c,var(--ink-2)) 45%,transparent);
   background:color-mix(in srgb,var(--nav-c,var(--ink-2)) 8%,transparent);
@@ -526,7 +527,7 @@ td.pv .v{display:block;font-variant-numeric:tabular-nums;
  * 同色系按鈕裡，填滿是唯一不必比較就看得出來的差別。 */
 .tabs{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;
   overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;
-  scroll-snap-type:x proximity;scrollbar-width:thin;
+  scrollbar-width:thin;
   padding:4px 1px 8px;margin:0}
 .tabs::-webkit-scrollbar{height:5px}
 .tabs::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
@@ -534,7 +535,7 @@ td.pv .v{display:block;font-variant-numeric:tabular-nums;
    顏色 --tk = 原色 --tc 混進 40% 的灰，彩度降下來，不跟頁首搶。第三層（分頁裡的分頁）12.5px。 */
 .tab{--tc:var(--accent-2);--tk:color-mix(in srgb,var(--tc) 60%,#87909a);flex:0 0 auto;appearance:none;font:inherit;font-size:13px;
   font-weight:600;line-height:1.2;white-space:nowrap;cursor:pointer;
-  scroll-snap-align:start;padding:7px 12px;border-radius:7px;
+  padding:7px 12px;border-radius:7px;
   color:var(--tk);border:1.5px solid color-mix(in srgb,var(--tk) 50%,transparent);
   background:color-mix(in srgb,var(--tk) 9%,transparent);
   transition:background .12s,color .12s,box-shadow .12s}
@@ -1602,7 +1603,7 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
 .wg-bar{display:flex;align-items:center;gap:8px;margin:0 0 12px;min-width:0}
 .wg-tabs{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;flex:1 1 auto;min-width:0;
   overflow-x:auto;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;
-  scroll-snap-type:x proximity;padding:3px 2px 6px;scrollbar-width:thin}
+  padding:3px 2px 6px;scrollbar-width:thin}
 .wg-tabs::-webkit-scrollbar{height:4px}
 .wg-tabs::-webkit-scrollbar-thumb{background:var(--rule);border-radius:3px}
 .wg-tabs.more-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);
@@ -1611,7 +1612,7 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
   mask-image:linear-gradient(90deg,transparent,#000 28px)}
 .wg-tabs.more-l.more-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent);
   mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
-.wg-tabs .wg-item{flex:0 0 auto;scroll-snap-align:start}
+.wg-tabs .wg-item{flex:0 0 auto}
 .wg-tools{display:flex;gap:6px;flex:0 0 auto;padding-bottom:3px}
 @media (max-width:640px){.wg-tl{display:none}}
 .wg-item{display:inline-flex;align-items:center;gap:3px;border-radius:999px}

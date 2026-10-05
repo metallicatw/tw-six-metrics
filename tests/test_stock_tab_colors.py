@@ -78,3 +78,13 @@ def test_頁內分頁比頁首大分頁小一號_而且降彩度():
         assert "--tk:color-mix(in srgb,var(--tc) 60%" in body, sel
         assert "color:var(--tc)" not in body, sel
     assert ".subtab{" in css and "font-size:12.5px" in css.split(".subtab{", 1)[1].split("}", 1)[0]
+
+
+def test_可以左右滑的分頁列不吸附_滑到哪停在哪():
+    """2026-10-05：拿掉所有 scroll-snap。放手後瀏覽器自己再挪一下去對齊某一顆，
+    讀者覺得是被拉回去。"""
+    for p in TPL.rglob("*"):
+        if p.suffix in {".css", ".j2", ".html", ".js"}:
+            src = p.read_text("utf-8")
+            for bad in ("scroll-snap-type", "scroll-snap-align", "scrollSnap"):
+                assert bad not in src, (p.name, bad)
