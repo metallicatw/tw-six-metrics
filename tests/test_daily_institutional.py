@@ -21,6 +21,17 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 
 
+def _back_to(date: str) -> int:
+    """要往回讀幾個檔才讀得到 *date* 那一天。
+
+    寫死一個數字（以前是 30，後來改 400）早晚會被時間追過去：每多一個交易日就
+    多一個檔，9/3 終究會掉出窗外，測試就在某天早上無緣無故 StopIteration。照檔名
+    數到那一天為止，這兩條測試就跟今天是幾號無關了。
+    """
+    folder = DATA / "market" / "daily" / "institutional"
+    return sum(1 for p in folder.glob("*.csv.gz") if p.name[:10] >= date)
+
+
 def _num(text: Any) -> float | None:
     text = str(text).replace(",", "").strip()
     try:
@@ -127,7 +138,7 @@ def test_the_daily_total_is_the_sum_of_the_rounded_columns():
     只會讓人以為自己算錯了。
     """
     day = next(
-        d for d in institutional_history(DATA, lookback=400, days=400)["5439"] if d.date == "2026-09-03"
+        d for d in institutional_history(DATA, lookback=_back_to("2026-09-03"), days=10_000)["5439"] if d.date == "2026-09-03"
     )
     assert (day.foreign, day.trust, day.dealer) == (93, 0, -44)
     assert day.total == 49, "把原始的合計直接換算會得到 50"
@@ -141,7 +152,7 @@ def test_the_rounding_goes_away_from_zero_not_to_the_even_number():
     的那種。
     """
     day = next(
-        d for d in institutional_history(DATA, lookback=400, days=400)["6423"] if d.date == "2026-09-03"
+        d for d in institutional_history(DATA, lookback=_back_to("2026-09-03"), days=10_000)["6423"] if d.date == "2026-09-03"
     )
     assert day.foreign == -7, "用了銀行家捨入"
 
