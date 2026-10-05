@@ -5,7 +5,9 @@
 {# 頁面標題和導覽列上目前那一顆重複，畫面上不再顯示（2026-10-04）；留給螢幕閱讀器與頁內大綱。 #}
 <h2 class="sr">台股評等清單</h2>
 <p class="muted">
-  本期（{{ latest_quarter }}）全市場評等，共 <span id="tally">{{ rows|length }} 檔</span>。
+  {%- set pg = progress %}
+  本期{{ pg.quarter }}(已更新{{ pg.quarter_n }}/{{ pg.total }}) / {{ pg.month }}(已更新{{ pg.month_n }}/{{ pg.total }})。<br>
+  全市場評等，共 <span id="tally">{{ rows|length }} 檔</span>。
   點欄位標題可排序，☆ 加入觀察清單。{{ '' }}
 {# 這一段以前寫的是「這張表是混齡的：底是活頁簿那份一年前的快照，上面疊著少數
    幾檔手動更新過的」。補課排程上線之後那個前提就不成立了，但那句話不會自己知道

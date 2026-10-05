@@ -732,6 +732,32 @@ def data_vintage(rows: list[Row]) -> tuple[str, str]:
     )
 
 
+def vintage_progress(rows: list[Row]) -> dict[str, Any]:
+    """〔評等清單〕標題那一行：最新一季、最新一個月，各已經有幾檔換上了（2026-10-05）。
+
+    `data_vintage` 回答的是「這張表大部分在哪一期」；換季、換月的那幾天讀者想知道的
+    是另一件事——**新的那一期進來多少了**（例如 9 月營收 10 日前後陸續申報，
+    `revenue-early` 一天三次把已申報的折進來）。所以這裡取的是最新的那一期，不是眾數。
+    """
+    def newest(values: list[str]) -> tuple[str, int]:
+        vals = [v for v in values if v]
+        if not vals:
+            return "", 0
+        top = max(vals)
+        return top, sum(1 for v in vals if v == top)
+
+    q, nq = newest([r.fiscal_quarter for r in rows])
+    m, nm = newest([r.revenue_month for r in rows])
+    # 2026.2Q → 2026Q2；115/09 → 2026/09
+    ql = f"{q[:4]}Q{q[5]}" if len(q) == 7 and q[4] == "." else q
+    try:
+        roc, mm = m.split("/")
+        ml = f"{int(roc) + 1911}/{mm}"
+    except ValueError:
+        ml = m
+    return {"quarter": ql, "quarter_n": nq, "month": ml, "month_n": nm, "total": len(rows)}
+
+
 def fresher_than(rows: list[Row], quarter: str) -> int:
     """How many rows are on a newer 財報季度 than the table's own label."""
     return sum(1 for r in rows if r.fiscal_quarter and r.fiscal_quarter > quarter)
@@ -1189,6 +1215,7 @@ def build_site(
     env.get_template("list.html.j2").stream(
         **base, page="list", rel="", rows=live, price_date=price_date,
         fresh_count=fresher_than(live, quarter),
+        progress=vintage_progress(live),
         coverage=fetch_coverage(live, fetched_at),
         delisted_count=len(rows) - len(live),
         next_filing=deadline.isoformat(),
