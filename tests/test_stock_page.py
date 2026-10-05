@@ -466,7 +466,7 @@ def test_the_watchlist_really_toggles_and_is_shared(tmp_path=None):
 
     # ── 子群組（2026-10-05） ───────────────────────────────────────────
     # 舊的單一清單原封不動變成第一個群組〔我的自選〕（id 固定 main，兩台裝置才合併得起來）。
-    assert steps["舊清單變成第一個群組"][0][0] == {"id": "main", "name": "我的自選", "n": 2, "src": ""}
+    assert steps["舊清單變成第一個群組"][0][0] == {"id": "main", "name": "我的自選", "n": 2, "src": "", "hidden": False}
     assert steps["舊清單變成第一個群組"][1] == "main"
     # 最後一個永遠是自動算的〔總交集清單〕。
     assert steps["舊清單變成第一個群組"][0][-1]["name"] == "總交集清單"
@@ -500,6 +500,19 @@ def test_the_watchlist_really_toggles_and_is_shared(tmp_path=None):
     assert "交集" in steps["總交集的星號說明"]
     assert steps["群組改了總交集跟著變"] == ["2330"]
     assert steps["reload 之後還在總交集"] == "__all"
+    # 隱藏的群組不參與總交集。
+    assert steps["乙加入後總交集"] == []
+    assert steps["隱藏乙"] == [True, False]
+    assert steps["隱藏後總交集"] == ["2330"]
+    assert steps["藏起目前這頁會跳走"] is True
+    assert steps["reload 還是隱藏"] is True
+    assert steps["取消隱藏又回來"] == []
+    # 匯入時另存新群組：快照、不帶來源，原本的來源群組不動。
+    copy, name, cur, order, same, src = steps["另存新群組"]
+    assert copy is True and name == cur == "趨勢 10/05" and order == ["1101"] and same is True and src == ""
+    assert steps["同名檢查"] == [True, True, False]
+    assert steps["空名稱不存"] is None
+    assert steps["匯入會取消隱藏"] is False
     assert steps["群組存檔壞掉"] == [2, "我的自選"], "存檔壞掉要退回一個可用的群組，不是讓頁面炸掉"
 
     # ── 置頂 ───────────────────────────────────────────────────────────

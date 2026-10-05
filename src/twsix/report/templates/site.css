@@ -1602,13 +1602,16 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
 .wg-item.drag{opacity:.45}
 .wg-item.to-l{box-shadow:-3px 0 0 var(--accent)}
 .wg-item.to-r{box-shadow:3px 0 0 var(--accent)}
-.wg-tab{--tc:#5f6b78;padding:6px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;
-  border:1.5px solid var(--tc);font:inherit;font-size:13.5px;font-weight:700;
-  color:var(--tc);background:color-mix(in srgb,var(--tc) 8%,transparent)}
-.wg-tab:hover{background:color-mix(in srgb,var(--tc) 16%,transparent)}
-.wg-tab[aria-selected=true]{background:var(--tc);color:#fff}
-.wg-tab:focus-visible{outline:2px solid var(--tc);outline-offset:2px}
-.wg-n{font-size:11.5px;font-weight:600;opacity:.8;margin-left:2px}
+/* 子分頁是頁首大分頁（15px）底下的一層：字小一號，顏色也收斂——--tc 是原色，
+   實際畫出來的 --tk 混進 40% 的灰，彩度降下來，才不會跟頁首搶。 */
+.wg-tab{--tc:#5f6b78;--tk:color-mix(in srgb,var(--tc) 60%,#87909a);
+  padding:4px 11px;border-radius:999px;cursor:pointer;white-space:nowrap;
+  border:1.5px solid var(--tk);font:inherit;font-size:12.5px;font-weight:600;
+  color:var(--tk);background:color-mix(in srgb,var(--tk) 7%,transparent)}
+.wg-tab:hover{background:color-mix(in srgb,var(--tk) 14%,transparent)}
+.wg-tab[aria-selected=true]{background:var(--tk);color:#fff}
+.wg-tab:focus-visible{outline:2px solid var(--tk);outline-offset:2px}
+.wg-n{font-size:11px;font-weight:600;opacity:.8;margin-left:2px}
 .wg-c0{--tc:#b25a00}.wg-c1{--tc:#0e7c6f}.wg-c2{--tc:#1c62b8}.wg-c3{--tc:#a3306b}
 .wg-c4{--tc:#6d3fd1}.wg-c5{--tc:#2b8a3e}.wg-c6{--tc:#c62828}.wg-c7{--tc:#6f6400}
 @media (prefers-color-scheme:dark){
@@ -1623,11 +1626,11 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
 :root[data-theme=dark] .wg-c4{--tc:#b39cff}:root[data-theme=dark] .wg-c5{--tc:#69db7c}
 :root[data-theme=dark] .wg-c6{--tc:#ff8787}:root[data-theme=dark] .wg-c7{--tc:#e0d050}
 :root[data-theme=dark] .wg-tab[aria-selected=true]{color:var(--ground)}
-.wg-mini{width:26px;height:26px;padding:0;border-radius:50%;border:1px solid var(--rule);
+.wg-mini{width:24px;height:24px;padding:0;border-radius:50%;border:1px solid var(--rule);
   background:var(--surface-2);color:var(--ink-2);font-size:12px;line-height:1;cursor:pointer}
 .wg-mini:disabled{opacity:.35;cursor:default}
-.wg-tool{padding:6px 12px;border-radius:999px;border:1.5px dashed var(--rule);background:transparent;
-  color:var(--ink-2);font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.wg-tool{padding:4px 11px;border-radius:999px;border:1.5px dashed var(--rule);background:transparent;
+  color:var(--ink-2);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
 .wg-tool[aria-pressed=true]{border-style:solid;border-color:var(--accent);color:var(--accent)}
 /* 匯入按鈕：和各頁原本的按鈕並排，用同一個強調色描邊。 */
 .wg-imp{padding:4px 11px;border-radius:999px;border:1.5px solid var(--accent);background:transparent;
@@ -1644,3 +1647,24 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
 .wg-allitem{margin-left:4px;padding-left:10px;border-left:1px solid var(--rule);border-radius:0}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]) .wg-tab.wg-all{--tc:#f2be45}}
 :root[data-theme=dark] .wg-tab.wg-all{--tc:#f2be45}
+/* 〔隱藏〕的群組：只在〔管理〕裡出現，淡掉加虛線，一眼看得出它不參與總交集。 */
+.wg-hid .wg-tab{opacity:.5;border-style:dashed;text-decoration:line-through}
+.wg-mini.wg-eye{width:auto;padding:0 8px;border-radius:999px;font-size:11.5px;font-weight:600}
+.wg-mini.wg-eye[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
+/* 匯入時的〔覆蓋／另存新群組〕對話框 */
+.wg-dlg{border:1px solid var(--rule);border-radius:14px;padding:20px 22px 16px;width:min(440px,92vw);
+  background:var(--surface);color:var(--ink);box-shadow:0 18px 50px rgba(0,0,0,.35)}
+.wg-dlg::backdrop{background:rgba(0,0,0,.45)}
+.wg-dlg-h{margin:0 0 6px;font-size:16px}
+.wg-dlg-p{margin:0 0 14px;color:var(--ink-2);font-size:14px}
+.wg-dlg-l{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.wg-dlg-l input{font:inherit;font-size:15px;padding:8px 10px;border-radius:8px;border:1px solid var(--rule);
+  background:var(--surface-2);color:var(--ink)}
+.wg-dlg-l input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.wg-dlg-warn{min-height:1.3em;margin:6px 0 10px;font-size:12.5px;color:#d9480f}
+.wg-dlg-b{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.wg-dlg-b button{padding:7px 14px;border-radius:999px;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;
+  border:1.5px solid var(--rule);background:transparent;color:var(--ink-2)}
+.wg-dlg-b .wg-dlg-copy{border-color:var(--accent);color:var(--accent)}
+.wg-dlg-b .wg-dlg-copy:disabled{opacity:.4;cursor:default}
+.wg-dlg-b .wg-dlg-over{border-color:var(--accent);background:var(--accent);color:var(--surface)}

@@ -155,6 +155,26 @@ W.select(ga); W.toggle('3034'); W.select('__all');
 out.push(['群組改了總交集跟著變', W.order()]);
 W.reload();
 out.push(['reload 之後還在總交集', W.current().id]);
+/* 隱藏：不參與總交集、藏起目前這一頁會跳走、reload 讀得回來。 */
+const gb = W.addGroup('乙'); ['9999'].forEach(c => W.toggle(c));
+W.select('__all'); out.push(['乙加入後總交集', W.order()]);
+out.push(['隱藏乙', [W.hideGroup(gb, true), W.hideGroup(gb, true)]]);
+W.select('__all'); out.push(['隱藏後總交集', W.order()]);
+W.select(gb); W.hideGroup(gb, false); W.hideGroup(gb, true);
+out.push(['藏起目前這頁會跳走', W.current().id !== gb]);
+W.reload(); out.push(['reload 還是隱藏', W.groups().filter(g => g.id === gb)[0].hidden]);
+W.hideGroup(gb, false); W.select('__all'); out.push(['取消隱藏又回來', W.order()]);
+/* 另存新群組：不帶 src、原來源群組不動；同名檢查。 */
+W.importGroup('trend', '趨勢', ['2330', '3034']);
+const before = W.sourceGroup('trend');
+const cp = W.importGroup('trend', '趨勢', ['1101'], '趨勢 10/05');
+out.push(['另存新群組', [cp.copy, cp.name, W.current().name, W.order(), W.sourceGroup('trend').n === before.n,
+  W.groups().filter(g => g.name === '趨勢 10/05')[0].src]]);
+out.push(['同名檢查', [W.nameTaken('趨勢'), W.nameTaken(' 趨勢 10/05 '), W.nameTaken('沒這個')]]);
+out.push(['空名稱不存', W.importGroup('trend', '趨勢', ['1101'], '  ')]);
+W.hideGroup(W.sourceGroup('trend').id, true);
+W.importGroup('trend', '趨勢', ['2330']);
+out.push(['匯入會取消隱藏', W.groups().filter(g => g.src === 'trend')[0].hidden]);
 store.set('twsix.wgroups', '{壞掉');
 W.reload();
 out.push(['群組存檔壞掉', [W.groups().length, W.current().name]]);

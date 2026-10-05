@@ -775,7 +775,7 @@
 var TWSIXWatch = (function(){
   /* 2026-10-05 起觀察清單分成數個**子群組**（分頁）：
    *
-   *   twsix.wgroups = {v:1, cur:"main", groups:[{id, name, codes:[…], src?}]}
+   *   twsix.wgroups = {v:1, cur:"main", groups:[{id, name, codes:[…], src?, hidden?}]}
    *
    * - 每個群組自己的 codes 陣列就是那一頁的順序（置頂／上移／下移只動它）。
    * - cur 是「目前的群組」：觀察清單頁顯示它，〔評等清單〕每一列的☆與個股頁的☆
@@ -794,6 +794,8 @@ var TWSIXWatch = (function(){
      （☆ 在它底下按了不會動），要改它就去改各個群組。空的群組不算，否則剛新增一個空群組，
      總交集就瞬間變成零檔。 */
   var ALL = '__all', ALL_NAME = '總交集清單';
+  /* 〔隱藏〕（2026-10-05）：hidden 的群組不出現在分頁列（〔管理〕裡才看得到），也**不參與**
+     總交集——留著備查、但暫時不想讓它卡住交集的清單，就把它藏起來。資料完全不動。 */
   var doc = null, cur = null, order = [], set = {};
 
   function clean(codes){
@@ -814,7 +816,7 @@ var TWSIXWatch = (function(){
     return null;
   }
   function intersect(){
-    var full = doc.groups.filter(function(g){ return g.codes.length; });
+    var full = doc.groups.filter(function(g){ return g.codes.length && !g.hidden; });
     if(!full.length) return [];
     return full[0].codes.filter(function(c){
       return full.every(function(g){ return g.codes.indexOf(c) >= 0; });
@@ -835,6 +837,7 @@ var TWSIXWatch = (function(){
     d.groups = d.groups.filter(function(g){ return g && g.id; }).map(function(g){
       var o = {id: String(g.id), name: String(g.name || '未命名'), codes: clean(g.codes)};
       if(g.src) o.src = String(g.src);
+      if(g.hidden) o.hidden = true;
       return o;
     });
     if(!d.groups.length) d = fresh();
@@ -894,7 +897,7 @@ var TWSIXWatch = (function(){
     try{ document.dispatchEvent(new CustomEvent('twsix:wgroup')); }catch(e){}
   }
   function groups(){
-    var out = doc.groups.map(function(g){ return {id: g.id, name: g.name, n: g.codes.length, src: g.src || ''}; });
+    var out = doc.groups.map(function(g){ return {id: g.id, name: g.name, n: g.codes.length, src: g.src || '', hidden: !!g.hidden}; });
     out.push({id: ALL, name: ALL_NAME, n: intersect().length, src: '', virtual: true});
     return out;
   }
@@ -925,6 +928,21 @@ var TWSIXWatch = (function(){
     save(); changed();
     return true;
   }
+  /* 隱藏／顯示。藏起目前這一頁時，跳到下一個看得到的群組（都藏光了就到總交集）。 */
+  function hideGroup(id, on){
+    var g = find(id); on = !!on;
+    if(!g || !!g.hidden === on) return false;
+    if(on) g.hidden = true; else delete g.hidden;
+    if(on && doc.cur === id){
+      var i = doc.groups.indexOf(g), next = null;
+      doc.groups.slice(i + 1).concat(doc.groups.slice(0, i).reverse()).forEach(function(x){
+        if(!next && !x.hidden) next = x;
+      });
+      doc.cur = next ? next.id : ALL;
+    }
+    save(); changed();
+    return true;
+  }
   /* 把 id 那個群組挪到 before 前面（before 為空＝挪到最後）。拖曳與 ◀ ▶ 都走這一條。 */
   function placeGroup(id, before){
     var g = find(id);
@@ -942,9 +960,23 @@ var TWSIXWatch = (function(){
     if(i < 0 || j < 0 || j >= ids.length) return false;
     return placeGroup(id, delta < 0 ? ids[j] : (ids[j + 1] || null));
   }
-  /* 從其他頁一鍵匯入：同一個來源（src）只有一個群組，再匯入就換掉它的內容。 */
-  function importGroup(src, name, codes){
+  /* 從其他頁一鍵匯入：同一個來源（src）只有一個群組，再匯入就換掉它的內容。
+     asName（2026-10-05）：不覆蓋，另存成一個新群組。新群組**不帶 src**——它是這一刻的
+     快照，下次再從同一頁匯入，換掉的仍然是原本那個來源群組，不會動到這份快照。 */
+  function nameTaken(name){
+    name = String(name || '').trim();
+    return doc.groups.some(function(g){ return g.name === name; });
+  }
+  function importGroup(src, name, codes, asName){
     codes = clean(codes);
+    if(asName !== undefined && asName !== null){
+      asName = String(asName).trim();
+      if(!asName) return null;
+      var ng = {id: uid(), name: asName, codes: codes};
+      doc.groups.push(ng); doc.cur = ng.id;
+      save(); changed();
+      return {name: ng.name, n: codes.length, prev: 0, existed: false, copy: true};
+    }
     var g = null;
     doc.groups.forEach(function(x){ if(x.src === src) g = x; });
     var prev = g ? g.codes.length : 0, had = !!g;
@@ -954,6 +986,7 @@ var TWSIXWatch = (function(){
       doc.groups.push(g);
     }
     g.codes = codes;
+    delete g.hidden;                         /* 剛匯入的要看得到 */
     doc.cur = g.id;
     save(); changed();
     return {name: g.name, n: codes.length, prev: prev, existed: had};
@@ -972,7 +1005,8 @@ var TWSIXWatch = (function(){
           all: function(){ return set; },
           groups: groups, current: function(){ return {id: cur.id, name: cur.name, n: order.length, virtual: !!cur.virtual}; },
           select: select, addGroup: addGroup, renameGroup: renameGroup, removeGroup: removeGroup,
-          placeGroup: placeGroup, moveGroup: moveGroup, importGroup: importGroup, sourceGroup: sourceGroup};
+          placeGroup: placeGroup, moveGroup: moveGroup, importGroup: importGroup, sourceGroup: sourceGroup,
+          hideGroup: hideGroup, nameTaken: function(n){ return nameTaken(n); }};
 })();
 
 
@@ -2765,26 +2799,30 @@ function reveal(bar, el){
   function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function render(){
     var gs = TWSIXWatch.groups(), cur = TWSIXWatch.current().id;
-    var h = '<div class="wg-tabs" role="tablist" aria-label="觀察清單群組">';
+    var h = '<div class="wg-tabs" role="tablist" aria-label="觀察清單群組">', nHid = 0;
     gs.forEach(function(g, i){
       var on = g.id === cur;
+      if(g.hidden){ nHid++; if(!editing) return; }
       if(g.virtual){
         h += '<span class="wg-item wg-allitem" data-id="' + esc(g.id) + '">' +
           '<button type="button" role="tab" class="wg-tab wg-all" aria-selected="' + on + '" data-act="pick" ' +
           'title="所有（非空的）群組都有的股票，自動算出">' + esc(g.name) + ' <span class="wg-n">' + g.n + '</span></button></span>';
         return;
       }
-      h += '<span class="wg-item" data-id="' + esc(g.id) + '"' + (editing ? '' : ' draggable="true"') + '>' +
+      h += '<span class="wg-item' + (g.hidden ? ' wg-hid' : '') + '" data-id="' + esc(g.id) + '"' + (editing ? '' : ' draggable="true"') + '>' +
         (editing ? '<button type="button" class="wg-mini" data-act="left" title="往前" aria-label="把 ' + esc(g.name) + ' 往前移"' + (i === 0 ? ' disabled' : '') + '>◀</button>' : '') +
-        '<button type="button" role="tab" class="wg-tab wg-c' + (i % 8) + '" aria-selected="' + on + '" data-act="pick" title="' + (editing ? '' : '點兩下改名；拖曳排序') + '">' +
+        '<button type="button" role="tab" class="wg-tab wg-c' + (i % 8) + '" aria-selected="' + on + '" data-act="pick" title="' +
+          (g.hidden ? '已隱藏：不在分頁列、不參與總交集' : editing ? '' : '點兩下改名；拖曳排序') + '">' +
         esc(g.name) + ' <span class="wg-n">' + g.n + '</span></button>' +
-        (editing ? '<button type="button" class="wg-mini" data-act="rename" title="改名" aria-label="把 ' + esc(g.name) + ' 改名">✎</button>' +
+        (editing ? '<button type="button" class="wg-mini wg-eye" data-act="hide" aria-pressed="' + !!g.hidden + '" title="' + (g.hidden ? '顯示（重新參與總交集）' : '隱藏（不參與總交集）') +
+                   '" aria-label="' + (g.hidden ? '顯示 ' : '隱藏 ') + esc(g.name) + '">' + (g.hidden ? '顯示' : '隱藏') + '</button>' +
+                   '<button type="button" class="wg-mini" data-act="rename" title="改名" aria-label="把 ' + esc(g.name) + ' 改名">✎</button>' +
                    '<button type="button" class="wg-mini" data-act="del" title="刪除" aria-label="刪除 ' + esc(g.name) + '"' + (gs.length < 3 ? ' disabled' : '') + '>✕</button>' +
                    '<button type="button" class="wg-mini" data-act="right" title="往後" aria-label="把 ' + esc(g.name) + ' 往後移"' + (i === gs.length - 2 ? ' disabled' : '') + '>▶</button>' : '') +
         '</span>';
     });
     h += '<button type="button" class="wg-tool" data-act="add" title="新增群組">＋ 新增</button>' +
-         '<button type="button" class="wg-tool" data-act="edit" aria-pressed="' + editing + '">' + (editing ? '完成' : '管理') + '</button></div>';
+         '<button type="button" class="wg-tool" data-act="edit" aria-pressed="' + editing + '">' + (editing ? '完成' : '管理' + (nHid ? '（隱藏 ' + nHid + '）' : '')) + '</button></div>';
     host.innerHTML = h;
   }
   function rename(id){
@@ -2803,6 +2841,7 @@ function reveal(bar, el){
       if(name !== null) TWSIXWatch.addGroup(name);
     }else if(act === 'edit'){ editing = !editing; render(); }
     else if(act === 'rename') rename(id);
+    else if(act === 'hide') TWSIXWatch.hideGroup(id, b.getAttribute('aria-pressed') !== 'true');
     else if(act === 'del'){
       var g = TWSIXWatch.groups().filter(function(x){ return x.id === id; })[0];
       if(g && window.confirm('刪除群組〔' + g.name + '〕？' + (g.n ? '裡面的 ' + g.n + ' 檔會一起移除（其他群組不受影響）。' : '')))
@@ -2889,10 +2928,67 @@ window.TWSIXImport = window.TWSIXImport || {};
     if(!codes.length){ say('目前沒有符合條件的股票可以匯入——先篩出結果再按一次。'); return; }
     TWSIXWatch.reload();
     var old = TWSIXWatch.sourceGroup(src);
-    if(old && old.n && !window.confirm('觀察清單〔' + old.name + '〕已經有 ' + old.n + ' 檔，要換成這一次的 ' + codes.length + ' 檔嗎？')) return;
-    var r = TWSIXWatch.importGroup(src, name, codes);
-    var rel = (window.TWSIX && TWSIX.rel) || '';
-    say('已把 <b>' + r.n + '</b> 檔匯入觀察清單〔' + esc(r.name) + '〕' + (old && old.n ? '（取代原本的 ' + old.n + ' 檔）' : '') +
-        '　<a href="' + rel + 'watchlist.html">去看 →</a>');
+    function done(asName){
+      var r = TWSIXWatch.importGroup(src, name, codes, asName);
+      if(!r) return;
+      var rel = (window.TWSIX && TWSIX.rel) || '';
+      say('已把 <b>' + r.n + '</b> 檔匯入觀察清單〔' + esc(r.name) + '〕' +
+          (r.copy ? '（新群組，原本的〔' + esc(old.name) + '〕沒動）' : old && old.n ? '（取代原本的 ' + old.n + ' 檔）' : '') +
+          '　<a href="' + rel + 'watchlist.html">去看 →</a>');
+    }
+    if(old && old.n) ask(old, codes.length, done);
+    else done();
   });
+
+  /* 已經有同來源的群組時：〔覆蓋〕或〔另存新群組〕。名稱欄預先帶出原本的名字，
+     改幾個字就能存（例如加上日期）；跟現有群組同名時不給存，免得分不出哪個是哪個。 */
+  var dlg = null;
+  function ask(old, n, cb){
+    if(typeof HTMLDialogElement === 'undefined'){
+      var nm = window.prompt('觀察清單〔' + old.name + '〕已經有 ' + old.n + ' 檔。\n' +
+        '・直接按確定＝覆蓋成這一次的 ' + n + ' 檔\n・改個名字再按確定＝另存成新群組', old.name);
+      if(nm === null) return;
+      nm = nm.trim();
+      cb(!nm || nm === old.name ? undefined : nm);
+      return;
+    }
+    if(!dlg){
+      dlg = document.createElement('dialog');
+      dlg.className = 'wg-dlg';
+      dlg.innerHTML =
+        '<form method="dialog">' +
+        '<h3 class="wg-dlg-h"></h3><p class="wg-dlg-p"></p>' +
+        '<label class="wg-dlg-l">另存新群組的名稱<input type="text" name="nm" maxlength="40" autocomplete="off"></label>' +
+        '<p class="wg-dlg-warn" aria-live="polite"></p>' +
+        '<div class="wg-dlg-b">' +
+        '<button value="cancel" class="wg-dlg-x">取消</button>' +
+        '<button value="copy" class="wg-dlg-copy">另存新群組</button>' +
+        '<button value="over" class="wg-dlg-over">覆蓋</button>' +
+        '</div></form>';
+      document.body.appendChild(dlg);
+    }
+    var inp = dlg.querySelector('input'), warn = dlg.querySelector('.wg-dlg-warn'), bc = dlg.querySelector('.wg-dlg-copy');
+    dlg.querySelector('.wg-dlg-h').textContent = '觀察清單〔' + old.name + '〕已經有 ' + old.n + ' 檔';
+    dlg.querySelector('.wg-dlg-p').textContent = '這一次有 ' + n + ' 檔。要覆蓋原本的群組，還是另存成一個新群組？';
+    dlg.querySelector('.wg-dlg-over').textContent = '覆蓋〔' + old.name + '〕';
+    inp.value = old.name;
+    function check(){
+      var v = inp.value.trim();
+      var bad = !v ? '請輸入名稱' : TWSIXWatch.nameTaken(v) ? '已經有叫〔' + v + '〕的群組，改一下名字' : '';
+      warn.textContent = bad; bc.disabled = !!bad;
+    }
+    inp.oninput = check; check();
+    inp.onkeydown = function(e){
+      if(e.key === 'Enter'){ e.preventDefault(); if(!bc.disabled) dlg.close('copy'); }
+    };
+    dlg.onclose = function(){
+      var v = dlg.returnValue; dlg.onclose = null;
+      if(v === 'over') cb();
+      else if(v === 'copy') cb(inp.value.trim());
+    };
+    dlg.returnValue = 'cancel';
+    dlg.showModal();
+    inp.focus();
+    var L = inp.value.length; try{ inp.setSelectionRange(L, L); }catch(e){}
+  }
 })();
