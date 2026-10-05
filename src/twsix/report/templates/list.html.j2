@@ -1,6 +1,7 @@
 {% extends "base.html.j2" %}
 {% from "_macros.html.j2" import row, table_head, tip, basis, price_note, quick_filters %}
-{% block title %}{{ site_title }}｜台股評等清單{% endblock %}
+{# 首頁的 <title> 就是書籤的預設名稱（2026-10-06）：放站名＋副標，不放分頁名。 #}
+{% block title %}{{ site_title }} | {{ site_tagline }}{% endblock %}
 {% block body %}
 {# 頁面標題和導覽列上目前那一顆重複，畫面上不再顯示（2026-10-04）；留給螢幕閱讀器與頁內大綱。 #}
 <h2 class="sr">台股評等清單</h2>

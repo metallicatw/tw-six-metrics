@@ -1984,7 +1984,7 @@ def test_網站圖示與加到主畫面的名稱(tmp_path=None):
     manifest = json.loads((out / "site.webmanifest").read_text("utf-8"))
     assert manifest["name"] == "金股道" and manifest["short_name"] == "金股道"
     index = (out / "index.html").read_text("utf-8")
-    assert "<title>金股道｜台股評等清單</title>" in index
+    assert "<title>金股道 | 禾熟之時，金股自到</title>" in index, "首頁標題＝書籤預設名稱"
     assert 'href="favicon.ico"' in index and 'content="金股道"' in index
     # 站名前面的站徽
     assert '<img class="brand" src="favicon.svg"' in index
