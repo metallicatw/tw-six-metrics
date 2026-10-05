@@ -462,7 +462,8 @@ def test_籌碼雷達分頁各自一色_符合檔數跟分頁同色_標記欄可
     tabs = _re.findall(r'data-t="(\w+)" role="tab"', src)
     colors = dict(_re.findall(r"\('(\w+)','(#[0-9a-f]{6})','#[0-9a-f]{6}'\)", src))
     assert set(tabs) == set(colors) and len(set(colors.values())) == len(tabs), "每一顆分頁一個不同的顏色"
-    assert "color:var(--tc" in src
+    # 分頁畫的是 --tk：原色 --tc 混進灰（全站第二層分頁統一降彩度，2026-10-05）。
+    assert "--tk:color-mix(in srgb,var(--tc) 60%" in src and "color:var(--tk)" in src
     for t in ("外資＋投信買賣超 ÷ 資本額 60 日累計（倍）", "扣掉大戶之 20 日周轉率（%）", "大戶庫存張數",
               "貪婪指標 1（買盤比例 20 日總和）", "買盤比例 60 日 − 賣盤比例 60 日"):
         assert f'"{t}":' in src, t

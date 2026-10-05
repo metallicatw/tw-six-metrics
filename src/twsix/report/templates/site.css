@@ -530,16 +530,18 @@ td.pv .v{display:block;font-variant-numeric:tabular-nums;
   padding:4px 1px 8px;margin:0}
 .tabs::-webkit-scrollbar{height:5px}
 .tabs::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
-.tab{--tc:var(--accent-2);flex:0 0 auto;appearance:none;font:inherit;font-size:13px;
+/* 第二層分頁（2026-10-05 全站統一）：頁首大分頁是 15px；頁內的分頁 13px、字重 600，
+   顏色 --tk = 原色 --tc 混進 40% 的灰，彩度降下來，不跟頁首搶。第三層（分頁裡的分頁）12.5px。 */
+.tab{--tc:var(--accent-2);--tk:color-mix(in srgb,var(--tc) 60%,#87909a);flex:0 0 auto;appearance:none;font:inherit;font-size:13px;
   font-weight:600;line-height:1.2;white-space:nowrap;cursor:pointer;
   scroll-snap-align:start;padding:7px 12px;border-radius:7px;
-  color:var(--tc);border:1.5px solid color-mix(in srgb,var(--tc) 50%,transparent);
-  background:color-mix(in srgb,var(--tc) 9%,transparent);
+  color:var(--tk);border:1.5px solid color-mix(in srgb,var(--tk) 50%,transparent);
+  background:color-mix(in srgb,var(--tk) 9%,transparent);
   transition:background .12s,color .12s,box-shadow .12s}
-.tab:hover{background:color-mix(in srgb,var(--tc) 18%,transparent)}
-.tab[aria-selected=true]{color:#fff;font-weight:700;background:var(--tc);
-  border-color:var(--tc);box-shadow:0 2px 6px color-mix(in srgb,var(--tc) 35%,transparent)}
-.tab:focus-visible{outline:2px solid var(--tc);outline-offset:2px}
+.tab:hover{background:color-mix(in srgb,var(--tk) 18%,transparent)}
+.tab[aria-selected=true]{color:#fff;font-weight:600;background:var(--tk);
+  border-color:var(--tk);box-shadow:0 2px 6px color-mix(in srgb,var(--tk) 35%,transparent)}
+.tab:focus-visible{outline:2px solid var(--tk);outline-offset:2px}
 .tabs #tab-summary{--tc:#0e7c6f}
 .tabs #tab-six{--tc:#1d7a3e}
 .tabs #tab-eps{--tc:#5f7d0e}
@@ -1318,12 +1320,12 @@ thead th .hsub{display:block;margin-top:1px;font-size:10px;font-weight:400;
 :root[data-theme=dark] .ai-stats tr.ai-d th{color:#b39cff}
 /* 財務健診的子分頁（財務地雷／成長力分析）：和全站分頁同一種膠囊樣式（2026-09-29）。 */
 .subtabs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
-.subtab{--tc:#c2255c;appearance:none;border:1.5px solid var(--tc);background:var(--surface);font:inherit;
-  font-size:14px;font-weight:700;padding:5px 14px;border-radius:999px;color:var(--tc);cursor:pointer}
+.subtab{--tc:#c2255c;--tk:color-mix(in srgb,var(--tc) 60%,#87909a);appearance:none;border:1.5px solid var(--tk);background:var(--surface);font:inherit;
+  font-size:12.5px;font-weight:600;padding:4px 12px;border-radius:999px;color:var(--tk);cursor:pointer}
 .subtab[data-sub=hl-growth]{--tc:#2b8a3e}
 .subtab:hover{background:var(--surface-2)}
-.subtab[aria-selected=true]{background:var(--tc);color:#fff}
-.subtab:focus-visible{outline:2px solid var(--tc);outline-offset:2px}
+.subtab[aria-selected=true]{background:var(--tk);color:#fff}
+.subtab:focus-visible{outline:2px solid var(--tk);outline-offset:2px}
 @media (prefers-color-scheme:dark){
   :root:not([data-theme=light]) .subtab{--tc:#f783ac}
   :root:not([data-theme=light]) .subtab[data-sub=hl-growth]{--tc:#69db7c}
@@ -1491,12 +1493,12 @@ table.hl-t{min-width:0}
    那一顆實心；窄螢幕可以橫向捲。顏色跟各段標題左邊那個方塊一樣。 */
 .ai-tabs{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin:0 0 6px;position:relative;
   -webkit-overflow-scrolling:touch;scrollbar-width:thin}
-.ai-tab{--tc:#5f6b78;flex:0 0 auto;padding:5px 13px;border-radius:15px;cursor:pointer;
-  border:1.5px solid var(--tc);font:inherit;font-size:13px;font-weight:700;
-  color:var(--tc);background:var(--surface)}
+.ai-tab{--tc:#5f6b78;--tk:color-mix(in srgb,var(--tc) 60%,#87909a);flex:0 0 auto;padding:5px 13px;border-radius:15px;cursor:pointer;
+  border:1.5px solid var(--tk);font:inherit;font-size:13px;font-weight:600;
+  color:var(--tk);background:var(--surface)}
 .ai-tab:hover{background:var(--surface-2)}
-.ai-tab[aria-selected=true]{background:var(--tc);color:#fff}
-.ai-tab:focus-visible{outline:2px solid var(--tc);outline-offset:2px}
+.ai-tab[aria-selected=true]{background:var(--tk);color:#fff}
+.ai-tab:focus-visible{outline:2px solid var(--tk);outline-offset:2px}
 .ai-j-f{--tc:#1c62b8}.ai-j-p{--tc:#0e7c6f}.ai-j-c{--tc:#c2255c}.ai-j-t{--tc:#2b8a3e}
 .ai-j-b{--tc:#b25a00}.ai-j-e{--tc:#a3306b}.ai-j-j{--tc:#5f6b78}.ai-j-g{--tc:#7048e8}
 /* 深色底：按鈕色調亮，選中那一顆用底色當字色（和個股頁分頁同一套做法）。 */
@@ -1620,7 +1622,7 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
    實際畫出來的 --tk 混進 40% 的灰，彩度降下來，才不會跟頁首搶。 */
 .wg-tab{--tc:#5f6b78;--tk:color-mix(in srgb,var(--tc) 60%,#87909a);
   padding:4px 11px;border-radius:999px;cursor:pointer;white-space:nowrap;
-  border:1.5px solid var(--tk);font:inherit;font-size:12.5px;font-weight:600;
+  border:1.5px solid var(--tk);font:inherit;font-size:13px;font-weight:600;
   color:var(--tk);background:color-mix(in srgb,var(--tk) 7%,transparent)}
 .wg-tab:hover{background:color-mix(in srgb,var(--tk) 14%,transparent)}
 .wg-tab[aria-selected=true]{background:var(--tk);color:#fff}

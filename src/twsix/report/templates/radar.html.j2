@@ -33,9 +33,9 @@ window.CF_V = "@@CFV@@";
 /* 每一顆分頁一個顏色（2026-09-28）：沒選中的是那個顏色的外框與字，選中的整顆填滿。
    同一個 --tc 也掛在對應的面板上，④⑤⑥「符合條件：N / M 檔」那一行用它上色。
    深色底換成亮一階的色調，選中那一顆用底色當字色（和 AI 選股頁的分頁同一套）。 */
-.cf-tab{--tc:var(--accent);flex:0 0 auto;border:1.5px solid var(--tc);background:var(--surface);color:var(--tc);border-radius:999px;padding:5px 12px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.cf-tab{--tc:var(--accent);--tk:color-mix(in srgb,var(--tc) 60%,#87909a);flex:0 0 auto;border:1.5px solid var(--tk);background:var(--surface);color:var(--tk);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
 .cf-tab:hover{background:var(--surface-2)}
-.cf-tab[aria-selected=true]{background:var(--tc);border-color:var(--tc);color:#fff}
+.cf-tab[aria-selected=true]{background:var(--tk);border-color:var(--tk);color:#fff}
 {% set cf_colors = [('t1','#d9480f','#ff8a5c'),('t2','#c2255c','#f783ac'),('t3','#2b8a3e','#69db7c'),
   ('t4','#1864ab','#6fb0f5'),('t5','#0b7285','#3bc9db'),('t6','#6741d9','#b39cff'),
   ('t7','#b25a00','#ffa94d'),('t8','#a61e4d','#faa2c1'),('t9','#5c7c00','#a9e34b'),

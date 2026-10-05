@@ -53,8 +53,28 @@ def test_深色的兩份一模一樣():
 def test_選中的那一顆是實心():
     css = (TPL / "site.css").read_text("utf-8")
     rule = re.search(r"^\.tab\[aria-selected=true\]\{([^}]*)\}", css, re.M).group(1)
-    assert "background:var(--tc)" in rule, rule
+    assert "background:var(--tk)" in rule, rule   # --tk＝--tc 混灰（降彩度）
     assert "color:#fff" in rule, rule
     assert ":root[data-theme=dark] .tab[aria-selected=true]{color:var(--ground)}" in css, (
         "深底上的按鈕色是調亮過的，白字壓不住"
     )
+
+
+def test_頁內分頁比頁首大分頁小一號_而且降彩度():
+    """全站統一（2026-10-05）：頁首大分頁 15px；頁內第二層 13px；第三層 12.5px。
+    顏色一律畫 --tk（原色混進 40% 灰），彩度不跟頁首搶。"""
+    css = (TPL / "site.css").read_text("utf-8")
+    nav = re.search(r"^nav\{[^}]*font-size:(\d+(?:\.\d+)?)px", css, re.M | re.S)
+    assert nav and float(nav.group(1)) == 15
+    rules = {
+        ".tab{": css, ".ai-tab{": css, ".wg-tab{": css, ".subtab{": css,
+        ".sc-tab{": (TPL / "screener.html.j2").read_text("utf-8"),
+        ".cf-tab{": (TPL / "radar.html.j2").read_text("utf-8"),
+    }
+    for sel, src in rules.items():
+        body = src.split("\n" + sel, 1)[1].split("}", 1)[0]
+        size = float(re.search(r"font-size:(\d+(?:\.\d+)?)px", body).group(1))
+        assert size < 15, (sel, size)
+        assert "--tk:color-mix(in srgb,var(--tc) 60%" in body, sel
+        assert "color:var(--tc)" not in body, sel
+    assert ".subtab{" in css and "font-size:12.5px" in css.split(".subtab{", 1)[1].split("}", 1)[0]
