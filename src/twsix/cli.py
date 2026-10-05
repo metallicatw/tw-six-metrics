@@ -2712,6 +2712,57 @@ def cmd_backfill_institutional(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_fetch_revenue_early(args: argparse.Namespace) -> int:
+    """月營收先到先收：公開資訊觀測站的彙總表，公司一申報就有（見 `ingest.revenue_early`）。
+
+    官方開放資料要到每月 17 日前後才換成上個月；這一支在 1～16 日之間每天把「已經
+    申報的那幾家」先折進它們的〔營收〕分頁並重算評等。存在
+    `data/market/{twse,tpex}_revenue_early/`，官方月報出來後被它蓋過。
+    """
+    from .ingest.base import HttpClient  # noqa: PLC0415
+    from .ingest.revenue_early import COLUMNS, EarlyRevenue, merge  # noqa: PLC0415
+
+    settings = Settings.load(args.config)
+    root = Path(args.out or settings.data_dir)
+    if args.month:
+        y, m = (int(x) for x in args.month.split("-"))
+    else:
+        today = datetime.now(_TAIPEI).date()
+        first = today.replace(day=1) - timedelta(days=1)          # 上個月
+        y, m = first.year, first.month
+    roc = y - 1911
+    roc_month = f"{roc:03d}{m:02d}"
+    official = [root / "market" / f / f"{roc_month}.csv" for f in ("twse_revenue", "tpex_revenue")]
+    if all(p.exists() for p in official) and not args.force:
+        print(f"  {roc_month} 官方月報已經有了，不必先收（--force 照抓）")
+        return EXIT_OK
+    http = HttpClient(
+        cache_dir=None, cache_ttl=0,
+        min_interval=max(6.0, settings.ingest.min_interval_seconds),
+        retries=8, timeout=120.0,
+        retry_307=True,   # MOPS 的 307 是節流，重試有用（見 HttpClient.retry_307）
+    )
+    got = EarlyRevenue(http).fetch(roc, m)
+    if not got:
+        print(f"::warning::{roc_month} 月營收彙總表一頁都沒拿到（下次排程再試）")
+        return EXIT_OK
+    for folder, rows in got.items():
+        path = root / "market" / folder / f"{roc_month}.csv"
+        old: list[dict[str, str]] = []
+        if path.exists():
+            with path.open(encoding="utf-8", newline="") as fh:
+                old = list(csv.DictReader(fh))
+        merged = merge(old, rows)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=list(COLUMNS), extrasaction="ignore", lineterminator="\n")
+            w.writeheader()
+            w.writerows(merged)
+        print(f"  {folder}/{roc_month}.csv：已申報 {len(merged)} 家（這一次拿到 {len(rows)} 家）")
+    _fold_revenue(root)
+    return EXIT_OK
+
+
 def cmd_backfill_qfii(args: argparse.Namespace) -> int:
     """回補過去 N 個交易日的全市場外資持股比率 → `market/daily/qfii/`。
 
@@ -4321,6 +4372,15 @@ def build_parser() -> argparse.ArgumentParser:
     bi.add_argument("--out", help="資料目錄")
     bi.add_argument("--minutes", type=float, default=0.0, help="時間預算（分鐘），0＝不限")
     bi.set_defaults(func=cmd_backfill_institutional)
+
+    br = sub.add_parser(
+        "fetch-revenue-early",
+        help="月營收先到先收：抓公開資訊觀測站的月營收彙總表（已申報的公司），折進分頁並重算評等",
+    )
+    br.add_argument("--month", help="YYYY-MM（預設上個月）")
+    br.add_argument("--force", action="store_true", help="官方月報已經有了也照抓")
+    br.add_argument("--out", help="資料目錄")
+    br.set_defaults(func=cmd_fetch_revenue_early)
 
     bq = sub.add_parser(
         "backfill-qfii",

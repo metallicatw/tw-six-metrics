@@ -122,8 +122,10 @@ def market_rows(data_dir: Path) -> dict[str, dict[str, list[str]]]:
     """
     out: dict[str, dict[str, list[str]]] = {}
     market = data_dir / "market"
-    for exchange in ("twse", "tpex"):
-        for path in sorted(market.glob(f"{exchange}_revenue/*.csv")):
+    # 先讀「先到先收」的彙總表（`revenue_early`），再讀官方月報：同一個月兩邊都有，
+    # 後讀的官方那一份蓋過去。早期那一份只有已經申報的公司，所以它只能補、不能當全市場。
+    for folder in ("twse_revenue_early", "tpex_revenue_early", "twse_revenue", "tpex_revenue"):
+        for path in sorted(market.glob(f"{folder}/*.csv")):
             with path.open(encoding="utf-8", newline="") as fh:
                 for record in csv.DictReader(fh):
                     code = _first(record, CODE_KEYS)

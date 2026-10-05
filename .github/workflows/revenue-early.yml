@@ -1,0 +1,104 @@
+name: 月營收先到先收（已申報的公司）
+
+# 公司一申報月營收，公開資訊觀測站的〔每月營業收入彙總表〕就收進去；證交所／櫃買
+# 的開放資料（market.yml 抓的那兩支）要到每月 17 日前後才換成上個月。
+#
+# 這一條在每月 1～16 日、一天三次，把「到現在為止已經申報的公司」先折進它們的
+# 〔營收〕分頁、重算評等、建站發布（見 twsix.ingest.revenue_early）。官方月報出來
+# 之後，`fetch-revenue-early` 看到那個月的官方檔案已經在了就直接結束，什麼都不做。
+#
+# 時間（台北）：12:43、18:43、22:43。月營收多在盤後到晚上申報，22:43 那一班接住
+# 當天晚上交的；隔天中午那一班接住深夜交的。避開 GitHub 尖峰的 09 UTC。
+
+on:
+  schedule:
+    - cron: "43 4 1-16 * *"
+    - cron: "43 10 1-16 * *"
+    - cron: "43 14 1-16 * *"
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "YYYY-MM（留空＝上個月）"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# 和 market.yml 同一組：兩條都會改 data/sheets 與 data/ratings.csv。
+concurrency:
+  group: market
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[report]"
+
+      - name: 測試
+        run: python scripts/run_tests.py
+
+      - name: 抓取已申報的月營收
+        env:
+          IN_MONTH: ${{ inputs.month || '' }}
+        run: |
+          case "$IN_MONTH" in
+            '') twsix fetch-revenue-early ;;
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]) twsix fetch-revenue-early --month "$IN_MONTH" --force ;;
+            *) echo "::error::月份格式要是 YYYY-MM：$IN_MONTH"; exit 1 ;;
+          esac
+
+      - name: Commit
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/market data/sheets data/ratings.csv
+          # 守門在提早 exit 的上面（理由見 market.yml）。
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "::notice::沒有新申報的公司"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          n="$(git diff --cached --name-only -- data/sheets | wc -l | tr -d ' ')"
+          git commit -m "月營收先到先收：${n} 檔" -m "公開資訊觀測站月營收彙總表（已申報的公司）。"
+
+      - name: 推送
+        if: steps.commit.outputs.changed != 'no'
+        uses: ./.github/actions/push-with-retry
+
+      - name: 建站
+        if: steps.commit.outputs.changed != 'no'
+        uses: ./.github/actions/build-site
+        env:
+          SITE_LOGIN_USER: ${{ secrets.SITE_LOGIN_USER }}
+          SITE_LOGIN_PASSWORD: ${{ secrets.SITE_LOGIN_PASSWORD }}
+          SITE_LOGIN_USERS: ${{ secrets.SITE_LOGIN_USERS }}
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+        with:
+          incremental: "true"
+          test: "false"
+          setup: "false"
+
+      - name: 發布
+        if: steps.commit.outputs.changed != 'no'
+        id: deployment
+        uses: actions/deploy-pages@v4
