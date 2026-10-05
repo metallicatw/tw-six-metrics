@@ -399,12 +399,25 @@ function cell(v, col){
   if (s.full) a.title = s.full;
   return el("td", a);
 }
+var IMPORT = {"r-fin": ["sc-fin", "財務選股"], "r-trend": ["sc-trend", "趨勢選股"],
+              "r-strong": ["sc-strong", "近期強勢股"], "r-high": ["sc-high", "創新高選股"]};
 function table(host, title, summary, list, opt){
   opt = opt || {};
   var cols = COLS.slice(0, 4).concat(opt.extra || [], COLS.slice(4));
   var state = {key: opt.sort || "opm", dir: -1};
   host.innerHTML = "";
-  host.appendChild(el("div", {cls: "sc-head"}, el("h3", {text: title}), el("span", {cls: "sc-count", text: list.length + " 家"})));
+  // 一鍵匯入觀察清單（2026-10-05）：每個分頁一個群組，名稱預設是分頁標題。
+  var imp = IMPORT[host.id];
+  var head = el("div", {cls: "sc-head"}, el("h3", {text: title}), el("span", {cls: "sc-count", text: list.length + " 家"}));
+  if (imp) {
+    window.TWSIXImport = window.TWSIXImport || {};
+    window.TWSIXImport[imp[0]] = function(){ return list.map(function(v){ return v.c; }); };
+    var b = el("button", {cls: "wg-imp", text: "⇩ 匯入觀察清單"});
+    b.type = "button"; b.setAttribute("data-wg-src", imp[0]); b.setAttribute("data-wg-name", imp[1]);
+    b.title = "把這 " + list.length + " 檔匯入觀察清單〔" + imp[1] + "〕";
+    head.appendChild(b);
+  }
+  host.appendChild(head);
   host.appendChild(el("p", {cls: "sc-note", text: summary}));
   if (opt.chart) host.appendChild(opt.chart(list));
   var wrap = el("div", {cls: "sc-scroll"});

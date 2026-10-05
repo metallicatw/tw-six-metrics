@@ -207,6 +207,11 @@
 </section>
 
 {# ── 今日候選 ─────────────────────────────────────────────── #}
+{# 一鍵匯入觀察清單（2026-10-05）：代號在建站時就寫進按鈕，見 site.js 的 TWSIXImport。 #}
+{% macro wg_imp(src, name, cands) -%}
+{%- if cands -%}<button type="button" class="wg-imp" data-wg-src="{{ src }}" data-wg-name="{{ name }}"
+  data-wg-codes="{{ cands|map(attribute='code')|join(',') }}" title="把這 {{ cands|length }} 檔匯入觀察清單〔{{ name }}〕">⇩ 匯入觀察清單</button>{%- endif -%}
+{%- endmacro %}
 <section class="ai-block ai-panel" id="ai-picks" role="tabpanel" aria-labelledby="aitab-picks" hidden>
   <h3 class="ai-h"><span class="ai-tag ai-tag-c">選</span>最新一次訊號的候選</h3>
   <p class="ai-lead">三套各有節奏：A 每月一次、B 與 D 每週一次。下面是各自最近一次的名單——已經過了財報品質否決（E）。
@@ -214,7 +219,8 @@
 
   <h4><span class="ai-s ai-s-A">A 營收驚喜</span>
     <span class="ai-cnt ai-cnt-A">共 {{ ai.a_total }} 檔符合</span>
-    <span class="muted">（{{ ai.a.month or '—' }} 營收，{{ ai.a.day or '—' }} 評分，{{ ai.a.universe or 0 }} 檔參與；列前 {{ ai.a_cands|length }}）</span>{% call tip() %}{{ aig('A') }}{% endcall %}</h4>
+    <span class="muted">（{{ ai.a.month or '—' }} 營收，{{ ai.a.day or '—' }} 評分，{{ ai.a.universe or 0 }} 檔參與；列前 {{ ai.a_cands|length }}）</span>{% call tip() %}{{ aig('A') }}{% endcall %}
+    {{ wg_imp('ai-a', 'AI營收驚喜', ai.a_cands) }}</h4>
   <p class="muted">營收比「去年同月 × 最近的成長速度」好很多（標準化後全市場前 10%）、連兩個月比預期好、年增為正、還沒被搶先反應。</p>
   {% if ai.a_cands %}
   <div class="scroll"><table class="ai-t">
@@ -231,7 +237,8 @@
 
   <h4><span class="ai-s ai-s-B">B 供應鏈連動</span>
     <span class="ai-cnt ai-cnt-B">共 {{ ai.b_total }} 檔符合</span>
-    <span class="muted">（{{ ai.b.day or '—' }}，連動圖建於 {{ ai.b.graph_day or '—' }}；列前 {{ ai.b_cands|length }}）</span>{% call tip() %}{{ aig('B') }}{% endcall %}</h4>
+    <span class="muted">（{{ ai.b.day or '—' }}，連動圖建於 {{ ai.b.graph_day or '—' }}；列前 {{ ai.b_cands|length }}）</span>{% call tip() %}{{ aig('B') }}{% endcall %}
+    {{ wg_imp('ai-b', 'AI供應鏈連動', ai.b_cands) }}</h4>
   <p class="muted">「鄰居」是扣掉大盤之後股價長期一起動的那幾家（多半是上下游或同一題材）。鄰居 20 日平均漲幅在全市場前 10%、自己落後、趨勢沒壞。
     鄰居關係的文字說明是 LLM 註解，只供參考，不影響選股。</p>
   {% if ai.b_cands %}
@@ -249,7 +256,8 @@
 
   <h4><span class="ai-s ai-s-D">D 籌碼共振</span>
     <span class="ai-cnt ai-cnt-D">共 {{ ai.d_cands|length }} 檔符合</span>
-    <span class="muted">（集保 {{ t.week or '—' }}，{{ t.universe }} 檔參與排名）</span>{% call tip() %}{{ aig('D') }}<br><br>{{ aig('score') }}{% endcall %}</h4>
+    <span class="muted">（集保 {{ t.week or '—' }}，{{ t.universe }} 檔參與排名）</span>{% call tip() %}{{ aig('D') }}<br><br>{{ aig('score') }}{% endcall %}
+    {{ wg_imp('ai-d', 'AI籌碼共振', ai.d_cands) }}</h4>
   <p class="muted">大戶（＞1,000 張）持股增加、股東人數減少、法人買超、董監增持——四個獨立來源同時偏多，
     <b>但股價還沒動</b>（20 日報酬低於同產業）、趨勢沒壞（站上 60 日線）。</p>
   {% if ai.d_cands %}

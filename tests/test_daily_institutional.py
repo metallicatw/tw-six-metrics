@@ -127,7 +127,7 @@ def test_the_daily_total_is_the_sum_of_the_rounded_columns():
     只會讓人以為自己算錯了。
     """
     day = next(
-        d for d in institutional_history(DATA)["5439"] if d.date == "2026-09-03"
+        d for d in institutional_history(DATA, lookback=400, days=400)["5439"] if d.date == "2026-09-03"
     )
     assert (day.foreign, day.trust, day.dealer) == (93, 0, -44)
     assert day.total == 49, "把原始的合計直接換算會得到 50"
@@ -141,7 +141,7 @@ def test_the_rounding_goes_away_from_zero_not_to_the_even_number():
     的那種。
     """
     day = next(
-        d for d in institutional_history(DATA)["6423"] if d.date == "2026-09-03"
+        d for d in institutional_history(DATA, lookback=400, days=400)["6423"] if d.date == "2026-09-03"
     )
     assert day.foreign == -7, "用了銀行家捨入"
 

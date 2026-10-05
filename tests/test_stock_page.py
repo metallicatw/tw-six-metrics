@@ -381,7 +381,8 @@ def test_the_star_says_what_pressing_it_will_do():
     js = (
         Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.js"
     ).read_text("utf-8")
-    assert "'從觀察清單移除'" in js and "'加入觀察清單'" in js
+    # 2026-10-05 起說明後面接著群組名稱：「加入觀察清單〔我的自選〕」。
+    assert "'從觀察清單' + name + '移除'" in js and "'加入觀察清單' + name" in js
     assert "aria-pressed" in js
 
 
@@ -416,11 +417,11 @@ def test_the_watchlist_really_toggles_and_is_shared(tmp_path=None):
 
     assert steps["初始"]["mark"] == "☆"
     assert steps["初始"]["pressed"] == "false"
-    assert steps["初始"]["title"] == "加入觀察清單"
+    assert steps["初始"]["title"] == "加入觀察清單〔我的自選〕"
 
     assert steps["個股頁按一下"]["mark"] == "★"
     assert steps["個股頁按一下"]["pressed"] == "true"
-    assert steps["個股頁按一下"]["title"] == "從觀察清單移除"
+    assert steps["個股頁按一下"]["title"] == "從觀察清單〔我的自選〕移除"
     assert steps["存起來的"] == '["2330"]'
 
     # 清單上那一列不必自己記狀態，畫一次就是對的——這就是「同一份」的意思。
@@ -462,6 +463,44 @@ def test_the_watchlist_really_toggles_and_is_shared(tmp_path=None):
 
     # 同一個代號出現兩次（手動改過、或兩個分頁同時寫）：去重，以第一次為準。
     assert steps["重複的代號"] == [["1101", "2330"], 2]
+
+    # ── 子群組（2026-10-05） ───────────────────────────────────────────
+    # 舊的單一清單原封不動變成第一個群組〔我的自選〕（id 固定 main，兩台裝置才合併得起來）。
+    assert steps["舊清單變成第一個群組"][0][0] == {"id": "main", "name": "我的自選", "n": 2, "src": ""}
+    assert steps["舊清單變成第一個群組"][1] == "main"
+    # 最後一個永遠是自動算的〔總交集清單〕。
+    assert steps["舊清單變成第一個群組"][0][-1]["name"] == "總交集清單"
+    # 新增的群組是空的、而且直接切過去；名字去掉前後空白。
+    assert steps["新增之後切過去"] == ["半導體", 0, False]
+    assert steps["新群組自己的清單"] == ["2454", "3034"]
+    # 舊鍵寫的是所有群組的聯集，給還沒更新的頁面與舊版雲端同步看。
+    assert steps["聯集寫回舊鍵"] == ["2330", "1101", "2454", "3034"]
+    # 星號加進的是**目前的群組**，說明要寫出是哪一個。
+    assert steps["星號跟著目前群組"]["title"] == "加入觀察清單〔半導體〕"
+    assert steps["切回我的自選"] == [["2330", "1101"], False]
+    assert steps["改名"] == [True, False, ["我的自選", "晶片", "總交集清單"]], "空白名稱不能改"
+    assert steps["往前挪"][0] is True and steps["往前挪"][1][1:] == ["main", "__all"]
+    assert steps["第一個再往前"] is False
+    assert steps["拖到最後"][0] is True and steps["拖到最後"][1][0] == "main"
+    assert steps["拖到最後"][1][-1] == "__all", "總交集永遠在最後"
+    # 匯入：去重、去空白、切到那個群組；同一個來源再匯入是**換掉**內容，改過的名字留著。
+    first = steps["第一次匯入"]
+    assert first[1:] == ["趨勢×六大×報酬", ["2330", "6669"]] and first[0]["existed"] is False
+    again = steps["同來源再匯入是換掉"]
+    assert again[0]["name"] == "我的趨勢" and again[0]["prev"] == 2 and again[0]["existed"] is True
+    assert again[1] == 4 and again[2] == ["3017"], "同一個來源不該多出第二個分頁"
+    assert steps["reload 讀得回群組"] == [[["我的自選", 2], ["晶片", 2], ["我的趨勢", 1], ["總交集清單", 0]], "我的趨勢"]
+    assert steps["刪掉目前的群組"][0] is True and steps["刪掉目前的群組"][2] == 3
+    assert steps["最後一個不能刪"] == [False, 2]
+    # 總交集清單：非空群組的交集，順序照第一個群組；空群組不算。
+    cur, order, last = steps["總交集"]
+    assert cur["id"] == "__all" and cur["name"] == "總交集清單" and cur["virtual"] is True
+    assert order == ["2330", "3034"] and last["n"] == 2
+    assert steps["總交集不能加減"] == [True, False, False, False, ["2330", "3034"]]
+    assert "交集" in steps["總交集的星號說明"]
+    assert steps["群組改了總交集跟著變"] == ["2330"]
+    assert steps["reload 之後還在總交集"] == "__all"
+    assert steps["群組存檔壞掉"] == [2, "我的自選"], "存檔壞掉要退回一個可用的群組，不是讓頁面炸掉"
 
     # ── 置頂 ───────────────────────────────────────────────────────────
     #

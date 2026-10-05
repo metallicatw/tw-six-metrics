@@ -2023,3 +2023,23 @@ def test_嵌入頁的燈泡在_div_裡_單獨開啟收進燈泡(tmp_path=None):
         cap = page[page.index('embed-cap'):page.index("<iframe")]
         before, inside = cap.split('class="tipbox"', 1)
         assert "單獨開啟" not in before and "單獨開啟這份報告" in inside, name
+
+
+def test_各頁都有匯入觀察清單的按鈕():
+    """子群組（2026-10-05）：每個來源一顆按鈕，預設群組名照使用者指定的寫法。"""
+    root = Path(__file__).resolve().parents[1] / "src/twsix/report/templates"
+    read = lambda name: (root / name).read_text("utf-8")  # noqa: E731
+    assert 'data-wg-src="trend" data-wg-name="趨勢×六大×報酬"' in read("trend.html.j2")
+    sc = read("screener.html.j2")
+    for src, name in (("sc-fin", "財務選股"), ("sc-trend", "趨勢選股"),
+                      ("sc-strong", "近期強勢股"), ("sc-high", "創新高選股")):
+        assert f'["{src}", "{name}"]' in sc, name
+    ai = read("ai.html.j2")
+    for src, name in (("ai-a", "AI營收驚喜"), ("ai-b", "AI供應鏈連動"), ("ai-d", "AI籌碼共振")):
+        assert f"wg_imp('{src}', '{name}'" in ai, name
+    for f, src, name in (("radar_bg/t4.html", "cf-t4", "籌碼篩選"), ("radar_bg/t5.html", "cf-t5", "基本面篩選"),
+                         ("radar_bg/t6.html", "cf-t6", "籌碼×基本面")):
+        assert f'data-wg-src="{src}" data-wg-name="{name}"' in read(f), name
+        assert f"['{src}'] = function()" in read("radar_bg/mods.js"), src
+    assert '["cf-picks", "精選漏斗"]' in read("radar.html.j2")
+    assert 'id="wg"' in read("watchlist.html.j2")

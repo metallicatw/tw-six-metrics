@@ -773,107 +773,206 @@
  * 私人清單，也不該有。換一台機器要重加，那是這個取捨的代價。
  * ========================================================================= */
 var TWSIXWatch = (function(){
-  var KEY = 'twsix.watchlist';
-  /* 存的是**一個陣列**，而順序就是使用者自己排的順序。
+  /* 2026-10-05 起觀察清單分成數個**子群組**（分頁）：
    *
-   * 上一版把它讀進一個物件（`set[code] = 1`）再用 `Object.keys(set)` 存回去，
-   * 而那樣會靜靜地把順序換掉：JS 物件的「整數樣」鍵（"1101"、"2330"）一律照
-   * 數字大小排在前面。所以不管使用者按星號的先後，存進去的永遠是代號小到大
-   * ——存的是陣列、看起來也像有順序，順序卻不是他給的那個。
+   *   twsix.wgroups = {v:1, cur:"main", groups:[{id, name, codes:[…], src?}]}
    *
-   * 現在陣列 `order` 是唯一的真相，物件 `set` 只是查表用的索引（1,769 列要
-   * 逐列問「這一檔有沒有被標記」，陣列的 indexOf 會是 O(n²)）。兩者一起改，
-   * 改的地方只有 toggle 與 move。
+   * - 每個群組自己的 codes 陣列就是那一頁的順序（置頂／上移／下移只動它）。
+   * - cur 是「目前的群組」：觀察清單頁顯示它，〔評等清單〕每一列的☆與個股頁的☆
+   *   也是加進／移出它——按下去之前，星號的說明會寫出是哪一個群組。
+   * - 從各頁「匯入觀察清單」建立的群組帶著 src（例如 "trend"、"sc-fin"），同一個
+   *   來源再匯入一次就**換掉**那個群組的內容，不會一直多出新分頁；改過名字也認得。
+   * - 第一次載入時，舊的 twsix.watchlist 整份變成第一個群組〔我的自選〕（id 固定為
+   *   main，兩台裝置登入同一個帳號時才合併得起來）。之後 twsix.watchlist 仍然寫一份
+   *   「所有群組的聯集」，給還沒更新的舊頁面與雲端同步的舊版本看。
    *
-   * 舊資料相容：存進去的本來就是一個代號陣列，所以舊瀏覽器裡那一份直接讀得
-   * 進來，只是它的順序是代號大小——那也是一個合理的起點。 */
-  var order = [];
-  var set = {};
+   * 舊版的說明（順序為什麼存陣列、reload 為什麼每次重建去重表）仍然成立，只是對象
+   * 從整份清單換成「目前的群組」。 */
+  var KEY = 'twsix.wgroups', OLD = 'twsix.watchlist';
+  /* 〔總交集清單〕（2026-10-05）：永遠排在最後的一個**自動算出來**的分頁——所有（非空的）
+     群組都有的那幾檔。它不存在 groups 裡，不能改名、刪除、排序，也不能直接加減股票
+     （☆ 在它底下按了不會動），要改它就去改各個群組。空的群組不算，否則剛新增一個空群組，
+     總交集就瞬間變成零檔。 */
+  var ALL = '__all', ALL_NAME = '總交集清單';
+  var doc = null, cur = null, order = [], set = {};
 
-  function reindex(){
+  function clean(codes){
+    var seen = {}, out = [];
+    (codes || []).forEach(function(c){
+      c = String(c || '').trim();
+      if(c && !seen[c]){ seen[c] = 1; out.push(c); }   /* 以第一次出現為準 */
+    });
+    return out;
+  }
+  function fresh(){
+    var old = [];
+    try{ old = JSON.parse(localStorage.getItem(OLD) || '[]') || []; }catch(e){}
+    return {v: 1, cur: 'main', groups: [{id: 'main', name: '我的自選', codes: clean(old)}]};
+  }
+  function find(id){
+    for(var i = 0; i < doc.groups.length; i++) if(doc.groups[i].id === id) return doc.groups[i];
+    return null;
+  }
+  function intersect(){
+    var full = doc.groups.filter(function(g){ return g.codes.length; });
+    if(!full.length) return [];
+    return full[0].codes.filter(function(c){
+      return full.every(function(g){ return g.codes.indexOf(c) >= 0; });
+    });
+  }
+  function bind(){
+    if(doc.cur === ALL) cur = {id: ALL, name: ALL_NAME, codes: intersect(), virtual: true};
+    else cur = find(doc.cur) || doc.groups[0];
+    doc.cur = cur.id;
+    order = cur.codes;
     set = {};
     order.forEach(function(c){ set[c] = 1; });
   }
   function reload(){
-    order = [];
-    /* 去重用的是**這一次**看到哪些，不是上一次留下來的 `set`。
-     *
-     * 第一版拿 `set` 當去重的依據而沒有先清掉它，於是「上一頁回來」重讀的時候，
-     * 記憶體裡已經有的那幾檔會被當成重複而整個跳過——存檔裡有三檔，讀回來只
-     * 剩一檔。而那一檔還是對的，所以畫面看起來只是「怎麼少了兩檔」。
-     * node 那份 harness 第一次跑就把它抓出來了。 */
-    var seen = {};
-    try{
-      var raw = JSON.parse(localStorage.getItem(KEY) || '[]') || [];
-      raw.forEach(function(c){
-        c = String(c);
-        if(c && !seen[c]){ seen[c] = 1; order.push(c); }  /* 以第一次出現為準 */
-      });
-    }catch(e){ order = []; }
-    reindex();
+    var d = null;
+    try{ d = JSON.parse(localStorage.getItem(KEY) || 'null'); }catch(e){ d = null; }
+    if(!d || !d.groups || !d.groups.length) d = fresh();
+    d.groups = d.groups.filter(function(g){ return g && g.id; }).map(function(g){
+      var o = {id: String(g.id), name: String(g.name || '未命名'), codes: clean(g.codes)};
+      if(g.src) o.src = String(g.src);
+      return o;
+    });
+    if(!d.groups.length) d = fresh();
+    doc = d;
+    bind();
     return set;
   }
   function save(){
-    try{ localStorage.setItem(KEY, JSON.stringify(order)); }catch(e){}
+    bind();
+    var all = [];
+    doc.groups.forEach(function(g){ all = all.concat(g.codes); });
+    try{
+      localStorage.setItem(KEY, JSON.stringify(doc));
+      localStorage.setItem(OLD, JSON.stringify(clean(all)));
+    }catch(e){}
   }
   function has(code){ return !!set[code]; }
   function toggle(code){
-    if(set[code]){
-      order.splice(order.indexOf(code), 1);
-    }else{
-      order.push(code);      /* 新加的排在最後面，不是插進中間 */
-    }
-    reindex();
+    if(cur.virtual) return !!set[code];      /* 總交集清單不能直接加減 */
+    if(set[code]) order.splice(order.indexOf(code), 1);
+    else order.push(code);                  /* 新加的排在最後面，不是插進中間 */
     save();
     return !!set[code];
   }
-  /* 往前或往後挪一格。回傳有沒有真的動到——已經在第一個還按「上移」不該
-     被當成一次改動（那會白存一次 localStorage，也會讓畫面重畫一次）。 */
   function move(code, delta){
-    var i = order.indexOf(code);
-    var j = i + delta;
+    if(cur.virtual) return false;
+    var i = order.indexOf(code), j = i + delta;
     if(i < 0 || j < 0 || j >= order.length) return false;
-    order[i] = order[j];
-    order[j] = code;
+    order[i] = order[j]; order[j] = code;
     save();
     return true;
   }
-  /* 直接挪到第一個。
-
-     為什麼不是「按 19 次上移」：一份觀察清單通常十幾檔，而「把這一檔提到最
-     上面」是實際最常做的動作（今天要盯它）。用上移做那件事要按到第 19 次，
-     而中間每一次都會存一次 localStorage、重排一次表格、移動一次焦點。
-
-     `splice` 兩次而不是交換：交換只對相鄰的兩個有意義，跳到第一個是**插入**
-     ——中間那幾檔要整批往後退一格，順序才不會被打亂。 */
   function top(code){
+    if(cur.virtual) return false;
     var i = order.indexOf(code);
     if(i <= 0) return false;
-    order.splice(i, 1);
-    order.unshift(code);
+    order.splice(i, 1); order.unshift(code);
     save();
     return true;
   }
   function index(code){ return order.indexOf(code); }
-  /* 一顆星要長什麼樣，只有這裡說了算——實心／空心、aria-pressed、以及那一句
-     說明。三個地方各寫一次，改一個就會有兩個沒改到。 */
   function paint(btn){
     var on = has(btn.getAttribute('data-star'));
+    var code = btn.getAttribute('data-star'), name = '〔' + cur.name + '〕';
     btn.textContent = on ? '★' : '☆';
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     btn.classList.toggle('on', on);
-    btn.title = on ? '從觀察清單移除' : '加入觀察清單';
-    var code = btn.getAttribute('data-star');
-    btn.setAttribute('aria-label', (on ? '把 ' + code + ' 從觀察清單移除'
-                                       : '把 ' + code + ' 加入觀察清單'));
+    btn.title = cur.virtual ? ALL_NAME + '是各群組的交集，要加減請到各群組' :
+                on ? '從觀察清單' + name + '移除' : '加入觀察清單' + name;
+    btn.setAttribute('aria-label', on ? '把 ' + code + ' 從觀察清單' + name + '移除'
+                                      : '把 ' + code + ' 加入觀察清單' + name);
     return on;
   }
+
+  /* ---- 群組 ---------------------------------------------------------- */
+  function changed(){
+    try{ document.dispatchEvent(new CustomEvent('twsix:wgroup')); }catch(e){}
+  }
+  function groups(){
+    var out = doc.groups.map(function(g){ return {id: g.id, name: g.name, n: g.codes.length, src: g.src || ''}; });
+    out.push({id: ALL, name: ALL_NAME, n: intersect().length, src: '', virtual: true});
+    return out;
+  }
+  function select(id){
+    if((id !== ALL && !find(id)) || doc.cur === id) return false;
+    doc.cur = id; save(); changed();
+    return true;
+  }
+  function uid(){ return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+  function addGroup(name){
+    var g = {id: uid(), name: String(name || '新群組').trim() || '新群組', codes: []};
+    doc.groups.push(g); doc.cur = g.id; save(); changed();
+    return g.id;
+  }
+  function renameGroup(id, name){
+    var g = find(id); name = String(name || '').trim();
+    if(!g || !name || g.name === name) return false;
+    g.name = name; save(); changed();
+    return true;
+  }
+  function removeGroup(id){
+    if(doc.groups.length <= 1) return false;         /* 最後一個群組不能刪 */
+    var i = -1;
+    doc.groups.forEach(function(g, k){ if(g.id === id) i = k; });
+    if(i < 0) return false;
+    doc.groups.splice(i, 1);
+    if(doc.cur === id) doc.cur = doc.groups[Math.max(0, i - 1)].id;
+    save(); changed();
+    return true;
+  }
+  /* 把 id 那個群組挪到 before 前面（before 為空＝挪到最後）。拖曳與 ◀ ▶ 都走這一條。 */
+  function placeGroup(id, before){
+    var g = find(id);
+    if(!g || id === before) return false;
+    var list = doc.groups.filter(function(x){ return x.id !== id; });
+    var at = list.length;
+    list.forEach(function(x, k){ if(x.id === before) at = k; });
+    list.splice(at, 0, g);
+    if(list.map(function(x){ return x.id; }).join() === doc.groups.map(function(x){ return x.id; }).join()) return false;
+    doc.groups = list; save(); changed();
+    return true;
+  }
+  function moveGroup(id, delta){
+    var ids = doc.groups.map(function(x){ return x.id; }), i = ids.indexOf(id), j = i + delta;
+    if(i < 0 || j < 0 || j >= ids.length) return false;
+    return placeGroup(id, delta < 0 ? ids[j] : (ids[j + 1] || null));
+  }
+  /* 從其他頁一鍵匯入：同一個來源（src）只有一個群組，再匯入就換掉它的內容。 */
+  function importGroup(src, name, codes){
+    codes = clean(codes);
+    var g = null;
+    doc.groups.forEach(function(x){ if(x.src === src) g = x; });
+    var prev = g ? g.codes.length : 0, had = !!g;
+    if(!g){
+      g = {id: 'src-' + src, name: name, codes: [], src: src};
+      if(find(g.id)) g.id = uid();
+      doc.groups.push(g);
+    }
+    g.codes = codes;
+    doc.cur = g.id;
+    save(); changed();
+    return {name: g.name, n: codes.length, prev: prev, existed: had};
+  }
+  function sourceGroup(src){
+    var out = null;
+    doc.groups.forEach(function(x){ if(x.src === src) out = {id: x.id, name: x.name, n: x.codes.length}; });
+    return out;
+  }
+
   reload();
   return {reload: reload, has: has, toggle: toggle, paint: paint,
           move: move, top: top, index: index,
           count: function(){ return order.length; },
           order: function(){ return order.slice(); },
-          all: function(){ return set; }};
+          all: function(){ return set; },
+          groups: groups, current: function(){ return {id: cur.id, name: cur.name, n: order.length, virtual: !!cur.virtual}; },
+          select: select, addGroup: addGroup, renameGroup: renameGroup, removeGroup: removeGroup,
+          placeGroup: placeGroup, moveGroup: moveGroup, importGroup: importGroup, sourceGroup: sourceGroup};
 })();
 
 
@@ -1266,11 +1365,14 @@ var TWSIXWatch = (function(){
 
   /* 觀察清單那一頁：一檔都沒加的時候要說話，不要給一張空表讓人以為壞了。 */
   var empty = document.getElementById('watch-empty');
-  if(empty){
-    var show = function(){ empty.hidden = TWSIXWatch.count() > 0; };
-    show();
-    table.addEventListener('click', show);
-  }
+  var show = function(){ if(empty) empty.hidden = TWSIXWatch.count() > 0; };
+  show();
+  if(empty) table.addEventListener('click', show);
+  /* 換了子群組（或新增、刪除、匯入）：星號、自訂順序、篩選、檔數全部照新的群組重來。 */
+  document.addEventListener('twsix:wgroup', function(){
+    [].forEach.call(table.querySelectorAll('button[data-star]'), paintStar);
+    applyCustomOrder(); apply(); count(); show();
+  });
 })();
 
 
@@ -2647,4 +2749,150 @@ function reveal(bar, el){
   set();
   if(window.ResizeObserver) new ResizeObserver(set).observe(h);
   else window.addEventListener('resize', set);
+})();
+
+/* =========================================================================
+ * 觀察清單的子群組分頁（只在〔台股觀察清單〕那一頁）
+ *
+ * 一列膠囊按鈕，樣式和站上其他分頁一樣。點一下切換群組；〔＋〕新增；〔管理〕
+ * 打開之後每一顆旁邊多出 ◀ ▶（排序）、✎（改名）、✕（刪除）。桌機也可以直接
+ * 拖曳膠囊排序、在膠囊上點兩下改名。手機沒有拖曳，用〔管理〕裡的 ◀ ▶。
+ * ========================================================================= */
+(function(){
+  var host = document.getElementById('wg');
+  if(!host || typeof TWSIXWatch === 'undefined') return;
+  var editing = false, dragId = null;
+  function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function render(){
+    var gs = TWSIXWatch.groups(), cur = TWSIXWatch.current().id;
+    var h = '<div class="wg-tabs" role="tablist" aria-label="觀察清單群組">';
+    gs.forEach(function(g, i){
+      var on = g.id === cur;
+      if(g.virtual){
+        h += '<span class="wg-item wg-allitem" data-id="' + esc(g.id) + '">' +
+          '<button type="button" role="tab" class="wg-tab wg-all" aria-selected="' + on + '" data-act="pick" ' +
+          'title="所有（非空的）群組都有的股票，自動算出">' + esc(g.name) + ' <span class="wg-n">' + g.n + '</span></button></span>';
+        return;
+      }
+      h += '<span class="wg-item" data-id="' + esc(g.id) + '"' + (editing ? '' : ' draggable="true"') + '>' +
+        (editing ? '<button type="button" class="wg-mini" data-act="left" title="往前" aria-label="把 ' + esc(g.name) + ' 往前移"' + (i === 0 ? ' disabled' : '') + '>◀</button>' : '') +
+        '<button type="button" role="tab" class="wg-tab wg-c' + (i % 8) + '" aria-selected="' + on + '" data-act="pick" title="' + (editing ? '' : '點兩下改名；拖曳排序') + '">' +
+        esc(g.name) + ' <span class="wg-n">' + g.n + '</span></button>' +
+        (editing ? '<button type="button" class="wg-mini" data-act="rename" title="改名" aria-label="把 ' + esc(g.name) + ' 改名">✎</button>' +
+                   '<button type="button" class="wg-mini" data-act="del" title="刪除" aria-label="刪除 ' + esc(g.name) + '"' + (gs.length < 3 ? ' disabled' : '') + '>✕</button>' +
+                   '<button type="button" class="wg-mini" data-act="right" title="往後" aria-label="把 ' + esc(g.name) + ' 往後移"' + (i === gs.length - 2 ? ' disabled' : '') + '>▶</button>' : '') +
+        '</span>';
+    });
+    h += '<button type="button" class="wg-tool" data-act="add" title="新增群組">＋ 新增</button>' +
+         '<button type="button" class="wg-tool" data-act="edit" aria-pressed="' + editing + '">' + (editing ? '完成' : '管理') + '</button></div>';
+    host.innerHTML = h;
+  }
+  function rename(id){
+    var g = TWSIXWatch.groups().filter(function(x){ return x.id === id; })[0];
+    if(!g) return;
+    var name = window.prompt('群組名稱', g.name);
+    if(name !== null) TWSIXWatch.renameGroup(id, name);
+  }
+  host.addEventListener('click', function(e){
+    var b = e.target.closest('button[data-act]');
+    if(!b || b.disabled) return;
+    var item = b.closest('.wg-item'), id = item && item.getAttribute('data-id'), act = b.getAttribute('data-act');
+    if(act === 'pick') TWSIXWatch.select(id);
+    else if(act === 'add'){
+      var name = window.prompt('新群組的名稱', '新群組');
+      if(name !== null) TWSIXWatch.addGroup(name);
+    }else if(act === 'edit'){ editing = !editing; render(); }
+    else if(act === 'rename') rename(id);
+    else if(act === 'del'){
+      var g = TWSIXWatch.groups().filter(function(x){ return x.id === id; })[0];
+      if(g && window.confirm('刪除群組〔' + g.name + '〕？' + (g.n ? '裡面的 ' + g.n + ' 檔會一起移除（其他群組不受影響）。' : '')))
+        TWSIXWatch.removeGroup(id);
+    }else if(act === 'left') TWSIXWatch.moveGroup(id, -1);
+    else if(act === 'right') TWSIXWatch.moveGroup(id, +1);
+  });
+  host.addEventListener('dblclick', function(e){
+    var b = e.target.closest('button[data-act="pick"]');
+    var it = b && b.closest('.wg-item');
+    if(it && !editing && !it.classList.contains('wg-allitem')) rename(it.getAttribute('data-id'));
+  });
+  /* 拖曳排序（桌機）：放在一顆膠囊的左半邊＝插到它前面，右半邊＝插到它後面。 */
+  host.addEventListener('dragstart', function(e){
+    var it = e.target.closest && e.target.closest('.wg-item');
+    if(!it || it.classList.contains('wg-allitem')) return;
+    dragId = it.getAttribute('data-id');
+    it.classList.add('drag');
+    try{ e.dataTransfer.setData('text/plain', dragId); e.dataTransfer.effectAllowed = 'move'; }catch(err){}
+  });
+  host.addEventListener('dragover', function(e){
+    if(!dragId) return;
+    var it = e.target.closest && e.target.closest('.wg-item');
+    if(!it) return;
+    e.preventDefault();
+    [].forEach.call(host.querySelectorAll('.wg-item'), function(x){ x.classList.remove('to-l', 'to-r'); });
+    var r = it.getBoundingClientRect();
+    it.classList.add(e.clientX < r.left + r.width / 2 ? 'to-l' : 'to-r');
+  });
+  host.addEventListener('drop', function(e){
+    if(!dragId) return;
+    e.preventDefault();
+    var it = e.target.closest && e.target.closest('.wg-item');
+    if(it){
+      var r = it.getBoundingClientRect(), id = it.getAttribute('data-id');
+      var before = id === '__all' ? null : id;
+      if(e.clientX >= r.left + r.width / 2){
+        var nx = it.nextElementSibling;
+        before = nx && nx.classList.contains('wg-item') ? nx.getAttribute('data-id') : null;
+      }
+      TWSIXWatch.placeGroup(dragId, before);
+    }
+    dragId = null; render();
+  });
+  host.addEventListener('dragend', function(){ dragId = null; render(); });
+  document.addEventListener('twsix:wgroup', render);
+  window.addEventListener('pageshow', function(){ TWSIXWatch.reload(); render(); });
+  render();
+})();
+
+/* =========================================================================
+ * 一鍵匯入觀察清單（〔趨勢×六大×報酬〕〔選股功能〕〔AI 選股〕〔籌碼雷達〕）
+ *
+ * 任何一顆 <button data-wg-src="來源" data-wg-name="預設群組名">：代號清單取自
+ * data-wg-codes（建站時就寫好的，例如 AI 選股的候選），沒有的話問
+ * window.TWSIXImport[來源]()（篩選結果是畫面上算出來的，例如選股功能、籌碼雷達）。
+ * 同一個來源只有一個群組：再匯入一次是**換成這一次的結果**，不是再多一個分頁。
+ * ========================================================================= */
+window.TWSIXImport = window.TWSIXImport || {};
+(function(){
+  if(typeof TWSIXWatch === 'undefined') return;
+  var toast = null, timer = null;
+  function say(html){
+    if(!toast){
+      toast = document.createElement('div');
+      toast.className = 'wg-toast'; toast.setAttribute('role', 'status');
+      document.body.appendChild(toast);
+    }
+    toast.innerHTML = html; toast.hidden = false;
+    clearTimeout(timer);
+    timer = setTimeout(function(){ toast.hidden = true; }, 6000);
+  }
+  function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('button[data-wg-src]');
+    if(!b) return;
+    var src = b.getAttribute('data-wg-src'), name = b.getAttribute('data-wg-name') || src;
+    var raw = b.getAttribute('data-wg-codes'), codes = [];
+    if(raw !== null) codes = raw.split(',');
+    else if(typeof window.TWSIXImport[src] === 'function'){
+      try{ codes = window.TWSIXImport[src]() || []; }catch(err){ codes = []; }
+    }
+    codes = codes.map(function(c){ return String(c).trim(); }).filter(Boolean);
+    if(!codes.length){ say('目前沒有符合條件的股票可以匯入——先篩出結果再按一次。'); return; }
+    TWSIXWatch.reload();
+    var old = TWSIXWatch.sourceGroup(src);
+    if(old && old.n && !window.confirm('觀察清單〔' + old.name + '〕已經有 ' + old.n + ' 檔，要換成這一次的 ' + codes.length + ' 檔嗎？')) return;
+    var r = TWSIXWatch.importGroup(src, name, codes);
+    var rel = (window.TWSIX && TWSIX.rel) || '';
+    say('已把 <b>' + r.n + '</b> 檔匯入觀察清單〔' + esc(r.name) + '〕' + (old && old.n ? '（取代原本的 ' + old.n + ' 檔）' : '') +
+        '　<a href="' + rel + 'watchlist.html">去看 →</a>');
+  });
 })();

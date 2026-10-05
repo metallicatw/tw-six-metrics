@@ -1730,6 +1730,8 @@ var __fetch = API.fetch;
   $('sampleBtn').addEventListener('click', applySample);
   $('resetBtn').addEventListener('click', resetFilters);
   $('exportBtn').addEventListener('click', exportResults);
+  // 一鍵匯入觀察清單（2026-10-05）：全部符合的代號，不只目前這一頁。
+  (window.TWSIXImport = window.TWSIXImport || {})['cf-t4'] = function(){ return STATE.filtered.map(function(x){ return x.c; }); };
   $('prevPage').addEventListener('click', function(){ if(STATE.page>1){ STATE.page--; render(); } });
   $('nextPage').addEventListener('click', function(){ STATE.page++; render(); });
   $('tabDay').addEventListener('click', function(){ setView('day'); });
@@ -2108,6 +2110,7 @@ var __fetch = API.fetch;
     }
   }
   __id("exportBtn").addEventListener("click", exportResults);
+  (window.TWSIXImport = window.TWSIXImport || {})['cf-t5'] = function(){ return CURRENT_ROWS.map(function(r){ return r.code; }); };
 
   function renderTable(rows){
     __id("matchCount").textContent = rows.length.toLocaleString("en-US");
@@ -2771,6 +2774,7 @@ var __fetch = API.fetch;
     }
   }
   __id("exportBtn").addEventListener("click", exportResults);
+  (window.TWSIXImport = window.TWSIXImport || {})['cf-t6'] = function(){ return CURRENT_ROWS.map(function(r){ return r.code; }); };
 
   function renderTable(rows){
     __id("matchCount").textContent = rows.length.toLocaleString("en-US");

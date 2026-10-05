@@ -1595,3 +1595,52 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
   /* A 的「理由」和前面幾欄說的是同一件事；手機上收起來，一列不必長到五行 */
   .ai-t .ai-hide-m{display:none}
 }
+
+/* -- 觀察清單的子群組分頁（2026-10-05） --------------------------------- */
+.wg-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px}
+.wg-item{display:inline-flex;align-items:center;gap:3px;border-radius:999px}
+.wg-item.drag{opacity:.45}
+.wg-item.to-l{box-shadow:-3px 0 0 var(--accent)}
+.wg-item.to-r{box-shadow:3px 0 0 var(--accent)}
+.wg-tab{--tc:#5f6b78;padding:6px 14px;border-radius:999px;cursor:pointer;white-space:nowrap;
+  border:1.5px solid var(--tc);font:inherit;font-size:13.5px;font-weight:700;
+  color:var(--tc);background:color-mix(in srgb,var(--tc) 8%,transparent)}
+.wg-tab:hover{background:color-mix(in srgb,var(--tc) 16%,transparent)}
+.wg-tab[aria-selected=true]{background:var(--tc);color:#fff}
+.wg-tab:focus-visible{outline:2px solid var(--tc);outline-offset:2px}
+.wg-n{font-size:11.5px;font-weight:600;opacity:.8;margin-left:2px}
+.wg-c0{--tc:#b25a00}.wg-c1{--tc:#0e7c6f}.wg-c2{--tc:#1c62b8}.wg-c3{--tc:#a3306b}
+.wg-c4{--tc:#6d3fd1}.wg-c5{--tc:#2b8a3e}.wg-c6{--tc:#c62828}.wg-c7{--tc:#6f6400}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) .wg-c0{--tc:#ffa94d}:root:not([data-theme=light]) .wg-c1{--tc:#4fd6c4}
+  :root:not([data-theme=light]) .wg-c2{--tc:#6fb0f5}:root:not([data-theme=light]) .wg-c3{--tc:#f783ac}
+  :root:not([data-theme=light]) .wg-c4{--tc:#b39cff}:root:not([data-theme=light]) .wg-c5{--tc:#69db7c}
+  :root:not([data-theme=light]) .wg-c6{--tc:#ff8787}:root:not([data-theme=light]) .wg-c7{--tc:#e0d050}
+  :root:not([data-theme=light]) .wg-tab[aria-selected=true]{color:var(--ground)}
+}
+:root[data-theme=dark] .wg-c0{--tc:#ffa94d}:root[data-theme=dark] .wg-c1{--tc:#4fd6c4}
+:root[data-theme=dark] .wg-c2{--tc:#6fb0f5}:root[data-theme=dark] .wg-c3{--tc:#f783ac}
+:root[data-theme=dark] .wg-c4{--tc:#b39cff}:root[data-theme=dark] .wg-c5{--tc:#69db7c}
+:root[data-theme=dark] .wg-c6{--tc:#ff8787}:root[data-theme=dark] .wg-c7{--tc:#e0d050}
+:root[data-theme=dark] .wg-tab[aria-selected=true]{color:var(--ground)}
+.wg-mini{width:26px;height:26px;padding:0;border-radius:50%;border:1px solid var(--rule);
+  background:var(--surface-2);color:var(--ink-2);font-size:12px;line-height:1;cursor:pointer}
+.wg-mini:disabled{opacity:.35;cursor:default}
+.wg-tool{padding:6px 12px;border-radius:999px;border:1.5px dashed var(--rule);background:transparent;
+  color:var(--ink-2);font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.wg-tool[aria-pressed=true]{border-style:solid;border-color:var(--accent);color:var(--accent)}
+/* 匯入按鈕：和各頁原本的按鈕並排，用同一個強調色描邊。 */
+.wg-imp{padding:4px 11px;border-radius:999px;border:1.5px solid var(--accent);background:transparent;
+  color:var(--accent);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;vertical-align:middle}
+.wg-imp:hover{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.wg-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:70;max-width:min(560px,92vw);
+  padding:10px 16px;border-radius:10px;background:#1f2937;color:#f3f4f6;font-size:13.5px;
+  box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.wg-toast[hidden]{display:none}
+.wg-toast a{color:#5eead4}
+/* 〔總交集清單〕：自動算出來的那一頁，金色、虛線框，和可以編輯的群組分得出來。 */
+.wg-tab.wg-all{--tc:#a87a00;border-style:dashed}
+.wg-tab.wg-all[aria-selected=true]{border-style:solid}
+.wg-allitem{margin-left:4px;padding-left:10px;border-left:1px solid var(--rule);border-radius:0}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .wg-tab.wg-all{--tc:#f2be45}}
+:root[data-theme=dark] .wg-tab.wg-all{--tc:#f2be45}

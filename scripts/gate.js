@@ -196,6 +196,26 @@
               kv["twsix.watchlist"] = JSON.stringify(a);
             } catch (e) {}
           }
+          // 觀察清單的子群組（2026-10-05）：同一個 id 的群組代號取聯集（雲端的順序在前），
+          // 只有一邊有的群組都留著（雲端的排前面）；目前選的群組以雲端為準。
+          if (mine["twsix.wgroups"] && r.kv["twsix.wgroups"]) {
+            try {
+              var gc = JSON.parse(r.kv["twsix.wgroups"]), gm = JSON.parse(mine["twsix.wgroups"]), byId = {};
+              (gc.groups || []).forEach(function (g) { byId[g.id] = g; });
+              (gm.groups || []).forEach(function (g) {
+                var o = byId[g.id];
+                if (!o) { gc.groups.push(g); byId[g.id] = g; return; }
+                (g.codes || []).forEach(function (c) { if ((o.codes || (o.codes = [])).indexOf(c) < 0) o.codes.push(c); });
+              });
+              kv["twsix.wgroups"] = JSON.stringify(gc);
+            } catch (e) {}
+          } else if (mine["twsix.watchlist"] && r.kv["twsix.wgroups"]) {
+            // 這台還是舊版的單一清單：併進雲端的第一個群組〔我的自選〕。
+            try {
+              var gw = JSON.parse(r.kv["twsix.wgroups"]), first = (gw.groups || [])[0], old = JSON.parse(mine["twsix.watchlist"]) || [];
+              if (first) { old.forEach(function (c) { if ((first.codes || (first.codes = [])).indexOf(c) < 0) first.codes.push(c); }); kv["twsix.wgroups"] = JSON.stringify(gw); }
+            } catch (e) {}
+          }
           replaceLocal(kv);
           var same = JSON.stringify(kv) === JSON.stringify(r.kv);
           setMeta({ uid: user.uid, rev: r.rev || 0, seq: same ? 0 : 1, synced: 0 });

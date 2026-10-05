@@ -74,7 +74,17 @@
   由 <a href="https://github.com/metallicatw/tw-trend-filter" rel="noopener">tw-trend-filter</a>
   每個交易日台北 15:10 產生，這裡嵌的是同一份。
   <a href="{{ rel }}{{ report }}#cross" target="_blank" rel="noopener">單獨開啟這份報告 ↗</a>
-{% endcall %}</div>
+{% endcall %} <button type="button" class="wg-imp" data-wg-src="trend" data-wg-name="趨勢×六大×報酬"
+  title="把報告裡目前篩選出來的股票匯入觀察清單〔趨勢×六大×報酬〕">⇩ 匯入觀察清單</button></div>
+{# 匯入的是嵌進來那份報告**目前**的篩選結果（同源 iframe，讀它自己的 TF_HITS；讀不到就讀左側清單的卡片）。 #}
+<script>
+(window.TWSIXImport = window.TWSIXImport || {})["trend"] = function(){
+  var f = document.getElementById("trend-frame"), w = f && f.contentWindow, d = w && w.document;
+  if (!d) return [];
+  try { var c = w.eval("typeof TF_HITS !== 'undefined' && typeof C !== 'undefined' ? TF_HITS.map(function(h){ return h[0][C.code]; }) : null"); if (c && c.length) return c; } catch (e) {}
+  return [].map.call(d.querySelectorAll("#sb-list .nb[data-code]"), function(n){ return n.getAttribute("data-code"); });
+};
+</script>
 {# `.tall`：桌機上 iframe 幾乎一整個視窗高（見 site.css）。78vh 的時候圖被
    壓到約 4:1，使用者說「壓太扁平了，看不出變化」。 #}
 <iframe id="trend-frame" class="embed tall" src="{{ rel }}{{ report }}#cross"
