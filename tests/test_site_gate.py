@@ -145,7 +145,9 @@ def test_a_page_without_head_is_left_alone_even_with_a_header_tag():
 
 def test_登入卡片用網站圖示當站徽():
     logo = sg.logo_svg()
-    assert logo.startswith("<svg") and 'id="tgf-bg"' in logo and "url(#tgf-gold)" in logo
+    # 2026-10-05 起站徽是內嵌點陣圖的 SVG（金股道），沒有漸層 id 了。
+    assert logo.startswith("<svg") and "data:image/png;base64," in logo
     js = (ROOT / "scripts" / "gate.js").read_text("utf-8")
     assert 'querySelector("h1").textContent = C.title' in js, "登入頁的站名不加連結"
-    assert sg.TITLE == "股海神偵情報站"
+    assert sg.TITLE == "金股道"
+    assert "禾熟之時，金股自到" in sg.TAGLINE and "GoldenWay" in sg.TAGLINE

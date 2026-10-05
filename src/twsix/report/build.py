@@ -227,6 +227,9 @@ def _env(assets: bool = False):  # type: ignore[no-untyped-def]
     env.globals["reward_risk_notes"] = list(REWARD_RISK_NOTES)
     # 收盤價旁邊那顆 Yahoo 技術分析圖示：個股頁頁首、AI 選股頁的表格也要用。
     env.globals["yahoo_ta"] = yahoo_chart_url
+    # 站名的英文與副標（2026-10-05 更名：股海神偵情報站 → 金股道）。
+    env.globals["site_en"] = SITE_EN
+    env.globals["site_tagline"] = SITE_TAGLINE
     if not assets:
         from markupsafe import Markup
 
@@ -418,8 +421,12 @@ def write_build_state(
     )
 
 
-#: 網站圖示與站徽（2026-10-04）：金色放大鏡戴著偵探紳士帽，鏡片裡是股海浪花與紅色上漲折線。
-#: 原稿是 icons/favicon.svg，PNG／ICO 由 scripts/make_icons.py 轉出。放在網站**根目錄**：
+#: 站名的英文與副標，頁首站名旁邊、登入卡片上用。
+SITE_EN = "GoldenWay"
+SITE_TAGLINE = "禾熟之時，金股自到"
+
+#: 網站圖示與站徽（2026-10-05 換成金股道的站徽：金色禾穗、緞帶與上揚箭頭）。
+#: 原稿是 icons/logo-source.png（使用者提供的點陣圖，圓形裁切），scripts/make_icons.py 轉出 PNG／ICO／SVG。放在網站**根目錄**：
 #: 瀏覽器沒看到 <link rel="icon"> 時會自己去要 /favicon.ico。頁首站名前的站徽用的也是那張 SVG。
 ICON_DIR = TEMPLATE_DIR / "icons"
 ICON_FILES = (
@@ -453,7 +460,7 @@ def web_manifest(site_title: str) -> str:
     )
 
 
-def write_assets(out_dir: Path, site_title: str = "股海神偵情報站") -> None:
+def write_assets(out_dir: Path, site_title: str = "金股道") -> None:
     target = out_dir / "assets"
     target.mkdir(parents=True, exist_ok=True)
     for name in ASSET_FILES:
@@ -912,7 +919,7 @@ def build_site(
     records: list[dict[str, str]],
     out_dir: Path,
     *,
-    site_title: str = "股海神偵情報站",
+    site_title: str = "金股道",
     rules: Any = None,
     repo: str = "",
     top_n: int = 50,
@@ -1815,7 +1822,7 @@ def build_stock_page(
     page: Any,
     out_file: Path,
     *,
-    site_title: str = "股海神偵情報站",
+    site_title: str = "金股道",
     generated_at: str = "",
     rel: str = "",
     repo: str = "",

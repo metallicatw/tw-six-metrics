@@ -54,8 +54,9 @@
     var w = document.getElementById("tg");
     if (!w) { w = document.createElement("div"); w.id = "tg"; document.body.appendChild(w); }
     w.innerHTML = '<div class="tg-card"><div class="tg-mark">' + (C.logo || '') + '</div>' +
-      '<h1></h1>' + inner + '<p class="tg-foot">僅限授權使用者</p></div>';
+      '<h1></h1><p class="tg-tag"></p>' + inner + '<p class="tg-foot">僅限授權使用者</p></div>';
     w.querySelector("h1").textContent = C.title;   // 純文字，不加連結（2026-10-04）
+    w.querySelector(".tg-tag").textContent = C.tagline || "";
     return w;
   }
   function icon(id, title, path, onClick) {

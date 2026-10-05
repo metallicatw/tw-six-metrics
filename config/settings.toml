@@ -48,7 +48,7 @@ site_dir = "site"
 # 〔趨勢選股〕（技術面篩選）和〔市場監控〕（台股加權、VIX、日經、密大信心、
 # 村田 B/B，加上一組日本焦點個股）——後者連「台股」都不只。一個比內容窄的
 # 標題，讀者會以為點進來只有那一張表。
-title    = "股海神偵情報站"
+title    = "金股道"
 subtitle = "由公開資料自動產生"
 # 發布這個網站的 GitHub repo（owner/name）。網頁上按「抓這一檔」會開一張預先
 # 填好的 issue，由 .github/workflows/stock.yml 接手抓取並重建網站。

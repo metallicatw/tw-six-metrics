@@ -37,7 +37,8 @@ import sys
 from pathlib import Path
 
 BEGIN, END = "<!--twsix-gate-->", "<!--/twsix-gate-->"
-TITLE = "股海神偵情報站"
+TITLE = "金股道"
+TAGLINE = "GoldenWay｜禾熟之時，金股自到"
 HOME = "https://metallicatw.github.io/tw-six-metrics/index.html"
 #: 系統管理員：永遠在名單上、永遠是管理員（Firestore 規則裡也寫死這一個）。
 OWNER = "eggeggyang2005@gmail.com"
@@ -79,6 +80,7 @@ color:#06231d;background:linear-gradient(135deg,#34d399,#22c1a8);box-shadow:0 10
 #tg button[disabled]{opacity:.6;cursor:wait}
 #tg .tg-err{min-height:20px;margin:12px 0 0;text-align:center;font-size:13px;color:#ff9a8f}
 #tg .tg-foot{margin:18px 0 0;text-align:center;font-size:11px;color:#6f8a94}
+#tg .tg-tag{margin:-6px 0 18px;text-align:center;font-size:12px;letter-spacing:.12em;color:#c9a35a}
 #tg .tg-shake{animation:tgs .35s}
 #tg-icons{position:absolute;top:8px;right:20px;z-index:6;display:flex;gap:8px}
 #tg-icons.tg-float{position:fixed;top:10px;right:12px;z-index:2147483646}
@@ -134,7 +136,7 @@ def logo_svg() -> str:
 
 def config_from_env(env: dict[str, str] | None = None) -> dict | None:
     env = dict(os.environ if env is None else env)
-    common = {"title": TITLE, "home": HOME, "logo": logo_svg()}
+    common = {"title": TITLE, "tagline": TAGLINE, "home": HOME, "logo": logo_svg()}
     fb = (env.get("FIREBASE_CONFIG") or "").strip()
     if fb:
         if "{" in fb and "}" in fb:   # 整段「const firebaseConfig = {...};」貼進來也可以

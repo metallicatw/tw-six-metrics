@@ -195,8 +195,18 @@ header.top h1 .built::before{content:"更新 "}
 header.top h1 a{color:inherit;text-decoration:none}
 /* 站名前面的站徽（2026-10-04）。h1 是 baseline 對齊，圖要另外自己置中。 */
 header.top h1 a{display:inline-flex;align-items:center;gap:9px}
-header.top h1 .brand{width:34px;height:34px;flex:0 0 auto;border-radius:8px}
-@media (max-width:640px){header.top h1 .brand{width:30px;height:30px}}
+header.top h1 .brand{width:40px;height:40px;flex:0 0 auto;border-radius:50%}
+@media (max-width:640px){header.top h1 .brand{width:34px;height:34px}}
+/* 金股道（2026-10-05）：站名＋英文一行、副標一行，金色。 */
+header.top h1 .brand-t{display:inline-flex;flex-direction:column;line-height:1.1}
+header.top h1 .brand-n{display:inline-flex;align-items:baseline;gap:8px;letter-spacing:.06em;
+  background:linear-gradient(180deg,#f3d27a,#c8962e);-webkit-background-clip:text;background-clip:text;color:transparent}
+header.top h1 .brand-en{font-size:13px;font-weight:600;letter-spacing:.08em;font-family:Georgia,"Times New Roman",serif}
+header.top h1 .brand-tag{font-size:11.5px;font-weight:500;letter-spacing:.12em;color:#b8924a;margin-top:3px}
+@media (prefers-color-scheme:light){:root:not([data-theme=dark]) header.top h1 .brand-n{background:linear-gradient(180deg,#b8862a,#8a6418);-webkit-background-clip:text;background-clip:text}
+  :root:not([data-theme=dark]) header.top h1 .brand-tag{color:#8a6a2a}}
+:root[data-theme=light] header.top h1 .brand-n{background:linear-gradient(180deg,#b8862a,#8a6418);-webkit-background-clip:text;background-clip:text}
+:root[data-theme=light] header.top h1 .brand-tag{color:#8a6a2a}
 
 /* 導覽列：四個分頁，四個顏色。
 

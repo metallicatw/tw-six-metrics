@@ -45,7 +45,7 @@ class IngestSettings:
 @dataclass
 class ReportSettings:
     site_dir: str = "site"
-    title: str = "股海神偵情報站"
+    title: str = "金股道"
     subtitle: str = "由公開資料自動產生"
     #: ``owner/name`` of the GitHub repository this site is published from.
     #:
