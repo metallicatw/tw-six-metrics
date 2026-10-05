@@ -23,6 +23,7 @@ from ..models import INDICATOR_LABELS, INDICATOR_ORDER
 from ..store import news as news_store
 from ..store.daily import (
     close_history,
+    foreign_month_end,
     institutional_history,
     latest_quotes,
     price_history,
@@ -318,6 +319,7 @@ def stock_signature(
     news: Any = None,
     closes: Any = None,
     history: Any = None,
+    foreign_months: Any = None,
 ) -> str:
     """一檔股票的「內容指紋」——分頁的位元組加上它在評等表裡的那幾列。
 
@@ -342,6 +344,9 @@ def stock_signature(
     # 就跟著移動；那一天沒變，補進來的也是同一批。
     if inst:
         h.update(f"inst|{inst[0].date}|{inst[0].total}|{inst[0].foreign_pct}".encode())
+    # 〔董監持股〕的外資(%)：月底那一天補進來（backfill-qfii --month-ends）要重畫。
+    if foreign_months:
+        h.update(("fm|" + "|".join(f"{k}:{v}" for k, v in sorted(foreign_months.items()))).encode())
     # 新聞也是每天換的。最新那一則的連結（裡面就是 newsId）加上則數就夠：新的一則
     # 進來，兩者至少變一個。
     if news:
@@ -845,6 +850,8 @@ def build_site(
     # 〔股價健診〕〔推估三年目標價〕要的長歷史（最多 760 個交易日）。
     long_hist = price_history(sheets_dir.parent) if sheets_dir is not None else {}
     # 全市場新聞，同樣一次讀進來。六十幾個壓縮檔翻一遍給 1,769 頁共用。
+    # 〔董監持股〕的外資(%)：每個月月底的外資持股比率，一次讀整個資料夾給所有頁共用。
+    foreign_months = foreign_month_end(sheets_dir.parent) if sheets_dir is not None else {}
     news_history = (
         news_store.history(sheets_dir.parent) if sheets_dir is not None else {}
     )
@@ -912,6 +919,7 @@ def build_site(
             news_history.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
             close_hist.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
             long_hist.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
+            foreign_months.get(code) if sheets_dir and (sheets_dir / code).is_dir() else None,
         )
         for code, group in grouped.items()
     }
@@ -979,6 +987,7 @@ def build_site(
                 closes=close_hist.get(stock_id),
                 news_items=news_history.get(stock_id),
                 history=long_hist.get(stock_id),
+                foreign_months=foreign_months.get(stock_id),
             )
             if full:
                 count += 1
@@ -1494,6 +1503,7 @@ def _full_stock_page(
     closes: Any = None,
     news_items: Any = None,
     history: Any = None,
+    foreign_months: Any = None,
 ) -> bool:
     """Render the ten-section page for one stock, if its sheets are on disk.
 
@@ -1567,6 +1577,7 @@ def _full_stock_page(
             closes=closes,
             news_items=news_items,
             history=history,
+            foreign_months=foreign_months,
         )
         from ..ingest.yearly_trading import annotate_sources
 

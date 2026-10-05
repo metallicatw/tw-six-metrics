@@ -592,6 +592,8 @@ def build_page(
     news_items: Any = None,
     #: `store.daily.price_history` 的一檔：(日期, 收盤)，舊的在前。
     history: Any = None,
+    #: `store.daily.foreign_month_end` 的一檔：{"2026/08": 69.2}。〔董監持股〕的外資(%)。
+    foreign_months: Any = None,
 ) -> StockPage:
     """Assemble the four sections from one rating and one valuation.
 
@@ -968,7 +970,7 @@ def build_page(
     from ..ingest import weekly_prices  # noqa: PLC0415
 
     page.holders = holders(grid(HOLDERS), weekly_prices.closes(grid(weekly_prices.SHEET)))
-    page.directors = directors(grid(DIRECTORS))
+    page.directors = directors(grid(DIRECTORS), history, foreign_months)
     have = {HOLDERS: page.holders, DIRECTORS: page.directors}
     page.unbuilt = [
         {"name": n, "why": w} for n, w in UNBUILT_PAGES if not have.get(n)

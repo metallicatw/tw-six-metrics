@@ -61,6 +61,9 @@ jobs:
           twsix backfill-institutional --days "$IN_DAYS" --minutes 60 || true
           # 外資持股比重（個股頁〔外資投信〕圖畫近 120 個交易日；已補過的日子會跳過）
           twsix backfill-qfii --days 125 --minutes 20 || true
+          # 〔董監持股〕表格 36 個月的「外資(%)」是月底值：每個月補一天就夠。
+          # 已經有的月份不連網，穩定狀態下這一行幾乎不花時間（2026-10-05）。
+          twsix backfill-qfii --month-ends 36 --minutes 6 || true
       - name: 集保原始 15 級（逐檔）
         env:
           IN_MIN: ${{ inputs.levels_minutes || '200' }}

@@ -2721,6 +2721,10 @@ def cmd_backfill_qfii(args: argparse.Namespace) -> int:
     接住當天與前幾天，`chipflow-backfill.yml` 每晚把 20 日的視窗補滿。
 
     上市那支和 T86 同一個 WAF（打太密回 307），所以間隔至少 3 秒。
+
+    `--month-ends N`（2026-10-05）：改成只補過去 N 個月**每個月最後一個交易日**。
+    〔董監持股〕表格列 36 個月，每一列的「外資(%)」是月底值——那張表只要每個月一天，
+    不必把三年的每一天都補齊（36 次請求 vs 750 次）。
     """
     from datetime import timedelta  # noqa: PLC0415
 
@@ -2745,17 +2749,34 @@ def cmd_backfill_qfii(args: argparse.Namespace) -> int:
     trading = {p.name[:10] for p in prices.glob("*.csv.gz")} if prices.is_dir() else set()
 
     want = args.days
+    months = getattr(args, "month_ends", 0) or 0
+    if months:
+        # 每個月最後一個交易日（照行情檔名）；這個月還沒過完，不算。
+        today = datetime.now(_TAIPEI).date().isoformat()
+        last: dict[str, str] = {}
+        for d in sorted(trading):
+            if d[:7] < today[:7]:
+                last[d[:7]] = d
+        candidates = sorted(last.values(), reverse=True)[:months]
+        want = len(candidates)
+    else:
+        candidates = None
     day = datetime.now(_TAIPEI).date() + timedelta(days=1)
     filled = skipped = missing = 0
     for _ in range(want * 2 + 20):
         if filled + skipped + missing >= want:
             break
-        day -= timedelta(days=1)
-        if day.weekday() >= 5:
-            continue
-        iso = day.isoformat()
-        if trading and iso not in trading:
-            continue
+        if candidates is not None:
+            if not candidates:
+                break
+            iso = candidates.pop(0)
+        else:
+            day -= timedelta(days=1)
+            if day.weekday() >= 5:
+                continue
+            iso = day.isoformat()
+            if trading and iso not in trading:
+                continue
         if budget and time.monotonic() - started > budget:
             print(f"  跑滿 {args.minutes} 分鐘，其餘下次再補")
             break
@@ -4309,6 +4330,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="要補幾個交易日（預設 25，蓋得住 20 日的視窗）")
     bq.add_argument("--out", help="資料目錄")
     bq.add_argument("--minutes", type=float, default=0.0, help="時間預算（分鐘），0＝不限")
+    bq.add_argument("--month-ends", type=int, default=0,
+                    help="改成只補過去 N 個月的月底那一天（〔董監持股〕的外資%%用）")
     bq.set_defaults(func=cmd_backfill_qfii)
 
     cd = sub.add_parser(

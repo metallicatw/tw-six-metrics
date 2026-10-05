@@ -267,6 +267,27 @@ def qfii_by_day(
     return out
 
 
+def foreign_month_end(data_dir: Path) -> dict[str, dict[str, float]]:
+    """`{代號: {"2026/08": 69.2, ...}}`——每個月最後一個有資料的交易日的外資持股比率（%）。
+
+    〔董監持股〕表格的「外資(%)」欄與卡片用它（2026-10-05）。董監的開放資料沒有這一欄，
+    而每天的外資持股統計就在 `market/daily/qfii/`。讀**整個**資料夾，不只最近幾十天：
+    表格列 36 個月，`backfill-qfii --month-ends` 會把每個月的月底那一天補進來。
+    """
+    folder = data_dir / "market" / "daily" / "qfii"
+    out: dict[str, dict[str, float]] = {}
+    if not folder.is_dir():
+        return out
+    for path in sorted(folder.glob("*.csv.gz")):            # 舊的在前：後讀的蓋掉＝月底
+        month = path.name[:7].replace("-", "/")
+        for row in _rows(path):
+            code = (row.get("code") or "").strip()
+            pct = _num(row.get("pct", ""))
+            if code and pct is not None:
+                out.setdefault(code, {})[month] = round(pct, 2)
+    return out
+
+
 def read_day_rows(data_dir: Path, folder: str, day: str) -> list[dict[str, str]]:
     """某一天已經存下來的那一份，原樣讀回來。沒有就是空的。
 

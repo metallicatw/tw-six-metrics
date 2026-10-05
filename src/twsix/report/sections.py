@@ -864,8 +864,27 @@ def holders(
 DIRECTOR_MONTHS = 36
 
 
-def directors(grid: Sequence[Sequence[str]]) -> Directors | None:
-    """把〔董監持股〕的格線讀成月列、兩條線與一張表。"""
+def directors(
+    grid: Sequence[Sequence[str]],
+    history: Any = None,
+    foreign_months: dict[str, float] | None = None,
+) -> Directors | None:
+    """把〔董監持股〕的格線讀成月列、兩條線與一張表。
+
+    ## 當月收盤與外資(%)：用自己每天抓的資料補（2026-10-05）
+
+    這兩欄原本只有 Goodinfo 匯入的那幾檔才有。改成每週從公開資訊觀測站抓整個
+    市場之後（`ingest.insiders`），那份開放資料**根本沒有**這兩欄——於是全站
+    幾乎每一檔的〔董監持股〕卡片都寫「外資持股 —%」，表格最右欄整欄空白。
+
+    兩個數字其實都在手上：
+    * 當月收盤＝那個月最後一個交易日的收盤（*history*：`store.daily.price_history`
+      的一檔，(日期, 收盤)，舊的在前）。
+    * 外資(%)＝那個月最後一個有外資持股統計的交易日的持股比率（*foreign_months*：
+      `store.daily.foreign_month_end` 的一檔，{"2026/08": 69.2}）。和 Goodinfo 一樣是月底值。
+
+    只補空格，分頁上原本有數字的照舊（匯入的 Goodinfo 歷史比我們的開放資料長）。
+    """
     cols, rows = _named(grid)
     if not rows or "月別" not in cols:
         return None
@@ -891,6 +910,17 @@ def directors(grid: Sequence[Sequence[str]]) -> Directors | None:
         )
     if not months:
         return None
+
+    month_close: dict[str, float] = {}
+    if history:
+        for day, close in zip(*history, strict=False):
+            month_close[day[:7].replace("-", "/")] = close     # 舊的在前：留下來的是月底
+    month_foreign = foreign_months or {}
+    for m in months:
+        if m["close"] is None and m["month"] in month_close:
+            m["close"] = month_close[m["month"]]
+        if m["foreign"] is None and m["month"] in month_foreign:
+            m["foreign"] = month_foreign[m["month"]]
 
     # 最新一個月常常整列是「-」（月報未送）。卡片要顯示的是「最近有數字的那個
     # 月」，不是「最近的那一列」——顯示一排破折號等於把沒送月報說成沒有持股。
