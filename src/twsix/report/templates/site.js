@@ -2795,11 +2795,15 @@ function reveal(bar, el){
 (function(){
   var host = document.getElementById('wg');
   if(!host || typeof TWSIXWatch === 'undefined') return;
-  var editing = false, dragId = null;
+  var editing = false, dragId = null, lastCur = null;
   function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function render(){
     var gs = TWSIXWatch.groups(), cur = TWSIXWatch.current().id;
-    var h = '<div class="wg-tabs" role="tablist" aria-label="觀察清單群組">', nHid = 0;
+    /* 一列左右滑動（2026-10-05）：群組一多，換行排成好幾列在手機上會佔掉半個螢幕。
+       分頁放在可橫向捲動的那一條裡；〔＋〕〔管理〕釘在右邊，不跟著捲走。
+       重畫時保留捲動位置，切換群組時把選中的那一顆捲進畫面。 */
+    var old = host.querySelector('.wg-tabs'), keep = old ? old.scrollLeft : 0;
+    var h = '<div class="wg-bar"><div class="wg-tabs" role="tablist" aria-label="觀察清單群組">', nHid = 0;
     gs.forEach(function(g, i){
       var on = g.id === cur;
       if(g.hidden){ nHid++; if(!editing) return; }
@@ -2821,10 +2825,32 @@ function reveal(bar, el){
                    '<button type="button" class="wg-mini" data-act="right" title="往後" aria-label="把 ' + esc(g.name) + ' 往後移"' + (i === gs.length - 2 ? ' disabled' : '') + '>▶</button>' : '') +
         '</span>';
     });
-    h += '<button type="button" class="wg-tool" data-act="add" title="新增群組">＋ 新增</button>' +
-         '<button type="button" class="wg-tool" data-act="edit" aria-pressed="' + editing + '">' + (editing ? '完成' : '管理' + (nHid ? '（隱藏 ' + nHid + '）' : '')) + '</button></div>';
+    h += '</div><div class="wg-tools">' +
+         '<button type="button" class="wg-tool" data-act="add" title="新增群組" aria-label="新增群組">＋<span class="wg-tl"> 新增</span></button>' +
+         '<button type="button" class="wg-tool" data-act="edit" aria-pressed="' + editing + '">' + (editing ? '完成' : '管理' + (nHid ? '<span class="wg-tl">（隱藏 ' + nHid + '）</span>' : '')) + '</button></div></div>';
     host.innerHTML = h;
+    var strip = host.querySelector('.wg-tabs');
+    strip.scrollLeft = keep;
+    if(cur !== lastCur){
+      var sel = strip.querySelector('[aria-selected="true"]');
+      if(sel){
+        var a = sel.closest('.wg-item') || sel, L = a.offsetLeft - strip.offsetLeft, R = L + a.offsetWidth;
+        if(L < strip.scrollLeft) strip.scrollLeft = Math.max(0, L - 24);
+        else if(R > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = R - strip.clientWidth + 24;
+      }
+      lastCur = cur;
+    }
+    edges();
   }
+  /* 左右兩端還有東西時淡出一點，提示「可以滑」。 */
+  function edges(){
+    var st = host.querySelector('.wg-tabs');
+    if(!st) return;
+    st.classList.toggle('more-l', st.scrollLeft > 2);
+    st.classList.toggle('more-r', st.scrollLeft + st.clientWidth < st.scrollWidth - 2);
+  }
+  host.addEventListener('scroll', edges, true);
+  window.addEventListener('resize', edges);
   function rename(id){
     var g = TWSIXWatch.groups().filter(function(x){ return x.id === id; })[0];
     if(!g) return;
