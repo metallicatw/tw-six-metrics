@@ -70,5 +70,5 @@ def test_評等清單標題寫出最新一季與最新月營收各更新了幾�
                    "behind": [{"code": "1", "name": "a", "quarter": "2026Q1", "halted": False}]}
     tpl = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates" / "list.html.j2")
     text = tpl.read_text("utf-8")
-    assert '本期{{ pg.quarter }}(已更新<b class="pg-n">{{ pg.quarter_n }}</b>' in text
+    assert '本期{{ pg.quarter }}(已更新<b class="cnt">{{ pg.quarter_n }}/{{ pg.total }}</b>' in text
     assert "※ 未換季" in text and "（停止買賣）" in text, "沒換上的那一兩檔寫在段落最後的附註"

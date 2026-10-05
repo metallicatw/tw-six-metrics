@@ -6,7 +6,7 @@
 <h2 class="sr">台股評等清單</h2>
 <p class="muted">
   {%- set pg = progress %}
-  本期{{ pg.quarter }}(已更新<b class="pg-n">{{ pg.quarter_n }}</b>/<span class="pg-t">{{ pg.total }}</span>{% if pg.behind %}<sup>※</sup>{% endif %}) / {{ pg.month }}(已更新<b class="pg-n pg-m">{{ pg.month_n }}</b>/<span class="pg-t">{{ pg.total }}</span>)。<br>
+  本期{{ pg.quarter }}(已更新<b class="cnt">{{ pg.quarter_n }}/{{ pg.total }}</b>{% if pg.behind %}<sup>※</sup>{% endif %}) / {{ pg.month }}(已更新<b class="cnt cnt-m">{{ pg.month_n }}/{{ pg.total }}</b>)。<br>
   全市場評等，共 <span id="tally">{{ rows|length }} 檔</span>。
   點欄位標題可排序，☆ 加入觀察清單。{{ '' }}
 {# 這一段以前寫的是「這張表是混齡的：底是活頁簿那份一年前的快照，上面疊著少數

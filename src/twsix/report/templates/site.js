@@ -879,16 +879,21 @@ var TWSIXWatch = (function(){
     return true;
   }
   function index(code){ return order.indexOf(code); }
+  /* ☆ 亮不亮（2026-10-05 起）：
+     - 〔台股觀察清單〕頁上：這一檔在不在**目前這個群組**（表格列的就是目前群組）。
+     - 其他頁（評等清單、個股頁）：在不在**任何一個**群組。按下去打開群組選單勾選。 */
   function paint(btn){
-    var on = has(btn.getAttribute('data-star'));
-    var code = btn.getAttribute('data-star'), name = '〔' + cur.name + '〕';
+    var code = btn.getAttribute('data-star');
+    var watchPage = !!document.querySelector('table[data-watchlist="1"]');
+    var on = watchPage ? has(code) : inAny(code);
+    var where = doc.groups.filter(function(g){ return g.codes.indexOf(code) >= 0; })
+                          .map(function(g){ return '〔' + g.name + '〕'; }).join('');
     btn.textContent = on ? '★' : '☆';
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-haspopup', 'true');
     btn.classList.toggle('on', on);
-    btn.title = cur.virtual ? ALL_NAME + '是各群組的交集，要加減請到各群組' :
-                on ? '從觀察清單' + name + '移除' : '加入觀察清單' + name;
-    btn.setAttribute('aria-label', on ? '把 ' + code + ' 從觀察清單' + name + '移除'
-                                      : '把 ' + code + ' 加入觀察清單' + name);
+    btn.title = where ? '已在觀察清單' + where + '——點一下調整要放進哪些群組' : '加入觀察清單（點一下選群組）';
+    btn.setAttribute('aria-label', '把 ' + code + ' 加入或移出觀察清單的群組' + (where ? '，目前在' + where : ''));
     return on;
   }
 
@@ -907,10 +912,27 @@ var TWSIXWatch = (function(){
     return true;
   }
   function uid(){ return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
-  function addGroup(name){
+  function addGroup(name, keepCur){
     var g = {id: uid(), name: String(name || '新群組').trim() || '新群組', codes: []};
-    doc.groups.push(g); doc.cur = g.id; save(); changed();
+    doc.groups.push(g);
+    if(!keepCur) doc.cur = g.id;      /* 從☆選單裡新增時不切換目前的群組 */
+    save(); changed();
     return g.id;
+  }
+  /* ☆ 選單（2026-10-05）：一檔可以同時在好幾個群組裡。 */
+  function groupsOf(code){
+    return doc.groups.filter(function(g){ return g.codes.indexOf(code) >= 0; }).map(function(g){ return g.id; });
+  }
+  function inAny(code){ return doc.groups.some(function(g){ return g.codes.indexOf(code) >= 0; }); }
+  function setIn(id, code, on){
+    var g = find(id); code = String(code || '').trim();
+    if(!g || !code) return false;
+    var i = g.codes.indexOf(code);
+    if(on && i < 0) g.codes.push(code);
+    else if(!on && i >= 0) g.codes.splice(i, 1);
+    else return false;
+    save(); changed();
+    return true;
   }
   function renameGroup(id, name){
     var g = find(id); name = String(name || '').trim();
@@ -1006,7 +1028,84 @@ var TWSIXWatch = (function(){
           groups: groups, current: function(){ return {id: cur.id, name: cur.name, n: order.length, virtual: !!cur.virtual}; },
           select: select, addGroup: addGroup, renameGroup: renameGroup, removeGroup: removeGroup,
           placeGroup: placeGroup, moveGroup: moveGroup, importGroup: importGroup, sourceGroup: sourceGroup,
-          hideGroup: hideGroup, nameTaken: function(n){ return nameTaken(n); }};
+          hideGroup: hideGroup, nameTaken: function(n){ return nameTaken(n); },
+          groupsOf: groupsOf, inAny: inAny, setIn: setIn};
+})();
+
+
+/* =========================================================================
+ * ☆ 的群組選單（2026-10-05）
+ *
+ * 一檔股票可以同時在好幾個群組裡。按☆打開一張小選單：每個群組一個勾選框（勾了
+ * 就在、取消就移出，立刻生效），最下面〔＋ 新增群組〕直接把這一檔放進新的群組。
+ * 只有一個群組的時候不開選單，直接加入／移出那一個——那是最常見的情形，不該多
+ * 點一下。點選單外面或按 Esc 收起。
+ * ========================================================================= */
+window.TWSIXStarMenu = (function(){
+  if(typeof TWSIXWatch === 'undefined') return null;
+  var box = null, anchor = null;
+  function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function close(){
+    if(box){ box.remove(); box = null; }
+    if(anchor){ try{ anchor.focus(); }catch(e){} anchor = null; }
+  }
+  function render(code){
+    var gs = TWSIXWatch.groups().filter(function(g){ return !g.virtual; });
+    var mine = TWSIXWatch.groupsOf(code);
+    var h = '<div class="sm-h">把 <b>' + esc(code) + '</b> 放進哪些群組</div><ul class="sm-l">';
+    gs.forEach(function(g){
+      h += '<li><label><input type="checkbox" data-g="' + esc(g.id) + '"' + (mine.indexOf(g.id) >= 0 ? ' checked' : '') + '> ' +
+           esc(g.name) + (g.hidden ? ' <span class="muted">（已隱藏）</span>' : '') + ' <span class="sm-n">' + g.n + '</span></label></li>';
+    });
+    h += '</ul><div class="sm-f"><button type="button" data-sm="new">＋ 新增群組</button><button type="button" data-sm="done">完成</button></div>';
+    box.innerHTML = h;
+  }
+  function place(){
+    var r = anchor.getBoundingClientRect(), w = box.offsetWidth, vw = document.documentElement.clientWidth;
+    var left = Math.min(Math.max(8, r.left + window.pageXOffset), window.pageXOffset + vw - w - 8);
+    box.style.left = left + 'px';
+    box.style.top = (r.bottom + window.pageYOffset + 4) + 'px';
+  }
+  function open(btn){
+    var code = btn.getAttribute('data-star');
+    var gs = TWSIXWatch.groups().filter(function(g){ return !g.virtual; });
+    if(gs.length === 1){                       /* 只有一個群組：直接加入／移出 */
+      TWSIXWatch.setIn(gs[0].id, code, TWSIXWatch.groupsOf(code).indexOf(gs[0].id) < 0);
+      return;
+    }
+    if(box && anchor === btn){ close(); return; }
+    close();
+    anchor = btn;
+    box = document.createElement('div');
+    box.className = 'star-menu'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', '選擇群組');
+    document.body.appendChild(box);
+    render(code); place();
+    box.addEventListener('change', function(e){
+      var c = e.target.closest('input[data-g]');
+      if(c) TWSIXWatch.setIn(c.getAttribute('data-g'), code, c.checked);
+    });
+    box.addEventListener('click', function(e){
+      var b = e.target.closest('button[data-sm]');
+      if(!b) return;
+      if(b.getAttribute('data-sm') === 'done'){ close(); return; }
+      var name = window.prompt('新群組的名稱', '新群組');
+      if(name === null) return;
+      var id = TWSIXWatch.addGroup(name, true);
+      TWSIXWatch.setIn(id, code, true);
+      render(code);
+    });
+    var f = box.querySelector('input'); if(f) f.focus();
+  }
+  document.addEventListener('click', function(e){
+    if(!box) return;
+    if(box.contains(e.target) || (anchor && anchor.contains(e.target))) return;
+    close();
+  }, true);
+  document.addEventListener('keydown', function(e){ if(box && e.key === 'Escape') close(); });
+  window.addEventListener('resize', function(){ if(box) place(); });
+  /* 群組在別處變了（例如另一顆☆、匯入）：選單開著就照新的狀態重畫。 */
+  document.addEventListener('twsix:wgroup', function(){ if(box && anchor) render(anchor.getAttribute('data-star')); });
+  return {open: open, close: close};
 })();
 
 
@@ -1021,9 +1120,11 @@ var TWSIXWatch = (function(){
   if(!btn) return;
   TWSIXWatch.paint(btn);
   btn.addEventListener('click', function(){
-    TWSIXWatch.toggle(btn.getAttribute('data-star'));
+    if(window.TWSIXStarMenu) TWSIXStarMenu.open(btn);
+    else TWSIXWatch.toggle(btn.getAttribute('data-star'));
     TWSIXWatch.paint(btn);
   });
+  document.addEventListener('twsix:wgroup', function(){ TWSIXWatch.paint(btn); });
   /* 上一頁回來、或在別的分頁改過清單，回到這一頁要重畫。 */
   window.addEventListener('pageshow', function(){
     TWSIXWatch.reload();
@@ -1059,6 +1160,7 @@ var TWSIXWatch = (function(){
   table.addEventListener('click', function(e){
     var btn = e.target.closest('button[data-star]');
     if(!btn) return;
+    if(window.TWSIXStarMenu){ TWSIXStarMenu.open(btn); return; }   /* 變動之後由 twsix:wgroup 重畫 */
     TWSIXWatch.toggle(btn.getAttribute('data-star'));
     paintStar(btn);
     /* 取消一檔之後，剩下那幾列的「第一個／最後一個」變了——不重畫的話，
@@ -1318,8 +1420,9 @@ var TWSIXWatch = (function(){
     rows.forEach(function(tr){ if(!tr.hidden) n++; });
     /* 觀察清單那一頁上，分母是「全市場 1,741 檔」——那個數字在那裡沒有意義，
        只會讓人以為自己漏掉了什麼。 */
+    /* 數字上色（2026-10-05）：篩出幾檔、分子分母一起用強調色。 */
     var txt = watchOnlyPage || n === rows.length
-      ? (n + ' 檔') : (n + ' / ' + rows.length + ' 檔');
+      ? ('<b class="cnt">' + n + '</b> 檔') : ('<b class="cnt">' + n + ' / ' + rows.length + '</b> 檔');
     /* 觀察清單：群組裡有、表格上卻沒有那一列的代號（2026-10-05）。表格現在收了評等表
        以外的上市櫃公司，正常不會再有；真的有（例如 ETF、已經不在交易所名單上的），
        就把代號寫出來，而不是讓分頁上的檔數和表格默默對不起來。被篩選條件藏起來的
@@ -1330,10 +1433,10 @@ var TWSIXWatch = (function(){
       var lost = TWSIXWatch.order().filter(function(c){ return !have[c]; });
       var hid = 0;
       rows.forEach(function(tr){ if(tr.hidden && TWSIXWatch.has(tr.getAttribute('data-code'))) hid++; });
-      if(hid) txt += '（另有 ' + hid + ' 檔被上面的篩選條件藏起來）';
-      if(lost.length) txt += '（' + lost.length + ' 檔查無資料：' + lost.slice(0, 8).join('、') + (lost.length > 8 ? '…' : '') + '）';
+      if(hid) txt += '（另有 <b class="cnt">' + hid + '</b> 檔被上面的篩選條件藏起來）';
+      if(lost.length) txt += '（<b class="cnt">' + lost.length + '</b> 檔查無資料：' + lost.slice(0, 8).join('、') + (lost.length > 8 ? '…' : '') + '）';
     }
-    tally.textContent = txt;
+    tally.innerHTML = txt;   /* 內容全是數字與代號（data-code），沒有使用者輸入 */
   }
   [q, onlyWatched, onlyPicks, sMin, sMax].concat(QF.map(function(x){ return x[1]; })).forEach(function(el){
     if(el) el.addEventListener(el.tagName === 'INPUT' && (el.type === 'search' || el.type === 'number') ? 'input' : 'change', apply);
@@ -2978,6 +3081,54 @@ function reveal(bar, el){
   document.addEventListener('twsix:wgroup', render);
   window.addEventListener('pageshow', function(){ TWSIXWatch.reload(); render(); });
   render();
+})();
+
+/* =========================================================================
+ * 〔台股觀察清單〕加入自選股（2026-10-05）：打代號或名稱，加進目前的群組。
+ * 候選就是這張表的每一列（評等清單＋評等表不收的上市櫃公司＋ETF）。
+ * ========================================================================= */
+(function(){
+  var wrap = document.getElementById('wg-add'), q = document.getElementById('wg-add-q');
+  var go = document.getElementById('wg-add-go'), dl = document.getElementById('wg-add-dl');
+  var msg = document.getElementById('wg-add-msg'), table = document.getElementById('t');
+  if(!wrap || !q || !table || typeof TWSIXWatch === 'undefined') return;
+  var names = {}, html = [];
+  [].forEach.call(table.tBodies[0].rows, function(tr){
+    var c = tr.getAttribute('data-code'), nm = tr.querySelector('td.nm');
+    var n = nm ? (nm.getAttribute('data-s') || nm.textContent).trim() : '';
+    names[c] = n;
+    html.push('<option value="' + c + ' ' + n.replace(/"/g, '&quot;') + '">');
+  });
+  dl.innerHTML = html.join('');
+  wrap.hidden = false;
+  function find(text){
+    text = String(text || '').trim();
+    if(!text) return null;
+    var c = text.split(/\s+/)[0];
+    if(names[c] !== undefined) return c;
+    for(var k in names) if(names[k] === text) return k;
+    var hit = Object.keys(names).filter(function(k){ return names[k].indexOf(text) >= 0; });
+    return hit.length === 1 ? hit[0] : null;
+  }
+  function sync(){
+    var v = TWSIXWatch.current().virtual;
+    q.disabled = go.disabled = !!v;
+    q.placeholder = v ? '總交集清單不能直接加，請到各群組' : '加入自選股：代號或名稱';
+  }
+  function add(){
+    var c = find(q.value), cur = TWSIXWatch.current();
+    if(cur.virtual) return;
+    if(!c){ msg.textContent = '找不到「' + q.value.trim() + '」，請輸入代號或完整名稱'; return; }
+    if(TWSIXWatch.has(c)){ msg.textContent = c + ' ' + names[c] + ' 已經在〔' + cur.name + '〕裡'; q.select(); return; }
+    TWSIXWatch.setIn(cur.id, c, true);
+    msg.textContent = '已加入 ' + c + ' ' + names[c] + ' →〔' + cur.name + '〕';
+    q.value = '';
+  }
+  go.addEventListener('click', add);
+  q.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); add(); } });
+  q.addEventListener('input', function(){ msg.textContent = ''; });
+  document.addEventListener('twsix:wgroup', sync);
+  sync();
 })();
 
 /* =========================================================================

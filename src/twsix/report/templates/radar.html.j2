@@ -58,6 +58,7 @@ window.CF_V = "@@CFV@@";
 .cf-panel.on{display:block}
 .cf-card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:10px 12px;margin:10px 0}
 .cf-card h4{margin:0 0 4px;font-size:13.5px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.cf-card h4.cf-h-inline{justify-content:flex-start;align-items:center}
 .cf-card h4 .cf-tip{font-weight:400;color:var(--muted);font-variant-numeric:tabular-nums}
 .cf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
 .cf-grid .cf-card{margin:0}
@@ -449,11 +450,12 @@ function sub(arr, f){ return (arr || []).map(f); }
 function showPicks(){
   var o = $("cf-opicks"); o.innerHTML = "";
   var w = R.weights || {};
-  o.appendChild(el("p", {cls: "cf-note"}, "資料日 " + R.asof + "；集保週 " + R.week + "；流動性母體 " + R.universe + " 檔；E 否決名單 " + R.veto_count + " 檔（AI 選股 " + (R.veto_asof || "未取得") + "）。今天的特徵權重（過去已實現週的 rank IC，負的歸零）：" + Object.keys(w).map(function(k){ return (R.feature_text[k] || k) + " " + fmt(w[k], 3); }).join("、") + " ",
+  o.appendChild(el("p", {cls: "cf-note"}, "資料日 " + R.asof + "；集保週 " + R.week + "；流動性母體 ", el("b", {cls: "cnt", text: String(R.universe)}), " 檔；E 否決名單 ", el("b", {cls: "cnt", text: String(R.veto_count)}), " 檔（AI 選股 " + (R.veto_asof || "未取得") + "）。今天的特徵權重（過去已實現週的 rank IC，負的歸零）：" + Object.keys(w).map(function(k){ return (R.feature_text[k] || k) + " " + fmt(w[k], 3); }).join("、") + " ",
     tipEl(G_L0 + "<br><br>" + G_E + "<br><br>" + G_IC)));
   var cols = [["c", "代號", "l"], ["n", "名稱", "l"], ["ind", "產業", "l"], ["p", "收盤", 1], ["s", "共振分數", 3]];
   function block(title, codes, desc, imp){
-    var h4 = el("h4", null, el("span", null, title + "（" + codes.length + " 檔）",
+    // 檔數上色、匯入鈕緊接在標題後面（2026-10-05）。
+    var h4 = el("h4", {cls: "cf-h-inline"}, el("span", null, title + "（", el("b", {cls: "cnt", text: String(codes.length)}), " 檔）",
       tipEl(G_SCORE + "<br><br>" + G_PIL + "<br><br>" + G_TIME + "<br><br>" + G_FLAG + "<br><br>" + G_WARN)));
     // 一鍵匯入觀察清單（2026-10-05）：〔精選〕→〔精選漏斗〕、〔籌碼共振（L1）〕→ 同名群組（匯入的是這一塊列出的，不含已進精選的）。
     if (imp && codes.length) {

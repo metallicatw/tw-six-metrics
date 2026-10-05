@@ -151,6 +151,15 @@ W.select('__all');
 out.push(['總交集', [W.current(), W.order(), W.groups().slice(-1)[0]]]);
 out.push(['總交集不能加減', [W.toggle('2330'), W.toggle('5555'), W.move('3034', 1), W.top('3034'), W.order()]]);
 W.paint(page); out.push(['總交集的星號說明', snap(page).title]);
+{
+  W.select('main');
+  const before = W.current().id;
+  const id = W.addGroup('選單新增', true);
+  const ok = W.setIn(id, '2330', true);
+  const gs = W.groupsOf('2330').map(x => x === id ? 'g9' : x).filter(x => x === 'main' || x === 'g9');
+  out.push(['多群組', [ok, gs, W.inAny('2330'), W.setIn(id, '2330', true), W.current().id === before ? 'main' : W.current().id,
+                      W.setIn(id, '2330', false), W.groupsOf('2330').filter(x => x === 'main' || x === id)]]);
+}
 W.select(ga); W.toggle('3034'); W.select('__all');
 out.push(['群組改了總交集跟著變', W.order()]);
 W.reload();

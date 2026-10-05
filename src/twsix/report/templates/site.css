@@ -1758,3 +1758,33 @@ html .wg-tab.wg-all[aria-selected=true]{border-style:solid}
 .pg-foot{color:var(--muted);font-size:12px}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]) .pg-n.pg-m{color:#ffa94d}}
 :root[data-theme=dark] .pg-n.pg-m{color:#ffa94d}
+/* ☆ 群組選單（2026-10-05） */
+.star-menu{position:absolute;z-index:80;min-width:220px;max-width:min(320px,calc(100vw - 16px));
+  background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:10px;
+  box-shadow:0 12px 32px rgba(0,0,0,.28);padding:8px 6px 6px;font-size:13.5px;text-align:left}
+.star-menu .sm-h{padding:2px 8px 6px;color:var(--muted);font-size:12.5px;border-bottom:1px solid var(--rule)}
+.star-menu .sm-l{list-style:none;margin:0;padding:4px 0;max-height:50vh;overflow-y:auto}
+.star-menu label{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.star-menu label:hover{background:var(--surface-2)}
+.star-menu input{accent-color:var(--accent);width:15px;height:15px}
+.star-menu .sm-n{margin-left:auto;color:var(--muted);font-size:11.5px}
+.star-menu .sm-f{display:flex;justify-content:space-between;gap:8px;padding:6px 6px 2px;border-top:1px solid var(--rule)}
+.star-menu .sm-f button{padding:4px 11px;border-radius:7px;border:1.5px solid var(--rule);background:transparent;
+  color:var(--ink-2);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+.star-menu .sm-f button[data-sm=done]{border-color:var(--accent);color:var(--accent)}
+/* 加入自選股 */
+.wg-add{display:inline-flex;align-items:center;gap:6px;margin-left:10px;flex-wrap:wrap}
+.wg-add input{font:inherit;font-size:13px;padding:5px 9px;border-radius:7px;border:1px solid var(--rule);
+  background:var(--surface);color:var(--ink);width:min(220px,60vw)}
+.wg-add button{font:inherit;font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:7px;cursor:pointer;
+  border:1.5px solid var(--accent);background:transparent;color:var(--accent)}
+.wg-add button:disabled,.wg-add input:disabled{opacity:.45;cursor:default}
+#wg-add-msg{color:var(--muted)}
+/* 「篩出幾檔／更新進度 xxxx/xxxx」的數字（2026-10-05 全站）：分子分母一起用強調色。
+   季報類用主色（青綠），月營收類用橘色。 */
+.cnt{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+.cnt.cnt-m{color:#b25a00}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .cnt.cnt-m{color:#ffa94d}}
+:root[data-theme=dark] .cnt.cnt-m{color:#ffa94d}
+/* 籌碼雷達各模組的「符合 N / 共 N 檔」也上色 */
+#cf #matchCount,#cf #totalCount{color:var(--accent);font-weight:700}

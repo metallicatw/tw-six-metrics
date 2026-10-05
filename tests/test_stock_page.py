@@ -381,8 +381,8 @@ def test_the_star_says_what_pressing_it_will_do():
     js = (
         Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.js"
     ).read_text("utf-8")
-    # 2026-10-05 起說明後面接著群組名稱：「加入觀察清單〔我的自選〕」。
-    assert "'從觀察清單' + name + '移除'" in js and "'加入觀察清單' + name" in js
+    # 2026-10-05 起☆打開群組選單：說明寫出它已經在哪些群組、或「點一下選群組」。
+    assert "'已在觀察清單' + where" in js and "'加入觀察清單（點一下選群組）'" in js
     assert "aria-pressed" in js
 
 
@@ -417,11 +417,11 @@ def test_the_watchlist_really_toggles_and_is_shared(tmp_path=None):
 
     assert steps["初始"]["mark"] == "☆"
     assert steps["初始"]["pressed"] == "false"
-    assert steps["初始"]["title"] == "加入觀察清單〔我的自選〕"
+    assert steps["初始"]["title"] == "加入觀察清單（點一下選群組）"
 
     assert steps["個股頁按一下"]["mark"] == "★"
     assert steps["個股頁按一下"]["pressed"] == "true"
-    assert steps["個股頁按一下"]["title"] == "從觀察清單〔我的自選〕移除"
+    assert steps["個股頁按一下"]["title"] == "已在觀察清單〔我的自選〕——點一下調整要放進哪些群組"
     assert steps["存起來的"] == '["2330"]'
 
     # 清單上那一列不必自己記狀態，畫一次就是對的——這就是「同一份」的意思。
@@ -475,8 +475,8 @@ def test_the_watchlist_really_toggles_and_is_shared(tmp_path=None):
     assert steps["新群組自己的清單"] == ["2454", "3034"]
     # 舊鍵寫的是所有群組的聯集，給還沒更新的頁面與舊版雲端同步看。
     assert steps["聯集寫回舊鍵"] == ["2330", "1101", "2454", "3034"]
-    # 星號加進的是**目前的群組**，說明要寫出是哪一個。
-    assert steps["星號跟著目前群組"]["title"] == "加入觀察清單〔半導體〕"
+    # 評等清單與個股頁上的☆：在任何一個群組裡就亮，說明寫出在哪些群組。
+    assert steps["星號跟著目前群組"]["title"].startswith("已在觀察清單〔我的自選〕")
     assert steps["切回我的自選"] == [["2330", "1101"], False]
     assert steps["改名"] == [True, False, ["我的自選", "晶片", "總交集清單"]], "空白名稱不能改"
     assert steps["往前挪"][0] is True and steps["往前挪"][1][1:] == ["main", "__all"]
@@ -497,7 +497,9 @@ def test_the_watchlist_really_toggles_and_is_shared(tmp_path=None):
     assert cur["id"] == "__all" and cur["name"] == "總交集清單" and cur["virtual"] is True
     assert order == ["2330", "3034"] and last["n"] == 2
     assert steps["總交集不能加減"] == [True, False, False, False, ["2330", "3034"]]
-    assert "交集" in steps["總交集的星號說明"]
+    assert "已在觀察清單" in steps["總交集的星號說明"]
+    # ☆ 群組選單的資料面：一檔可以在好幾個群組；從選單新增群組不切換目前群組。
+    assert steps["多群組"] == [True, ["main", "g9"], True, False, "main", True, ["main"]]
     assert steps["群組改了總交集跟著變"] == ["2330"]
     assert steps["reload 之後還在總交集"] == "__all"
     # 隱藏的群組不參與總交集。

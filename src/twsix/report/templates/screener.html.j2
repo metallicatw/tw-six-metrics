@@ -63,7 +63,7 @@ window.SC_V = "{{ data_v|default('') }}";
 .sc-inds{position:relative;display:inline-block}
 .sc-indpanel{position:absolute;z-index:20;top:100%;left:0;margin-top:4px;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:8px;width:min(420px,86vw);max-height:300px;overflow:auto;box-shadow:0 6px 18px rgba(0,0,0,.15)}
 .sc-indpanel label{display:inline-flex;gap:4px;align-items:center;width:48%;font-size:13px;margin:2px 0;color:var(--ink)}
-.sc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.sc-head{display:flex;align-items:center;justify-content:flex-start;gap:10px;flex-wrap:wrap}
 .sc-head h3{margin:0;font-size:17px}
 .sc-count{background:var(--accent-2);color:#fff;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:600}
 /* 深色模式的 --accent-2 是亮青色：實心按鈕與家數徽章改用深色字（2026-09-29 對比度檢查） */
@@ -543,6 +543,24 @@ function runFin(){
 var LINKS = "點代號或名稱開個股資訊頁、點股價旁的圖示開 Yahoo 技術分析。";
 
 function presetFields(tab, clear){ Object.keys(PRESET[tab]).forEach(function(id){ var v = PRESET[tab][id]; setv(id, clear && typeof v === "number" ? null : v); }); }
+/* 基準期別與下一期的進度（2026-10-05）。
+   篩選一律用「已公布家數達最多那一期八成」的最新一期（BASE_SHARE，見 report/screener.py）——
+   只有 180 家公布 9 月營收時就拿 9 月篩，等於把其餘 1,700 多家直接排除在外。
+   所以基準期不提早換；但下一期已經在進來的話，把進度寫出來，滿八成就自動換過去。 */
+function nextOf(counts, base){
+  var ks = Object.keys(counts || {}).filter(function(k){ return k > base; }).sort();
+  return ks.length ? ks[ks.length - 1] : null;
+}
+function basisNote(){
+  var T = D.rows.length;
+  function one(label, base, counts, cls){
+    var s = label + " " + base + "（已公布 <b class=\"cnt" + cls + "\">" + (counts[base] || 0) + "/" + T + "</b>）";
+    var nx = nextOf(counts, base);
+    if (nx) s += "，" + nx + " 進度 <b class=\"cnt" + cls + "\">" + counts[nx] + "/" + T + "</b>（達八成自動換）";
+    return s;
+  }
+  return one("基準季", D.base_q, D.qcount, "") + "、" + one("基準月", D.base_m, D.mcount, " cnt-m");
+}
 function basePeriods(){ return "財報季度：" + D.base_q + "、營收月份：" + D.base_m; }
 
 function runTrend(){
@@ -690,7 +708,7 @@ tabs.forEach(function(t){ t.addEventListener("click", function(){ open(t.getAttr
 
 grab("data.json").then(function(doc){
   D = unpackData(doc);
-  $("sc-msg").textContent = "資料日 " + D.asof + "；基準季 " + D.base_q + "（" + D.qcount[D.base_q] + " 家）、基準月 " + D.base_m + "（" + D.mcount[D.base_m] + " 家）；共 " + D.rows.length + " 檔。";
+  $("sc-msg").innerHTML = "資料日 " + D.asof + "；" + basisNote() + "；共 <b class=\"cnt\">" + D.rows.length + "</b> 檔。";
   buildFin();
   ["fin", "trend", "strong", "high"].forEach(function(t){ preset(t, false); });
   formLoad();
