@@ -183,44 +183,41 @@ button.viewmode:hover{border-color:var(--accent);color:var(--accent)}
 button.viewmode[aria-pressed=true]{border-color:var(--accent);color:var(--accent);
   background:var(--surface)}
 button.viewmode:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
-/* 標題要讓開那顆按鈕的寬度，不然長標題會鑽到它下面。 */
-header.top h1{padding-right:104px}
-header.top h1{margin:0;font-size:24px;letter-spacing:-.01em;font-weight:700;
-  display:flex;align-items:baseline;flex-wrap:wrap;gap:10px}
-/* 建站時間跟在站名後面。用 baseline 對齊而不是 center：兩個字級差一倍，
-   置中對齊會讓小的那個看起來浮在半空中。 */
-header.top h1 .built{font-size:11px;font-weight:400;color:var(--muted);
-  letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap}
-header.top h1 .built::before{content:"更新 "}
-header.top h1 a{color:inherit;text-decoration:none}
-/* 站名前面的站徽（2026-10-04）。h1 是 baseline 對齊，圖要另外自己置中。 */
-header.top h1 a{display:inline-flex;align-items:center;gap:9px}
-header.top h1 .brand{width:40px;height:40px;flex:0 0 auto;border-radius:50%}
-/* 金股道（2026-10-05）：站名＋英文一行、副標一行，金色。 */
-header.top h1 .brand-t{display:inline-flex;flex-direction:column;line-height:1.1}
-header.top h1 .brand-n{display:inline-flex;align-items:baseline;gap:8px;letter-spacing:.06em;
+/* 頁首站名區塊（2026-10-06：兩行，電腦與手機同一套）
+ *
+ *   [站徽] 金股道  GoldenWay
+ *          禾熟之時，金股自到 · 更新 2026-10-06 05:40 台北時間
+ *
+ * 頁首是固定在畫面上方的，每多一行就少一行內容，所以收成兩行：第一行是名字（中文大、
+ * 英文小、同一條基線），第二行把副標和建站時間並排——兩者都是小字的「說明」層級。
+ * 站徽跟兩行一樣高。用 grid 排：<a> 與 .brand-t 設成 display:contents，裡面的字
+ * 直接當格子，點下去仍然是那個連結。
+ * 右上角那兩顆按鈕只壓在第一行的高度，所以讓位（padding-right）只給第一行。 */
+header.top h1{margin:0;font-size:24px;font-weight:700;letter-spacing:0;line-height:1.15;
+  display:grid;grid-template-columns:auto auto 1fr;column-gap:10px;row-gap:3px;align-items:baseline}
+header.top h1 a,header.top h1 .brand-t{display:contents;color:inherit;text-decoration:none}
+header.top h1 .brand{grid-column:1;grid-row:1 / span 2;align-self:center;
+  width:46px;height:46px;border-radius:50%}
+header.top h1 .brand-n{grid-column:2 / 4;grid-row:1;padding-right:104px;
+  display:flex;align-items:baseline;gap:10px;white-space:nowrap;
   background:linear-gradient(180deg,#f3d27a,#c8962e);-webkit-background-clip:text;background-clip:text;color:transparent}
-header.top h1 .brand-en{font-size:13px;font-weight:600;letter-spacing:.08em;font-family:Georgia,"Times New Roman",serif}
-header.top h1 .brand-tag{font-size:11.5px;font-weight:500;letter-spacing:.12em;color:#b8924a;margin-top:3px}
-/* 站名永遠不斷行（2026-10-05：手機上「金股」「道」被拆成兩行）。 */
-header.top h1 .brand-nm{white-space:nowrap}
-/* 站名、英文、副標排成三行，站徽跟三行一樣高（2026-10-05，電腦與手機同一套）。
-   字級由大到小：站名 26 → 英文 12 → 副標 11.5；手機 24 → 11.5 → 11。
-   建站時間貼著三行的底，和副標同一條基線附近，不再浮在站名旁邊。 */
-header.top h1{align-items:center}
-header.top h1 a{gap:12px}
-header.top h1 .brand{width:58px;height:58px}
-header.top h1 .brand-n{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
-header.top h1 .brand-nm{font-size:26px;line-height:1.05;letter-spacing:.12em}
-header.top h1 .brand-en{font-size:12px;letter-spacing:.22em;line-height:1.1}
-header.top h1 .brand-tag{font-size:11.5px;letter-spacing:.14em;margin-top:2px;white-space:nowrap}
-header.top h1 .built{align-self:flex-end;margin-bottom:3px}
+header.top h1 .brand-nm{font-size:25px;letter-spacing:.14em;line-height:1.05}
+header.top h1 .brand-en{font-size:12.5px;font-weight:600;letter-spacing:.2em;
+  font-family:Georgia,"Times New Roman",serif}
+header.top h1 .brand-tag{grid-column:2;grid-row:2;font-size:11.5px;font-weight:500;
+  letter-spacing:.12em;color:#b8924a;white-space:nowrap}
+header.top h1 .built{grid-column:3;grid-row:2;font-size:11px;font-weight:400;color:var(--muted);
+  letter-spacing:0;font-variant-numeric:tabular-nums;white-space:nowrap}
+header.top h1 .built::before{content:"·\00a0\00a0更新 ";color:var(--muted)}
 @media (max-width:640px){
-  header.top h1 a{gap:10px}
-  header.top h1 .brand{width:54px;height:54px}
-  header.top h1 .brand-nm{font-size:24px}
-  header.top h1 .brand-en{font-size:11.5px}
-  header.top h1 .brand-tag{font-size:11px}
+  header.top h1{column-gap:8px;row-gap:2px}
+  header.top h1 .brand{width:40px;height:40px}
+  header.top h1 .brand-n{gap:8px}
+  header.top h1 .brand-nm{font-size:22px;letter-spacing:.1em}
+  header.top h1 .brand-en{font-size:11px;letter-spacing:.14em}
+  header.top h1 .brand-tag{font-size:10.5px;letter-spacing:.04em}
+  header.top h1 .built{font-size:10px}
+  header.top h1 .built::before{content:"· 更新 "}
 }
 @media (prefers-color-scheme:light){:root:not([data-theme=dark]) header.top h1 .brand-n{background:linear-gradient(180deg,#b8862a,#8a6418);-webkit-background-clip:text;background-clip:text}
   :root:not([data-theme=dark]) header.top h1 .brand-tag{color:#8a6a2a}}
