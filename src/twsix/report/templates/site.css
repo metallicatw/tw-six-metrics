@@ -204,14 +204,23 @@ header.top h1 .brand-en{font-size:13px;font-weight:600;letter-spacing:.08em;font
 header.top h1 .brand-tag{font-size:11.5px;font-weight:500;letter-spacing:.12em;color:#b8924a;margin-top:3px}
 /* 站名永遠不斷行（2026-10-05：手機上「金股」「道」被拆成兩行）。 */
 header.top h1 .brand-nm{white-space:nowrap}
-/* 手機：站名、英文、副標排成三行，站徽跟三行一樣高。字級由大到小：24 → 11.5 → 11。 */
+/* 站名、英文、副標排成三行，站徽跟三行一樣高（2026-10-05，電腦與手機同一套）。
+   字級由大到小：站名 26 → 英文 12 → 副標 11.5；手機 24 → 11.5 → 11。
+   建站時間貼著三行的底，和副標同一條基線附近，不再浮在站名旁邊。 */
+header.top h1{align-items:center}
+header.top h1 a{gap:12px}
+header.top h1 .brand{width:58px;height:58px}
+header.top h1 .brand-n{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+header.top h1 .brand-nm{font-size:26px;line-height:1.05;letter-spacing:.12em}
+header.top h1 .brand-en{font-size:12px;letter-spacing:.22em;line-height:1.1}
+header.top h1 .brand-tag{font-size:11.5px;letter-spacing:.14em;margin-top:2px;white-space:nowrap}
+header.top h1 .built{align-self:flex-end;margin-bottom:3px}
 @media (max-width:640px){
   header.top h1 a{gap:10px}
   header.top h1 .brand{width:54px;height:54px}
-  header.top h1 .brand-n{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
-  header.top h1 .brand-nm{font-size:24px;line-height:1.05;letter-spacing:.12em}
-  header.top h1 .brand-en{font-size:11.5px;letter-spacing:.22em;line-height:1.1}
-  header.top h1 .brand-tag{font-size:11px;letter-spacing:.14em;margin-top:2px;white-space:nowrap}
+  header.top h1 .brand-nm{font-size:24px}
+  header.top h1 .brand-en{font-size:11.5px}
+  header.top h1 .brand-tag{font-size:11px}
 }
 @media (prefers-color-scheme:light){:root:not([data-theme=dark]) header.top h1 .brand-n{background:linear-gradient(180deg,#b8862a,#8a6418);-webkit-background-clip:text;background-clip:text}
   :root:not([data-theme=dark]) header.top h1 .brand-tag{color:#8a6a2a}}
