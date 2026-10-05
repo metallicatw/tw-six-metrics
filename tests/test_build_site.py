@@ -2042,4 +2042,5 @@ def test_各頁都有匯入觀察清單的按鈕():
         assert f'data-wg-src="{src}" data-wg-name="{name}"' in read(f), name
         assert f"['{src}'] = function()" in read("radar_bg/mods.js"), src
     assert '["cf-picks", "精選漏斗"]' in read("radar.html.j2")
+    assert '["cf-l1", "籌碼共振（L1）"]' in read("radar.html.j2"), "籌碼共振（L1）也要能一鍵匯入"
     assert 'id="wg"' in read("watchlist.html.j2")

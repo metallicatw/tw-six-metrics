@@ -455,7 +455,7 @@ function showPicks(){
   function block(title, codes, desc, imp){
     var h4 = el("h4", null, el("span", null, title + "（" + codes.length + " 檔）",
       tipEl(G_SCORE + "<br><br>" + G_PIL + "<br><br>" + G_TIME + "<br><br>" + G_FLAG + "<br><br>" + G_WARN)));
-    // 一鍵匯入觀察清單（2026-10-05）：只有〔精選〕那一塊有，群組預設名〔精選漏斗〕。
+    // 一鍵匯入觀察清單（2026-10-05）：〔精選〕→〔精選漏斗〕、〔籌碼共振（L1）〕→ 同名群組（匯入的是這一塊列出的，不含已進精選的）。
     if (imp && codes.length) {
       var b = el("button", {cls: "wg-imp", type: "button", "data-wg-src": imp[0], "data-wg-name": imp[1], "data-wg-codes": codes.join(","),
                             title: "把這 " + codes.length + " 檔匯入觀察清單〔" + imp[1] + "〕", text: "⇩ 匯入觀察清單"});
@@ -486,7 +486,7 @@ function showPicks(){
     o.appendChild(card);
   }
   block("精選", R.picks || [], "L0 流動性、非 E 否決 ＋ 共振分數前 5% 且三根柱子至少兩根 ＋ 兩面以上成長旗標 ＋ 趨勢成立（T1）。", ["cf-picks", "精選漏斗"]);
-  block("籌碼共振（L1）", (R.l1 || []).filter(function(c){ return (R.picks || []).indexOf(c) < 0; }), "共振分數前 10% 且法人、大戶、股東三根柱子至少兩根同向，但沒有通過精選的其他條件。給人工複核用。");
+  block("籌碼共振（L1）", (R.l1 || []).filter(function(c){ return (R.picks || []).indexOf(c) < 0; }), "共振分數前 10% 且法人、大戶、股東三根柱子至少兩根同向，但沒有通過精選的其他條件。給人工複核用。", ["cf-l1", "籌碼共振（L1）"]);
   var j = R.journal || [];
   var card = el("div", {cls: "cf-card"}, el("h4", {text: "精選日誌（近 60 個交易日）"}), el("p", {cls: "cf-note", text: "每天的精選照實記下來（data/chipflow/journal.csv），之後對答案：報酬是入選當天收盤到今天的還原報酬，超額是減去同一天流動性母體的平均。這不是交易紀錄，沒有扣成本。"}));
   var t = el("table", {cls: "cf-tbl"});
