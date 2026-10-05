@@ -1962,31 +1962,10 @@ window.TWSIXStarMenu = (function(){
     });
   }
 
-  var vm = document.getElementById('viewmode');
-  if(vm){
-    var KEY = 'twsix.viewmode';
-    var read = function(){
-      try{ return localStorage.getItem(KEY) || ''; }catch(e){ return ''; }
-    };
-    var write = function(v){
-      try{ v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); }
-      catch(e){}
-    };
-    /* 「手機版」不是另一份 HTML，是把版面寬度釘成窄的——同一份頁面、同一組
-       樣式，只是走 CSS 裡本來就有的那條窄螢幕分支。維護兩份版面才是真正會
-       壞掉的做法。 */
-    var apply = function(mode){
-      document.documentElement.setAttribute('data-view', mode || 'auto');
-      var narrow = mode === 'mobile';
-      vm.textContent = narrow ? '切換電腦版' : '切換手機版';
-      vm.setAttribute('aria-pressed', narrow ? 'true' : 'false');
-    };
-    apply(read());
-    vm.addEventListener('click', function(){
-      var next = read() === 'mobile' ? '' : 'mobile';
-      write(next); apply(next);
-    });
-  }
+  /* 〔切換手機版〕按鈕 2026-10-06 拿掉。以前按過的人瀏覽器裡還記著「手機版」——清掉，
+     不然版面會一直被釘在 430px 寬，而且再也沒有按鈕可以切回來。 */
+  try{ localStorage.removeItem('twsix.viewmode'); }catch(e){}
+  try{ document.documentElement.removeAttribute('data-view'); }catch(e){}
 })();
 
 

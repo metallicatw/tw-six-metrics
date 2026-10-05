@@ -173,16 +173,6 @@ header.top{background:var(--surface);border-bottom:1px solid var(--rule);margin-
 header.top{position:sticky;top:0;z-index:40}
 html{scroll-padding-top:calc(var(--head-h,0px) + 8px)}
 header.top .in{max-width:1240px;margin:0 auto;padding:12px 20px 10px;position:relative}
-/* 檢視模式切換：頁首右上角。用 absolute 而不是 flex，因為 .in 裡面已經有標題、
-   導覽列、搜尋框三塊各自排版的東西，加一層 flex 會把它們全部重排。 */
-button.viewmode{position:absolute;top:10px;right:20px;z-index:5;
-  appearance:none;font:inherit;font-size:12px;line-height:1;cursor:pointer;
-  padding:6px 12px;border-radius:999px;
-  border:1px solid var(--rule);background:var(--surface-2);color:var(--ink-2)}
-button.viewmode:hover{border-color:var(--accent);color:var(--accent)}
-button.viewmode[aria-pressed=true]{border-color:var(--accent);color:var(--accent);
-  background:var(--surface)}
-button.viewmode:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
 /* 頁首站名區塊（2026-10-06：兩行，電腦與手機同一套）
  *
  *   [站徽] 金股道  GoldenWay
@@ -192,13 +182,13 @@ button.viewmode:focus-visible{outline:2px solid var(--accent-2);outline-offset:2
  * 英文小、同一條基線），第二行把副標和建站時間並排——兩者都是小字的「說明」層級。
  * 站徽跟兩行一樣高。用 grid 排：<a> 與 .brand-t 設成 display:contents，裡面的字
  * 直接當格子，點下去仍然是那個連結。
- * 右上角那兩顆按鈕只壓在第一行的高度，所以讓位（padding-right）只給第一行。 */
+ * 右上角的登出圖示（有登入時才有）只壓在第一行，讓位由 gate.js 量好寫在第一行上。 */
 header.top h1{margin:0;font-size:24px;font-weight:700;letter-spacing:0;line-height:1.15;
   display:grid;grid-template-columns:auto auto 1fr;column-gap:10px;row-gap:3px;align-items:baseline}
 header.top h1 a,header.top h1 .brand-t{display:contents;color:inherit;text-decoration:none}
 header.top h1 .brand{grid-column:1;grid-row:1 / span 2;align-self:center;
   width:46px;height:46px;border-radius:50%}
-header.top h1 .brand-n{grid-column:2 / 4;grid-row:1;padding-right:104px;
+header.top h1 .brand-n{grid-column:2 / 4;grid-row:1;
   display:flex;align-items:baseline;gap:10px;white-space:nowrap;
   background:linear-gradient(180deg,#f3d27a,#c8962e);-webkit-background-clip:text;background-clip:text;color:transparent}
 header.top h1 .brand-nm{font-size:25px;letter-spacing:.14em;line-height:1.05}
@@ -1170,17 +1160,12 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
   cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)}
 #totop:hover{color:var(--accent-2);border-color:var(--accent-2)}
 #totop:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
-#viewmode{margin-left:14px}
 
 /* -- 窄版 -----------------------------------------------------------------
    用 @container 而不是 @media：這樣「切換手機版」那顆按鈕真的有用——它只是把
    .wrap 釘窄，容器查詢就跟著生效。大螢幕上看到的窄版和手機上看到的是同一份
    版面，不是另外維護的第二套；維護兩套版面的專案，壞掉的永遠是沒人在看的那一套。 */
 .wrap{container-type:inline-size;container-name:page}
-:root[data-view=mobile] .wrap,
-:root[data-view=mobile] header.top .in{max-width:430px}
-:root[data-view=mobile] body{background:var(--rule)}
-:root[data-view=mobile] .wrap{background:var(--ground);min-height:100vh}
 
 @container page (max-width:760px){
   .calc-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}

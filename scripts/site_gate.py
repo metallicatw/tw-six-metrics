@@ -53,34 +53,33 @@ _HEAD = re.compile(r"<head(?:\s[^>]*)?>", re.I)  # 不能吃到 <header>
 
 CSS = """
 html.tg-lock body>*:not(#tg){display:none!important}
-html.tg-lock body{background:#0b1a22!important;margin:0}
+html.tg-lock body{background:#0b1016!important;margin:0}
 #tg{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;
 padding:16px;box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
-background:radial-gradient(1200px 600px at 15% 10%,rgba(14,124,111,.55),transparent 60%),
-radial-gradient(900px 500px at 90% 90%,rgba(18,122,143,.45),transparent 60%),#0b1a22;color:#e8f1f4}
+background:radial-gradient(700px 420px at 50% 28%,rgba(200,150,46,.13),transparent 70%),#0b1016;color:#e8eef4}
 #tg *{box-sizing:border-box}
-#tg .tg-card{width:100%;max-width:380px;background:rgba(255,255,255,.06);backdrop-filter:blur(14px);
--webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.14);border-radius:18px;
-padding:32px 28px 26px;box-shadow:0 24px 60px rgba(0,0,0,.45)}
-#tg .tg-mark{width:64px;height:64px;border-radius:15px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
-box-shadow:0 10px 28px rgba(244,192,67,.28),0 0 0 1px rgba(255,255,255,.12)}
-#tg .tg-mark svg{display:block}
-#tg h1{margin:0 0 4px;font-size:20px;font-weight:700;text-align:center;letter-spacing:.04em;color:#fff}
-#tg .tg-sub{margin:0 0 22px;text-align:center;font-size:13px;color:#9fb6bf}
-#tg label{display:block;font-size:12px;color:#b9ccd3;margin:0 0 6px;letter-spacing:.06em}
-#tg input[type=text],#tg input[type=password]{width:100%;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.18);
-background:rgba(0,0,0,.25);color:#fff;font-size:15px;padding:0 14px;margin:0 0 14px;outline:none;transition:border-color .15s,box-shadow .15s}
-#tg input:focus{border-color:#22c1a8;box-shadow:0 0 0 3px rgba(34,193,168,.25)}
-#tg .tg-row{display:flex;align-items:center;justify-content:space-between;margin:2px 0 18px;font-size:13px;color:#b9ccd3}
+#tg .tg-card{width:100%;max-width:360px;background:#141b22;border:1px solid rgba(255,255,255,.07);border-radius:16px;
+padding:34px 28px 22px;box-shadow:0 24px 60px rgba(0,0,0,.5);text-align:center}
+#tg .tg-mark{width:88px;height:88px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
+filter:drop-shadow(0 8px 22px rgba(200,150,46,.25))}
+#tg .tg-mark svg{display:block;width:88px;height:88px}
+#tg h1{margin:0;font-size:26px;font-weight:700;text-align:center;letter-spacing:.24em;text-indent:.24em;
+background:linear-gradient(180deg,#f3d27a,#c8962e);-webkit-background-clip:text;background-clip:text;color:transparent}
+#tg .tg-tag{margin:6px 0 26px;text-align:center;font-size:12px;letter-spacing:.14em;color:#b8924a}
+#tg .tg-sub{margin:0 0 18px;text-align:center;font-size:13px;color:#8b99a6}
+#tg label{display:block;text-align:left;font-size:12px;color:#b6c3cf;margin:0 0 6px;letter-spacing:.06em}
+#tg input[type=text],#tg input[type=password]{width:100%;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.12);
+background:#0b1016;color:#fff;font-size:15px;padding:0 14px;margin:0 0 14px;outline:none;transition:border-color .15s,box-shadow .15s}
+#tg input:focus{border-color:#c8962e;box-shadow:0 0 0 3px rgba(200,150,46,.22)}
+#tg .tg-row{display:flex;align-items:center;justify-content:space-between;margin:2px 0 18px;font-size:13px;color:#b6c3cf}
 #tg .tg-row label{display:flex;align-items:center;gap:8px;margin:0;font-size:13px;letter-spacing:0;cursor:pointer}
-#tg .tg-row input{accent-color:#10b981;width:16px;height:16px;margin:0}
+#tg .tg-row input{accent-color:#c8962e;width:16px;height:16px;margin:0}
 #tg button{width:100%;height:46px;border:0;border-radius:10px;cursor:pointer;font-size:15px;font-weight:700;letter-spacing:.2em;
-color:#06231d;background:linear-gradient(135deg,#34d399,#22c1a8);box-shadow:0 10px 24px rgba(16,185,129,.3);transition:transform .08s,filter .15s}
+color:#1a1206;background:linear-gradient(180deg,#f0cd74,#c8962e);box-shadow:0 10px 24px rgba(200,150,46,.22);transition:transform .08s,filter .15s}
 #tg button:hover{filter:brightness(1.06)}#tg button:active{transform:translateY(1px)}
 #tg button[disabled]{opacity:.6;cursor:wait}
-#tg .tg-err{min-height:20px;margin:12px 0 0;text-align:center;font-size:13px;color:#ff9a8f}
-#tg .tg-foot{margin:18px 0 0;text-align:center;font-size:11px;color:#6f8a94}
-#tg .tg-tag{margin:-6px 0 18px;text-align:center;font-size:12px;letter-spacing:.12em;color:#c9a35a}
+#tg .tg-err{min-height:18px;margin:10px 0 0;text-align:center;font-size:13px;color:#ff9a8f}
+#tg .tg-foot{margin:14px 0 0;padding-top:14px;border-top:1px solid rgba(255,255,255,.07);text-align:center;font-size:12px;color:#8b99a6;letter-spacing:.04em}
 #tg .tg-shake{animation:tgs .35s}
 #tg-icons{position:absolute;top:8px;right:20px;z-index:6;display:flex;gap:8px}
 #tg-icons.tg-float{position:fixed;top:10px;right:12px;z-index:2147483646}
@@ -130,7 +129,7 @@ def logo_svg() -> str:
     svg = re.sub(r"<!--.*?-->", "", svg, flags=re.S)
     svg = re.sub(r'id="([\w-]+)"', r'id="tgf-\1"', svg)
     svg = re.sub(r"url\(#([\w-]+)\)", r"url(#tgf-\1)", svg)
-    svg = svg.replace("<svg ", '<svg width="64" height="64" aria-hidden="true" ', 1)
+    svg = svg.replace("<svg ", '<svg width="88" height="88" aria-hidden="true" ', 1)
     return re.sub(r">\s+<", "><", svg).strip()
 
 

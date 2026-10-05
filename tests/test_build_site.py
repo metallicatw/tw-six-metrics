@@ -1002,9 +1002,9 @@ def test_the_narrow_layout_is_written_once_and_the_toggle_reuses_it():
 
     assert "container-type:inline-size" in css and "container-name:page" in css
     assert "@container page (max-width:760px)" in css
-    assert ":root[data-view=mobile] .wrap" in css
-    # 按鈕只改屬性，不改版面——版面的話在 CSS 裡。
-    assert "data-view" in js and "twsix.viewmode" in js
+    # 〔切換手機版〕按鈕 2026-10-06 拿掉；以前存下的「手機版」要清掉，不然版面被釘窄、切不回來。
+    assert "data-view=mobile" not in css and "button.viewmode" not in css
+    assert "localStorage.removeItem('twsix.viewmode')" in js
     # 回到最上方：捲下去才出現，而且尊重「減少動態效果」。
     assert "#totop{position:fixed" in css
     assert "prefers-reduced-motion" in js
