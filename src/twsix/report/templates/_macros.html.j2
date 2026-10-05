@@ -86,10 +86,14 @@
       <button type="button" class="mv-dn" data-move="{{ r.stock_id }}" data-delta="1"
               aria-label="把 {{ r.stock_id }} 往下移" title="往下移">▼</button>
     </span></td>
-  <td data-s="{{ r.stock_id }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.stock_id }}</a></td>
+  {# 評等表不收的那幾檔（金融保險業、存託憑證…，只出現在觀察清單）沒有個股頁，
+     連過去是 404——改連 Yahoo 技術分析。 #}
+  {%- set href = yahoo_ta(r.stock_id, r.market) if r.unrated else rel ~ 'stock/' ~ r.stock_id ~ '.html' %}
+  {%- set ext = ' target="_blank" rel="noopener" title="不在評等清單（六大指標不適用），開 Yahoo 技術分析"'|safe if r.unrated else '' %}
+  <td data-s="{{ r.stock_id }}"><a href="{{ href }}"{{ ext }}>{{ r.stock_id }}</a></td>
   {# 名稱也連過去。原本只有代號可點——而讀者掃清單時眼睛落在名稱上，
      卻要把游標移回四位數字才點得到，那是每一列都要付一次的小摩擦。 #}
-  <td class="nm" data-s="{{ r.name }}"><a href="{{ rel }}stock/{{ r.stock_id }}.html">{{ r.name }}</a></td>
+  <td class="nm" data-s="{{ r.name }}"><a href="{{ href }}"{{ ext }}>{{ r.name }}</a></td>
   {# 上市／上櫃。「這一檔在哪個市場」是掃清單時會分開看的一件事——上櫃的流動性、
      法人參與度、本益比水準都和上市不一樣。資料本來就在評等表的 `market` 欄裡，
      只是一直沒有被畫出來。 #}
@@ -109,7 +113,7 @@
   <td class="when-cell" data-s="{{ r.fiscal_quarter }}|{{ r.revenue_month }}"
       {%- if when %} title="報表更新於 {{ when }}　完整報告：河流圖、季節性、外資投信、個股新聞（大戶／董監持股另由每週排程更新）"
       {%- elif has_full %} title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞"{% endif %}>
-    {{ basis(r) }}</td>
+    {% if r.unrated %}<span class="muted" title="金融保險業、存託憑證等六大指標不適用的公司，不在評等清單">不適用評等</span>{% else %}{{ basis(r) }}{% endif %}</td>
   {% if prices %}{{ price_cells(r, price_date) }}{% endif %}
   {% for key in ('revenue_yoy','operating_margin','net_income_yoy','eps','inventory_turnover','free_cash_flow') %}
   <td class="mid" data-s="{{ {'AA':4,'A':3,'BB':2,'B':1,'C':0}.get(r.grades[key], -999) }}">{{ grade(r.grades[key]) }}</td>

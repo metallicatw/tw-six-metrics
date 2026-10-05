@@ -1318,8 +1318,22 @@ var TWSIXWatch = (function(){
     rows.forEach(function(tr){ if(!tr.hidden) n++; });
     /* 觀察清單那一頁上，分母是「全市場 1,741 檔」——那個數字在那裡沒有意義，
        只會讓人以為自己漏掉了什麼。 */
-    tally.textContent = watchOnlyPage || n === rows.length
+    var txt = watchOnlyPage || n === rows.length
       ? (n + ' 檔') : (n + ' / ' + rows.length + ' 檔');
+    /* 觀察清單：群組裡有、表格上卻沒有那一列的代號（2026-10-05）。表格現在收了評等表
+       以外的上市櫃公司，正常不會再有；真的有（例如 ETF、已經不在交易所名單上的），
+       就把代號寫出來，而不是讓分頁上的檔數和表格默默對不起來。被篩選條件藏起來的
+       不算在這裡——那是「篩掉了」，不是「沒有」。 */
+    if(watchOnlyPage && typeof TWSIXWatch !== 'undefined'){
+      var have = {};
+      rows.forEach(function(tr){ have[tr.getAttribute('data-code')] = 1; });
+      var lost = TWSIXWatch.order().filter(function(c){ return !have[c]; });
+      var hid = 0;
+      rows.forEach(function(tr){ if(tr.hidden && TWSIXWatch.has(tr.getAttribute('data-code'))) hid++; });
+      if(hid) txt += '（另有 ' + hid + ' 檔被上面的篩選條件藏起來）';
+      if(lost.length) txt += '（' + lost.length + ' 檔查無資料：' + lost.slice(0, 8).join('、') + (lost.length > 8 ? '…' : '') + '）';
+    }
+    tally.textContent = txt;
   }
   [q, onlyWatched, onlyPicks, sMin, sMax].concat(QF.map(function(x){ return x[1]; })).forEach(function(el){
     if(el) el.addEventListener(el.tagName === 'INPUT' && (el.type === 'search' || el.type === 'number') ? 'input' : 'change', apply);

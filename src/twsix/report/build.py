@@ -495,6 +495,10 @@ class Row:
     risk_free: bool = False
     #: 〔台股觀察清單〕上的收盤價與漲跌。只有那一頁畫（見 `price_views`）。
     px: PriceView | None = None
+    #: 不在評等表裡的上市櫃公司（金融保險業、存託憑證、剛上市的…）。只出現在
+    #: 〔台股觀察清單〕：從籌碼雷達、趨勢選股匯入的群組會帶進這些代號，表格上卻
+    #: 沒有那一列，於是分頁寫 51 檔、底下只列 50 檔（2026-10-05）。見 `unrated_rows`。
+    unrated: bool = False
 
 
 #: 〔台股觀察清單〕上的那四欄：收盤價、日漲跌、5 日漲跌、20 日漲跌。
@@ -577,6 +581,92 @@ def price_views(
             yahoo=yahoo_chart_url(r.stock_id, r.market),
         )
     return out
+
+
+def trend_names(report: Path) -> dict[str, tuple[str, str]]:
+    """`{代號: (名稱, 產業)}`，從 tw-trend-filter 那份報告裡的資料列讀出來。
+
+    那份報告的母體含 ETF（0050、0056…），而交易所的公司基本資料沒有 ETF——觀察清單
+    上那幾列的名稱只有這裡有。讀不到就是空的，列上寫代號。
+    """
+    import re  # noqa: PLC0415
+
+    try:
+        text = report.read_text("utf-8", errors="ignore")
+    except OSError:
+        return {}
+    return {c: (n, i) for c, n, i in re.findall(r'\["(\d{4,6}[A-Z]?)","([^"]*)","([^"]*)"', text)}
+
+
+def unrated_rows(data_dir: Path, have: set[str],
+                 extra_names: dict[str, tuple[str, str]] | None = None) -> list[Row]:
+    """上市櫃公司裡、評等表沒有的那些，做成只有代號／名稱／市場／產業的列。
+
+    〔台股觀察清單〕的群組可以從別的頁一鍵匯入，而那些頁的母體比評等表大：籌碼雷達
+    含金融股與存託憑證（六大指標不適用，評等表不收），趨勢選股也是。沒有這些列，
+    匯入的股票在清單上就**消失**——分頁上的檔數和表格對不起來，而且沒有任何提示。
+    """
+    import csv  # noqa: PLC0415
+
+    from ..ingest.market import INDUSTRY_CODES  # noqa: PLC0415
+
+    # 產業名稱：最新一期月營收表上有中文的產業別；沒有的（金融業不報月營收）退回代碼表。
+    industry: dict[str, str] = {}
+    for folder in ("twse_revenue", "tpex_revenue"):
+        files = sorted((data_dir / "market" / folder).glob("*.csv"))
+        for path in files[-2:]:
+            with path.open(encoding="utf-8-sig") as fh:
+                for r in csv.DictReader(fh):
+                    code, ind = (r.get("公司代號") or "").strip(), (r.get("產業別") or "").strip()
+                    if code and ind:
+                        industry[code] = ind
+    out: list[Row] = []
+    for fname, market, code_col, name_col, ind_col in (
+        ("twse_companies.csv", "上市", "公司代號", "公司簡稱", "產業別"),
+        ("tpex_companies.csv", "上櫃", "SecuritiesCompanyCode", "CompanyAbbreviation",
+         "SecuritiesIndustryCode"),
+    ):
+        path = data_dir / fname
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8-sig") as fh:
+            for r in csv.DictReader(fh):
+                code = (r.get(code_col) or "").strip()
+                if not code or code in have:
+                    continue
+                have.add(code)
+                ind = industry.get(code) or INDUSTRY_CODES.get((r.get(ind_col) or "").strip(), "")
+                out.append(Row(
+                    stock_id=code, name=(r.get(name_col) or "").strip() or code, market=market,
+                    industry=ind, fiscal_quarter="", revenue_month="",
+                    grades=dict.fromkeys(GRADE_KEYS, ""), composite="", composite_delta=None,
+                    value_pick=False, composite_value=None, unrated=True,
+                ))
+    # 交易所公司名單之外、但每天有行情的（ETF）：名稱從趨勢報告借，借不到寫代號。
+    prices = sorted((data_dir / "market" / "daily" / "prices").glob("*.csv.gz"))
+    if prices:
+        import gzip  # noqa: PLC0415
+
+        with gzip.open(prices[-1], "rt", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                code = (r.get("code") or "").strip()
+                if not code or code in have:
+                    continue
+                have.add(code)
+                name, ind = (extra_names or {}).get(code, (code, ""))
+                out.append(Row(
+                    stock_id=code, name=name, market=(r.get("market") or "").strip(),
+                    industry="ETF" if code.startswith("00") else ind, fiscal_quarter="",
+                    revenue_month="", grades=dict.fromkeys(GRADE_KEYS, ""), composite="",
+                    composite_delta=None, value_pick=False, composite_value=None, unrated=True,
+                ))
+    out.sort(key=lambda r: r.stock_id)
+    return out
+
+
+#: 〔評等清單〕表格上的六個等第欄（_macros.html.j2 的 row 照這個順序畫）。
+GRADE_KEYS = ("revenue_yoy", "operating_margin", "net_income_yoy", "eps",
+              "inventory_turnover", "free_cash_flow")
 
 
 def rows_from_store(
@@ -1081,16 +1171,20 @@ def build_site(
     # 收盤價、日漲跌、5 日、20 日漲跌：〔評等清單〕與〔觀察清單〕兩張表都畫
     # （2026-09-23 起兩張表的欄位一致；只有觀察清單多置頂／上移下移那兩顆鈕）。
     views: dict[str, PriceView] = {}
+    # 〔台股觀察清單〕多出來的列：已下市的（群組裡可能還留著）與評等表不收的上市櫃公司。
+    extra: list[Row] = [r for r in rows if r.delisted]
     if sheets_dir is not None:
-        views = price_views(
-            live,
-            quotes,
-            close_history(
-                sheets_dir.parent, lookback=PRICE_LOOKBACK, days=max(PRICE_WINDOWS) + 1
-            ),
+        extra += unrated_rows(sheets_dir.parent, {r.stock_id for r in rows},
+                              trend_names(out_dir / TREND_REPORT))
+        px_hist = close_history(
+            sheets_dir.parent, lookback=PRICE_LOOKBACK, days=max(PRICE_WINDOWS) + 1
         )
+        views = price_views(live, quotes, px_hist)
         for r in live:
             r.px = views.get(r.stock_id)
+        extra_views = price_views(extra, quotes, px_hist)
+        for r in extra:
+            r.px = extra_views.get(r.stock_id)
     price_date = common_price_date(views)
     env.get_template("list.html.j2").stream(
         **base, page="list", rel="", rows=live, price_date=price_date,
@@ -1108,7 +1202,7 @@ def build_site(
     # 建站的時候我們不知道他標了哪幾檔——也不該知道。這是一份靜態網站，沒有
     # 可以放私人清單的地方。
     env.get_template("watchlist.html.j2").stream(
-        **base, page="watchlist", rel="", rows=live, price_date=price_date
+        **base, page="watchlist", rel="", rows=live + extra, price_date=price_date
     ).dump(str(out_dir / "watchlist.html"))
     written["watchlist.html（觀察清單）"] = 1
 

@@ -1,0 +1,59 @@
+"""〔台股觀察清單〕要列得出群組裡的每一檔（2026-10-05）。
+
+從籌碼雷達、趨勢選股一鍵匯入的群組會帶進評等表不收的股票（金融保險業、存託憑證、
+ETF）。表格上沒有那一列，分頁寫 51 檔、底下只列 50 檔，而且沒有任何提示。
+"""
+
+from __future__ import annotations
+
+import csv
+import gzip
+import io
+import tempfile
+from pathlib import Path
+
+from twsix.report.build import trend_names, unrated_rows
+
+
+def _write(path: Path, header: list[str], rows: list[list[str]], gz: bool = False) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(header)
+    w.writerows(rows)
+    data = buf.getvalue().encode("utf-8")
+    path.write_bytes(gzip.compress(data) if gz else data)
+
+
+def test_評等表以外的上市櫃公司與ETF都有一列():
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        _write(d / "twse_companies.csv", ["公司代號", "公司簡稱", "產業別"],
+               [["2330", "台積電", "24"], ["2881", "富邦金", "17"], ["9136", "巨騰-DR", "91"]])
+        _write(d / "tpex_companies.csv", ["SecuritiesCompanyCode", "CompanyAbbreviation", "SecuritiesIndustryCode"],
+               [["5876", "上海商銀", "17"]])
+        _write(d / "market" / "daily" / "prices" / "2026-10-05.csv.gz",
+               ["date", "code", "market", "close"],
+               [["2026-10-05", "0050", "上市", "115.95"], ["2026-10-05", "2330", "上市", "1500"]], gz=True)
+        rep = d / "trend-report.html"
+        rep.write_text('var D=[["0050","元大台灣50","其他",115.9]];', "utf-8")
+        rows = unrated_rows(d, {"2330"}, trend_names(rep))
+        got = {r.stock_id: (r.name, r.market, r.industry, r.unrated) for r in rows}
+        assert got == {
+            "0050": ("元大台灣50", "上市", "ETF", True),
+            "2881": ("富邦金", "上市", "金融保險業", True),
+            "5876": ("上海商銀", "上櫃", "金融保險業", True),
+            "9136": ("巨騰-DR", "上市", "存託憑證", True),
+        }
+        assert all(set(r.grades.values()) == {""} for r in rows)
+
+
+def test_沒有個股頁的那幾列連到Yahoo_財報基準寫不適用評等():
+    tpl = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates")
+    macros = (tpl / "_macros.html.j2").read_text("utf-8")
+    assert "yahoo_ta(r.stock_id, r.market) if r.unrated" in macros
+    assert "不適用評等" in macros
+    build = (tpl.parent / "build.py").read_text("utf-8")
+    assert "rows=live + extra" in build
+    js = (tpl / "site.js").read_text("utf-8")
+    assert "檔查無資料" in js and "被上面的篩選條件藏起來" in js
