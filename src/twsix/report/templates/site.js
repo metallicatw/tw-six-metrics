@@ -2788,49 +2788,75 @@ function reveal(bar, el){
 /* =========================================================================
  * 觀察清單的子群組分頁（只在〔台股觀察清單〕那一頁）
  *
- * 一列膠囊按鈕，樣式和站上其他分頁一樣。點一下切換群組；〔＋〕新增；〔管理〕
- * 打開之後每一顆旁邊多出 ◀ ▶（排序）、✎（改名）、✕（刪除）。桌機也可以直接
- * 拖曳膠囊排序、在膠囊上點兩下改名。手機沒有拖曳，用〔管理〕裡的 ◀ ▶。
+ * 一列左右滑動的膠囊按鈕，點一下切換群組。右邊釘著〔＋〕與〔管理 ▾〕。
+ * 〔管理 ▾〕（2026-10-05 改成下拉選單）：一張直式清單，每一列是一個群組——
+ *   ▲ ▼ 排序（桌機也能直接拖曳整列）、✎ 改名、〔隱藏／顯示〕、✕ 刪除；
+ *   點群組名稱就切過去（隱藏的群組只能從這裡點進去）。底下有〔＋ 新增群組〕。
+ *   點選單外面或按 Esc 收起來。
+ * 分頁列上的膠囊仍可拖曳排序、點兩下改名（桌機）。
  * ========================================================================= */
 (function(){
   var host = document.getElementById('wg');
   if(!host || typeof TWSIXWatch === 'undefined') return;
-  var editing = false, dragId = null, lastCur = null;
+  var open = false, dragId = null, lastCur = null;
   function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function mini(act, label, txt, dis, extra){
+    return '<button type="button" class="wg-mini' + (extra || '') + '" data-act="' + act + '" title="' + label + '" aria-label="' + label + '"' +
+      (dis ? ' disabled' : '') + '>' + txt + '</button>';
+  }
+  function menu(gs, cur){
+    var real = gs.filter(function(g){ return !g.virtual; }), last = real.length - 1;
+    var h = '<div class="wg-menu" role="dialog" aria-label="管理群組">' +
+      '<div class="wg-mh"><b>管理群組</b><span>拖曳或 ▲▼ 排序・隱藏的不在分頁列、也不算進總交集</span></div><ul class="wg-rows">';
+    real.forEach(function(g, i){
+      var nm = esc(g.name);
+      h += '<li class="wg-row wg-dr' + (g.hidden ? ' wg-hid' : '') + (g.id === cur ? ' on' : '') + '" data-id="' + esc(g.id) + '" draggable="true">' +
+        '<span class="wg-grip" aria-hidden="true">⠿</span>' +
+        '<span class="wg-dot wg-c' + (gs.indexOf(g) % 8) + '" aria-hidden="true"></span>' +
+        '<button type="button" class="wg-rname" data-act="pick" title="切換到這個群組">' + nm + ' <span class="wg-n">' + g.n + '</span></button>' +
+        '<span class="wg-ops">' +
+        mini('up', '把 ' + nm + ' 往前移', '▲', i === 0) +
+        mini('down', '把 ' + nm + ' 往後移', '▼', i === last) +
+        mini('rename', '把 ' + nm + ' 改名', '✎') +
+        mini('hide', (g.hidden ? '顯示 ' : '隱藏 ') + nm, g.hidden ? '顯示' : '隱藏', false, ' wg-eye" aria-pressed="' + !!g.hidden) +
+        mini('del', '刪除 ' + nm, '✕', real.length < 2) +
+        '</span></li>';
+    });
+    return h + '</ul><div class="wg-mf">' +
+      '<button type="button" class="wg-tool" data-act="add">＋ 新增群組</button>' +
+      '<button type="button" class="wg-tool wg-done" data-act="close">完成</button></div></div>';
+  }
   function render(){
     var gs = TWSIXWatch.groups(), cur = TWSIXWatch.current().id;
-    /* 一列左右滑動（2026-10-05）：群組一多，換行排成好幾列在手機上會佔掉半個螢幕。
-       分頁放在可橫向捲動的那一條裡；〔＋〕〔管理〕釘在右邊，不跟著捲走。
-       重畫時保留捲動位置，切換群組時把選中的那一顆捲進畫面。 */
+    /* 一列左右滑動：群組一多，換行排成好幾列在手機上會佔掉半個螢幕。重畫時保留捲動
+       位置，切換群組時把選中的那一顆捲進畫面。 */
     var old = host.querySelector('.wg-tabs'), keep = old ? old.scrollLeft : 0;
+    var oldRows = host.querySelector('.wg-rows'), keepY = oldRows ? oldRows.scrollTop : 0;
     var h = '<div class="wg-bar"><div class="wg-tabs" role="tablist" aria-label="觀察清單群組">', nHid = 0;
     gs.forEach(function(g, i){
       var on = g.id === cur;
-      if(g.hidden){ nHid++; if(!editing) return; }
+      if(g.hidden){ nHid++; if(!on) return; }      /* 隱藏的不上分頁列（除非正在看它） */
       if(g.virtual){
         h += '<span class="wg-item wg-allitem" data-id="' + esc(g.id) + '">' +
           '<button type="button" role="tab" class="wg-tab wg-all" aria-selected="' + on + '" data-act="pick" ' +
-          'title="所有（非空的）群組都有的股票，自動算出">' + esc(g.name) + ' <span class="wg-n">' + g.n + '</span></button></span>';
+          'title="所有（非空、未隱藏的）群組都有的股票，自動算出">' + esc(g.name) + ' <span class="wg-n">' + g.n + '</span></button></span>';
         return;
       }
-      h += '<span class="wg-item' + (g.hidden ? ' wg-hid' : '') + '" data-id="' + esc(g.id) + '"' + (editing ? '' : ' draggable="true"') + '>' +
-        (editing ? '<button type="button" class="wg-mini" data-act="left" title="往前" aria-label="把 ' + esc(g.name) + ' 往前移"' + (i === 0 ? ' disabled' : '') + '>◀</button>' : '') +
+      h += '<span class="wg-item wg-dr' + (g.hidden ? ' wg-hid' : '') + '" data-id="' + esc(g.id) + '" draggable="true">' +
         '<button type="button" role="tab" class="wg-tab wg-c' + (i % 8) + '" aria-selected="' + on + '" data-act="pick" title="' +
-          (g.hidden ? '已隱藏：不在分頁列、不參與總交集' : editing ? '' : '點兩下改名；拖曳排序') + '">' +
-        esc(g.name) + ' <span class="wg-n">' + g.n + '</span></button>' +
-        (editing ? '<button type="button" class="wg-mini wg-eye" data-act="hide" aria-pressed="' + !!g.hidden + '" title="' + (g.hidden ? '顯示（重新參與總交集）' : '隱藏（不參與總交集）') +
-                   '" aria-label="' + (g.hidden ? '顯示 ' : '隱藏 ') + esc(g.name) + '">' + (g.hidden ? '顯示' : '隱藏') + '</button>' +
-                   '<button type="button" class="wg-mini" data-act="rename" title="改名" aria-label="把 ' + esc(g.name) + ' 改名">✎</button>' +
-                   '<button type="button" class="wg-mini" data-act="del" title="刪除" aria-label="刪除 ' + esc(g.name) + '"' + (gs.length < 3 ? ' disabled' : '') + '>✕</button>' +
-                   '<button type="button" class="wg-mini" data-act="right" title="往後" aria-label="把 ' + esc(g.name) + ' 往後移"' + (i === gs.length - 2 ? ' disabled' : '') + '>▶</button>' : '') +
-        '</span>';
+          (g.hidden ? '已隱藏：不在分頁列、不參與總交集' : '點兩下改名；拖曳排序') + '">' +
+        esc(g.name) + ' <span class="wg-n">' + g.n + '</span></button></span>';
     });
     h += '</div><div class="wg-tools">' +
          '<button type="button" class="wg-tool" data-act="add" title="新增群組" aria-label="新增群組">＋<span class="wg-tl"> 新增</span></button>' +
-         '<button type="button" class="wg-tool" data-act="edit" aria-pressed="' + editing + '">' + (editing ? '完成' : '管理' + (nHid ? '<span class="wg-tl">（隱藏 ' + nHid + '）</span>' : '')) + '</button></div></div>';
+         '<button type="button" class="wg-tool wg-mgr" data-act="edit" aria-haspopup="true" aria-expanded="' + open + '">管理' +
+           (nHid ? '<span class="wg-tl">（隱藏 ' + nHid + '）</span>' : '') + ' ▾</button>' +
+         (open ? menu(gs, cur) : '') + '</div></div>';
     host.innerHTML = h;
     var strip = host.querySelector('.wg-tabs');
     strip.scrollLeft = keep;
+    var rows = host.querySelector('.wg-rows');
+    if(rows) rows.scrollTop = keepY;
     if(cur !== lastCur){
       var sel = strip.querySelector('[aria-selected="true"]');
       if(sel){
@@ -2851,62 +2877,83 @@ function reveal(bar, el){
   }
   host.addEventListener('scroll', edges, true);
   window.addEventListener('resize', edges);
+  function setOpen(v){
+    if(open === v) return;
+    open = v; render();
+    if(open){ var f = host.querySelector('.wg-menu .wg-rname'); if(f) f.focus(); }
+    else{ var m = host.querySelector('.wg-mgr'); if(m) m.focus(); }
+  }
   function rename(id){
     var g = TWSIXWatch.groups().filter(function(x){ return x.id === id; })[0];
     if(!g) return;
     var name = window.prompt('群組名稱', g.name);
     if(name !== null) TWSIXWatch.renameGroup(id, name);
   }
+  /* 點選單外面就收起來。用捕捉階段：選單裡按下去會重畫，冒泡到 document 時
+     e.target 已經不在畫面上，判斷不出它原本在不在選單裡。 */
+  document.addEventListener('click', function(e){
+    if(!open || !e.target.closest) return;
+    if(e.target.closest('.wg-menu, .wg-mgr')) return;
+    open = false; render();
+  }, true);
+  document.addEventListener('keydown', function(e){
+    if(open && e.key === 'Escape') setOpen(false);
+  });
   host.addEventListener('click', function(e){
     var b = e.target.closest('button[data-act]');
     if(!b || b.disabled) return;
-    var item = b.closest('.wg-item'), id = item && item.getAttribute('data-id'), act = b.getAttribute('data-act');
+    var item = b.closest('[data-id]'), id = item && item.getAttribute('data-id'), act = b.getAttribute('data-act');
     if(act === 'pick') TWSIXWatch.select(id);
     else if(act === 'add'){
       var name = window.prompt('新群組的名稱', '新群組');
       if(name !== null) TWSIXWatch.addGroup(name);
-    }else if(act === 'edit'){ editing = !editing; render(); }
+    }else if(act === 'edit') setOpen(!open);
+    else if(act === 'close') setOpen(false);
     else if(act === 'rename') rename(id);
     else if(act === 'hide') TWSIXWatch.hideGroup(id, b.getAttribute('aria-pressed') !== 'true');
     else if(act === 'del'){
       var g = TWSIXWatch.groups().filter(function(x){ return x.id === id; })[0];
       if(g && window.confirm('刪除群組〔' + g.name + '〕？' + (g.n ? '裡面的 ' + g.n + ' 檔會一起移除（其他群組不受影響）。' : '')))
         TWSIXWatch.removeGroup(id);
-    }else if(act === 'left') TWSIXWatch.moveGroup(id, -1);
-    else if(act === 'right') TWSIXWatch.moveGroup(id, +1);
+    }else if(act === 'up') TWSIXWatch.moveGroup(id, -1);
+    else if(act === 'down') TWSIXWatch.moveGroup(id, +1);
   });
   host.addEventListener('dblclick', function(e){
-    var b = e.target.closest('button[data-act="pick"]');
+    var b = e.target.closest('.wg-tabs button[data-act="pick"]');
     var it = b && b.closest('.wg-item');
-    if(it && !editing && !it.classList.contains('wg-allitem')) rename(it.getAttribute('data-id'));
+    if(it && !it.classList.contains('wg-allitem')) rename(it.getAttribute('data-id'));
   });
-  /* 拖曳排序（桌機）：放在一顆膠囊的左半邊＝插到它前面，右半邊＝插到它後面。 */
+  /* 拖曳排序（桌機）：分頁列上看左右半邊，選單裡看上下半邊——放在前半＝插到它前面。 */
+  function vertical(el){ return el.classList.contains('wg-row'); }
+  function firstHalf(el, e){
+    var r = el.getBoundingClientRect();
+    return vertical(el) ? e.clientY < r.top + r.height / 2 : e.clientX < r.left + r.width / 2;
+  }
   host.addEventListener('dragstart', function(e){
-    var it = e.target.closest && e.target.closest('.wg-item');
-    if(!it || it.classList.contains('wg-allitem')) return;
+    var it = e.target.closest && e.target.closest('.wg-dr');
+    if(!it) return;
     dragId = it.getAttribute('data-id');
     it.classList.add('drag');
     try{ e.dataTransfer.setData('text/plain', dragId); e.dataTransfer.effectAllowed = 'move'; }catch(err){}
   });
   host.addEventListener('dragover', function(e){
     if(!dragId) return;
-    var it = e.target.closest && e.target.closest('.wg-item');
+    var it = e.target.closest && e.target.closest('.wg-dr, .wg-allitem');
     if(!it) return;
     e.preventDefault();
-    [].forEach.call(host.querySelectorAll('.wg-item'), function(x){ x.classList.remove('to-l', 'to-r'); });
-    var r = it.getBoundingClientRect();
-    it.classList.add(e.clientX < r.left + r.width / 2 ? 'to-l' : 'to-r');
+    [].forEach.call(host.querySelectorAll('.to-l, .to-r'), function(x){ x.classList.remove('to-l', 'to-r'); });
+    it.classList.add(firstHalf(it, e) ? 'to-l' : 'to-r');
   });
   host.addEventListener('drop', function(e){
     if(!dragId) return;
     e.preventDefault();
-    var it = e.target.closest && e.target.closest('.wg-item');
+    var it = e.target.closest && e.target.closest('.wg-dr, .wg-allitem');
     if(it){
-      var r = it.getBoundingClientRect(), id = it.getAttribute('data-id');
-      var before = id === '__all' ? null : id;
-      if(e.clientX >= r.left + r.width / 2){
-        var nx = it.nextElementSibling;
-        before = nx && nx.classList.contains('wg-item') ? nx.getAttribute('data-id') : null;
+      var id = it.getAttribute('data-id'), before = id === '__all' ? null : id;
+      if(id !== '__all' && !firstHalf(it, e)){
+        /* 插到它後面＝插到資料順序裡它的下一個前面（分頁列上看不到隱藏的，所以照資料算） */
+        var ids = TWSIXWatch.groups().filter(function(g){ return !g.virtual; }).map(function(g){ return g.id; });
+        before = ids[ids.indexOf(id) + 1] || null;
       }
       TWSIXWatch.placeGroup(dragId, before);
     }

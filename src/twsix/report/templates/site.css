@@ -1682,3 +1682,34 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
 .wg-dlg-b .wg-dlg-copy{border-color:var(--accent);color:var(--accent)}
 .wg-dlg-b .wg-dlg-copy:disabled{opacity:.4;cursor:default}
 .wg-dlg-b .wg-dlg-over{border-color:var(--accent);background:var(--accent);color:var(--surface)}
+/* 〔管理 ▾〕下拉選單（2026-10-05）：直式清單，一列一個群組。 */
+.wg-tools{position:relative}
+.wg-mgr[aria-expanded=true]{border-style:solid;border-color:var(--accent);color:var(--accent)}
+.wg-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;width:min(400px,calc(100vw - 24px));
+  background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:12px;
+  box-shadow:0 14px 40px rgba(0,0,0,.28);padding:10px 8px 8px;text-align:left}
+.wg-mh{display:flex;flex-direction:column;gap:2px;padding:0 6px 8px;border-bottom:1px solid var(--rule)}
+.wg-mh b{font-size:14px}
+.wg-mh span{font-size:11.5px;color:var(--muted)}
+.wg-rows{list-style:none;margin:0;padding:4px 0;max-height:min(60vh,460px);overflow-y:auto;overscroll-behavior:contain}
+.wg-row{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:8px}
+.wg-row:hover{background:var(--surface-2)}
+.wg-row.on{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.wg-row.drag{opacity:.45}
+.wg-row.to-l{box-shadow:inset 0 3px 0 var(--accent)}
+.wg-row.to-r{box-shadow:inset 0 -3px 0 var(--accent)}
+.wg-grip{color:var(--muted);cursor:grab;font-size:13px;width:12px;flex:0 0 auto;user-select:none}
+.wg-dot{--tk:color-mix(in srgb,var(--tc,#5f6b78) 60%,#87909a);width:10px;height:10px;border-radius:50%;
+  background:var(--tk);flex:0 0 auto}
+.wg-rname{flex:1 1 auto;min-width:0;text-align:left;background:none;border:0;padding:4px 2px;cursor:pointer;
+  font:inherit;font-size:13.5px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wg-rname:hover{text-decoration:underline}
+.wg-row.wg-hid .wg-rname{color:var(--muted);text-decoration:line-through}
+.wg-row.wg-hid .wg-dot{opacity:.4}
+.wg-ops{display:flex;gap:3px;flex:0 0 auto}
+.wg-mf{display:flex;justify-content:space-between;gap:8px;padding:8px 6px 2px;border-top:1px solid var(--rule)}
+.wg-done{border-style:solid;border-color:var(--accent);color:var(--accent)}
+@media (max-width:640px){
+  .wg-ops .wg-mini{width:28px;height:28px}
+  .wg-ops .wg-mini.wg-eye{width:auto}
+}
