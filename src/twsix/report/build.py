@@ -732,7 +732,7 @@ def data_vintage(rows: list[Row]) -> tuple[str, str]:
     )
 
 
-def vintage_progress(rows: list[Row]) -> dict[str, Any]:
+def vintage_progress(rows: list[Row], trading: set[str] | None = None) -> dict[str, Any]:
     """〔評等清單〕標題那一行：最新一季、最新一個月，各已經有幾檔換上了（2026-10-05）。
 
     `data_vintage` 回答的是「這張表大部分在哪一期」；換季、換月的那幾天讀者想知道的
@@ -755,7 +755,21 @@ def vintage_progress(rows: list[Row]) -> dict[str, Any]:
         ml = f"{int(roc) + 1911}/{mm}"
     except ValueError:
         ml = m
-    return {"quarter": ql, "quarter_n": nq, "month": ml, "month_n": nm, "total": len(rows)}
+    # 還沒換上最新一季的那幾檔，點名出來（不多的時候）。換季期間是幾百檔、不點名；
+    # 換季結束後剩下的一兩檔通常不是漏抓，是公司根本沒申報——例如 1589 永冠-KY
+    # 2026-04 起停止交易、2025Q4 之後的財報都沒有公告（2026-10-05 查）。
+    behind = [
+        {"code": r.stock_id, "name": r.name, "quarter": _qlabel(r.fiscal_quarter),
+         "halted": trading is not None and r.stock_id not in trading}
+        for r in rows if r.fiscal_quarter and r.fiscal_quarter != q
+    ]
+    return {"quarter": ql, "quarter_n": nq, "month": ml, "month_n": nm, "total": len(rows),
+            "behind": behind if len(behind) <= 5 else []}
+
+
+def _qlabel(q: str) -> str:
+    """2025.3Q → 2025Q3。"""
+    return f"{q[:4]}Q{q[5]}" if len(q) == 7 and q[4] == "." else q
 
 
 def fresher_than(rows: list[Row], quarter: str) -> int:
@@ -1215,7 +1229,7 @@ def build_site(
     env.get_template("list.html.j2").stream(
         **base, page="list", rel="", rows=live, price_date=price_date,
         fresh_count=fresher_than(live, quarter),
-        progress=vintage_progress(live),
+        progress=vintage_progress(live, set(quotes) if quotes else None),
         coverage=fetch_coverage(live, fetched_at),
         delisted_count=len(rows) - len(live),
         next_filing=deadline.isoformat(),

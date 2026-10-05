@@ -6,7 +6,7 @@
 <h2 class="sr">台股評等清單</h2>
 <p class="muted">
   {%- set pg = progress %}
-  本期{{ pg.quarter }}(已更新{{ pg.quarter_n }}/{{ pg.total }}) / {{ pg.month }}(已更新{{ pg.month_n }}/{{ pg.total }})。<br>
+  本期{{ pg.quarter }}(已更新<b class="pg-n">{{ pg.quarter_n }}</b>/<span class="pg-t">{{ pg.total }}</span>{% if pg.behind %}<sup>※</sup>{% endif %}) / {{ pg.month }}(已更新<b class="pg-n pg-m">{{ pg.month_n }}</b>/<span class="pg-t">{{ pg.total }}</span>)。<br>
   全市場評等，共 <span id="tally">{{ rows|length }} 檔</span>。
   點欄位標題可排序，☆ 加入觀察清單。{{ '' }}
 {# 這一段以前寫的是「這張表是混齡的：底是活頁簿那份一年前的快照，上面疊著少數
@@ -40,7 +40,10 @@
   {% if delisted_count %}
   已下市的 {{ delisted_count }} 檔不在這張表上，用上方搜尋仍然找得到。
   {% endif %}
-{% endcall %}</p>
+{% endcall %}
+{#- 換季結束後還沒換上的那一兩檔，多半不是漏抓，是公司沒申報（例：1589 永冠-KY 停止買賣）。
+    附註在這一段最後面，不佔標題的字。 #}
+{%- if pg.behind %}<br><span class="note-s pg-foot">※ 未換季：{% for b in pg.behind %}{{ b.code }} {{ b.name }}{% if b.halted %}（停止買賣）{% endif %}{% if not loop.last %}、{% endif %}{% endfor %}</span>{% endif %}</p>
 {# 這裡原本還有一個「只看有完整報告」。它在只有 183 檔抓過報表的時候會把清單從
    1,741 列篩到 183 列，是當時最有用的一個篩選。補課排程跑完之後，1,877 列**全部**
    都有完整報告——那個勾選框篩掉零列。

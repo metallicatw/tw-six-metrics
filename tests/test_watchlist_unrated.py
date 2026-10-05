@@ -66,6 +66,9 @@ def test_評等清單標題寫出最新一季與最新月營收各更新了幾�
         return Row("1", "a", "上市", "x", q, m, {}, "", None, False, None)
 
     got = vintage_progress([r("2026.2Q", "115/09"), r("2026.2Q", "115/08"), r("2026.1Q", "115/08")])
-    assert got == {"quarter": "2026Q2", "quarter_n": 2, "month": "2026/09", "month_n": 1, "total": 3}
+    assert got == {"quarter": "2026Q2", "quarter_n": 2, "month": "2026/09", "month_n": 1, "total": 3,
+                   "behind": [{"code": "1", "name": "a", "quarter": "2026Q1", "halted": False}]}
     tpl = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates" / "list.html.j2")
-    assert "本期{{ pg.quarter }}(已更新{{ pg.quarter_n }}/{{ pg.total }})" in tpl.read_text("utf-8")
+    text = tpl.read_text("utf-8")
+    assert '本期{{ pg.quarter }}(已更新<b class="pg-n">{{ pg.quarter_n }}</b>' in text
+    assert "※ 未換季" in text and "（停止買賣）" in text, "沒換上的那一兩檔寫在段落最後的附註"

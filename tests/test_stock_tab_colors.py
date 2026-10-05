@@ -88,3 +88,11 @@ def test_可以左右滑的分頁列不吸附_滑到哪停在哪():
             src = p.read_text("utf-8")
             for bad in ("scroll-snap-type", "scroll-snap-align", "scrollSnap"):
                 assert bad not in src, (p.name, bad)
+
+
+def test_全站頁內分頁同一種樣式_照個股頁那一排():
+    """2026-10-05：選股功能、籌碼雷達、AI 選股、觀察清單、財務健診子分頁都改成個股頁
+    〔評價簡表…〕那種圓角方塊；顏色再降一階（原色只留 45%）。"""
+    css = (TPL / "site.css").read_text("utf-8")
+    block = css.split("html :is(.tab,.subtab,.sc-tab,.cf-tab,.ai-tab,.wg-tab){", 1)[1].split("}", 1)[0]
+    assert "border-radius:7px" in block and "45%" in block and "font-size:13px" in block

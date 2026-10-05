@@ -1716,3 +1716,45 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
   .wg-ops .wg-mini{width:28px;height:28px}
   .wg-ops .wg-mini.wg-eye{width:auto}
 }
+
+/* =========================================================================
+ * 全站頁內分頁統一樣式（2026-10-05，使用者指定照個股頁〔評價簡表／六大財務指標評等…〕那一排）
+ *
+ * 圓角方塊（7px，不是膠囊）、邊框是色調的半透明、底色淡淡一層、選中那一顆實心加一點
+ * 陰影。顏色再降一階：--tk 是原色 --tc 只留 45%、混進 55% 的灰（原本 60／40）。
+ *
+ * 一次套在所有頁內分頁上：個股頁 .tab、財務健診 .subtab、選股功能 .sc-tab、
+ * 籌碼雷達 .cf-tab、AI 選股 .ai-tab、觀察清單群組 .wg-tab。前面加 `html` 是為了
+ * 蓋過 screener／radar 頁裡那幾段後載入的 <style>（同樣的類別選擇器，後寫的贏）。
+ * 各自的顏色（--tc）照舊由原本那幾行決定，這裡不動。
+ * ========================================================================= */
+html :is(.tab,.subtab,.sc-tab,.cf-tab,.ai-tab,.wg-tab){
+  --tk:color-mix(in srgb,var(--tc,#5f6b78) 45%,#8a929b);
+  appearance:none;font:inherit;font-size:13px;font-weight:600;line-height:1.2;white-space:nowrap;
+  cursor:pointer;padding:7px 12px;border-radius:7px;
+  color:var(--tk);border:1.5px solid color-mix(in srgb,var(--tk) 50%,transparent);
+  background:color-mix(in srgb,var(--tk) 9%,transparent);
+  transition:background .12s,color .12s,box-shadow .12s}
+html :is(.tab,.subtab,.sc-tab,.cf-tab,.ai-tab,.wg-tab):hover{
+  background:color-mix(in srgb,var(--tk) 18%,transparent)}
+html :is(.tab,.subtab,.sc-tab,.cf-tab,.ai-tab,.wg-tab)[aria-selected=true]{
+  color:#fff;background:var(--tk);border-color:var(--tk);
+  box-shadow:0 2px 6px color-mix(in srgb,var(--tk) 35%,transparent)}
+html :is(.tab,.subtab,.sc-tab,.cf-tab,.ai-tab,.wg-tab):focus-visible{outline:2px solid var(--tk);outline-offset:2px}
+/* 第三層（分頁裡的分頁）小一號 */
+html .subtab{font-size:12.5px;padding:5px 10px}
+/* 深色底：選中那一顆用底色當字色（和原本一樣，白字壓不住調亮過的色塊） */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) :is(.tab,.subtab,.sc-tab,.cf-tab,.ai-tab,.wg-tab)[aria-selected=true]{color:var(--ground)}
+}
+:root[data-theme=dark] :is(.tab,.subtab,.sc-tab,.cf-tab,.ai-tab,.wg-tab)[aria-selected=true]{color:var(--ground)}
+/* 〔總交集清單〕保留虛線，看得出它是算出來的那一頁 */
+html .wg-tab.wg-all{border-style:dashed}
+html .wg-tab.wg-all[aria-selected=true]{border-style:solid}
+/* 〔評等清單〕標題的「已更新 N/總數」：已更新的檔數用強調色，季報與月營收各一色；總數淡色。 */
+.pg-n{color:var(--accent);font-weight:700}
+.pg-n.pg-m{color:#b25a00}
+.pg-t{color:var(--muted)}
+.pg-foot{color:var(--muted);font-size:12px}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .pg-n.pg-m{color:#ffa94d}}
+:root[data-theme=dark] .pg-n.pg-m{color:#ffa94d}
