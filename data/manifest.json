@@ -1,7 +1,7 @@
 {
   "counts": {
-    "market/tpex_balance/115Q2": 891,
-    "market/tpex_income/115Q2": 891,
+    "market/tpex_balance/115Q2": 892,
+    "market/tpex_income/115Q2": 892,
     "market/tpex_revenue/11507": 890,
     "market/tpex_revenue/11508": 892,
     "market/twse_balance/115Q2": 1084,
@@ -12,7 +12,7 @@
     "tpex_companies": 892,
     "twse_companies": 1095
   },
-  "generated_at": "2026-10-04T06:52:34+00:00",
+  "generated_at": "2026-10-06T07:42:01+00:00",
   "notes": [
     "baseline imported from 評等清單 v6.62 (published snapshot)"
   ],
