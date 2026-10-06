@@ -174,12 +174,12 @@ def test_兩張表的欄號都對得上位置():
         for i, th in enumerate(ths):
             m = re.search(r'data-col="(\d+)"', th)
             assert m is None or int(m.group(1)) == i, (i, th[:80])
-        first = page.split('<tr data-code="')[1].split("</tr>")[0]
+        first = page.split(' data-code="')[1].split("</tr>")[0]
         assert len(re.findall(r"<td\b", first)) == len(ths)
 
 
 def test_觀察清單上真的畫出價格與走勢圖連結():
-    row = _watch().split('<tr data-code="2330"')[1].split("</tr>")[0]
+    row = _watch().split('<tr hidden data-code="2330"')[1].split("</tr>")[0]
     assert "1,200" in row, "收盤價不在那一列上（千元以上不印小數）"
     assert 'href="https://tw.stock.yahoo.com/quote/2330.TW/technical-analysis"' in row
     assert 'target="_blank"' in row and 'class="yf"' in row
@@ -189,7 +189,7 @@ def test_觀察清單上真的畫出價格與走勢圖連結():
     assert "+0.84%" in row, "日漲跌幅：10 ÷ 1,190"
     assert "+4.35%" in row, "5 日：1,200 ÷ 1,150"
     assert "+20.00%" in row, "20 日：1,200 ÷ 1,000"
-    down = _watch().split('<tr data-code="5439"')[1].split("</tr>")[0]
+    down = _watch().split('<tr hidden data-code="5439"')[1].split("</tr>")[0]
     assert "quote/5439.TWO" in down, "上櫃要連 .TWO"
     assert 'class="down"' in down, "跌要是綠色（down）"
 

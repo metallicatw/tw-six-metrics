@@ -44,7 +44,7 @@
    「+0.50」「—」「AA」照字串排會排出胡說，而把「怎麼比大小」放進 JS 去猜每一欄
    的型別，等於在兩個地方各寫一次規則。這裡一次寫好：數字就是數字，等第換成
    0~4，沒有值一律是最小的 -999——排序時沉到底，而不是插在中間。 #}
-{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False, price_date='', ai=None, cf=None) -%}
+{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False, price_date='', ai=None, cf=None, start_hidden=False) -%}
 {% set when = (fetched_at or {}).get(r.stock_id) %}
 {% set has_full = when or (rich_ids and r.stock_id in rich_ids) %}
 {%- set mk = (ai or {}).get(r.stock_id) %}
@@ -53,7 +53,9 @@
    的字——字是給人看的（「具投資價值」「1.46」），分類是給程式比對的，兩者分開，改了
    顯示方式也不會讓篩選失靈。 #}
 {%- set sc = r.composite|float(default=none) %}
-<tr data-code="{{ r.stock_id }}" data-f-ind="{{ ind_key(r.industry) }}" data-f-score="{{ '%.4f'|format(sc) if sc is not none else '' }}" data-f-pick="{{ 1 if r.value_pick else 0 }}"
+{#- start_hidden：〔觀察清單〕上每一列先藏著，由 site.js 只打開目前群組那幾列（2026-10-06）。
+   原本 2,000 列先全部排版一次、JS 再藏起其中 1,990 列——那一次白做的排版就要幾秒。 #}
+<tr{% if start_hidden %} hidden{% endif %} data-code="{{ r.stock_id }}" data-f-ind="{{ ind_key(r.industry) }}" data-f-score="{{ '%.4f'|format(sc) if sc is not none else '' }}" data-f-pick="{{ 1 if r.value_pick else 0 }}"
     data-f-rr="{{ reward_cat(r) }}" data-f-rrv="{{ '%.6f'|format(r.reward_risk) if (r.reward_risk is not none and not r.risk_free) else '' }}" data-f-ai="{{ mk.kind if mk else '' }}" data-f-cf="{{ cm.kind if cm else '' }}">
   {# 流水號。內容留空，數字由 CSS 的計數器產生——這樣它數的是**畫面上的位置**：
      排序之後從 1 重新數，篩選之後跳過被隱藏的列。若改成建站時寫死的數字，排一次

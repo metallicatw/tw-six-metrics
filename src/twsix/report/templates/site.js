@@ -882,9 +882,18 @@ var TWSIXWatch = (function(){
   /* ☆ 亮不亮（2026-10-05 起）：
      - 〔台股觀察清單〕頁上：這一檔在不在**目前這個群組**（表格列的就是目前群組）。
      - 其他頁（評等清單、個股頁）：在不在**任何一個**群組。按下去打開群組選單勾選。 */
+  /* 「這一頁是不是觀察清單」整頁只問一次（2026-10-06）。原本每一顆☆都問一次
+     document.querySelector——評等清單上找不到那張表，於是每問一次就把整份
+     DOM（1,943 列、十萬個節點）從頭掃到尾，1,943 顆星 × 載入時三輪，手機上要
+     卡十幾秒。這一句就是「網頁跑太慢」的主因。 */
+  var watchPageMemo = null;
+  function isWatchPage(){
+    if(watchPageMemo === null) watchPageMemo = !!document.querySelector('table[data-watchlist="1"]');
+    return watchPageMemo;
+  }
   function paint(btn){
     var code = btn.getAttribute('data-star');
-    var watchPage = !!document.querySelector('table[data-watchlist="1"]');
+    var watchPage = isWatchPage();
     var on = watchPage ? has(code) : inAny(code);
     var where = doc.groups.filter(function(g){ return g.codes.indexOf(code) >= 0; })
                           .map(function(g){ return '〔' + g.name + '〕'; }).join('');

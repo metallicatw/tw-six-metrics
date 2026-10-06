@@ -791,7 +791,10 @@ def test_the_watchlist_page_is_the_same_table_filtered_in_the_browser(tmp_path=N
 
     page = (out / "watchlist.html").read_text("utf-8")
     assert '<table id="t" class="compact" data-watchlist="1">' in page
-    assert '<tr data-code="5439"' in page and '<tr data-code="2330"' in page
+    # 每一列先藏著，site.js 只打開目前群組那幾列（2026-10-06）：不然 2,000 列要先
+    # 全部排版一次再被藏起來，手機上白白多花幾秒。評等清單那一頁則照常全部顯示。
+    assert '<tr hidden data-code="5439"' in page and '<tr hidden data-code="2330"' in page
+    assert '<tr data-code="5439"' in (out / "index.html").read_text("utf-8")
     assert 'id="watch-empty"' in page          # 一檔都沒加時要說話
     js = (out / "assets" / "site.js").read_text("utf-8")
     assert "twsix.watchlist" in js and "localStorage" in js
@@ -2045,3 +2048,16 @@ def test_各頁都有匯入觀察清單的按鈕():
     assert '["cf-picks", "精選漏斗"]' in read("radar.html.j2")
     assert '["cf-l1", "籌碼共振（L1）"]' in read("radar.html.j2"), "籌碼共振（L1）也要能一鍵匯入"
     assert 'id="wg"' in read("watchlist.html.j2")
+
+
+def test_星號不會每一顆都掃一次整份頁面():
+    """2026-10-06 量到〔評等清單〕載入要 20 秒，其中十幾秒是 paint()：每一顆☆都問一次
+    `document.querySelector('table[data-watchlist="1"]')`。評等清單上沒有那張表，所以每問
+    一次就把十萬個節點從頭掃到尾——1,943 顆 × 三輪。改成整頁只問一次之後是 4~5 秒。
+    """
+    import re
+
+    js = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.js").read_text("utf-8")
+    body = js.split("function paint(btn){", 1)[1].split("\n  }\n", 1)[0]
+    assert "document.querySelector" not in body, "paint() 裡又直接查 DOM 了"
+    assert len(re.findall(r"document\.querySelector\('table\[data-watchlist", js)) == 1
