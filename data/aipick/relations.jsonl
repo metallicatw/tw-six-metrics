@@ -91,3 +91,9 @@
 {"a":"3023","b":"3189","asked":"2026-10-05","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"信邦為線束廠，景碩為載板廠，兩者皆屬電子零組件與台股科技股，常隨大盤與電子股題材同步變動。"}
 {"a":"3023","b":"8155","asked":"2026-10-05","model":"gemini-flash-lite-latest","relation":"供應商","confidence":0.85,"note":"博智為專業印刷電路板（PCB）廠，信邦為連接器與線束模組廠，博智供應 A 相關電子零組件。"}
 {"a":"3023","b":"2368","asked":"2026-10-05","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆為台股知名電子零組件與AI概念股，常因盤勢與題材連動，但非直接上下游關係。"}
+{"a":"6538","b":"8064","asked":"2026-10-06","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.5,"note":"兩者皆屬台股設備與零組件相關類股，常在盤面資金輪動或特定題材時呈現類股同步變動。"}
+{"a":"6538","b":"2305","asked":"2026-10-06","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"兩者皆為台股上市櫃公司，常因盤面資金流向或特定電子股題材而被市場歸類為連動股，無直接業務往來。"}
+{"a":"6538","b":"2303","asked":"2026-10-06","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬台股電子股與半導體相關供應鏈，常隨大盤與半導體類股走勢同步變動。"}
+{"a":"1727","b":"6861","asked":"2026-10-06","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"中華化為特化與電子級硫酸廠，睿生光電為X光平版偵檢器廠，兩者業務無直接供應鏈關係，主要同屬台股電子化工或生醫相關題材連動"}
+{"a":"1727","b":"3430","asked":"2026-10-06","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"兩者皆為台灣特用化學品製造商，產品線多有重疊，常被歸為化學工業類股的同一題材。"}
+{"a":"1727","b":"6234","asked":"2026-10-06","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"中華化為特化與化學品廠，高僑為設備與零組件廠，業務無直接上下游關聯，走勢同步可能歸類於電子或特定題材。"}
