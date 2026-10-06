@@ -1162,7 +1162,7 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 #totop:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
 
 /* -- 窄版 -----------------------------------------------------------------
-   用 @container 而不是 @media：這樣「切換手機版」那顆按鈕真的有用——它只是把
+   用 @container 而不是 @media（〔切換手機版〕按鈕 2026-10-06 已拿掉，容器查詢照用）：當初是讓那顆按鈕只要把
    .wrap 釘窄，容器查詢就跟著生效。大螢幕上看到的窄版和手機上看到的是同一份
    版面，不是另外維護的第二套；維護兩套版面的專案，壞掉的永遠是沒人在看的那一套。 */
 .wrap{container-type:inline-size;container-name:page}
@@ -1484,7 +1484,7 @@ table.hl-t{min-width:0}
 .ai-ic{list-style:none;padding:0;margin:8px 0;display:grid;gap:3px;max-width:420px}
 .ai-ic li{display:grid;grid-template-columns:11em 5em 1fr;gap:8px;font-size:12.5px}
 .ai-ic em{font-style:normal;color:var(--muted)}
-.ai-tag-c{background:#c2255c}.ai-tag-t{background:#2b8a3e}
+.ai-tag-c{background:#c2255c}.ai-tag-A{background:#e67700}.ai-tag-B{background:#1c7ed6}.ai-tag-D{background:#6d3fd1}.ai-tag-t{background:#2b8a3e}
 /* 各方案的小標籤（A 橘、B 藍、D 紫），表格與標題共用 */
 .ai-s{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:700;
   color:#fff;background:#5f6b78;white-space:nowrap}
@@ -1512,14 +1512,17 @@ table.hl-t{min-width:0}
 .ai-tab[aria-selected=true]{background:var(--tk);color:#fff}
 .ai-tab:focus-visible{outline:2px solid var(--tk);outline-offset:2px}
 .ai-j-f{--tc:#1c62b8}.ai-j-p{--tc:#0e7c6f}.ai-j-c{--tc:#c2255c}.ai-j-t{--tc:#2b8a3e}
-.ai-j-b{--tc:#b25a00}.ai-j-e{--tc:#a3306b}.ai-j-j{--tc:#5f6b78}.ai-j-g{--tc:#7048e8}
+.ai-j-b{--tc:#0b7ea3}.ai-j-sa{--tc:#e67700}.ai-j-sb{--tc:#1c7ed6}.ai-j-sd{--tc:#6d3fd1}.ai-j-e{--tc:#a3306b}.ai-j-j{--tc:#5f6b78}.ai-j-g{--tc:#7048e8}
 /* 深色底：按鈕色調亮，選中那一顆用底色當字色（和個股頁分頁同一套做法）。 */
 @media (prefers-color-scheme:dark){
   :root:not([data-theme=light]) .ai-j-f{--tc:#6fb0f5}
   :root:not([data-theme=light]) .ai-j-p{--tc:#4fd6c4}
   :root:not([data-theme=light]) .ai-j-c{--tc:#f783ac}
   :root:not([data-theme=light]) .ai-j-t{--tc:#69db7c}
-  :root:not([data-theme=light]) .ai-j-b{--tc:#ffa94d}
+  :root:not([data-theme=light]) .ai-j-b{--tc:#4fc9ec}
+  :root:not([data-theme=light]) .ai-j-sa{--tc:#ffa94d}
+  :root:not([data-theme=light]) .ai-j-sb{--tc:#74c0fc}
+  :root:not([data-theme=light]) .ai-j-sd{--tc:#b197fc}
   :root:not([data-theme=light]) .ai-j-e{--tc:#e599f7}
   :root:not([data-theme=light]) .ai-j-j{--tc:#a3aebb}
   :root:not([data-theme=light]) .ai-j-g{--tc:#b39cff}
@@ -1529,7 +1532,10 @@ table.hl-t{min-width:0}
 :root[data-theme=dark] .ai-j-p{--tc:#4fd6c4}
 :root[data-theme=dark] .ai-j-c{--tc:#f783ac}
 :root[data-theme=dark] .ai-j-t{--tc:#69db7c}
-:root[data-theme=dark] .ai-j-b{--tc:#ffa94d}
+:root[data-theme=dark] .ai-j-b{--tc:#4fc9ec}
+:root[data-theme=dark] .ai-j-sa{--tc:#ffa94d}
+:root[data-theme=dark] .ai-j-sb{--tc:#74c0fc}
+:root[data-theme=dark] .ai-j-sd{--tc:#b197fc}
 :root[data-theme=dark] .ai-j-e{--tc:#e599f7}
 :root[data-theme=dark] .ai-j-j{--tc:#a3aebb}
 :root[data-theme=dark] .ai-j-g{--tc:#b39cff}

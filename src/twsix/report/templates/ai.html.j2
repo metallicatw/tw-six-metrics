@@ -67,7 +67,7 @@
 <b>D 籌碼共振・週期對齊版</b>：持有滿 20 個交易日出場——和權重學習用的「之後 20 日報酬」同一個週期，所以叫對齊；影子帳戶用的就是這一版。它也是看過規劃版回測之後才訂的（樣本內，偏樂觀）。<br>
 <b>D 籌碼共振・規劃版</b>：照〈AI選股方案規劃〉的出場條件——收盤跌破 60 日線（原文是 20 日線）或持有滿 40 個交易日當天出場；大戶比例連兩週下降、投信連三日賣超時隔一個交易日出場。兩版停損都是 3 × ATR14。
 {%- elif k == 'E' -%}
-<b>E 否決</b>（財報品質）：不選股，只把地雷擋在外面，紅旗合計三面以上就否決。<br>
+<b>E 財報品質</b>（否決）：不選股，只把地雷擋在外面，紅旗合計三面以上就否決。<br>
 ・財報八面：單季營業利益 &lt; 0；連兩季淨利 &lt; 0；近四季業外佔稅前淨利 &gt; 50%；近四季有獲利但營業現金流 &lt; 0；應計比率（淨利 − 營業現金流）÷ 總資產 &gt; 10%；負債比 &gt; 60% 且比一年前高 10 個百分點以上；近四季營收年減超過 20%；董監質押比 &gt; 30%。<br>
 ・重大訊息四面：非例行更換簽證會計師、財務／會計主管異動（各 1 面，180 天有效）；退票／重整／繼續經營疑慮（2 面，365 天）；停工／災害（1 面，90 天）。<br>
 ・財報在法定公告期限後才算看得到（Q1 5/15、Q2 8/14、Q3 11/14、年報次年 3/31）。A、B、D 選股時先過這一關；持有中新被否決的隔一個交易日出場。
@@ -122,21 +122,161 @@
 {# 各段是**獨立的分頁**（2026-09-24），不是同一頁裡的定位點：一次只顯示一段，
    網址 #regime、#backtest… 可以直接開到那一段。切換由 site.js 的 AI 分頁那一段負責；
    沒有 JavaScript 的時候全部攤開（見 site.css 的 :not(.js)）。 #}
+{# 分頁順序（2026-10-06 使用者指定）：A～F 六套方法照字母排，後面是影子帳戶、回測、日誌、名詞解釋。
+   原本的〔今日候選〕拆成 A、B、D 三頁；〔E 否決〕改名〔E 財報品質〕。舊網址 #picks 會開到 A。 #}
 <div class="ai-tabs" role="tablist" aria-label="AI 選股">
-  <button type="button" role="tab" id="aitab-regime" class="ai-tab ai-j-f" aria-controls="ai-regime" aria-selected="true">F 市場狀態</button>
-  <button type="button" role="tab" id="aitab-paper" class="ai-tab ai-j-p" aria-controls="ai-paper" aria-selected="false" tabindex="-1">影子帳戶</button>
-  <button type="button" role="tab" id="aitab-picks" class="ai-tab ai-j-c" aria-controls="ai-picks" aria-selected="false" tabindex="-1">今日候選</button>
+  <button type="button" role="tab" id="aitab-a" class="ai-tab ai-j-sa" aria-controls="ai-a" aria-selected="true">A 營收驚喜</button>
+  <button type="button" role="tab" id="aitab-b" class="ai-tab ai-j-sb" aria-controls="ai-b" aria-selected="false" tabindex="-1">B 供應鏈連動</button>
   <button type="button" role="tab" id="aitab-talks" class="ai-tab ai-j-t" aria-controls="ai-talks" aria-selected="false" tabindex="-1">C 法說轉折</button>
+  <button type="button" role="tab" id="aitab-d" class="ai-tab ai-j-sd" aria-controls="ai-d" aria-selected="false" tabindex="-1">D 籌碼共振</button>
+  <button type="button" role="tab" id="aitab-veto" class="ai-tab ai-j-e" aria-controls="ai-veto" aria-selected="false" tabindex="-1">E 財報品質</button>
+  <button type="button" role="tab" id="aitab-regime" class="ai-tab ai-j-f" aria-controls="ai-regime" aria-selected="false" tabindex="-1">F 市場狀態</button>
+  <button type="button" role="tab" id="aitab-paper" class="ai-tab ai-j-p" aria-controls="ai-paper" aria-selected="false" tabindex="-1">影子帳戶</button>
   {% if ai.bt %}
   <button type="button" role="tab" id="aitab-backtest" class="ai-tab ai-j-b" aria-controls="ai-backtest" aria-selected="false" tabindex="-1">回測</button>
   {% endif %}
-  <button type="button" role="tab" id="aitab-veto" class="ai-tab ai-j-e" aria-controls="ai-veto" aria-selected="false" tabindex="-1">E 否決</button>
   <button type="button" role="tab" id="aitab-journal" class="ai-tab ai-j-j" aria-controls="ai-journal" aria-selected="false" tabindex="-1">日誌</button>
   <button type="button" role="tab" id="aitab-gloss" class="ai-tab ai-j-g" aria-controls="ai-gloss" aria-selected="false" tabindex="-1">名詞解釋</button>
 </div>
 
+{# ── A 營收驚喜／B 供應鏈連動／D 籌碼共振（原〔今日候選〕，2026-10-06 拆成三頁） ── #}
+{# 一鍵匯入觀察清單（2026-10-05）：代號在建站時就寫進按鈕，見 site.js 的 TWSIXImport。 #}
+{% macro wg_imp(src, name, cands) -%}
+{%- if cands -%}<button type="button" class="wg-imp" data-wg-src="{{ src }}" data-wg-name="{{ name }}"
+  data-wg-codes="{{ cands|map(attribute='code')|join(',') }}" title="把這 {{ cands|length }} 檔匯入觀察清單〔{{ name }}〕">⇩ 匯入觀察清單</button>{%- endif -%}
+{%- endmacro %}
+<section class="ai-block ai-panel" id="ai-a" role="tabpanel" aria-labelledby="aitab-a">
+  <h3 class="ai-h"><span class="ai-tag ai-tag-A">A</span>營收驚喜
+    <span class="ai-cnt ai-cnt-A">共 {{ ai.a_total }} 檔符合</span>
+    <span class="muted">（{{ ai.a.month or '—' }} 營收，{{ ai.a.day or '—' }} 評分，{{ ai.a.universe or 0 }} 檔參與；列前 {{ ai.a_cands|length }}）</span>{% call tip() %}{{ aig('A') }}{% endcall %}
+    {{ wg_imp('ai-a', 'AI營收驚喜', ai.a_cands) }}</h3>
+  <p class="ai-lead">A 每月一次（月營收公布後）。最近一次的名單已經過了財報品質否決（E）；「法說」一欄是那一檔最近一次法說的轉折（C），負轉折的不會進影子帳戶。</p>
+  <p class="muted">營收比「去年同月 × 最近的成長速度」好很多（標準化後全市場前 10%）、連兩個月比預期好、年增為正、還沒被搶先反應。</p>
+  {% if ai.a_cands %}
+  <div class="scroll"><table class="ai-t">
+    <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th class="num">SUE</th><th class="num">年增</th><th class="num">收盤</th><th class="num">六大</th><th>法說</th><th class="ai-hide-m">理由</th></tr></thead>
+    <tbody>{% for c in ai.a_cands %}
+      <tr><td>{{ sl(c.code, c.code) }}</td><td>{{ sl(c.code, c.name) }}</td><td class="muted">{{ c.industry }}</td>
+        <td class="num"><b>{{ '%+.1f'|format(c.extra.sue) }}</b></td>
+        <td class="num {{ 'up' if c.extra.yoy > 0 else 'down' }}">{{ '%+.0f'|format(c.extra.yoy * 100) }}%</td>
+        <td class="num">{{ c.close }}<a class="yf" href="{{ yahoo_ta(c.code, c.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ c.code }} Yahoo 技術分析"></a></td><td class="num">{{ c.six_txt }}</td>
+        <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td>
+        <td class="ai-reasons ai-hide-m">{{ c.reasons|join('；') }}</td></tr>
+    {% endfor %}</tbody></table></div>
+  {% else %}<p class="stale">最近一次沒有符合全部條件的股票。</p>{% endif %}
+
+</section>
+
+<section class="ai-block ai-panel" id="ai-b" role="tabpanel" aria-labelledby="aitab-b" hidden>
+  <h3 class="ai-h"><span class="ai-tag ai-tag-B">B</span>供應鏈連動
+    <span class="ai-cnt ai-cnt-B">共 {{ ai.b_total }} 檔符合</span>
+    <span class="muted">（{{ ai.b.day or '—' }}，連動圖建於 {{ ai.b.graph_day or '—' }}；列前 {{ ai.b_cands|length }}）</span>{% call tip() %}{{ aig('B') }}{% endcall %}
+    {{ wg_imp('ai-b', 'AI供應鏈連動', ai.b_cands) }}</h3>
+  <p class="ai-lead">B 每週一次。最近一次的名單已經過了財報品質否決（E）；「法說」一欄是那一檔最近一次法說的轉折（C），負轉折的不會進影子帳戶。</p>
+  <p class="muted">「鄰居」是扣掉大盤之後股價長期一起動的那幾家（多半是上下游或同一題材）。鄰居 20 日平均漲幅在全市場前 10%、自己落後、趨勢沒壞。
+    鄰居關係的文字說明是 LLM 註解，只供參考，不影響選股。</p>
+  {% if ai.b_cands %}
+  <div class="scroll"><table class="ai-t">
+    <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th class="num">鄰居 20 日</th><th class="num">自己 20 日</th><th class="num">落後</th><th>主要鄰居</th><th>法說</th></tr></thead>
+    <tbody>{% for c in ai.b_cands %}
+      <tr><td>{{ sl(c.code, c.code) }}</td><td>{{ sl(c.code, c.name) }}</td><td class="muted">{{ c.industry }}</td>
+        <td class="num {{ 'up' if c.extra.nm > 0 else 'down' }}">{{ '%+.1f'|format(c.extra.nm * 100) }}%</td>
+        <td class="num {{ 'up' if c.extra.own > 0 else 'down' }}">{{ '%+.1f'|format(c.extra.own * 100) }}%</td>
+        <td class="num"><b>{{ '%.1f'|format(c.extra.gap * 100) }}%</b></td>
+        <td class="ai-reasons">{% for n in (c.neighbors or [])[:4] %}{{ sl(n.code, n.name) }}<span class="muted">（{{ '%.2f'|format(n.corr) if n.corr is not none else '—' }}{% if n.relation %}｜{{ n.relation }}{% endif %}）</span>{% if not loop.last %}、{% endif %}{% endfor %}</td>
+        <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td></tr>
+    {% endfor %}</tbody></table></div>
+  {% else %}<p class="stale">最近一次沒有符合全部條件的股票。</p>{% endif %}
+
+</section>
+
+{# ── C 法說轉折 ─────────────────────────────────────────────── #}
+<section class="ai-block ai-panel" id="ai-talks" role="tabpanel" aria-labelledby="aitab-talks" hidden>
+  <h3 class="ai-h"><span class="ai-tag ai-tag-t">C</span>法說轉折{% call tip() %}{{ aig('C') }}{% endcall %}
+    <span class="muted">（近 90 天，{{ ai.turns|length }} 家；累計讀過 {{ t.talks_count or 0 }} 份簡報）</span></h3>
+  <p class="ai-lead">同一家公司這一次法說和上一次的<b>差異</b>：營收方向、毛利率方向、整體口氣。
+    轉折 ≤ −2 是負轉折——影子帳戶不買、持有中的隔一個交易日出場。這份資料從上線那天才開始累積，回測期間沒有。</p>
+  <p class="muted ai-llm">讀法：{% if ai.llm.enabled %}<b>LLM（Google Gemini{% if ai.llm.model %}，{{ ai.llm.model }}{% endif %}）</b>，
+    上一趟呼叫 {{ ai.llm.calls }} / {{ ai.llm.max_calls }} 次{% if ai.llm.stopped %}（{{ ai.llm.stopped }}）{% endif %}；沒輪到的用規則讀。
+    {% else %}<b>規則</b>（數簡報裡的正面詞與負面詞）。設定 repo secret <code>GEMINI_API_KEY</code> 之後改由 LLM 讀持股與候選的簡報。{% endif %}
+    {% if ai.fetch.ran_at %}上一趟抓取：{{ ai.fetch.ran_at }}。{% endif %}</p>
+  {% if ai.turns %}
+  <div class="scroll"><table class="ai-t">
+    <thead><tr><th>代號</th><th>名稱</th><th>法說日</th><th>轉折</th><th class="num">分數</th><th>讀法</th><th>摘要</th></tr></thead>
+    <tbody>{% for x in ai.turns[:30] %}
+      <tr><td>{{ sl(x.code, x.code) }}</td><td>{{ sl(x.code, x.name) }}</td><td>{{ x.date }}</td>
+        <td class="{{ 'down' if x.kind == '負轉折' else ('up' if x.kind == '正轉折' else 'muted') }}">{{ x.kind }}{% if not x.prev_date %}<span class="muted">（第一次，沒有可比）</span>{% endif %}</td>
+        <td class="num">{{ '%+.1f'|format(x.score) }}</td><td class="muted">{{ 'LLM' if x.method == 'llm' else '規則' }}</td>
+        <td class="ai-reasons">{{ x.summary or ('；'.join(x.highlights) if x.highlights else '—') }}</td></tr>
+    {% endfor %}</tbody></table></div>
+  {% else %}
+  <p class="muted">還沒有資料：法說會簡報從 <code>twsix aipick-fetch</code> 第一次跑的那天開始累積。</p>
+  {% endif %}
+</section>
+
+<section class="ai-block ai-panel" id="ai-d" role="tabpanel" aria-labelledby="aitab-d" hidden>
+  <h3 class="ai-h"><span class="ai-tag ai-tag-D">D</span>籌碼共振
+    <span class="ai-cnt ai-cnt-D">共 {{ ai.d_cands|length }} 檔符合</span>
+    <span class="muted">（集保 {{ t.week or '—' }}，{{ t.universe }} 檔參與排名）</span>{% call tip() %}{{ aig('D') }}<br><br>{{ aig('score') }}{% endcall %}
+    {{ wg_imp('ai-d', 'AI籌碼共振', ai.d_cands) }}</h3>
+  <p class="ai-lead">D 每週一次（集保週資料更新後）。最近一次的名單已經過了財報品質否決（E）；「法說」一欄是那一檔最近一次法說的轉折（C），負轉折的不會進影子帳戶。</p>
+  <p class="muted">大戶（＞1,000 張）持股增加、股東人數減少、法人買超、董監增持——四個獨立來源同時偏多，
+    <b>但股價還沒動</b>（20 日報酬低於同產業）、趨勢沒壞（站上 60 日線）。</p>
+  {% if ai.d_cands %}
+  <div class="scroll"><table class="ai-t">
+    <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th class="num">共振分數</th>
+      <th class="num">收盤</th><th class="num">20 日</th><th class="num">同業</th><th class="num">六大</th><th>法說</th><th>理由</th></tr></thead>
+    <tbody>{% for c in ai.d_cands %}
+      <tr><td>{{ sl(c.code, c.code) }}</td><td>{{ sl(c.code, c.name) }}</td>
+        <td class="muted">{{ c.industry }}</td><td class="num"><b>{{ c.score_txt }}</b></td>
+        <td class="num">{{ c.close }}<a class="yf" href="{{ yahoo_ta(c.code, c.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ c.code }} Yahoo 技術分析"></a></td><td class="num {{ c.ret20_tone }}">{{ c.ret20_txt }}</td>
+        <td class="num muted">{{ c.ind_txt }}</td><td class="num">{{ c.six_txt }}</td>
+        <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td>
+        <td class="ai-reasons">{{ c.reasons|join('；') }}</td></tr>
+    {% endfor %}</tbody></table></div>
+  {% else %}<p class="stale">這一週沒有同時符合全部條件的股票。</p>{% endif %}
+  {% if ai.weights %}
+  <details class="ai-more"><summary>D 這一週的權重（由過去各週學出來的）</summary>
+    <p class="muted">每個特徵和「之後 20 個交易日報酬」的等級相關（rank IC），取過去各週平均，負的歸零。歷史不到 8 週時一律等權。</p>
+    <ul class="ai-bars">{% for name, w in ai.weights %}
+      <li><span>{{ name }}</span><i style="--w:{{ (w * 100)|round(1) }}%"></i><b>{{ '%.0f'|format(w * 100) }}%</b></li>
+    {% endfor %}</ul>
+  </details>
+  {% endif %}
+</section>
+
+{# ── E 財報品質（否決名單） ─────────────────────────────────────────────── #}
+<section class="ai-block ai-panel" id="ai-veto" role="tabpanel" aria-labelledby="aitab-veto" hidden>
+  <h3 class="ai-h"><span class="ai-tag ai-tag-e">E</span>財報品質否決名單{% call tip() %}{{ aig('E') }}{% endcall %}
+    <span class="muted">（{{ t.veto_count }} / {{ t.rated }} 檔，紅旗三面以上）</span></h3>
+  <p class="ai-lead">財報八面：本業虧損、連兩季虧損、獲利靠業外、獲利沒有變成現金、應計比率偏高、負債快速上升、營收大幅衰退、董監高質押。
+    重大訊息四面：非例行更換簽證會計師、財務／會計主管異動、退票／重整／繼續經營疑慮（算兩面）、停工／災害。
+    這一層不選股，只把地雷擋在外面。</p>
+  {% if ai.news_flags %}
+  <details class="ai-more"><summary>近 60 天的重訊警訊（{{ ai.news_flags|length }} 則）</summary>
+    <div class="scroll"><table class="ai-t">
+      <thead><tr><th>日期</th><th>代號</th><th>名稱</th><th>警訊</th><th>主旨</th></tr></thead>
+      <tbody>{% for n in ai.news_flags %}
+        <tr><td>{{ n.date }}</td><td>{{ sl(n.code, n.code) }}</td><td>{{ sl(n.code, n.name) }}</td>
+          <td class="down">{{ n.label }}</td><td class="ai-reasons">{{ n.subject }}</td></tr>
+      {% endfor %}</tbody></table></div>
+  </details>
+  {% else %}
+  <p class="muted">重大訊息從 <code>twsix aipick-fetch</code> 第一次跑的那天開始存（已存 {{ t.news_days or 0 }} 天），目前沒有警訊。</p>
+  {% endif %}
+  <details class="ai-more"><summary>展開否決名單</summary>
+    <div class="scroll"><table class="ai-t">
+      <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th>財報</th><th class="num">紅旗</th><th>明細</th></tr></thead>
+      <tbody>{% for v in t.vetoes %}
+        <tr><td>{{ sl(v.code, v.code) }}</td><td>{{ sl(v.code, v.name) }}</td><td class="muted">{{ v.industry }}</td>
+          <td>{{ v.quarter }}</td><td class="num"><b>{{ v.score if v.score is defined else v.flags|length }}</b></td>
+          <td class="ai-reasons">{{ v.details|join('；') }}</td></tr>
+      {% endfor %}</tbody></table></div>
+  </details>
+</section>
+
 {# ── F 市場狀態 ─────────────────────────────────────────────── #}
-<section class="ai-block ai-panel" id="ai-regime" role="tabpanel" aria-labelledby="aitab-regime">
+<section class="ai-block ai-panel" id="ai-regime" role="tabpanel" aria-labelledby="aitab-regime" hidden>
   <h3 class="ai-h"><span class="ai-tag ai-tag-f">F</span>市場狀態{% call tip() %}{{ aig('F') }}{% endcall %}</h3>
   {% if rn %}
   <div class="ai-regime ai-tone-{{ rn.tone }}">
@@ -206,106 +346,10 @@
   {% endif %}
 </section>
 
-{# ── 今日候選 ─────────────────────────────────────────────── #}
-{# 一鍵匯入觀察清單（2026-10-05）：代號在建站時就寫進按鈕，見 site.js 的 TWSIXImport。 #}
-{% macro wg_imp(src, name, cands) -%}
-{%- if cands -%}<button type="button" class="wg-imp" data-wg-src="{{ src }}" data-wg-name="{{ name }}"
-  data-wg-codes="{{ cands|map(attribute='code')|join(',') }}" title="把這 {{ cands|length }} 檔匯入觀察清單〔{{ name }}〕">⇩ 匯入觀察清單</button>{%- endif -%}
-{%- endmacro %}
-<section class="ai-block ai-panel" id="ai-picks" role="tabpanel" aria-labelledby="aitab-picks" hidden>
-  <h3 class="ai-h"><span class="ai-tag ai-tag-c">選</span>最新一次訊號的候選</h3>
-  <p class="ai-lead">三套各有節奏：A 每月一次、B 與 D 每週一次。下面是各自最近一次的名單——已經過了財報品質否決（E）。
-    「法說」一欄是那一檔最近一次法說的轉折（C）；負轉折的不會進影子帳戶。</p>
 
-  <h4><span class="ai-s ai-s-A">A 營收驚喜</span>
-    <span class="ai-cnt ai-cnt-A">共 {{ ai.a_total }} 檔符合</span>
-    <span class="muted">（{{ ai.a.month or '—' }} 營收，{{ ai.a.day or '—' }} 評分，{{ ai.a.universe or 0 }} 檔參與；列前 {{ ai.a_cands|length }}）</span>{% call tip() %}{{ aig('A') }}{% endcall %}
-    {{ wg_imp('ai-a', 'AI營收驚喜', ai.a_cands) }}</h4>
-  <p class="muted">營收比「去年同月 × 最近的成長速度」好很多（標準化後全市場前 10%）、連兩個月比預期好、年增為正、還沒被搶先反應。</p>
-  {% if ai.a_cands %}
-  <div class="scroll"><table class="ai-t">
-    <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th class="num">SUE</th><th class="num">年增</th><th class="num">收盤</th><th class="num">六大</th><th>法說</th><th class="ai-hide-m">理由</th></tr></thead>
-    <tbody>{% for c in ai.a_cands %}
-      <tr><td>{{ sl(c.code, c.code) }}</td><td>{{ sl(c.code, c.name) }}</td><td class="muted">{{ c.industry }}</td>
-        <td class="num"><b>{{ '%+.1f'|format(c.extra.sue) }}</b></td>
-        <td class="num {{ 'up' if c.extra.yoy > 0 else 'down' }}">{{ '%+.0f'|format(c.extra.yoy * 100) }}%</td>
-        <td class="num">{{ c.close }}<a class="yf" href="{{ yahoo_ta(c.code, c.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ c.code }} Yahoo 技術分析"></a></td><td class="num">{{ c.six_txt }}</td>
-        <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td>
-        <td class="ai-reasons ai-hide-m">{{ c.reasons|join('；') }}</td></tr>
-    {% endfor %}</tbody></table></div>
-  {% else %}<p class="stale">最近一次沒有符合全部條件的股票。</p>{% endif %}
 
-  <h4><span class="ai-s ai-s-B">B 供應鏈連動</span>
-    <span class="ai-cnt ai-cnt-B">共 {{ ai.b_total }} 檔符合</span>
-    <span class="muted">（{{ ai.b.day or '—' }}，連動圖建於 {{ ai.b.graph_day or '—' }}；列前 {{ ai.b_cands|length }}）</span>{% call tip() %}{{ aig('B') }}{% endcall %}
-    {{ wg_imp('ai-b', 'AI供應鏈連動', ai.b_cands) }}</h4>
-  <p class="muted">「鄰居」是扣掉大盤之後股價長期一起動的那幾家（多半是上下游或同一題材）。鄰居 20 日平均漲幅在全市場前 10%、自己落後、趨勢沒壞。
-    鄰居關係的文字說明是 LLM 註解，只供參考，不影響選股。</p>
-  {% if ai.b_cands %}
-  <div class="scroll"><table class="ai-t">
-    <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th class="num">鄰居 20 日</th><th class="num">自己 20 日</th><th class="num">落後</th><th>主要鄰居</th><th>法說</th></tr></thead>
-    <tbody>{% for c in ai.b_cands %}
-      <tr><td>{{ sl(c.code, c.code) }}</td><td>{{ sl(c.code, c.name) }}</td><td class="muted">{{ c.industry }}</td>
-        <td class="num {{ 'up' if c.extra.nm > 0 else 'down' }}">{{ '%+.1f'|format(c.extra.nm * 100) }}%</td>
-        <td class="num {{ 'up' if c.extra.own > 0 else 'down' }}">{{ '%+.1f'|format(c.extra.own * 100) }}%</td>
-        <td class="num"><b>{{ '%.1f'|format(c.extra.gap * 100) }}%</b></td>
-        <td class="ai-reasons">{% for n in (c.neighbors or [])[:4] %}{{ sl(n.code, n.name) }}<span class="muted">（{{ '%.2f'|format(n.corr) if n.corr is not none else '—' }}{% if n.relation %}｜{{ n.relation }}{% endif %}）</span>{% if not loop.last %}、{% endif %}{% endfor %}</td>
-        <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td></tr>
-    {% endfor %}</tbody></table></div>
-  {% else %}<p class="stale">最近一次沒有符合全部條件的股票。</p>{% endif %}
 
-  <h4><span class="ai-s ai-s-D">D 籌碼共振</span>
-    <span class="ai-cnt ai-cnt-D">共 {{ ai.d_cands|length }} 檔符合</span>
-    <span class="muted">（集保 {{ t.week or '—' }}，{{ t.universe }} 檔參與排名）</span>{% call tip() %}{{ aig('D') }}<br><br>{{ aig('score') }}{% endcall %}
-    {{ wg_imp('ai-d', 'AI籌碼共振', ai.d_cands) }}</h4>
-  <p class="muted">大戶（＞1,000 張）持股增加、股東人數減少、法人買超、董監增持——四個獨立來源同時偏多，
-    <b>但股價還沒動</b>（20 日報酬低於同產業）、趨勢沒壞（站上 60 日線）。</p>
-  {% if ai.d_cands %}
-  <div class="scroll"><table class="ai-t">
-    <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th class="num">共振分數</th>
-      <th class="num">收盤</th><th class="num">20 日</th><th class="num">同業</th><th class="num">六大</th><th>法說</th><th>理由</th></tr></thead>
-    <tbody>{% for c in ai.d_cands %}
-      <tr><td>{{ sl(c.code, c.code) }}</td><td>{{ sl(c.code, c.name) }}</td>
-        <td class="muted">{{ c.industry }}</td><td class="num"><b>{{ c.score_txt }}</b></td>
-        <td class="num">{{ c.close }}<a class="yf" href="{{ yahoo_ta(c.code, c.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ c.code }} Yahoo 技術分析"></a></td><td class="num {{ c.ret20_tone }}">{{ c.ret20_txt }}</td>
-        <td class="num muted">{{ c.ind_txt }}</td><td class="num">{{ c.six_txt }}</td>
-        <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td>
-        <td class="ai-reasons">{{ c.reasons|join('；') }}</td></tr>
-    {% endfor %}</tbody></table></div>
-  {% else %}<p class="stale">這一週沒有同時符合全部條件的股票。</p>{% endif %}
-  {% if ai.weights %}
-  <details class="ai-more"><summary>D 這一週的權重（由過去各週學出來的）</summary>
-    <p class="muted">每個特徵和「之後 20 個交易日報酬」的等級相關（rank IC），取過去各週平均，負的歸零。歷史不到 8 週時一律等權。</p>
-    <ul class="ai-bars">{% for name, w in ai.weights %}
-      <li><span>{{ name }}</span><i style="--w:{{ (w * 100)|round(1) }}%"></i><b>{{ '%.0f'|format(w * 100) }}%</b></li>
-    {% endfor %}</ul>
-  </details>
-  {% endif %}
-</section>
 
-{# ── C 法說轉折 ─────────────────────────────────────────────── #}
-<section class="ai-block ai-panel" id="ai-talks" role="tabpanel" aria-labelledby="aitab-talks" hidden>
-  <h3 class="ai-h"><span class="ai-tag ai-tag-t">C</span>法說轉折{% call tip() %}{{ aig('C') }}{% endcall %}
-    <span class="muted">（近 90 天，{{ ai.turns|length }} 家；累計讀過 {{ t.talks_count or 0 }} 份簡報）</span></h3>
-  <p class="ai-lead">同一家公司這一次法說和上一次的<b>差異</b>：營收方向、毛利率方向、整體口氣。
-    轉折 ≤ −2 是負轉折——影子帳戶不買、持有中的隔一個交易日出場。這份資料從上線那天才開始累積，回測期間沒有。</p>
-  <p class="muted ai-llm">讀法：{% if ai.llm.enabled %}<b>LLM（Google Gemini{% if ai.llm.model %}，{{ ai.llm.model }}{% endif %}）</b>，
-    上一趟呼叫 {{ ai.llm.calls }} / {{ ai.llm.max_calls }} 次{% if ai.llm.stopped %}（{{ ai.llm.stopped }}）{% endif %}；沒輪到的用規則讀。
-    {% else %}<b>規則</b>（數簡報裡的正面詞與負面詞）。設定 repo secret <code>GEMINI_API_KEY</code> 之後改由 LLM 讀持股與候選的簡報。{% endif %}
-    {% if ai.fetch.ran_at %}上一趟抓取：{{ ai.fetch.ran_at }}。{% endif %}</p>
-  {% if ai.turns %}
-  <div class="scroll"><table class="ai-t">
-    <thead><tr><th>代號</th><th>名稱</th><th>法說日</th><th>轉折</th><th class="num">分數</th><th>讀法</th><th>摘要</th></tr></thead>
-    <tbody>{% for x in ai.turns[:30] %}
-      <tr><td>{{ sl(x.code, x.code) }}</td><td>{{ sl(x.code, x.name) }}</td><td>{{ x.date }}</td>
-        <td class="{{ 'down' if x.kind == '負轉折' else ('up' if x.kind == '正轉折' else 'muted') }}">{{ x.kind }}{% if not x.prev_date %}<span class="muted">（第一次，沒有可比）</span>{% endif %}</td>
-        <td class="num">{{ '%+.1f'|format(x.score) }}</td><td class="muted">{{ 'LLM' if x.method == 'llm' else '規則' }}</td>
-        <td class="ai-reasons">{{ x.summary or ('；'.join(x.highlights) if x.highlights else '—') }}</td></tr>
-    {% endfor %}</tbody></table></div>
-  {% else %}
-  <p class="muted">還沒有資料：法說會簡報從 <code>twsix aipick-fetch</code> 第一次跑的那天開始累積。</p>
-  {% endif %}
-</section>
 
 {# ── 回測 ─────────────────────────────────────────────── #}
 {% if ai.bt %}
@@ -383,35 +427,6 @@
 </section>
 {% endif %}
 
-{# ── E 否決名單 ─────────────────────────────────────────────── #}
-<section class="ai-block ai-panel" id="ai-veto" role="tabpanel" aria-labelledby="aitab-veto" hidden>
-  <h3 class="ai-h"><span class="ai-tag ai-tag-e">E</span>財報品質否決名單{% call tip() %}{{ aig('E') }}{% endcall %}
-    <span class="muted">（{{ t.veto_count }} / {{ t.rated }} 檔，紅旗三面以上）</span></h3>
-  <p class="ai-lead">財報八面：本業虧損、連兩季虧損、獲利靠業外、獲利沒有變成現金、應計比率偏高、負債快速上升、營收大幅衰退、董監高質押。
-    重大訊息四面：非例行更換簽證會計師、財務／會計主管異動、退票／重整／繼續經營疑慮（算兩面）、停工／災害。
-    這一層不選股，只把地雷擋在外面。</p>
-  {% if ai.news_flags %}
-  <details class="ai-more"><summary>近 60 天的重訊警訊（{{ ai.news_flags|length }} 則）</summary>
-    <div class="scroll"><table class="ai-t">
-      <thead><tr><th>日期</th><th>代號</th><th>名稱</th><th>警訊</th><th>主旨</th></tr></thead>
-      <tbody>{% for n in ai.news_flags %}
-        <tr><td>{{ n.date }}</td><td>{{ sl(n.code, n.code) }}</td><td>{{ sl(n.code, n.name) }}</td>
-          <td class="down">{{ n.label }}</td><td class="ai-reasons">{{ n.subject }}</td></tr>
-      {% endfor %}</tbody></table></div>
-  </details>
-  {% else %}
-  <p class="muted">重大訊息從 <code>twsix aipick-fetch</code> 第一次跑的那天開始存（已存 {{ t.news_days or 0 }} 天），目前沒有警訊。</p>
-  {% endif %}
-  <details class="ai-more"><summary>展開否決名單</summary>
-    <div class="scroll"><table class="ai-t">
-      <thead><tr><th>代號</th><th>名稱</th><th>產業</th><th>財報</th><th class="num">紅旗</th><th>明細</th></tr></thead>
-      <tbody>{% for v in t.vetoes %}
-        <tr><td>{{ sl(v.code, v.code) }}</td><td>{{ sl(v.code, v.name) }}</td><td class="muted">{{ v.industry }}</td>
-          <td>{{ v.quarter }}</td><td class="num"><b>{{ v.score if v.score is defined else v.flags|length }}</b></td>
-          <td class="ai-reasons">{{ v.details|join('；') }}</td></tr>
-      {% endfor %}</tbody></table></div>
-  </details>
-</section>
 
 {# ── 訊號日誌 ─────────────────────────────────────────────── #}
 <section class="ai-block ai-panel" id="ai-journal" role="tabpanel" aria-labelledby="aitab-journal" hidden>
@@ -442,7 +457,7 @@
     <dt>B 供應鏈連動</dt><dd>{{ aig('B') }}</dd>
     <dt>D 籌碼共振</dt><dd>{{ aig('D') }}</dd>
     <dt>共振分數</dt><dd>{{ aig('score') }}</dd>
-    <dt>E 否決</dt><dd>{{ aig('E') }}</dd>
+    <dt>E 財報品質（否決）</dt><dd>{{ aig('E') }}</dd>
     <dt>C 法說負轉折</dt><dd>{{ aig('C') }}</dd>
     <dt>合併帳戶（三套都在）／合併帳戶（全期）</dt><dd>{{ aig('since_full') }}</dd>
     <dt>A 營收驚喜・一致版／規劃版</dt><dd>{{ aig('a_ver') }}</dd>

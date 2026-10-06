@@ -2682,6 +2682,7 @@ function reveal(bar, el){
     });
   });
   var want = (location.hash || '').slice(1).replace(/^ai-/, '');
+  if(want === 'picks') want = 'a';   /* 舊網址：〔今日候選〕2026-10-06 拆成 A／B／D 三頁 */
   if(want && document.getElementById('aitab-' + want)) show(want, false, false);
 })();
 

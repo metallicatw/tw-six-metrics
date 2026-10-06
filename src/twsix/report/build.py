@@ -605,6 +605,33 @@ def trend_names(report: Path) -> dict[str, tuple[str, str]]:
     return {c: (n, i) for c, n, i in re.findall(r'\["(\d{4,6}[A-Z]?)","([^"]*)","([^"]*)"', text)}
 
 
+#: 嵌進來的〔市場監控〕報告自己有一顆〔電腦版／手機版〕。它會在報告的腳本跑完、發現自己
+#: 被嵌起來之後把那顆鈕藏掉——但那份報告 1.2 MB，網路慢的時候腳本要好幾秒才跑完，
+#: 那段時間按鈕就一直掛在畫面上（2026-10-06 使用者回報）。所以複製進網站時直接在
+#: <head> 補一行 CSS：一載入就是藏著的，不必等腳本。單獨開啟那份報告時不受影響。
+REPORT_HIDE_CSS = '<style id="twsix-embed">#modeToggleBtn{display:none!important}</style>'
+
+
+def hide_report_toggle(path: Path) -> bool:
+    """在嵌入用的報告 <head> 裡補上隱藏〔電腦版／手機版〕的 CSS。已經有就不動。
+
+    market-monitor 那邊已經把這顆按鈕從源頭刪掉（2026-10-06）；這一層留著，是給
+    還沒重新產生的舊報告用的——選擇器找不到元素時什麼都不做。
+    """
+    try:
+        html = path.read_text("utf-8")
+    except OSError:
+        return False
+    if 'id="twsix-embed"' in html:
+        return False
+    i = html.lower().find("<head>")
+    if i < 0:
+        return False
+    i += len("<head>")
+    path.write_text(html[:i] + REPORT_HIDE_CSS + html[i:], encoding="utf-8")
+    return True
+
+
 def unrated_rows(data_dir: Path, have: set[str],
                  extra_names: dict[str, tuple[str, str]] | None = None) -> list[Row]:
     """上市櫃公司裡、評等表沒有的那些，做成只有代號／名稱／市場／產業的列。
@@ -1008,6 +1035,8 @@ def build_site(
     # build` 之前複製成 `site/monitor-report.html`。導覽列那一項**看檔案在不在**
     # 才出現：本機建站沒有那個檔案，寫死一個連結就是一個 404。
     has_monitor = (out_dir / MONITOR_REPORT).exists()
+    if has_monitor:
+        hide_report_toggle(out_dir / MONITOR_REPORT)
     # 〔趨勢選股〕同理：檔案在才畫那一頁、導覽列才出現那一項。
     has_trend = (out_dir / TREND_REPORT).exists()
 

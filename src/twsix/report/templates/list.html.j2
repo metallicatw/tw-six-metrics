@@ -28,7 +28,7 @@
   {% if coverage.fetched >= coverage.total %}
   目前<b>全部 {{ "{:,}".format(coverage.total) }} 檔</b>都抓過，
   {% else %}
-  目前 <b>{{ "{:,}".format(coverage.fetched) }} / {{ "{:,}".format(coverage.total) }} 檔</b>抓過（其餘由排程一天四批在補），
+  目前 <b>{{ "{:,}".format(coverage.fetched) }} / {{ "{:,}".format(coverage.total) }} 檔</b>抓過（其餘由排程每天分批在補），
   {% endif %}
   最舊 {{ coverage.oldest or "—" }}、最新 {{ coverage.newest or "—" }}。
   {% if fresh_count %}

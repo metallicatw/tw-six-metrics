@@ -72,3 +72,17 @@ def test_評等清單標題寫出最新一季與最新月營收各更新了幾�
     text = tpl.read_text("utf-8")
     assert '本期{{ pg.quarter }}(已更新<b class="cnt">{{ pg.quarter_n }}/{{ pg.total }}</b>' in text
     assert "※ 未換季" in text and "（停止買賣）" in text, "沒換上的那一兩檔寫在段落最後的附註"
+
+
+def test_嵌入的監控報告一載入就藏起電腦版手機版按鈕():
+    import tempfile as _t
+
+    from twsix.report.build import hide_report_toggle
+
+    with _t.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "monitor-report.html"
+        p.write_text('<html><head><title>x</title></head><body><button id="modeToggleBtn">切換</button></body></html>', "utf-8")
+        assert hide_report_toggle(p) is True
+        html = p.read_text("utf-8")
+        assert html.index("#modeToggleBtn{display:none!important}") < html.index("<title>")
+        assert hide_report_toggle(p) is False, "不重複加"
