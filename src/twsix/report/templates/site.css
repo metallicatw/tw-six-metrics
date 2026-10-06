@@ -620,7 +620,9 @@ table.rev th .u{display:block;font-size:10.5px;font-weight:500;color:var(--muted
    收起來的時候只佔一個字；按下去在原地長出一塊說明。
 
    沒有 JavaScript 的時候整塊直接攤開（下面 html:not(.js) 那一段）：看不到的
-   說明比擠在頁面上的說明糟，而這個網站的其他部分沒有 JS 也讀得完。 */
+   說明比擠在頁面上的說明糟，而這個網站的其他部分沒有 JS 也讀得完。
+   .js 是 base.html.j2 在 <head> 一開頭就標上的，不等 site.js——不然網頁慢的時候，
+   下載完之前每一顆燈泡的說明都是攤開的。 */
 /* 燈泡的對齊。
  *
  * 原本是 `margin:2px 0 10px`——那個 10px 的下邊距是給「自己站一行」的情況留的，

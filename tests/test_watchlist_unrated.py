@@ -86,3 +86,19 @@ def test_嵌入的監控報告一載入就藏起電腦版手機版按鈕():
         html = p.read_text("utf-8")
         assert html.index("#modeToggleBtn{display:none!important}") < html.index("<title>")
         assert hide_report_toggle(p) is False, "不重複加"
+
+
+def test_燈泡說明在網頁還沒載完時就是收起來的():
+    """2026-10-06：網頁慢的時候燈泡說明整塊攤開，等 site.js 跑完才收起。
+
+    `html:not(.js) .tipbox{display:block}` 是給沒有 JavaScript 的備案，而 .js 原本由
+    site.js（defer）加上——下載解析完之前那個備案一直生效。改成 <head> 一開頭就
+    同步標上，要在樣式表之前，也不能是 defer／async。
+    """
+    import re
+
+    base = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/base.html.j2").read_text("utf-8")
+    head = base.split("</head>", 1)[0]
+    m = re.search(r"<script>([^<]*classList\.add\('js'\)[^<]*)</script>", head)
+    assert m, "<head> 裡沒有同步標上 .js"
+    assert head.index(m.group(0)) < head.index("site.css"), "要在樣式表之前"
