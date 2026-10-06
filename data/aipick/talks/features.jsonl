@@ -835,3 +835,5 @@
 {"code":"6604","name":"儒億","date":"2026-09-10","file":"660420260901M001.pdf","processed":"2026-10-05","source":"pdf","rules":{"pos":26,"neg":11,"tone":0.3571,"chars":8796},"llm":null,"model":""}
 {"code":"1402","name":"遠東新","date":"2026-10-06","file":"140220261005M001.pdf","processed":"2026-10-06","source":"pdf","rules":{"pos":11,"neg":1,"tone":0.5882,"chars":4525},"llm":null,"model":""}
 {"code":"9919","name":"康那香","date":"2026-10-06","file":"991920261002M001.pdf","processed":"2026-10-06","source":"pdf","rules":{"pos":1,"neg":1,"tone":0.0,"chars":3112},"llm":null,"model":""}
+{"code":"6257","name":"矽格","date":"2026-10-06","file":"625720261006M001.pdf","processed":"2026-10-06","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":31},"llm":null,"model":""}
+{"code":"8390","name":"金益鼎","date":"2026-10-06","file":"839020261006M002.pdf","processed":"2026-10-06","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":37},"llm":null,"model":""}
