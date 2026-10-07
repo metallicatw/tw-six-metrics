@@ -207,6 +207,26 @@ def test_the_import_is_kept_whole_even_though_the_chart_draws_a_year():
     assert "21W36" not in labels                # 五年前那一週不在圖上
 
 
+def test_更長的區間放在週期切換裡_頁面本身不變重():
+    """2026-10-07：預設照舊近一年；三年、五年做成週期切換，放在個股頁旁邊的
+    `<代號>.r.json`，按了才下載。"""
+    from twsix.report.build import range_figures
+    from twsix.report.sections import holders
+
+    view = holders(_csv(HOLDERS).grid)
+    assert list(view.alt) == ["3Y", "5Y"]
+    assert "26W36" in view.alt["3Y"]["big"] and "24W36" in view.alt["3Y"]["small"]
+    assert "21W40" in view.alt["5Y"]["big"], "五年那一張要畫到匯入的最早那幾週"
+    assert "21W40" not in view.figures["big"]
+
+    class Page:
+        river = None
+    page = Page()
+    page.holders = view
+    data = range_figures(page)
+    assert set(data["holders"]["5Y"]) == {"big", "small"}
+
+
 # ---------------------------------------------------------------------------
 # 一次匯入一整批
 # ---------------------------------------------------------------------------

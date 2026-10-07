@@ -27,7 +27,7 @@ rather than counting it once.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from . import charts
@@ -167,6 +167,9 @@ class River:
     #: which one it is rather than showing the same picture either way.
     figure: str = ""
     weeks: int = 0
+    #: 週期切換（2026-10-07）：「1Y」「3Y」各畫一張，放進個股頁旁邊的
+    #: `<代號>.r.json`，按了才下載——預設那張（全部）照舊直接畫在頁面上。
+    alt: dict[str, str] = field(default_factory=dict)
 
     @property
     def zone_name(self) -> str:
@@ -187,6 +190,10 @@ class River:
             else:
                 out.append((name, f"{lo:,.2f} ~ {hi:,.2f}"))
         return out
+
+
+#: 河流圖的週期切換：（按鈕上的字, 畫幾週）。「全部」是預設那一張，不在這裡。
+RIVER_RANGES: tuple[tuple[str, int], ...] = (("1Y", 52), ("3Y", 156))
 
 
 def build_pe_river(
@@ -236,6 +243,7 @@ def build_pe_river(
         )
     band_prices = bands.prices(current_eps) if current_eps else ()
     figure = ""
+    alt: dict[str, str] = {}
     if weekly and quarterly:
         # The bands move with the trailing EPS a reader had at the time —
         # Goodinfo's ShowK_ChartFlow shape, not five horizontal rules.  See
@@ -255,6 +263,19 @@ def build_pe_river(
                     title="本益比河流圖（週收盤價，分區隨近四季 EPS 變動）",
                     current=market_price,
                 )
+                # 短一點的區間：分區倍數不變（那是年度資料決定的），只是畫的週數少。
+                for key, n in RIVER_RANGES:
+                    if len(weekly) <= n:
+                        continue
+                    part = [b[-n:] for b in series]
+                    if any(any(v is not None for v in b) for b in part):
+                        alt[key] = charts.river(
+                            list(weekly)[-n:],
+                            part,
+                            RIVER_ZONES,
+                            title="本益比河流圖（週收盤價，分區隨近四季 EPS 變動）",
+                            current=market_price,
+                        )
     return River(
         kind="本益比",
         levels=bands.levels,
@@ -264,6 +285,7 @@ def build_pe_river(
         years=len(multiples),
         figure=figure,
         weeks=len(weekly),
+        alt=alt,
     )
 
 
@@ -689,6 +711,9 @@ SMALL_TIERS = ("≦10張",)
 #: 52 週：圖表一致，而且集保查詢頁本來就只給 51 週——那是這份資料天生的長度。
 #: 更長的歷史照舊存著（匯入的 258 週不會被丟掉），只是不畫。
 HOLDER_WEEKS = 52
+#: 〔大戶持股〕的週期切換（2026-10-07）：預設近一年（上面那 52 週，圖表一致）；按鈕
+#: 另外給三年、五年——匯入的歷史有五年，原本只能看最近一年。（字, 週數, 橫軸幾週標一次）
+HOLDER_RANGES: tuple[tuple[str, int, int], ...] = (("3Y", 156, 26), ("5Y", 260, 52))
 
 
 @dataclass
@@ -699,6 +724,9 @@ class Holders:
     tiers: list[str]
     latest: dict[str, Any]
     figures: dict[str, str]
+    #: 週期切換（2026-10-07）：{"3Y": {"big": svg, "small": svg}, "5Y": …}。和河流圖
+    #: 一樣寫進 `<代號>.r.json`，按了才下載——預設（近一年）照舊畫在頁面上，頁面不變重。
+    alt: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -821,39 +849,46 @@ def holders(
     # 看起來像資料沒抓到。取「最新一列有數字的」，和〔董監持股〕同一個作法。
     latest = next((w for w in weeks if w["big"] is not None), weeks[0])
 
-    window = weeks[:HOLDER_WEEKS]
-    labels = [w["week"] for w in window]
+    def draw(window: list[dict[str, Any]], every: int) -> dict[str, str]:
+        labels = [w["week"] for w in window]
+        # 當週收盤，用統計日期對到〔股價(週)〕（見 _weekly_close_at）。
+        #
+        # 「大戶持股在下降但股價在漲」是這個分頁最常被問的一句話，而它原本要靠讀者
+        # 記著另一個分頁的線長什麼樣。
+        price_line = [w["close"] for w in window]
+        if not any(v is not None for v in price_line):
+            price_line = None
+        return {
+            "big": charts.line(
+                labels,
+                [w["big"] for w in window],
+                title=f"大戶持股比例（{'＋'.join(BIG_TIERS)}）",
+                unit="%",
+                digits=1,
+                label_every=every,
+                price=price_line,
+            ),
+            "small": charts.line(
+                labels,
+                [w["small"] for w in window],
+                title=f"散戶持股比例（{SMALL_TIERS[0]}）",
+                unit="%",
+                digits=1,
+                label_every=every,
+                price=price_line,
+            ),
+        }
 
-    # 當週收盤，Goodinfo 那張表自己就帶著（〔當週股價-收盤〕欄），所以這一格
-    # 不必去別的地方取資料，也不會有對不齊的問題——它和持股比例是同一列讀出來的。
-    #
-    # 「大戶持股在下降但股價在漲」是這個分頁最常被問的一句話，而它原本要靠讀者
-    # 記著另一個分頁的線長什麼樣。
-    price_line = [w["close"] for w in window]
-    if not any(v is not None for v in price_line):
-        price_line = None
-
-    figures = {
-        "big": charts.line(
-            labels,
-            [w["big"] for w in window],
-            title=f"大戶持股比例（{'＋'.join(BIG_TIERS)}）",
-            unit="%",
-            digits=1,
-            label_every=13,
-            price=price_line,
-        ),
-        "small": charts.line(
-            labels,
-            [w["small"] for w in window],
-            title=f"散戶持股比例（{SMALL_TIERS[0]}）",
-            unit="%",
-            digits=1,
-            label_every=13,
-            price=price_line,
-        ),
-    }
-    return Holders(weeks=weeks, tiers=tiers, latest=latest, figures=figures)
+    figures = draw(weeks[:HOLDER_WEEKS], 13)
+    alt: dict[str, dict[str, str]] = {}
+    for key, n, every in HOLDER_RANGES:
+        # 「5Y」是「全部」——匯入的歷史大約 258 週；不足那麼長就畫有的。只要比上一級
+        # 多出一段才給這顆按鈕，不然按下去和上一張一模一樣。
+        prev = HOLDER_WEEKS if not alt else HOLDER_RANGES[len(alt) - 1][1]
+        if len(weeks) <= prev:
+            break
+        alt[key] = draw(weeks[:n], every)
+    return Holders(weeks=weeks, tiers=tiers, latest=latest, figures=figures, alt=alt)
 
 
 #: 圖上畫幾個月。36 個月，和下面那張表一樣長。

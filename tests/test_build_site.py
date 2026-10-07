@@ -2061,3 +2061,21 @@ def test_星號不會每一顆都掃一次整份頁面():
     body = js.split("function paint(btn){", 1)[1].split("\n  }\n", 1)[0]
     assert "document.querySelector" not in body, "paint() 裡又直接查 DOM 了"
     assert len(re.findall(r"document\.querySelector\('table\[data-watchlist", js)) == 1
+
+
+def test_河流圖有週期切換_其他區間按了才下載(tmp_path=None):
+    """2026-10-07：河流圖 1Y／3Y／全部。預設（全部）畫在頁面上，其他兩張在
+    `stock/<代號>.r.json`；頁面上那幾顆按鈕和旁邊那份檔案一起出現。"""
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "stock" / "5439.html").read_text("utf-8")
+    assert 'data-rng="river"' in page and 'data-r="1Y"' in page and 'data-r="ALL" class="on"' in page
+    assert '<div class="rng-fig" data-rng-fig="river">' in page
+    data = json.loads((out / "stock" / "5439.r.json").read_text("utf-8"))
+    assert set(data["river"]) == {"1Y", "3Y"}
+    assert data["river"]["1Y"].count("<svg") == 1
+    js = (out / "assets" / "site.js").read_text("utf-8")
+    assert "code + '.r.json'" in js and "window.TWSIXHover = function(root)" in js
+    # 沒有完整資料的那一檔（普通版個股頁）沒有按鈕，也沒有旁邊那份檔。
+    assert not (out / "stock" / "2330.r.json").exists()

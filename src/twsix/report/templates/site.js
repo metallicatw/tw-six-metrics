@@ -2466,8 +2466,8 @@ function y3Eps(rev, sh, g, m){
  * 率）……該年 EPS ＝ 該年營收 × 該年淨利率 ÷ 股數（百萬元 ÷ 億股要再除以 100），
  * 目標價 ＝ 該年 EPS × 本益比。
  *
- * 目標價矩陣的顏色：九格一起由低到高、綠→黃→紅（台股慣例，高＝紅）；三張圖上
- * 的虛線用同一格的顏色，對得起來。
+ * 目標價表格的樣式與配色和〔估值方式二〕的矩陣同一套（每個本益比一個色相、五階
+ * 深淺）；三張圖上的虛線用那一列的色調，對得起來。
  * ========================================================================= */
 (function(){
   var box = document.getElementById('y3');
@@ -2477,6 +2477,9 @@ function y3Eps(rev, sh, g, m){
   var $ = function(id){ return document.getElementById(id); };
   var el = {rev: $('y3-rev'), sh: $('y3-sh'), g: $('y3-g'), m: $('y3-m'), pe: $('y3-pe'), out: $('y3-out')};
   var H = pxHistory();
+  var price = parseFloat(box.getAttribute('data-price'));
+  if(!isFinite(price) || price <= 0) price = null;
+  var priceDate = box.getAttribute('data-price-date') || '';
 
   function nums(t){
     return String(t || '').split(/[,，\s]+/).map(parseFloat).filter(function(v){ return !isNaN(v); });
@@ -2495,21 +2498,6 @@ function y3Eps(rev, sh, g, m){
     el.m.value = [m, m, m].join(', ');
     el.pe.value = (seed.pe || [15, 20, 25]).join(', ');
   }
-  /* 綠 → 黃 → 橘 → 紅。t 在 0～1。 */
-  function heat(t){
-    var stops = [[22,163,74],[132,190,50],[210,196,30],[245,158,11],[234,108,32],[220,38,38]];
-    t = Math.max(0, Math.min(1, t)) * (stops.length - 1);
-    var i = Math.min(stops.length - 2, Math.floor(t)), f = t - i;
-    var c = stops[i].map(function(v, k){ return Math.round(v + (stops[i + 1][k] - v) * f); });
-    return 'rgb(' + c.join(',') + ')';
-  }
-  /* 底色夠亮（黃、黃綠、淺橘）就用深色字，不然白字貼在黃底上幾乎看不見（2026-09-29，
-     全站對比度檢查找到的：目標價中段的格子白字對黃底只有 1.8:1）。 */
-  function heatInk(css){
-    var c = css.match(/\d+/g).map(function(v){ v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
-    var L = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-    return L > 0.3 ? '#1b1b1b' : '#fff';
-  }
   function money(v){ return Math.round(v).toLocaleString(); }
   function signCls(v){ return v > 0 ? 'up' : (v < 0 ? 'down' : ''); }
 
@@ -2525,22 +2513,48 @@ function y3Eps(rev, sh, g, m){
     var all = [];
     pes.forEach(function(pe){ eps.forEach(function(e){ all.push(e * pe); }); });
     var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
-    function color(v){ return heat(hi > lo ? (v - lo) / (hi - lo) : .5); }
+    /* 樣式與配色照〔估值方式二〕的目標價矩陣（2026-10-07 使用者要求）：格子分開、
+       圓角、兩行（金額＋相對現價的預期報酬／風險）。每一個本益比一個色相，和試算盤
+       同一套：由低到高 藍 → 綠 → 橘（超過三個從頭輪）；同一色相裡五階深淺，九格
+       一起排——深淺可以跨列比大小，色相告訴你這是哪一個本益比。預估 EPS 用灰階。
+       圖上的虛線用同一列的色調，對得起來。 */
+    var fams = ['a', 'b', 'c'];
+    var step9 = function(v){ return hi > lo ? Math.round((v - lo) / (hi - lo) * 4) : 2; };
+    var eLo = Math.min.apply(null, eps), eHi = Math.max.apply(null, eps);
+    var stepE = function(v){ return eHi > eLo ? Math.round((v - eLo) / (eHi - eLo) * 4) : 2; };
+    function delta(v){
+      if(!price || !v) return null;
+      var up = v / price - 1, txt = (up >= 0 ? '+' : '−') + (Math.abs(up) * 100).toFixed(1) + '%';
+      return {text: txt, title: (up >= 0 ? '預期報酬 ' : '預期風險 ') + txt + '（相對現價 ' + price.toFixed(2) + '）'};
+    }
     var base = seed.base_year || new Date().getFullYear() - 1;
     var names = ['今年（' + (base + 1) + '）', '明年（' + (base + 2) + '）', '後年（' + (base + 3) + '）'];
-    var h = '<h5 class="y3-h">預估未來三年 EPS 與目標價</h5><div class="scroll"><table class="y3-t"><thead><tr><th>項目</th>' +
-      names.map(function(n){ return '<th>' + n + '</th>'; }).join('') + '</tr></thead><tbody>' +
-      '<tr><th scope="row">營收成長率</th>' + g.map(function(v){ return '<td class="' + signCls(v) + '">' + (v > 0 ? '▲ ' : v < 0 ? '▼ ' : '') + v.toFixed(2) + '%</td>'; }).join('') + '</tr>' +
-      '<tr><th scope="row">淨利率（歸母）</th>' + m.map(function(v){ return '<td class="' + signCls(v) + '">' + v.toFixed(2) + '%</td>'; }).join('') + '</tr>' +
-      '<tr class="eps"><th scope="row">預估 EPS（元）</th>' + eps.map(function(v){ return '<td>' + v.toFixed(2) + '</td>'; }).join('') + '</tr>' +
-      pes.map(function(pe){
-        return '<tr class="tp"><th scope="row">預估 PE＝' + pe + '</th>' + eps.map(function(e){
-          var v = e * pe, bg = color(v), ink = heatInk(bg);
-          return '<td style="background:' + bg + ';color:' + ink + (ink === '#fff' ? '' : ';text-shadow:none') + '">' + money(v) + '</td>';
+    var sw = function(f){ return '<span class="sw" style="background:var(--m' + f + '3)"></span>'; };
+    var h = '<h5 class="mtitle mt0 y3-h">預估未來三年 EPS 與目標價</h5>' +
+      '<p class="mlegend"><b>顏色</b>　數值由小到大、由淺至深　目標價：' +
+      pes.slice(0, 3).map(function(pe, k){ return sw(fams[k]) + '<span>PE ' + pe + '</span>'; }).join('　') +
+      '<span>（九格一起比，' + money(lo) + ' → ' + money(hi) + '）</span>' +
+      (price ? '<span>　每格第二行是相對現價 ' + price.toFixed(2) + (priceDate ? '（' + priceDate + ' 收盤）' : '') +
+               ' 的預期報酬（＋）或預期風險（−）</span>' : '') + '</p>' +
+      '<div class="scroll mwrap mt0"><table class="matrix mt0 y3-t"><thead><tr><th>項目</th>' +
+      names.map(function(n){ return '<th class="num">' + n + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      '<tr class="in"><th scope="row">營收成長率</th>' + g.map(function(v){ return '<td class="' + signCls(v) + '"><span class="v">' + (v > 0 ? '▲ ' : v < 0 ? '▼ ' : '') + Math.abs(v).toFixed(2) + '%</span></td>'; }).join('') + '</tr>' +
+      '<tr class="in"><th scope="row">淨利率（歸母）</th>' + m.map(function(v){ return '<td class="' + signCls(v) + '"><span class="v">' + v.toFixed(2) + '%</span></td>'; }).join('') + '</tr>' +
+      '<tr class="eps"><th scope="row">預估 EPS（元）</th>' + eps.map(function(v){ return '<td class="num mn' + stepE(v) + '"><span class="v">' + v.toFixed(2) + '</span></td>'; }).join('') + '</tr>' +
+      pes.map(function(pe, k){
+        return '<tr class="tp rt' + (k % 3 + 1) + '"><th scope="row">預估目標價<br>PE＝' + pe + '</th>' + eps.map(function(e){
+          var v = e * pe, d = delta(v);
+          return '<td class="num m' + fams[k % 3] + step9(v) + '"' + (d ? ' title="' + d.title + '"' : '') + '>' +
+            '<span class="v">' + money(v) + '</span>' + (d ? '<span class="d">' + d.text + '</span>' : '') + '</td>';
         }).join('') + '</tr>';
       }).join('') + '</tbody></table></div>' +
-      '<p class="note-s">營收成長率：<span class="up">紅 ▲ 成長</span>、<span class="down">綠 ▼ 衰退</span>。目標價的底色是九格一起由低到高（綠 → 紅）。' +
+      '<p class="note-s">營收成長率：<span class="up">紅 ▲ 成長</span>、<span class="down">綠 ▼ 衰退</span>。' +
       '淨利率（歸母）＝ 歸屬母公司稅後淨利 ÷ 營收。</p>';
+    /* 圖上的虛線：那一列的色調（--t1／--t2／--t3），和表頭同色。 */
+    var tones = [1, 2, 3].map(function(k){
+      var c = ''; try{ c = getComputedStyle(box).getPropertyValue('--t' + k).trim(); }catch(e){}
+      return c || ['#23619f', '#1f7a55', '#b8610d'][k - 1];
+    });
     var charts = [];
     if(H && H.c.length > 1){
       var start = Math.max(0, H.c.length - 500);
@@ -2559,7 +2573,7 @@ function y3Eps(rev, sh, g, m){
         series: [{name: '收盤價', color: 'ink', values: H.c, width: 1.4}],
         hlines: pes.map(function(pe, k){
           var v = eps[y] * pe;
-          return {value: v, color: color(v),
+          return {value: v, color: tones[k % 3],
                   label: (pes.length === 3 ? labels[k] : '') + '(PE=' + pe + ') ' + money(v)};
         })});
     });
@@ -2810,18 +2824,82 @@ function reveal(bar, el){
   if(!panel.hidden) load();
 })();
 
+/* =========================================================================
+ * 個股頁的週期切換（河流圖、大戶持股，2026-10-07）
+ *
+ * 預設那一張建站時就畫在頁面上；其他區間的圖在同一個資料夾的 `<代號>.r.json`
+ * （見 build.write_range_figures），第一次按其他區間時才下載，之後留在記憶體。
+ * 切回預設就放回原本那一張，不必再下載。這一段要排在下面「滑鼠移過的即時資訊」
+ * 之前：那一段會改動 svg（包一層、加十字線），存下來的原圖必須是改動前的。
+ * ========================================================================= */
+(function(){
+  var bars = document.querySelectorAll('.rng[data-rng]');
+  if(!bars.length) return;
+  var code = (location.pathname.split('/').pop() || '').replace(/\.html?$/, '');
+  var cache = null;
+  function load(){
+    if(!cache){
+      cache = fetch(code + '.r.json', {cache: 'no-cache'}).then(function(r){
+        if(!r.ok) throw new Error(r.status);
+        return r.json();
+      });
+      cache.catch(function(){ cache = null; });
+    }
+    return cache;
+  }
+  Array.prototype.forEach.call(bars, function(bar){
+    var fig = bar.getAttribute('data-rng');
+    var boxes = document.querySelectorAll('.rng-fig[data-rng-fig="' + fig + '"]');
+    var first = bar.querySelector('button.on');
+    var def = first ? first.getAttribute('data-r') : '';
+    var orig = [].map.call(boxes, function(b){ return b.innerHTML; });
+    function mark(r){
+      [].forEach.call(bar.querySelectorAll('button'), function(b){
+        var on = b.getAttribute('data-r') === r;
+        b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+    function put(r, data){
+      [].forEach.call(boxes, function(b, i){
+        if(r === def){ b.innerHTML = orig[i]; }
+        else{
+          var v = data && data[fig] && data[fig][r];
+          var part = b.getAttribute('data-part');
+          var svg = part ? (v && v[part]) : v;
+          if(!svg) return;
+          b.innerHTML = svg;
+        }
+        if(window.TWSIXHover) window.TWSIXHover(b);
+      });
+      mark(r);
+    }
+    bar.addEventListener('click', function(e){
+      var btn = e.target.closest ? e.target.closest('button[data-r]') : null;
+      if(!btn || btn.classList.contains('on')) return;
+      var r = btn.getAttribute('data-r');
+      if(r === def){ put(r, null); return; }
+      bar.classList.add('busy');
+      load().then(function(d){ put(r, d); }, function(){
+        btn.title = '這一段的圖還沒產生（下一次建站後就有）';
+      }).then(function(){ bar.classList.remove('busy'); });
+    });
+  });
+})();
+
 /* 伺服器端畫的圖（charts.py：〈個股資訊〉的長條、折線、組合圖、河流圖）滑鼠移過／
    手指滑過的即時資訊。和〔股價健診〕那幾張 JS 圖同一個樣子（.pxtip）：一條垂直
    十字線，旁邊一個小窗列出那一期每一個序列的值——包含右軸的收盤價。
    資料在 <svg data-hover>（見 charts._hover_attr），x 是 viewBox 座標。 */
 (function(){
-  var svgs = document.querySelectorAll('svg.chart[data-hover]');
-  if(!svgs.length) return;
   var NS = 'http://www.w3.org/2000/svg';
   function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   function fmt(v, d){ return Number(v).toLocaleString('en-US', {minimumFractionDigits: d, maximumFractionDigits: d}); }
   var open = [];
-  Array.prototype.forEach.call(svgs, function(svg){
+  /* 週期切換換進來的新圖也要接上（2026-10-07）：所以「接一張圖」是一個函式，
+     window.TWSIXHover(根節點) 把那裡面還沒接過的圖接上。 */
+  function wire(svg){
+    if(svg._hover) return;
+    svg._hover = true;
     var o;
     try{ o = JSON.parse(svg.getAttribute('data-hover')); }catch(e){ return; }
     var n = o.x.length;
@@ -2873,7 +2951,11 @@ function reveal(bar, el){
     function touch(e){ var t = e.touches[0]; if(t) show(t.clientX, t.clientY); }
     svg.addEventListener('touchstart', touch, {passive: true});
     svg.addEventListener('touchmove', touch, {passive: true});
-  });
+  }
+  window.TWSIXHover = function(root){
+    Array.prototype.forEach.call((root || document).querySelectorAll('svg.chart[data-hover]'), wire);
+  };
+  window.TWSIXHover(document);
   // 手機上沒有 mouseleave：點圖以外的地方就收起來。
   document.addEventListener('touchstart', function(e){
     if(e.target.closest && e.target.closest('.chart-hover')) return;

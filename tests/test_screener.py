@@ -169,7 +169,11 @@ def test_亮色底不放白字_淺色底不放淺色字():
     for sel in ("nav a[aria-current=page]", ".way-h .n", ".pxh-zoom button.on"):
         assert f":root[data-theme=dark] {sel}" in css and f":root:not([data-theme=light]) {sel}" in css, sel
     assert ".hl-ok{color:#047857" in css and ".rrv-weak,.criteria .warnings{color:#b86e00}" in css
-    assert "function heatInk(" in (T / "site.js").read_text("utf-8"), "目標價熱度格要依底色選字色"
+    # 三年目標價表改用〔估值方式二〕那一套矩陣色階（2026-10-07）：每一階都有自己的字色
+    # （--ma0-fg…），不必再依底色臨時挑。
+    js = (T / "site.js").read_text("utf-8")
+    assert 'table class="matrix mt0 y3-t"' in js and "function heatInk(" not in js
+    assert all(f"--m{f}{i}-fg" in css for f in "nabc" for i in range(5))
     sc = (T / "screener.html.j2").read_text("utf-8")
     assert ":root[data-theme=dark] .sc-count,:root[data-theme=dark] .sc-btn.pri{color:var(--ground)}" in sc
 

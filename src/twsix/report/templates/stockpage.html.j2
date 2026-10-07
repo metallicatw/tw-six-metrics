@@ -1,5 +1,5 @@
 {% extends "base.html.j2" %}
-{% from "_macros.html.j2" import tip %}
+{% from "_macros.html.j2" import tip, range_bar %}
 {% import "_macros.html.j2" as m %}
 {% block title %}{{ p.stock_id }} {{ p.name }}｜{{ site_title }}{% endblock %}
 {% block body %}
@@ -561,21 +561,25 @@
    成長率），明年 ＝ 今年 ×（1＋明年成長率）……每一年的 EPS ＝ 該年營收 × 該年
    淨利率 ÷ 股數，目標價 ＝ EPS × 本益比。三張圖把三年的目標價畫在股價走勢上。
    全部在瀏覽器裡算（site.js 的 threeYear）。 #}
-<section class="way way3" id="y3" data-code="{{ p.stock_id }}" data-seed='{{ p.three_year|tojson }}'>
+<section class="way way3" id="y3" data-code="{{ p.stock_id }}" data-seed='{{ p.three_year|tojson }}'
+         data-price="{{ p.market_price or '' }}" data-price-date="{{ p.price_date }}">
 <h4 class="way-h"><span class="n">推估三年目標價</span>逐年累乘三年
   <span class="sub">年營收基準採 {{ p.three_year.base_year }} 全年；成長率、淨利率預設為最近一季（{{ p.three_year.basis.quarter }}）的數字，三年相同——請務必自行調整</span></h4>
-  <div class="calc-inputs y3-in">
-    <label><span class="lab"><span class="t">年營收（百萬，可改）</span></span>
+  {# 五個輸入框排成一列，和〔估值方式二〕同一套（2026-10-07）：原本後三格各佔一整行、
+     橫跨整個版面，一行字配一條一千像素寬的框，看起來很散。 #}
+  <div class="calc-inputs">
+    <label><span class="lab"><span class="t">年營收（百萬元）</span></span>
       <input type="number" id="y3-rev" step="any"></label>
-    <label><span class="lab"><span class="t">股數（億股，可改）</span></span>
+    <label><span class="lab"><span class="t">股數（億股）</span></span>
       <input type="number" id="y3-sh" step="any"></label>
-  </div>
-  <div class="y3-rows">
-    <label>【預估未來三年營收成長率（%）】今年, 明年, 後年
+    <label title="今年, 明年, 後年"><span class="lab"><span class="t">營收成長率（%）</span>
+      <span class="hint">今年,明年,後年</span></span>
       <input type="text" id="y3-g" inputmode="decimal"></label>
-    <label>【預估未來三年淨利率（歸母）（%）】今年, 明年, 後年
+    <label title="今年, 明年, 後年"><span class="lab"><span class="t">淨利率（歸母）（%）</span>
+      <span class="hint">今年,明年,後年</span></span>
       <input type="text" id="y3-m" inputmode="decimal"></label>
-    <label>【預估本益比 PE】每個 PE 一列目標價
+    <label title="每個 PE 一列目標價"><span class="lab"><span class="t">預估本益比 PE</span>
+      <span class="hint">一個 PE 一列</span></span>
       <input type="text" id="y3-pe" inputmode="decimal"></label>
   </div>
   <button type="button" class="btn-grab" id="y3-run">📊 計算三年〔預估EPS〕與〔預估目標價〕</button>
@@ -674,9 +678,9 @@
 {% if p.history and p.history.c %}
 <div class="pxh" id="pxh">
   <div class="pxh-form">
-    <label>條件一：股價在 <input type="number" id="pxh-m1" min="1" max="12" step="1" value="3"> 月內從高檔下跌幅度超過 <input type="number" id="pxh-p1" min="1" max="90" step="1" value="20"> %</label>
-    <label>條件二：股價在 <input type="number" id="pxh-m2" min="1" max="12" step="1" value="3"> 月內從低檔上漲幅度超過 <input type="number" id="pxh-p2" min="1" max="300" step="1" value="20"> %</label>
-    <label>條件三：股價跌破前 <input type="number" id="pxh-d3" min="5" max="240" step="1" value="60"> 個交易日低點</label>
+    <label><span class="pxh-tag">條件一</span>股價在 <input type="number" id="pxh-m1" min="1" max="12" step="1" value="3"> 月內從高檔下跌幅度超過 <input type="number" id="pxh-p1" min="1" max="90" step="1" value="20"> %</label>
+    <label><span class="pxh-tag">條件二</span>股價在 <input type="number" id="pxh-m2" min="1" max="12" step="1" value="3"> 月內從低檔上漲幅度超過 <input type="number" id="pxh-p2" min="1" max="300" step="1" value="20"> %</label>
+    <label><span class="pxh-tag">條件三</span>股價跌破前 <input type="number" id="pxh-d3" min="5" max="240" step="1" value="60"> 個交易日低點</label>
     <div class="pxh-btns">
       <button type="button" class="btn-grab" id="pxh-run">重新健診</button>
       <button type="button" class="btn-grab alt" id="pxh-short">短期預設值</button>
@@ -777,7 +781,8 @@
   近四季 EPS，而 EPS 每季會變；季報要等公布才算數（Q1 五月中、Q2 八月中、
   Q3 十一月中、年報隔年三月底），所以邊界是階梯而不是平滑曲線。
 {% endset %}
-{{ p.river.figure }}
+{% if p.river.alt %}{{ range_bar("river", p.river.alt.keys()|list + ["ALL"], "ALL") }}{% endif %}
+<div class="rng-fig" data-rng-fig="river">{{ p.river.figure }}</div>
 {% else %}
 <p class="stale">
   活頁簿的河流圖用<b>週線</b>收盤價；這次沒抓到週線序列，
@@ -980,8 +985,9 @@
   <div class="card"><b>{{ "%.3f"|format(h.latest.custody) if h.latest.custody is not none else "—" }}</b>
     <span>集保庫存（萬張）</span></div>
 </div>
-{{ h.figures.big|safe }}
-{{ h.figures.small|safe }}
+{% if h.alt %}{{ range_bar("holders", ["1Y"] + h.alt.keys()|list, "1Y") }}{% endif %}
+<div class="rng-fig" data-rng-fig="holders" data-part="big">{{ h.figures.big|safe }}</div>
+<div class="rng-fig" data-rng-fig="holders" data-part="small">{{ h.figures.small|safe }}</div>
 <div class="scroll">
   <table>
     <thead>

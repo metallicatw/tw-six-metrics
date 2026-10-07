@@ -1199,6 +1199,9 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 }
 @container page (max-width:480px){
   .calc-inputs{grid-template-columns:1fr;gap:12px}
+  /* 窄版：標籤自己一行，句子像一段文字那樣自然換行（輸入框是行內的一個字）。 */
+  .wrap .pxh-form label{display:block;line-height:2.2}
+  .wrap .pxh-form .pxh-tag{display:block;width:max-content;line-height:1.4;margin-bottom:2px}
   .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .mlegend{font-size:11px}
   /* 四位數的目標價在 6.2em 裡還放得下，但擠三欄之後每欄只剩不到 5em；
@@ -1306,11 +1309,13 @@ thead th .hsub{display:block;margin-top:1px;font-size:10px;font-weight:400;
 @media (prefers-color-scheme:dark){
   :root:not([data-theme=light]) nav a[aria-current=page],
   :root:not([data-theme=light]) .way-h .n,
-  :root:not([data-theme=light]) .pxh-zoom button.on{color:var(--ground)}
+  :root:not([data-theme=light]) .pxh-zoom button.on,
+  :root:not([data-theme=light]) .rng button.on{color:var(--ground)}
 }
 :root[data-theme=dark] nav a[aria-current=page],
 :root[data-theme=dark] .way-h .n,
-:root[data-theme=dark] .pxh-zoom button.on{color:var(--ground)}
+:root[data-theme=dark] .pxh-zoom button.on,
+:root[data-theme=dark] .rng button.on{color:var(--ground)}
 /* 淺色模式的橘色字（--g1 #f0a72a）在白底上只有 2:1：報酬風險比「偏弱」、估價頁的
    注意事項。淺色底用深一階的橘（色相不變）；深色模式照舊用 --g1。 */
 .rrv-weak,.criteria .warnings{color:#b86e00}
@@ -1361,11 +1366,16 @@ table.hl-t th.num,table.hl-t td.num{text-align:right;font-variant-numeric:tabula
 /* 表格下方「註：…」那一行：原本沒有樣式，在手機上是一整段內文字級（2026-10-04）。 */
 p.foot{margin:8px 0 0;font-size:12px;color:var(--muted);line-height:1.6}
 /* 股價健診 */
-.pxh-form label{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0 0 8px;
-  font-size:13.5px;color:var(--ink-2)}
-.pxh-form input{width:4.6em;padding:5px 7px;border:1px solid var(--rule);border-radius:5px;
-  background:var(--ground);color:var(--ink);font:inherit;font-variant-numeric:tabular-nums}
-.pxh-btns{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+/* 條件列和〔選股功能〕同一種排法（2026-10-07）：左邊一顆膠囊標籤、右邊一句話，列與列
+   之間一條虛線；輸入框 13px、同高。 */
+.pxh-form label{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:0;padding:7px 0;
+  font-size:13.5px;color:var(--ink-2);border-bottom:1px dashed var(--rule)}
+.pxh-tag{display:inline-block;min-width:4.2em;text-align:center;border-radius:999px;padding:3px 10px;
+  font-size:12px;font-weight:600;white-space:nowrap;color:var(--accent-2);
+  background:color-mix(in srgb,var(--accent-2) 14%,transparent)}
+.pxh-form input{width:4.6em;height:30px;box-sizing:border-box;padding:4px 7px;border:1px solid var(--rule);border-radius:6px;
+  background:var(--ground);color:var(--ink);font:inherit;font-size:13px;font-variant-numeric:tabular-nums}
+.pxh-btns{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0 4px}
 .btn-grab.alt{background:var(--accent-2)}
 .pxh-sum{display:flex;flex-wrap:wrap;gap:4px 18px;align-items:baseline;margin:16px 0 8px;
   padding:8px 12px;border:1px solid var(--rule);border-radius:6px;background:var(--surface-2);
@@ -1390,11 +1400,15 @@ p.foot{margin:8px 0 0;font-size:12px;color:var(--muted);line-height:1.6}
 .pxlegend span{display:inline-flex;align-items:center;gap:5px}
 .pxlegend i{width:22px;height:0;border-top:2.5px solid;display:inline-block}
 .pxlegend i.dash{border-top-style:dashed}
-.pxh-zoom{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:12px 0 4px;font-size:12.5px;
+.pxh-zoom,.rng{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:12px 0 4px;font-size:12.5px;
   color:var(--muted)}
-.pxh-zoom button{appearance:none;border:1px solid var(--rule);background:var(--surface);
+.pxh-zoom button,.rng button{appearance:none;border:1px solid var(--rule);background:var(--surface);
   color:var(--ink-2);border-radius:999px;padding:4px 12px;font:inherit;font-size:12.5px;cursor:pointer}
-.pxh-zoom button.on{background:var(--accent-2);border-color:var(--accent-2);color:#fff}
+.pxh-zoom button.on,.rng button.on{background:var(--accent-2);border-color:var(--accent-2);color:#fff}
+/* 個股頁的週期切換（河流圖、大戶持股）：和〔股價健診〕的縮放區間同一種膠囊。 */
+.rng{margin:6px 0 8px}
+.rng-l{margin-right:2px}
+.rng.busy{opacity:.6}
 /* 兩個 range 疊在同一條軌道上：只有把手接得到滑鼠，軌道本身讓給下面那一條。 */
 .pxh-range{position:relative;height:26px;margin:4px 0}
 .pxh-range input{position:absolute;left:0;right:0;top:0;width:100%;margin:0;height:26px;
@@ -1408,15 +1422,17 @@ p.foot{margin:8px 0 0;font-size:12px;color:var(--muted);line-height:1.6}
 /* 推估三年目標價：第三個色系（紫），和估值方式一（綠）、二（藍綠）分得開。 */
 .way3{border-left-color:#7c3aed}
 .way3 .way-h .n{background:#7c3aed}
-.y3-in{grid-template-columns:repeat(2,minmax(0,16em))}
-.y3-rows{display:grid;gap:8px;margin:4px 0 12px}
-.y3-rows label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
-.y3-rows input{padding:7px 8px;border:1px solid var(--rule);border-radius:5px;background:var(--ground);
-  color:var(--ink);font:inherit;font-size:14px;font-variant-numeric:tabular-nums}
-table.y3-t{font-size:13px;min-width:420px}
-table.y3-t th,table.y3-t td{text-align:center;padding:7px 10px;font-variant-numeric:tabular-nums}
-table.y3-t tr.eps td{font-weight:700}
-table.y3-t tr.tp td{color:#fff;font-weight:600;text-shadow:0 1px 1px rgba(0,0,0,.35)}
+/* 三年目標價表：樣式與配色照〔估值方式二〕的矩陣（table.matrix），這裡只補它多出來的
+   東西——輸入那兩列（成長率、淨利率）不填色，目標價每一列的列標題跟著那一列的色調。 */
+table.matrix.y3-t th:first-child{width:8.5em}
+table.matrix.y3-t thead th.num,table.matrix.y3-t td{width:8em}
+table.matrix.y3-t tr.in td{font-weight:600}
+table.matrix.y3-t tr.in td.up{color:var(--up)}
+table.matrix.y3-t tr.in td.down{color:var(--down)}
+table.matrix.y3-t tr.rt1 th[scope=row]{background:var(--t1-bg);color:var(--t1)}
+table.matrix.y3-t tr.rt2 th[scope=row]{background:var(--t2-bg);color:var(--t2)}
+table.matrix.y3-t tr.rt3 th[scope=row]{background:var(--t3-bg);color:var(--t3)}
+.way3 h5.mtitle{border-left:4px solid var(--rule);padding-left:9px}
 /* 健診那兩張表在手機上不橫捲：三欄各自折行（全站表格預設 min-width:560px）。 */
 table.hl-t{min-width:0}
 @container page (max-width:760px){

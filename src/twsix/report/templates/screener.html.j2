@@ -48,16 +48,35 @@ window.SC_V = "{{ data_v|default('') }}";
 :root[data-theme=dark] .sc-tab[aria-selected=true]{color:var(--ground)}
 .sc-panel[hidden]{display:none}
 .sc-card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;margin:0 0 14px}
-.sc-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:6px 0}
-.sc-tag{display:inline-block;background:color-mix(in srgb,var(--accent-2) 14%,transparent);color:var(--accent-2);border-radius:999px;padding:3px 10px;font-size:13px;font-weight:600;white-space:nowrap}
-.sc input[type=number],.sc select{font:inherit;font-size:14px;padding:5px 8px;border:1px solid var(--rule);border-radius:7px;background:var(--surface);color:var(--ink);width:6.5em}
-.sc select{width:auto}
-.sc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 18px;margin:6px 0 10px}
-.sc-grid label{display:block;font-size:13px;color:var(--ink-2);margin-bottom:3px}
-.sc-range{display:flex;align-items:center;gap:6px}
-.sc-range input[type=number]{width:100%}
-.sc-btns{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
-.sc-btn{font:inherit;font-size:14px;border:1px solid var(--rule);background:var(--surface-2);color:var(--ink);border-radius:8px;padding:7px 16px;cursor:pointer}
+.sc-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 6px;margin:0;padding:7px 0;font-size:13.5px;color:var(--ink-2);border-bottom:1px dashed var(--rule)}
+.sc-row:last-of-type{border-bottom:0}
+.sc-row .sc-tag{min-width:4.2em;text-align:center}
+.sc-tag{display:inline-block;background:color-mix(in srgb,var(--accent-2) 14%,transparent);color:var(--accent-2);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+/* 輸入框與下拉：和內文同一級（13px）、同一個高度（32px），一列裡的格子才排得齊。
+   原本 14px 而標籤 13px——框裡的字比標籤還大，整片看起來很擠（2026-10-07）。 */
+.sc input[type=number],.sc select,.sc .sc-sel{font:inherit;font-size:13px;line-height:1.2;height:32px;box-sizing:border-box;
+  padding:4px 8px;border:1px solid var(--rule);border-radius:7px;background:var(--surface);color:var(--ink);width:5.5em}
+.sc select{width:auto;padding-right:4px}
+.sc input[type=number]::placeholder{color:var(--muted);opacity:.8}
+/* 條件格：每格「標籤一行＋輸入框一行」，欄寬固定（手機兩欄、平板三欄、電腦五欄）。
+   標籤不折行，過長以 … 收尾，完整說明在 title。 */
+.sc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 20px;margin:4px 0 12px}
+/* 電腦版五欄：九個範圍剛好排成「財務五項｜價量四項」兩列，基準那一列四格靠左。 */
+@media (min-width:1000px){.sc-grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.sc-grid.sc-base{padding-bottom:12px;border-bottom:1px dashed var(--rule)}
+.sc-f{min-width:0}
+.sc-f label{display:flex;align-items:baseline;gap:5px;font-size:12.5px;font-weight:600;color:var(--ink-2);margin:0 0 4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc-f label .u{font-size:11px;font-weight:500;color:var(--muted)}
+.sc-f select,.sc-f .sc-inds,.sc-f .sc-sel{width:100%}
+.sc-f .sc-inds{display:block}
+.sc-f .sc-sel{text-align:left;cursor:pointer}
+.sc-range{display:flex;align-items:center;gap:4px}
+.sc-range input[type=number]{width:100%;min-width:0;flex:1 1 0}
+.sc-to{color:var(--muted);font-size:12px;flex:0 0 auto}
+.sc-btns{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.sc-btn{font:inherit;font-size:13px;border:1px solid var(--rule);background:var(--surface-2);color:var(--ink);border-radius:8px;padding:6px 14px;cursor:pointer}
+.sc-btns .sc-note{font-size:12px;flex:1 1 16em}
 .sc-btn.pri{background:var(--accent-2);border-color:var(--accent-2);color:#fff;font-weight:600}
 .sc-btn.on{outline:2px solid var(--accent-2);outline-offset:1px;font-weight:600}
 .sc-inds{position:relative;display:inline-block}
@@ -102,7 +121,11 @@ window.SC_V = "{{ data_v|default('') }}";
 .sc-chart{margin-top:10px}
 .sc-chart svg{width:100%;max-width:860px;height:auto;display:block}
 .sc-chart text{font-size:11px;fill:var(--ink-2)}
-@media (max-width:640px){.sc-card{padding:12px}.sc input[type=number]{width:5em}}
+@media (max-width:640px){.sc-card{padding:12px}.sc input[type=number]{width:4.6em}
+  .sc-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
+  /* 句子型的條件列：標籤自己一行，句子從下一行的行首開始，不會折成參差的三段。 */
+  .sc-row{display:block;line-height:2.2}
+  .sc-row .sc-tag{display:block;width:max-content;line-height:1.4;margin-bottom:2px}}
 </style>
 
 <div class="sc">
@@ -120,12 +143,13 @@ window.SC_V = "{{ data_v|default('') }}";
 {# ── 財務選股 ── #}
 <section class="sc-panel" id="sc-fin" hidden>
 <div class="sc-card">
-  <div class="sc-grid">
-    <div><label>財報季度</label><select id="f-q"></select></div>
-    <div><label>營收月份</label><select id="f-m"></select></div>
-    <div><label>市場別</label><select id="f-mk"><option value="">全部</option><option>上市</option><option>上櫃</option></select></div>
-    <div><label>產業別（可複選）</label>
-      <span class="sc-inds"><button type="button" class="sc-btn" id="f-indbtn">全部產業 ▾</button>
+  {# 基準與範圍兩組格子用同一套欄寬（2026-10-07）：上下對齊、標籤一行、輸入框同高。 #}
+  <div class="sc-grid sc-base">
+    <div class="sc-f"><label for="f-q">財報季度</label><select id="f-q"></select></div>
+    <div class="sc-f"><label for="f-m">營收月份</label><select id="f-m"></select></div>
+    <div class="sc-f"><label for="f-mk">市場別</label><select id="f-mk"><option value="">全部</option><option>上市</option><option>上櫃</option></select></div>
+    <div class="sc-f"><label for="f-indbtn">產業別<span class="u">可複選</span></label>
+      <span class="sc-inds"><button type="button" class="sc-btn sc-sel" id="f-indbtn">全部產業 ▾</button>
       <div class="sc-indpanel" id="f-indpanel" hidden></div></span></div>
   </div>
   <div class="sc-grid" id="f-ranges"></div>
@@ -472,9 +496,14 @@ function barChart(list, key, label, top){
 }
 
 // ── 四個分頁 ───────────────────────────────────────────────────────────
-var RANGES = [["opm", "營業利益率 (%)"], ["eps", "EPS (元)"], ["yoy", "營收年增率 (%)"], ["cum", "累計年增率 (%)"],
-  ["arrow", "財務雙箭頭 (營收年增率 + 營業利益率 %)"], ["p", "股價 (元，最新收盤)"], ["pe", "本益比 (最新股價 ÷ 近四季EPS)"],
-  ["mc", "最近一個月漲幅 (%)"], ["v", "成交量 (成交股數/1000)"]];
+// [鍵, 名稱, 單位, 說明（滑鼠停留／長按看得到）]。標籤只放名稱與單位、一行寫完——
+// 原本把算式也塞進標籤（「財務雙箭頭 (營收年增率 + 營業利益率 %)」），那一格折成兩行，
+// 下面的輸入框就和同一列的其他格子對不齊（2026-10-07）。
+var RANGES = [["opm", "營業利益率", "%", "最近一季營業利益率"], ["eps", "EPS", "元", "最近一季每股盈餘"],
+  ["yoy", "營收年增率", "%", "營收月份那個月的單月年增率"], ["cum", "累計年增率", "%", "營收月份為止的累計營收年增率"],
+  ["arrow", "財務雙箭頭", "%", "營收年增率 ＋ 營業利益率"], ["p", "股價", "元", "最新收盤價"],
+  ["pe", "本益比", "倍", "最新股價 ÷ 近四季 EPS"], ["mc", "近一月漲幅", "%", "最近一個月的股價漲幅"],
+  ["v", "成交量", "張", "成交股數 ÷ 1000"]];
 var PRESET = {
   fin: {opm: [10, null], eps: [1, null], yoy: [20, null], cum: [20, null], arrow: [40, null], p: [50, null]},
   trend: {"t-n1": 20, "t-dir": "up", "t-x1": 10, "t-n2": 20, "t-hl": "high", "t-ma": "bull"},
@@ -493,9 +522,12 @@ function buildFin(){
   D.months.forEach(function(m){ $("f-m").appendChild(el("option", {value: m, text: m + "（" + D.mcount[m] + " 家）"})); });
   var box = $("f-ranges");
   RANGES.forEach(function(r){
-    box.appendChild(el("div", null, el("label", {text: r[1]}), el("div", {cls: "sc-range"},
-      el("input", {type: "number", step: "any", id: "f-" + r[0] + "-lo", placeholder: "最小"}), "～",
-      el("input", {type: "number", step: "any", id: "f-" + r[0] + "-hi", placeholder: "最大"}))));
+    var lab = el("label", {title: r[3]}, r[1], el("span", {cls: "u", text: r[2]}));
+    lab.htmlFor = "f-" + r[0] + "-lo";
+    box.appendChild(el("div", {cls: "sc-f"}, lab, el("div", {cls: "sc-range"},
+      el("input", {type: "number", step: "any", id: "f-" + r[0] + "-lo", placeholder: "最小", title: r[3]}),
+      el("span", {cls: "sc-to", text: "～"}),
+      el("input", {type: "number", step: "any", id: "f-" + r[0] + "-hi", placeholder: "最大", title: r[3]}))));
   });
   var panel = $("f-indpanel");
   var tools = el("div", {cls: "sc-row"});
@@ -526,7 +558,7 @@ function runFin(){
   var conds = [], list = [];
   RANGES.forEach(function(r){
     var lo = val("f-" + r[0] + "-lo"), hi = val("f-" + r[0] + "-hi");
-    if (lo != null || hi != null) conds.push(r[1].replace(/\s*\(.*$/, "") + " " + (lo != null ? lo : "") + "～" + (hi != null ? hi : ""));
+    if (lo != null || hi != null) conds.push(r[1] + " " + (lo != null ? lo : "") + "～" + (hi != null ? hi : ""));
   });
   D.rows.forEach(function(r){
     if (mk && r.m !== mk) return;

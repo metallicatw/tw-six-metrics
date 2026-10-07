@@ -1906,4 +1906,33 @@ def build_stock_page(
         forecast_basis_notes=FORECAST_BASIS_NOTES,
         delisted=delisted,
     ).dump(str(out_file))
+    write_range_figures(page, out_file)
     return out_file
+
+
+def range_figures(page: Any) -> dict[str, Any]:
+    """個股頁週期切換要的其他區間的圖（河流圖、大戶持股）。沒有就是空的。"""
+    out: dict[str, Any] = {}
+    river = getattr(page, "river", None)
+    if river is not None and getattr(river, "alt", None):
+        out["river"] = dict(river.alt)
+    holders = getattr(page, "holders", None)
+    if holders is not None and getattr(holders, "alt", None):
+        out["holders"] = {k: dict(v) for k, v in holders.alt.items()}
+    return out
+
+
+def write_range_figures(page: Any, out_file: Path) -> Path | None:
+    """寫 `stock/<代號>.r.json`：按下週期按鈕才下載（2026-10-07）。
+
+    預設那一張照舊畫在頁面上；其他區間放在旁邊這個檔，頁面本身不因為多了幾顆
+    按鈕而變重（五年的大戶持股兩張圖就有六十幾 KB）。沒有可切的就刪掉舊檔，
+    免得頁面上沒有按鈕、旁邊卻躺著一份過期的圖。
+    """
+    path = out_file.with_name(out_file.stem + ".r.json")
+    data = range_figures(page)
+    if not data:
+        path.unlink(missing_ok=True)
+        return None
+    path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return path

@@ -464,3 +464,12 @@
   上面一行是元、下面一行是 %。點欄位標題排序時看的是 %。
   <br><br>收盤價右邊那顆 <b>↗ 圖示</b>開 Yahoo 股市那一檔的走勢圖（新分頁）。
 {%- endmacro %}
+
+{# 個股頁的週期切換（2026-10-07）：河流圖、大戶持股。預設那一張畫在頁面上；其他區間在
+   旁邊的 `<代號>.r.json`，按了才下載（site.js 的 rangeSwitch）。 #}
+{% macro range_bar(fig, keys, default) -%}
+<div class="rng" role="group" aria-label="週期切換" data-rng="{{ fig }}">
+  <span class="rng-l">週期切換</span>
+  {%- for k in keys %}<button type="button" data-r="{{ k }}"{% if k == default %} class="on" aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>{{ '全部' if k == 'ALL' else k }}</button>{% endfor %}
+</div>
+{%- endmacro %}
