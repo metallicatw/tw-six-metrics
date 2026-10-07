@@ -829,6 +829,8 @@ tr.here th{font-weight:700}
    320 → 260 是那一列還有一句「具投資價值」判斷依據時量出來的（一列 37px、換行
    70px，820px 以上維持一列）。那句話現在收進燈泡了，而且少了一個勾選框，所以這
    一列比當時短得多——260 留著沒有壞處，它要的寬度本來就是「打得下一個股名」。 */
+.q-wrap{display:inline-flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0}
+.q-wrap input[type=search]{min-width:0}
 .filters input[type=search]{flex:0 1 260px;min-width:170px;padding:7px 11px;
   border:1px solid var(--rule);border-radius:5px;background:var(--surface);
   color:var(--ink);font:inherit;font-size:13.5px}
@@ -1637,8 +1639,14 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
 /* 手機：固定三列——①產業＋綜合評分 ②具投資價值＋報酬風險比 ③AI＋籌碼雷達＋清除＋💡。
    字小半號、框收窄，三列各自塞得進一行；真的太窄（＜340px）才在列內換行。 */
 @media (max-width:640px){
-  .qf{flex-direction:column;align-items:stretch;gap:8px}
-  .qf-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+  .qf{flex-direction:column;align-items:stretch;gap:8px;flex:1 1 100%;min-width:0;max-width:100%}
+  /* 一列不換行：放不下的時候是下拉框自己縮窄，而不是把最後一顆擠到下一列
+     （手機字級調大的人也一樣是三列）。 */
+  .qf-row{display:flex;flex-wrap:nowrap;align-items:center;gap:6px 8px;min-width:0;max-width:100%}
+  .qf-row>label,.qf-row>.qf-inds{flex:0 1 auto;min-width:0}
+  .qf-row select,.qf-row .qf-btn{flex:1 1 auto;min-width:3.6em;width:auto;max-width:9em;
+    overflow:hidden;text-overflow:ellipsis}
+  .qf-row>.qf-end{flex:none;margin-left:auto}
   .qf label,.qf .qf-inds{font-size:12.5px;gap:4px}
   .qf select,.qf .qf-btn,.qf .qf-reset{font-size:12.5px;padding:4px 6px}
   .qf input[type=number]{font-size:12.5px;width:4em;padding:4px 5px}

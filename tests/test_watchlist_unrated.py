@@ -153,4 +153,4 @@ def test_快速篩選在手機上固定三列():
     qf = mac[mac.index("{% macro quick_filters"):mac.index("{%- endmacro %}", mac.index("{% macro quick_filters"))]
     assert qf.count('<span class="qf-row">') == 3
     css = (root / "site.css").read_text("utf-8")
-    assert ".qf-row{display:contents}" in css and ".qf-row{display:flex;flex-wrap:wrap" in css
+    assert ".qf-row{display:contents}" in css and ".qf-row{display:flex;flex-wrap:nowrap" in css

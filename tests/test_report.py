@@ -247,7 +247,8 @@ def test_the_listing_explains_具投資價值_next_to_the_checkbox():
         ROOT / "src/twsix/report/templates/list.html.j2"
     ).read_text("utf-8")
     assert 'class="hint"' not in listing, "行內那三句已經收進燈泡"
-    after = listing[listing.index("只看具投資價值"):]
+    # 2026-10-07 起燈泡接在文字篩選框右邊（手機上快篩才排得成三列），內容不變。
+    after = listing[listing.index('<span class="q-wrap">'):]
     bulb = after[after.index("{% call tip() %}"):after.index("{% endcall %}")]
     # 四個條件全部寫得下，而不是只寫得下三個。
     assert "BB" in bulb and "≥ 3" in bulb and "0.3" in bulb

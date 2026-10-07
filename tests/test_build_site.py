@@ -2008,8 +2008,11 @@ def test_大分頁不再顯示和導覽列重複的標題(tmp_path=None):
     # 雲端同步那段說明收進燈泡：在 tipbox 裡，不在攤開的段落裡。
     assert "跟著帳號存在雲端" in watch.split('class="tipbox"', 1)[1]
     index = (out / "index.html").read_text("utf-8")
+    # 2026-10-07：💡 改接在文字篩選框右邊；〔清除篩選〕那一格只剩按鈕，手機上快篩固定三列。
+    q = index[index.index('<span class="q-wrap">'):index.index('<div class="qf"')]
+    assert 'id="q"' in q and 'class="bulb"' in q
     end = index[index.index('class="qf-end"'):]
-    assert end.index('id="f-reset"') < end.index('class="bulb"') < end.index("</span></span>") + 400
+    assert 'class="bulb"' not in end[:end.index("</span>")]
 
 
 def test_嵌入頁的燈泡在_div_裡_單獨開啟收進燈泡(tmp_path=None):
