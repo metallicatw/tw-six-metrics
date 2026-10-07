@@ -11,6 +11,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+import re
 import shutil
 from collections import Counter, defaultdict
 from collections.abc import Iterable
@@ -605,30 +606,39 @@ def trend_names(report: Path) -> dict[str, tuple[str, str]]:
     return {c: (n, i) for c, n, i in re.findall(r'\["(\d{4,6}[A-Z]?)","([^"]*)","([^"]*)"', text)}
 
 
-#: 嵌進來的〔市場監控〕報告自己有一顆〔電腦版／手機版〕。它會在報告的腳本跑完、發現自己
-#: 被嵌起來之後把那顆鈕藏掉——但那份報告 1.2 MB，網路慢的時候腳本要好幾秒才跑完，
-#: 那段時間按鈕就一直掛在畫面上（2026-10-06 使用者回報）。所以複製進網站時直接在
-#: <head> 補一行 CSS：一載入就是藏著的，不必等腳本。單獨開啟那份報告時不受影響。
-REPORT_HIDE_CSS = '<style id="twsix-embed">#modeToggleBtn{display:none!important}</style>'
+#: 複製進網站的〔市場監控〕報告，在 <head> 補一段只給「嵌入版」用的 CSS（單獨開啟那份
+#: 報告不受影響）：
+#:
+#: * 拿掉報告自己的外框留白（2026-10-07 使用者回報「多了一層框架、整頁變窄」）。報告
+#:   單獨開啟時 body 四周留 24px（手機 12px），嵌進來之後外面已經有網站的版心與留白，
+#:   兩層疊起來，卡片左右各比其他頁面內縮四十幾 px。嵌入版改成只留上方一點點。
+#: * 舊報告的〔電腦版／手機版〕鈕一載入就藏著（2026-10-06；源頭已刪，這條給還沒重新
+#:   產生的舊報告用，找不到元素時什麼都不做）。
+REPORT_EMBED_CSS = ('<style id="twsix-embed">'
+                    'html body{padding:4px 0 0!important;margin:0!important}'
+                    '#modeToggleBtn{display:none!important}'
+                    '</style>')
+REPORT_HIDE_CSS = REPORT_EMBED_CSS   # 舊名字，測試與呼叫端還在用
+_EMBED_BLOCK = re.compile(r'<style id="twsix-embed">.*?</style>', re.S)
 
 
 def hide_report_toggle(path: Path) -> bool:
-    """在嵌入用的報告 <head> 裡補上隱藏〔電腦版／手機版〕的 CSS。已經有就不動。
-
-    market-monitor 那邊已經把這顆按鈕從源頭刪掉（2026-10-06）；這一層留著，是給
-    還沒重新產生的舊報告用的——選擇器找不到元素時什麼都不做。
-    """
+    """在嵌入用的報告 <head> 裡補上（或換新）嵌入版的 CSS，見 REPORT_EMBED_CSS。"""
     try:
         html = path.read_text("utf-8")
     except OSError:
         return False
-    if 'id="twsix-embed"' in html:
+    if REPORT_EMBED_CSS in html:
         return False
+    if 'id="twsix-embed"' in html:
+        # 上一版補的那一段：換成這一版（報告若沿用前一次的複本，也拿得到新規則）。
+        path.write_text(_EMBED_BLOCK.sub(lambda _m: REPORT_EMBED_CSS, html, count=1), encoding="utf-8")
+        return True
     i = html.lower().find("<head>")
     if i < 0:
         return False
     i += len("<head>")
-    path.write_text(html[:i] + REPORT_HIDE_CSS + html[i:], encoding="utf-8")
+    path.write_text(html[:i] + REPORT_EMBED_CSS + html[i:], encoding="utf-8")
     return True
 
 

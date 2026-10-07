@@ -891,6 +891,10 @@ iframe.embed{display:block;width:100%;height:78vh;min-height:480px;border:1px so
    捲到 iframe 的頂端時，整個視窗就是那份報告；上面的頁首和標題往上捲走。
    窄版（容器查詢）回到 88vh，見下面那一段。 */
 iframe.embed.tall{height:calc(100vh - 16px);min-height:640px}
+/* 〔全球市場監控＋日股觀察〕：報告自己就是一張張卡片，iframe 不再多包一層框（2026-10-07，
+   「多了一層框架、整頁變窄」）。報告那一邊的外框留白也拿掉了（build.REPORT_EMBED_CSS），
+   卡片左右緣和其他頁面的內容對齊。 */
+iframe.embed.fit{border:0;border-radius:0;background:transparent}
 /* 燈泡裡那份〔預設篩選條件〕。內容是從報告裡抽出來的（build.py 的
    trend_rules_html），長這樣：<ol><li><b>①…</b><span>…</span></li>…</ol>
    <p class="stop">停損：…</p>。 */

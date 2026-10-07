@@ -88,6 +88,27 @@ def test_嵌入的監控報告一載入就藏起電腦版手機版按鈕():
         assert hide_report_toggle(p) is False, "不重複加"
 
 
+
+def test_嵌入的監控報告不再多一層外框留白():
+    """2026-10-07「多了一層框架、整頁變窄」：報告自己的 body 留白（24px）疊在網站版心
+    裡面，卡片比其他頁面內縮四十幾 px。嵌入版拿掉那一圈；iframe 本身也不再畫框。
+    上一版補過的報告（只有藏按鈕那一條）要換成新的。"""
+    import tempfile as _t
+
+    from twsix.report.build import REPORT_EMBED_CSS, hide_report_toggle
+
+    assert "html body{padding:4px 0 0!important" in REPORT_EMBED_CSS
+    with _t.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "monitor-report.html"
+        p.write_text('<html><head><style id="twsix-embed">#modeToggleBtn{display:none!important}</style>'
+                     '<title>x</title></head><body></body></html>', "utf-8")
+        assert hide_report_toggle(p) is True
+        html = p.read_text("utf-8")
+        assert html.count('id="twsix-embed"') == 1 and REPORT_EMBED_CSS in html
+    css = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.css").read_text("utf-8")
+    assert "iframe.embed.fit{border:0;border-radius:0;background:transparent}" in css
+
+
 def test_燈泡說明在網頁還沒載完時就是收起來的():
     """2026-10-06：網頁慢的時候燈泡說明整塊攤開，等 site.js 跑完才收起。
 
