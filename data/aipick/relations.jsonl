@@ -97,3 +97,15 @@
 {"a":"1727","b":"6861","asked":"2026-10-06","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"中華化為特化與電子級硫酸廠，睿生光電為X光平版偵檢器廠，兩者業務無直接供應鏈關係，主要同屬台股電子化工或生醫相關題材連動"}
 {"a":"1727","b":"3430","asked":"2026-10-06","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"兩者皆為台灣特用化學品製造商，產品線多有重疊，常被歸為化學工業類股的同一題材。"}
 {"a":"1727","b":"6234","asked":"2026-10-06","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"中華化為特化與化學品廠，高僑為設備與零組件廠，業務無直接上下游關聯，走勢同步可能歸類於電子或特定題材。"}
+{"a":"5274","b":"6531","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.9,"note":"兩者皆為台股高價矽智財（IP）與IC設計族群，常被市場歸類在同一題材中同步變動。"}
+{"a":"5274","b":"2368","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"供應商","confidence":0.9,"note":"金像電為信驊主要的伺服器板供應商，兩者同屬AI伺服器供應鏈。"}
+{"a":"5274","b":"3443","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"兩者皆為台灣股市中知名的IC設計公司，常被市場歸類於高價電子股與IP/ASIC題材而同步變動。"}
+{"a":"2454","b":"6526","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":1.0,"note":"達發科技為聯發科旗下之小金雞，屬於聯發科集團之達發子公司。"}
+{"a":"2454","b":"3443","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"供應商","confidence":0.9,"note":"創意為聯發科提供 ASIC 設計服務，屬於聯發科的供應鏈夥伴。"}
+{"a":"2454","b":"3661","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"聯發科與世芯-KY皆為台灣IC設計大廠，且在高階ASIC與AI晶片領域存在競爭或比價效應。"}
+{"a":"3714","b":"3437","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"富采與榮創皆為台灣知名的LED廠，屬於同業競爭與同一題材關係。"}
+{"a":"3714","b":"3673","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.8,"note":"兩者皆為台灣主要的面板/光電及觸控相關供應鏈廠商，常被歸類於同一產業題材。"}
+{"a":"3714","b":"6830","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"富采為 LED 大廠，汎銓為半導體檢測分析廠，兩者業務與供應鏈無直接上下游或同業關係。"}
+{"a":"2303","b":"2302","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"聯電與麗正皆屬於半導體產業中的晶圓代工與封測相關同業公司。"}
+{"a":"2303","b":"2492","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆為台股重要電子股，常受整體半導體及電子零組件行情連動。"}
+{"a":"2303","b":"6116","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"兩者皆為台灣主要的半導體晶圓代工廠，同屬半導體族群，常因產業景氣連動而同步變動。"}
