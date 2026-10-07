@@ -7,6 +7,7 @@
   --ground:#eef4f7; --surface:#fff; --surface-2:#e3ecf1;
   --ink:#0d1620; --ink-2:#33424f; --muted:#5d6b78;
   --rule:#d2dee5; --accent:#0e7c6f; --accent-2:#127a8f;
+  --field:#f6f9fb; --field-line:#c6d4dd;
   --up:#cf3327; --down:#0d7c4f;
   /* 等第：亮底配深字，不是深底配白字。
      鮮豔的顏色配白字幾乎一定過不了 4.5:1（#10b981 配白只有 2.54），為了合規
@@ -68,6 +69,7 @@
   --ground:#0b1016; --surface:#141b22; --surface-2:#1c252e;
   --ink:#e8eef4; --ink-2:#b6c3cf; --muted:#8b99a6;
   --rule:#26313b; --accent:#4fd6c4; --accent-2:#5ecfe0;
+  --field:#080c11; --field-line:#2e3a46;
   --up:#ff7b6b; --down:#4ede9d;
   /* 等第的填色兩個主題共用——它們本來就夠亮，深字在深底上一樣讀得到（5.0~8.5）。
      一組顏色兩邊通用，「AA 是什麼顏色」就不必記兩次。 */
@@ -1850,3 +1852,24 @@ html .wg-tab.wg-all[aria-selected=true]{border-style:solid}
 :root[data-theme=dark] .cnt.cnt-m{color:#ffa94d}
 /* 籌碼雷達各模組的「符合 N / 共 N 檔」也上色 */
 #cf #matchCount,#cf #totalCount{color:var(--accent);font-weight:700}
+
+/* =========================================================================
+ * 全站輸入框與下拉（2026-10-07，照〔趨勢×六大×報酬〕那份報告的門檻欄位）
+ *
+ * 輸入框的底色比它所在的卡片**深一階**（深色：卡片 #141b22、框 #080c11；淺色：白卡、
+ * 淡灰框），框線比分隔線亮一點——一眼分得出「這裡可以打字」，而不是和卡片融成一片。
+ * 聚焦時框線換成強調色＋一圈淡光。
+ *
+ * 用 !important 只壓底色與框線：選股、清單、個股頁各自有寫自己的尺寸，尺寸不動，
+ * 只統一顏色。籌碼雷達（#cf，照 BG 版面一比一）不套。勾選框、滑桿不是輸入框，不套。
+ * 「長得像下拉的按鈕」（全部產業 ▾、報酬風險比 ▾）也一起，否則同一列兩種底色。
+ * ========================================================================= */
+html body :is(input:not([type]),input[type=text],input[type=number],input[type=search],
+  input[type=email],input[type=password],input[type=date],select,textarea,.qf-btn,.sc-sel):not(#cf *){
+  background-color:var(--field)!important;border-color:var(--field-line)!important;color:var(--ink)}
+html body :is(input,textarea):not(#cf *)::placeholder{color:var(--muted);opacity:.8}
+html body :is(input:not([type]),input[type=text],input[type=number],input[type=search],
+  input[type=email],input[type=password],input[type=date],select,textarea,.qf-btn,.sc-sel):not(#cf *):focus-visible{
+  border-color:var(--accent-2)!important;outline:none;
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-2) 28%,transparent)}
+html body :is(.qf-btn,.sc-sel):not(#cf *):hover{border-color:color-mix(in srgb,var(--accent-2) 55%,var(--field-line))!important}

@@ -154,3 +154,13 @@ def test_快速篩選在手機上固定三列():
     assert qf.count('<span class="qf-row">') == 3
     css = (root / "site.css").read_text("utf-8")
     assert ".qf-row{display:contents}" in css and ".qf-row{display:flex;flex-wrap:nowrap" in css
+
+
+def test_全站輸入框比卡片深一階():
+    """2026-10-07：輸入框與下拉照〔趨勢×六大×報酬〕的門檻欄位——底色比卡片深一階、框線
+    看得見、聚焦有一圈淡光。只統一顏色（尺寸各頁照舊）；籌碼雷達（#cf，BG 版面）不套。"""
+    css = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.css").read_text("utf-8")
+    assert "--field:#080c11; --field-line:#2e3a46;" in css and "--field:#f6f9fb;" in css
+    rule = css[css.index("html body :is(input:not([type])"):]
+    assert ":not(#cf *)" in rule.split("{", 1)[0] and "background-color:var(--field)!important" in rule
+    assert "input[type=checkbox]" not in rule.split("{", 1)[0] and "range" not in rule.split("{", 1)[0]
