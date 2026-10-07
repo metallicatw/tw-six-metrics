@@ -731,6 +731,20 @@ def _merged(out_dir: Path, sheet: str, grid: list[list[str]]) -> list[list[str]]
     return merge(sheet, sheet_store.read_grid(out_dir, sheet), grid)
 
 
+def _listed_within_days(root: Path, code: str, days: int) -> str:
+    """上市（櫃）日期在 *days* 天內就回 ``YYYY-MM-DD``，否則（或查不到）回空字串。"""
+    try:
+        from .ingest.yearly_trading import listing_dates  # noqa: PLC0415
+
+        day = listing_dates(root).get(code, "")
+        listed = date(int(day[:4]), int(day[4:6]), int(day[6:8]))
+    except Exception:  # noqa: BLE001 - 查不到就當作不是新股
+        return ""
+    if (datetime.now(_TAIPEI).date() - listed).days > days:
+        return ""
+    return listed.isoformat()
+
+
 def cmd_fetch_stock(args: argparse.Namespace) -> int:
     """單檔查詢：抓一支股票的九張報表，存成可離線重讀的格線.
 
@@ -859,12 +873,22 @@ def cmd_fetch_stock(args: argparse.Namespace) -> int:
         # rather than printing one message that is half wrong either way.
         print(f"\n{failures}/{len(sheets)} 張表未取得。", file=sys.stderr)
         if contract_failures:
-            print(
-                f"  其中 {contract_failures} 張是契約不符——頁面抓到了但版面不符預期，"
-                f"多半是站台改版。請對照 reference/ENDPOINTS.md 更新 "
-                f"moneydj.CONTRACTS。",
-                file=sys.stderr,
-            )
+            young = _listed_within_days(out_dir.parent.parent, args.stock, 400)
+            if young:
+                # 列數不足而且上市未滿一年多：是歷史還不夠長，不是改版（2026-10-08，
+                # 3718 中光電投控 9/3 掛牌，十一張有八張「只解析出 N 列」）。
+                print(
+                    f"  其中 {contract_failures} 張列數不足——這檔 {young} 才上市（櫃），"
+                    f"券商鏡像上的歷史還不夠長，不是站台改版。",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"  其中 {contract_failures} 張是契約不符——頁面抓到了但版面不符預期，"
+                    f"多半是站台改版。請對照 reference/ENDPOINTS.md 更新 "
+                    f"moneydj.CONTRACTS。",
+                    file=sys.stderr,
+                )
         if failures > contract_failures:
             print(
                 "  其餘是連線失敗。八個站台全部拒絕通常代表 IP 被擋"
@@ -1857,12 +1881,51 @@ def new_listings(root: Path, market: Any) -> list[str]:
     量到的是 251 檔。金融保險業不算（六大指標本來就不適用），所以扣掉之後
     是「應該在清單上、但從來沒出現過」的那一批。
     """
-    known = {r.get("stock_id", "") for r in Store(root).read("ratings")}
+    rows = Store(root).read("ratings")
+    known = {r.get("stock_id", "") for r in rows}
+    stamp = new_listing_stamp(rows)
     return [
         code
-        for code in market.codes()
+        for code in sorted(listed_universe(root, market))
         if code not in known and not market.financials(code).excluded
+        # 上一輪試過、券商鏡像的歷史還不夠算評等（新上市、或新成立的控股公司）：
+        # 全市場換季之前不再問（見 `new_listing_stamp`）。
+        and not _refresh_is_stuck(root, code, stamp)
     ]
+
+
+def new_listing_stamp(rows: Any) -> str:
+    """新上市股票「試過、還算不出來」的記號內容：``新上市@<全市場最新期別>``。
+
+    3718 中光電投控 2026-09-03 掛牌，券商鏡像上它的歷史只有兩三季，十一張表有八張
+    「列數不足」，評等算不出來、寫不進清單——於是 `new_listings` 每一輪都再排它一次，
+    一天四班、每班 15 個請求，紀錄裡每次都是一整排「契約不符」。全市場換季（新的一季
+    財報出來）之後記號自動失效，那時候鏡像上多了一季，值得再問一次。
+    """
+    latest = [r.get("fiscal_quarter", "") for r in rows if r.get("period_index") == "1"]
+    latest = [q for q in latest if q]
+    return f"新上市@{max(latest) if latest else ''}"
+
+
+def listed_universe(root: Path, market: Any) -> set[str]:
+    """官方行情名單 ∩ 兩個交易所的公司基本資料（2026-10-08）。
+
+    行情與財報資料裡會殘留**剛下市**的代號：5371 中光電在 2026-09-03 換股成
+    3718 中光電投控之後，Q2 財報與月營收裡還有它，於是補課每天拿 15 個請求去問一檔
+    已經不在的股票（鏡像上只剩兩列，報「契約不符」）。公司基本資料是當天在市場上的
+    名單，兩者交集才是「現在真的還在交易」的那一批。基本資料讀不到或不完整時退回
+    行情名單，不讓一份缺檔把整個母體縮小。
+    """
+    codes = set(market.codes())
+    try:
+        from .ingest.yearly_trading import listing_dates  # noqa: PLC0415
+
+        listed = set(listing_dates(root))
+    except Exception:  # noqa: BLE001 - 讀不到就不交集
+        listed = set()
+    if len(listed) < MIN_UNIVERSE:
+        return codes
+    return codes & listed
 
 
 def official_universe(root: Path) -> set[str]:
@@ -2088,7 +2151,7 @@ def cmd_refresh(args: argparse.Namespace) -> int:
     if args.codes:
         queue = [(c.strip(), "") for c in args.codes.split(",") if c.strip()]
     else:
-        universe = None if market is None else set(market.codes())
+        universe = None if market is None else listed_universe(root, market)
         queue = stale_codes(root, universe=universe)
         # 過期的先補完，再來是「評等新、但沒有分頁」的（點進去只有一頁），
         # 最後才是新上市的：螢幕上錯的東西 > 只有半套的 > 還沒出現的。
@@ -2155,11 +2218,18 @@ def cmd_refresh(args: argparse.Namespace) -> int:
         grids = _fetched_grids(root, code)
         if grids is None:
             failed.append(f"{code}：抓完了卻讀不回來")
+            if was == "新上市":
+                mark_refresh_stuck(root, code, new_listing_stamp(Store(root).read("ratings")))
             continue
         try:
             data = GridsSource(grids=grids, stock_id=code).load()
             rating = rate(data, settings.rules, settings.periods)
         except Exception as exc:  # noqa: BLE001 - 一檔算不出來不該停下整批
+            if was == "新上市":
+                # 不是失敗：上市太新，鏡像上的歷史還不夠。記下來，換季前不再問。
+                mark_refresh_stuck(root, code, new_listing_stamp(Store(root).read("ratings")))
+                print(f"  （新上市、鏡像上的歷史還不夠算評等：{exc}——全市場換季前不再排它）")
+                continue
             failed.append(f"{code}：{exc}")
             continue
         meta = None
@@ -2194,7 +2264,7 @@ def cmd_refresh(args: argparse.Namespace) -> int:
     # 收尾：把不在官方名單上的那幾檔標成已下市。跟補課同一支指令，是因為官方名單
     # 這時剛好已經讀進來了，不必再跑一趟。
     if market is not None:
-        mark_delisted(root, set(market.codes()))
+        mark_delisted(root, listed_universe(root, market))
     return EXIT_OK if done or not failed else EXIT_FAIL
 
 
