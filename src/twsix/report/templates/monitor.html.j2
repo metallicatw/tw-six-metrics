@@ -12,8 +12,13 @@
    CORS 的問題，也不必請對方配合任何事。 #}
 {# 頁面標題和導覽列重複，畫面上不顯示；說明燈泡改放在這一行小字後面（2026-10-04）。 #}
 <h2 class="sr">全球市場監控＋日股觀察</h2>
-{# <div> 不是 <p>：燈泡裡有 <ol>，放在 <p> 裡瀏覽器會提早把段落關掉，整段說明就攤在頁面上（2026-10-04）。 #}
-<div class="muted note-s embed-cap">每天台北 06:30 更新 {% call tip() %}
+{# 這一行原本是「每天台北 06:30 更新 💡」，報告自己的時間戳在 iframe 裡另起一行（手機上還
+   折成兩行）。2026-10-07 改成一行：報告的生成時間與資料基準搬到這裡（build.report_stamp），
+   燈泡接在後面；報告裡那一行藏起來（build.hide_report_header）。讀不到時間戳時退回原本那句。
+   <div> 不是 <p>：燈泡裡有 <ol>，放在 <p> 裡瀏覽器會提早把段落關掉，整段說明就攤在頁面上。 #}
+<div class="muted note-s embed-cap mon-stamp">
+  {%- if stamp %}<span>報告生成時間 {{ stamp[0] }}</span><span class="sep">｜</span><span>資料基準 {{ stamp[1] }}</span>
+  {%- else %}每天台北 06:30 更新{% endif %} {% call tip() %}
   台股加權、VIX、日經 225、密大消費者信心、村田 B/B Ratio 與一組日本焦點個股。
   <br><br>
   由 <a href="https://github.com/metallicatw/market-monitor" rel="noopener">market-monitor</a>

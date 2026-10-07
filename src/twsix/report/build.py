@@ -619,6 +619,37 @@ REPORT_EMBED_CSS = ('<style id="twsix-embed">'
                     '#modeToggleBtn{display:none!important}'
                     '</style>')
 REPORT_HIDE_CSS = REPORT_EMBED_CSS   # 舊名字，測試與呼叫端還在用
+#: 報告開頭那一行時間戳（「報告生成時間：…　｜　報告資料基準：…」）搬到網站這一頁，接上
+#: 說明燈泡（2026-10-07）。只有讀得到時間戳時才藏報告裡那一行——讀不到（報告改了格式）
+#: 就維持原樣，不讓這一行憑空消失。
+REPORT_HEADER_HIDE = '<style id="twsix-embed-head">.page-header{display:none!important}</style>'
+_STAMP = re.compile(r"報告生成時間：\s*([^<｜　]+?)\s*　?｜　?\s*報告資料基準：\s*([^<　]+?)\s*<")
+
+
+def report_stamp(path: Path) -> tuple[str, str] | None:
+    """嵌入報告的（生成時間, 資料基準）；讀不到回 None。"""
+    try:
+        head = path.read_text("utf-8", errors="ignore")[:400_000]
+    except OSError:
+        return None
+    m = _STAMP.search(head)
+    return (m.group(1).strip(), m.group(2).strip()) if m else None
+
+
+def hide_report_header(path: Path) -> bool:
+    """藏起嵌入報告自己的時間戳那一行（網站那一頁已經畫了）。已經有就不動。"""
+    try:
+        html = path.read_text("utf-8")
+    except OSError:
+        return False
+    if 'id="twsix-embed-head"' in html:
+        return False
+    i = html.lower().find("<head>")
+    if i < 0:
+        return False
+    i += len("<head>")
+    path.write_text(html[:i] + REPORT_HEADER_HIDE + html[i:], encoding="utf-8")
+    return True
 _EMBED_BLOCK = re.compile(r'<style id="twsix-embed">.*?</style>', re.S)
 
 
@@ -1363,8 +1394,11 @@ def build_site(
         written["cross.html（轉址到趨勢×六大×報酬）"] = 1
 
     if has_monitor:
+        mon_stamp = report_stamp(out_dir / MONITOR_REPORT)
+        if mon_stamp:
+            hide_report_header(out_dir / MONITOR_REPORT)
         env.get_template("monitor.html.j2").stream(
-            **base, page="monitor", rel="", report=MONITOR_REPORT
+            **base, page="monitor", rel="", report=MONITOR_REPORT, stamp=mon_stamp
         ).dump(str(out_dir / MONITOR_PAGE))
         written["monitor.html（市場監控）"] = 1
 

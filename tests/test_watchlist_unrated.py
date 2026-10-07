@@ -123,3 +123,34 @@ def test_燈泡說明在網頁還沒載完時就是收起來的():
     m = re.search(r"<script>([^<]*classList\.add\('js'\)[^<]*)</script>", head)
     assert m, "<head> 裡沒有同步標上 .js"
     assert head.index(m.group(0)) < head.index("site.css"), "要在樣式表之前"
+
+
+
+def test_監控頁的時間戳搬到網站這一行_燈泡接在後面():
+    """2026-10-07：刪掉「每天台北 06:30 更新」，報告的「生成時間｜資料基準」搬到網站那一行
+    （一行），💡 接在後面；報告裡那一行藏起來。讀不到時間戳時退回原本那句、不藏。"""
+    import tempfile as _t
+
+    from twsix.report.build import hide_report_header, report_stamp
+
+    with _t.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "monitor-report.html"
+        p.write_text('<html><head></head><body><div class="page-header"><div class="page-subtitle stamp-lead">'
+                     "報告生成時間：2026-10-07 13:03　｜　報告資料基準：2026/10/06</div></div></body></html>", "utf-8")
+        assert report_stamp(p) == ("2026-10-07 13:03", "2026/10/06")
+        assert hide_report_header(p) is True and hide_report_header(p) is False
+        assert ".page-header{display:none!important}" in p.read_text("utf-8")
+        p.write_text("<html><head></head><body>別的格式</body></html>", "utf-8")
+        assert report_stamp(p) is None
+    tpl = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/monitor.html.j2").read_text("utf-8")
+    assert "報告生成時間 {{ stamp[0] }}" in tpl and "資料基準 {{ stamp[1] }}" in tpl
+
+
+def test_快速篩選在手機上固定三列():
+    """2026-10-07：手機上原本自然換行成四列；改成三個 .qf-row，電腦版 display:contents。"""
+    root = Path(__file__).resolve().parents[1] / "src/twsix/report/templates"
+    mac = (root / "_macros.html.j2").read_text("utf-8")
+    qf = mac[mac.index("{% macro quick_filters"):mac.index("{%- endmacro %}", mac.index("{% macro quick_filters"))]
+    assert qf.count('<span class="qf-row">') == 3
+    css = (root / "site.css").read_text("utf-8")
+    assert ".qf-row{display:contents}" in css and ".qf-row{display:flex;flex-wrap:wrap" in css

@@ -1567,7 +1567,7 @@ def test_市場監控的說明也收進燈泡(tmp_path=None):
     page = (out / MONITOR_PAGE).read_text(encoding="utf-8")
     # 2026-10-04：和導覽列重複的標題不再顯示，燈泡接在 iframe 上面那一行小字後面。
     assert '<h2 class="sr">全球市場監控＋日股觀察</h2>' in page
-    cap = page[page.index('class="muted note-s embed-cap"'):page.index("<iframe")]
+    cap = page[page.index('class="muted note-s embed-cap'):page.index("<iframe")]
     assert 'class="bulb"' in cap, "燈泡不在說明那一行"
     assert "村田" in page, "說明內容不見了"
     # iframe 上面不該有一整段攤開的說明文字（都在燈泡的 tipbox 裡）。
@@ -2022,7 +2022,7 @@ def test_嵌入頁的燈泡在_div_裡_單獨開啟收進燈泡(tmp_path=None):
     build_site(_records(), out, sheets_dir=_sheets(tmp))
     for name in ("trend.html", MONITOR_PAGE):
         page = (out / name).read_text("utf-8")
-        assert '<div class="muted note-s embed-cap">' in page, name
+        assert '<div class="muted note-s embed-cap' in page, name
         assert '<p class="muted note-s embed-cap">' not in page, name
         cap = page[page.index('embed-cap'):page.index("<iframe")]
         before, inside = cap.split('class="tipbox"', 1)

@@ -160,6 +160,9 @@
    （見 row），和上面的文字篩選、觀察清單同時作用（全部條件都要成立）。 #}
 {% macro quick_filters(rows) -%}
 <div class="qf" role="group" aria-label="快速篩選">
+  {#- 三個 .qf-row：電腦版 display:contents（照舊一整排自然換行）；手機版各自一列，
+      固定排成三列（2026-10-07：原本自然換行是四列，而且每列長短不一）。 #}
+  <span class="qf-row">
   {# 產業：可複選（2026-09-29）。按鈕打開一個勾選面板，有〔全選〕〔全部取消〕；
      全部勾著＝不篩。 #}
   <span class="qf-inds">產業 <button type="button" id="f-indbtn" class="qf-btn" aria-expanded="false">全部產業 ▾</button>
@@ -178,6 +181,7 @@
   {# 綜合評分：自訂範圍（例如 2～4、3～4）。留空＝不限；算不出分數的一檔在設了範圍時不列。 #}
   <label>綜合評分 <input type="number" id="f-smin" min="0" max="4" step="0.01" placeholder="最小" aria-label="綜合評分最小">
     ～ <input type="number" id="f-smax" min="0" max="4" step="0.01" placeholder="最大" aria-label="綜合評分最大"></label>
+  </span><span class="qf-row">
   <label>具投資價值 <select id="only-picks"><option value="">全部</option><option value="1">具投資價值</option><option value="0">不具</option></select></label>
   {# 報酬風險比：勾選面板（複選，2026-09-30）。勾了的項目任一成立就列（OR）；都不勾＝不篩。
      「自訂範圍」是 ≥ 下限（可再加 ≤ 上限）；無風險視為 ∞，所以只設下限時一定會一起篩到，
@@ -192,6 +196,7 @@
       <label><input type="checkbox" data-rr="bear"> 空頭</label>
       <label><input type="checkbox" data-rr="na"> — 算不出來</label>
     </span></span>
+  </span><span class="qf-row">
   <label>AI <select id="f-ai"><option value="">全部</option><option value="held">持有中</option><option value="cand">候選</option>
     <option value="veto">財報否決</option><option value="any">任一標記</option></select></label>
   <label>籌碼雷達 <select id="f-cf"><option value="">全部</option><option value="pick">精選</option><option value="l1">共振</option>
@@ -200,6 +205,7 @@
       兩個包在一起，窄螢幕換行時才不會只剩燈泡掉到下一列。 -#}
   <span class="qf-end"><button type="button" id="f-reset" class="qf-reset">清除篩選</button>
   {%- if caller %}{{ caller() }}{% endif %}</span>
+  </span>
 </div>
 {%- endmacro %}
 

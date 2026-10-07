@@ -1203,9 +1203,9 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 }
 @container page (max-width:480px){
   .calc-inputs{grid-template-columns:1fr;gap:12px}
-  /* 窄版：標籤自己一行，句子像一段文字那樣自然換行（輸入框是行內的一個字）。 */
-  .wrap .pxh-form label{display:block;line-height:2.2}
-  .wrap .pxh-form .pxh-tag{display:block;width:max-content;line-height:1.4;margin-bottom:2px}
+  /* 窄版：標籤和句子同一列（一個條件一列），句子太長才像一段文字那樣自然換行。 */
+  .wrap .pxh-form label{display:block;line-height:2.3}
+  .wrap .pxh-form .pxh-tag{display:inline-block;line-height:1.4;margin-right:6px;min-width:0}
   .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .mlegend{font-size:11px}
   /* 四位數的目標價在 6.2em 裡還放得下，但擠三欄之後每欄只剩不到 5em；
@@ -1367,6 +1367,10 @@ table.hl-t th.num,table.hl-t td.num{text-align:right;font-variant-numeric:tabula
 .hl-sub{margin:0 0 8px;font-size:12.5px;color:var(--muted);max-width:none}
 .note-s{margin:6px 0 0;font-size:11.5px;color:var(--muted);max-width:none;line-height:1.65}
 .embed-cap{margin:0 0 8px}
+/* 〔全球市場監控〕那一行：生成時間｜資料基準 💡，手機上也是一行（字收到 12px、不折行）。 */
+.mon-stamp{display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:12.5px;margin:0 0 10px}
+.mon-stamp .sep{color:var(--rule)}
+@media (max-width:420px){.mon-stamp{font-size:11.5px;letter-spacing:-.1px}}
 /* 表格下方「註：…」那一行：原本沒有樣式，在手機上是一整段內文字級（2026-10-04）。 */
 p.foot{margin:8px 0 0;font-size:12px;color:var(--muted);line-height:1.6}
 /* 股價健診 */
@@ -1608,6 +1612,7 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
 :root[data-theme=dark] .cf-mk-l1{color:#e3d35a;border-color:#e3d35a}
 /* 快速篩選那一列：五個下拉＋一顆清除。 */
 .qf{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.qf-row{display:contents}
 .qf label{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);white-space:nowrap}
 .qf select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--rule);border-radius:6px;
   background:var(--surface);color:var(--ink);max-width:12em}
@@ -1629,6 +1634,16 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
 .qf-rrpanel .qf-rrrange{flex-wrap:wrap}
 .qf-rrpanel input[type=number]{width:5em}
 .qf-note{font-size:11.5px;color:var(--muted);margin:0 0 4px 22px;line-height:1.4}
+/* 手機：固定三列——①產業＋綜合評分 ②具投資價值＋報酬風險比 ③AI＋籌碼雷達＋清除＋💡。
+   字小半號、框收窄，三列各自塞得進一行；真的太窄（＜340px）才在列內換行。 */
+@media (max-width:640px){
+  .qf{flex-direction:column;align-items:stretch;gap:8px}
+  .qf-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+  .qf label,.qf .qf-inds{font-size:12.5px;gap:4px}
+  .qf select,.qf .qf-btn,.qf .qf-reset{font-size:12.5px;padding:4px 6px}
+  .qf input[type=number]{font-size:12.5px;width:4em;padding:4px 5px}
+  .qf-end{gap:6px}
+}
 @media (max-width:640px){
   .ai-block{padding:12px 12px 14px}
   .ai-state{font-size:22px}

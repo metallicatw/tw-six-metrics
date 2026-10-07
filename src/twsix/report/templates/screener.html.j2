@@ -123,9 +123,11 @@ window.SC_V = "{{ data_v|default('') }}";
 .sc-chart text{font-size:11px;fill:var(--ink-2)}
 @media (max-width:640px){.sc-card{padding:12px}.sc input[type=number]{width:4.6em}
   .sc-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
-  /* 句子型的條件列：標籤自己一行，句子從下一行的行首開始，不會折成參差的三段。 */
-  .sc-row{display:block;line-height:2.2}
-  .sc-row .sc-tag{display:block;width:max-content;line-height:1.4;margin-bottom:2px}}
+  /* 句子型的條件列（2026-10-07）：標籤和句子在同一列，一個條件一列；句子太長才像一段
+     文字那樣自然接到下一行（輸入框是行內的一個字），不會折成參差的幾段。 */
+  .sc-row{display:block;line-height:2.3;font-size:13px}
+  .sc-row input[type=number]{width:4.2em;padding-left:6px;padding-right:4px}
+  .sc-row .sc-tag{display:inline-block;line-height:1.4;margin-right:6px;min-width:0}}
 </style>
 
 <div class="sc">
