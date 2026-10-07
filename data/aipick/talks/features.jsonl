@@ -839,3 +839,4 @@
 {"code":"8390","name":"金益鼎","date":"2026-10-06","file":"839020261006M002.pdf","processed":"2026-10-06","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":37},"llm":null,"model":""}
 {"code":"3516","name":"亞帝歐","date":"2026-10-06","file":"351620261006M001.pdf","processed":"2026-10-06","source":"pdf","rules":{"pos":0,"neg":0,"tone":0.0,"chars":3157},"llm":null,"model":""}
 {"code":"3624","name":"光頡","date":"2026-10-07","file":"362420261006M001.pdf","processed":"2026-10-07","source":"pdf","rules":{"pos":7,"neg":0,"tone":0.5833,"chars":4149},"llm":null,"model":""}
+{"code":"5309","name":"系統電","date":"2026-10-07","file":"530920261007M001.pdf","processed":"2026-10-07","source":"pdf","rules":{"pos":32,"neg":3,"tone":0.725,"chars":9034},"llm":null,"model":""}
