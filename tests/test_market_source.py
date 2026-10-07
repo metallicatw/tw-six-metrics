@@ -334,3 +334,38 @@ def test_the_queue_no_longer_holds_stocks_that_can_never_be_rated():
     queue = set(new_listings(root, md))
     for code in ("2850", "2883", "9136", "910322", "6015", "5864"):
         assert code not in queue, f"{code} 還在佇列裡"
+
+
+def test_剛下市的不在母體裡_新上市算不出來的換季前不再排():
+    """2026-10-08 refresh 紀錄：3718 中光電投控（9/3 掛牌）十一張有八張「列數不足」、
+    5371 中光電（9/3 換股下市）鏡像只剩兩列——兩檔每一班都被排進來、每一班都報
+    「契約不符，多半是站台改版」。兩件事都不是改版：
+
+    * 5371 還留在財報／月營收裡，但已經不在交易所的公司基本資料上 → 不在母體。
+    * 3718 試過一次算不出評等 → 記號 `新上市@<最新期別>`，全市場換季前不再排。
+    """
+    import shutil
+    import tempfile
+
+    from twsix import cli
+    from twsix.ingest.market import MarketData
+
+    root = ROOT / "data"
+    md = MarketData.load(root)
+    uni = cli.listed_universe(root, md)
+    assert "5371" not in uni and "3718" in uni and len(uni) > 1500
+
+    tmp = Path(tempfile.mkdtemp())
+    for name in ("ratings.csv", "twse_companies.csv", "tpex_companies.csv"):
+        shutil.copy(root / name, tmp / name)
+    shutil.copytree(root / "market", tmp / "market")
+    md2 = MarketData.load(tmp)
+    assert "3718" in cli.new_listings(tmp, md2)
+    stamp = cli.new_listing_stamp(cli.Store(tmp).read("ratings"))
+    assert stamp.startswith("新上市@20")
+    cli.mark_refresh_stuck(tmp, "3718", stamp)
+    assert "3718" not in cli.new_listings(tmp, md2), "試過算不出來，換季前不該再排"
+    cli.mark_refresh_stuck(tmp, "3718", "新上市@2000.1Q")
+    assert "3718" in cli.new_listings(tmp, md2), "換季之後記號自動失效"
+    assert cli._listed_within_days(root, "3718", 100_000) == "2026-09-03"
+    assert cli._listed_within_days(root, "2330", 400) == ""  # 1994 年上市
