@@ -400,8 +400,8 @@
   <p class="stop">中間那一欄是<b>損益兩平所需的最低勝率</b>＝ 1 ÷（1 ＋ 報酬風險比）。</p>
   <p class="stop"><b>無風險</b>＝股價已經低於下檔價，沒有下檔風險，比 3.0 還好。
   <b>空頭</b>＝預期報酬是負的（目標價低於現在的股價）。
-  <b>—</b>＝算不出來：多半是<b>歷年本益比不足</b>（年度股價與 EPS 湊不滿五年，例如上市
-  未滿五年，本益比區間算不出來），也可能是預估 EPS 為負、本益比估價不適用。<b>三者不是同一件事</b>。</p>
+  <b>—</b>＝算不出來：多半是<b>歷年本益比不足</b>（本益比區間取去年起往前 5 年，至少要 3 個
+  完整年度；上市未滿或有虧損年度不計），也可能是預估 EPS 為負、本益比估價不適用。<b>三者不是同一件事</b>。</p>
   <p class="stop">{% for note in reward_risk_notes %}{{ note }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
 {% endcall %}</span></th>
   <th class="mid ai-cell"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 17 + o }}">AI</button>{% call tip() %}

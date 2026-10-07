@@ -198,13 +198,17 @@ def test_merge_keeps_years_only_one_exchange_has():
     assert merged[0].high == 380.0  # 上市 wins where both report
 
 
-def test_a_short_series_is_refused_rather_than_biasing_the_pe_band():
+def test_上市未滿五年的照存_只有一年都沒有才報錯():
+    """2026-10-08：「至少需要 5 年」是照活頁簿本益比 5 年平均窗口訂的，但擋在抓取這一步
+    會讓上市 1～4 年的股票連有的那幾年都不存。改成有幾年存幾年，夠不夠交給估價各項。"""
+    check([Year(114, 1.0, 1.0, 1.0)])           # 1 年：照存，不報錯
+    check([Year(114, 2.0, 1.0, 1.5), Year(113, 2.0, 1.0, 1.5)])
     try:
-        check([Year(114, 1.0, 1.0, 1.0)])
+        check([])
     except FetchError as exc:
-        assert "5 年" in str(exc)
+        assert "只取得 0 年" in str(exc) and "至少需要" in str(exc)
     else:
-        raise AssertionError("不足 5 年應該要報錯")
+        raise AssertionError("一年都沒有應該要報錯（明年一月再問）")
 
 
 def test_the_grid_reads_back_through_the_same_coordinates_as_the_workbook():
@@ -323,13 +327,23 @@ def test_記號還是讀得回來():
 
     cli = _cli()
     d = Path(tempfile.mkdtemp())
-    cli._mark_yearly_too_young(d, 2, "2026-09-14")
+    cli._mark_yearly_too_young(d, 0, "2026-09-14")
     # ⚠️ 封鎖上限是**一年**（`YEARLY_MAX_BLOCK_YEARS`），不是「差幾年等幾年」。
     # 以前只回兩年就封到 2029，而這個判定分不出「真的太新」和「這一次回得不
     # 完整」——見下面 `test_一次壞回應不該換到四年封鎖`。
     assert cli._yearly_too_young(d, "2026-09-14") is True
     assert cli._yearly_too_young(d, "2026-12-31") is True
     assert cli._yearly_too_young(d, "2027-06-01") is False
+
+
+def test_舊的年份不足記號不再擋():
+    """2026-10-08 以前「只取得 2 年」也會被封到明年；現在 1 年以上照存，舊記號不算數。"""
+    import tempfile
+
+    cli = _cli()
+    d = Path(tempfile.mkdtemp())
+    cli._mark_yearly_too_young(d, 2, "2026-09-14")
+    assert cli._yearly_too_young(d, "2026-09-14") is False
 
 
 def test_舊名字的記號會自己被換掉():
@@ -347,7 +361,7 @@ def test_舊名字的記號會自己被換掉():
     d = Path(tempfile.mkdtemp())
     legacy = d / cli.YEARLY_TOO_YOUNG_LEGACY
     legacy.write_text(
-        _json.dumps({"years": 2, "checked": "2026-09-14", "retry_after": "2029-01-15"}),
+        _json.dumps({"years": 0, "checked": "2026-09-14", "retry_after": "2029-01-15"}),
         encoding="utf-8",
     )
 

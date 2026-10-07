@@ -172,17 +172,30 @@ def merge(listed: Sequence[Year], otc: Sequence[Year]) -> list[Year]:
     return sorted(by_year.values(), key=lambda y: -y.year)
 
 
-def check(years: Sequence[Year]) -> None:
-    """Fail loudly on a short or empty series.
+#: 本益比區間的「5 年平均」窗口（活頁簿〈BASIC2〉J7:M8，預設 K2＝5年平均）要幾年。
+#: **這不是抓取的門檻**——見 `check`。
+PE_WINDOW_YEARS = 5
 
-    A P/E band built from three years instead of eight is not obviously wrong
-    on screen — it is just wrong.  Five is the fewest the 5-year window rule
-    can work with at all.
+
+def check(years: Sequence[Year]) -> None:
+    """Fail only when there is nothing usable at all.
+
+    以前這裡是「少於 5 年就報錯、整份不存」（2026-10-08 改掉）。那個 5 年是照活頁簿
+    本益比區間的 5 年平均窗口訂的，但它擋錯了地方：
+
+    * 估價引擎自己就會判斷夠不夠——5 年窗口裡有 3 年就算得出本益比區間
+      （`valuation.eps_forecast.PeBand`），河流圖要 5 個年度倍數（`build_pe_river`），
+      不夠的那一項各自留白並寫明原因。
+    * 擋在抓取這一步，上市 1～4 年的股票連已經有的那幾年都不存，殖利率估價與
+      本益比區間整塊空白，而錯誤訊息還寫「可能是代號有誤」。
+
+    現在：有幾年存幾年。只有「一年都沒有」（今年才上市，交易所還沒有完整年度）
+    才報錯——那一種明年一月再問。
     """
-    if len(years) < 5:
+    if not years:
         raise FetchError(
-            f"年度交易資訊只取得 {len(years)} 年，至少需要 5 年才能算本益比區間。"
-            f"　可能是代號有誤，或交易所回應格式已改。"
+            "年度交易資訊只取得 0 年：今年才上市（櫃），交易所還沒有任何完整年度，"
+            "至少需要 1 年。"
         )
     if not any(y.high and y.low for y in years):
         raise FetchError("年度交易資訊沒有任何一年有最高／最低價")
@@ -277,7 +290,7 @@ class YearlyTrading:
 # 河流圖的分區、沒有目標價與下檔價、沒有報酬風險比，也就進不了〔趨勢×六大×報酬〕。
 #
 # 交易所拿不到的原因幾乎都是「上市未滿五年」：證交所的年度表只列已結束的年度，
-# 而 `check()` 要至少五年才寫檔。但這三個數字不是只有交易所算得出來——
+# （以前 `check()` 還要至少五年才寫檔，2026-10-08 起有幾年存幾年）。但這三個數字不是只有交易所算得出來——
 #
 # * 每日行情（2024 起整年都在）：逐日算，和交易所的定義一模一樣。
 # * 〔股價(週)〕（1998 起）：最高＝各週最高的最高、最低＝各週最低的最低（實測 6,045

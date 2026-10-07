@@ -292,7 +292,10 @@ def evaluate(
     band = PeBand.from_history(inp.pe_high, inp.pe_low, opts.pe_basis)
     pe_view: PriceView | None = None
     if band is None:
-        gaps["pe"] = "歷年本益比不足"
+        # 本益比區間取「去年起往前 5 年」的窗口，至少要 3 年（PeBand.from_history）。
+        n_pe = sum(1 for v in list(inp.pe_high)[1:6] if v is not None)
+        gaps["pe"] = (f"歷年本益比僅 {n_pe} 年（至少要 3 個完整年度；上市未滿或有虧損年度不計）"
+                      if n_pe < 3 else "歷年本益比不足")
     elif row is None:
         gaps["pe"] = "無預估EPS"
     elif not inp.market_price:

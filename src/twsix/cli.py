@@ -3560,7 +3560,7 @@ def cmd_fetch_ownership(args: argparse.Namespace) -> int:
 
 
 #: `cmd_fetch_yearly` 最近一次的失敗訊息。批次模式靠它分辨「這次沒抓到」
-#: （下次可重試）與「這檔上市未滿 5 年」（重跑一百次也一樣）。
+#: （下次可重試）與「今年才上市、交易所還沒有任何完整年度」（明年一月前問幾次都一樣）。
 _LAST_YEARLY_ERROR = [""]
 
 
@@ -3640,6 +3640,12 @@ def cmd_fetch_yearly(args: argparse.Namespace) -> int:
         f"  年度交易資訊 {len(years)} 年（{years[-1]}–{years[0]}）"
         f"　來源：{where} -> {target}"
     )
+    from .ingest.yearly_trading import PE_WINDOW_YEARS  # noqa: PLC0415
+
+    if len(years) < PE_WINDOW_YEARS:
+        # 不是錯誤：上市未滿 5 年。照存，估價各項自己判斷夠不夠（見 yearly_trading.check）。
+        print(f"    （上市僅 {len(years)} 年，未滿 {PE_WINDOW_YEARS} 年：本益比區間以現有年數計，"
+              "河流圖滿 5 年後自動補上）")
     return EXIT_OK
 
 
@@ -3875,6 +3881,13 @@ def _yearly_too_young(sheet_dir: Path, today: str) -> bool:
         mark = json.loads((sheet_dir / YEARLY_TOO_YOUNG).read_text("utf-8"))
     except Exception:  # noqa: BLE001 - 記號讀不開就當作沒有，重問一次
         return False
+    # 2026-10-08 起，有 1 年以上的照存（見 yearly_trading.check）。以前「只取得 2 年」
+    # 也會記這個號、封到明年——那些舊記號不再算數，下一輪就把那幾年補進來。
+    try:
+        if int(mark.get("years", 0)) >= 1:
+            return False
+    except (TypeError, ValueError):
+        pass
     return str(mark.get("retry_after", "")) > today
 
 
@@ -3923,7 +3936,8 @@ def _mark_yearly_too_young(sheet_dir: Path, years: int, today: str) -> None:
 def _yearly_missing(data_dir: Path, *, include_too_young: bool = False) -> list[str]:
     """還沒有〔年度交易資訊〕那一張的股票，代號排序。
 
-    預設**不含**那些已知上市未滿五年的——它們不是「還沒補到」，是「還不能補」。
+    預設**不含**那些今年才上市（櫃）、交易所還沒有完整年度的——它們不是「還沒補到」，
+    是「還不能補」。（上市一年以上的照存，見 yearly_trading.check。）
     把它們混在一起數，那個數字每天都一樣，看起來像排程壞了。
     """
     from .ingest.yearly_trading import SHEET  # noqa: PLC0415
@@ -4040,18 +4054,18 @@ def cmd_backfill_yearly(args: argparse.Namespace) -> int:
 
     print(
         f"\n年度交易資訊回補：成功 {ok} 檔"
-        f"｜上市未滿 5 年（重跑也不會變）{len(too_young)} 檔"
+        f"｜交易所還沒有完整年度（明年一月再問）{len(too_young)} 檔"
         f"｜這次沒抓到（下次可重試）{len(retryable)} 檔"
         f"｜還沒輪到 {max(0, len(codes) - ok - len(too_young) - len(retryable))} 檔"
     )
     if too_young:
-        print(f"  年份不足：{', '.join(too_young[:20])}"
+        print(f"  還沒有完整年度：{', '.join(too_young[:20])}"
               + (" …" if len(too_young) > 20 else ""))
         print("  （已記下，下一個年結之前不再問它們）")
     waiting = len(_yearly_missing(data_dir, include_too_young=True)) - len(
         _yearly_missing(data_dir))
     if waiting:
-        print(f"  另有 {waiting} 檔已知上市未滿五年，這一輪連問都沒問。")
+        print(f"  另有 {waiting} 檔今年才上市（櫃），這一輪連問都沒問。")
     return EXIT_OK
 
 
