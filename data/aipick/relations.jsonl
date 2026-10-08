@@ -109,3 +109,9 @@
 {"a":"2303","b":"2302","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"聯電與麗正皆屬於半導體產業中的晶圓代工與封測相關同業公司。"}
 {"a":"2303","b":"2492","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆為台股重要電子股，常受整體半導體及電子零組件行情連動。"}
 {"a":"2303","b":"6116","asked":"2026-10-07","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"兩者皆為台灣主要的半導體晶圓代工廠，同屬半導體族群，常因產業景氣連動而同步變動。"}
+{"a":"3221","b":"8182","asked":"2026-10-08","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"台嘉碩與加高皆為台灣知名的石英元件製造商，屬於同業競爭關係。"}
+{"a":"3221","b":"2484","asked":"2026-10-08","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"台嘉碩與希華皆為台灣知名的石英元件（Frequency Control Devices）製造廠，產品高度重疊，屬於同業競"}
+{"a":"3221","b":"8289","asked":"2026-10-08","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"台嘉碩與泰藝均為台灣知名的石英元件（Frequency Control Products）製造商，產品高度重疊。"}
+{"a":"6488","b":"5483","asked":"2026-10-08","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":1.0,"note":"中美晶（5483）為環球晶（6488）之母公司，持股超過半數並具控制權。"}
+{"a":"6488","b":"6182","asked":"2026-10-08","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"環球晶與合晶皆為台灣主要的半導體矽晶圓製造廠，屬於同業競爭關係。"}
+{"a":"6488","b":"3532","asked":"2026-10-08","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"環球晶與台勝科皆為台灣主要的半導體矽晶圓廠，屬於直接競爭對手。"}
