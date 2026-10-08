@@ -855,3 +855,4 @@
 {"code":"2010","name":"春源","date":"2026-10-08","file":"201020261008M001.pdf","processed":"2026-10-08","source":"pdf","rules":{"pos":32,"neg":1,"tone":0.8158,"chars":8021},"llm":null,"model":""}
 {"code":"2221","name":"大甲","date":"2026-10-08","file":"222120261008M001.pdf","processed":"2026-10-08","source":"pdf","rules":{"pos":20,"neg":0,"tone":0.8,"chars":3871},"llm":null,"model":""}
 {"code":"2607","name":"榮運","date":"2026-10-08","file":"260720261008M001.pdf","processed":"2026-10-08","source":"pdf","rules":{"pos":22,"neg":2,"tone":0.6897,"chars":2194},"llm":null,"model":""}
+{"code":"7818","name":"溢泰實業","date":"2026-09-30","file":"781820261008M001.pdf","processed":"2026-10-08","source":"pdf","rules":{"pos":26,"neg":4,"tone":0.6286,"chars":8259},"llm":null,"model":""}
