@@ -848,3 +848,6 @@
 {"code":"6517","name":"保勝光學","date":"2026-10-07","file":"651720261007M003.pdf","processed":"2026-10-07","source":"pdf","rules":{"pos":2,"neg":0,"tone":0.2857,"chars":4835},"llm":null,"model":""}
 {"code":"3516","name":"亞帝歐","date":"2026-10-06","file":"351620261007M001.pdf","processed":"2026-10-07","source":"pdf","rules":{"pos":0,"neg":0,"tone":0.0,"chars":3152},"llm":null,"model":""}
 {"code":"3354","name":"律勝","date":"2026-10-08","file":"335420261007M001.pdf","processed":"2026-10-08","source":"pdf","rules":{"pos":6,"neg":0,"tone":0.5455,"chars":3189},"llm":null,"model":""}
+{"code":"2603","name":"長榮","date":"2026-10-08","file":"260320261008M001.pdf","processed":"2026-10-08","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":27},"llm":null,"model":""}
+{"code":"3008","name":"大立光","date":"2026-10-08","file":"300820261008M001.pdf","processed":"2026-10-08","source":"pdf","rules":{"pos":0,"neg":0,"tone":0.0,"chars":1125},"llm":null,"model":""}
+{"code":"6126","name":"信音","date":"2026-10-08","file":"612620261008M001.pdf","processed":"2026-10-08","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":35},"llm":null,"model":""}
