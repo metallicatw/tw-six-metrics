@@ -115,3 +115,4 @@
 {"a":"6488","b":"5483","asked":"2026-10-08","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":1.0,"note":"中美晶（5483）為環球晶（6488）之母公司，持股超過半數並具控制權。"}
 {"a":"6488","b":"6182","asked":"2026-10-08","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"環球晶與合晶皆為台灣主要的半導體矽晶圓製造廠，屬於同業競爭關係。"}
 {"a":"6488","b":"3532","asked":"2026-10-08","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"環球晶與台勝科皆為台灣主要的半導體矽晶圓廠，屬於直接競爭對手。"}
+{"a":"6538","b":"3008","asked":"2026-10-10","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆為台股知名的高價電子股或科技類股，常隨大盤與電子股資金流向同向波動。"}
