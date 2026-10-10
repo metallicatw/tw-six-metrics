@@ -278,6 +278,10 @@ jobs:
       - name: 推送
         if: steps.commit.outputs.changed == 'yes'
         uses: ./.github/actions/push-with-retry
+        with:
+          # 兩趟每日排程（或手動補跑）重疊時，這些重算出來的產物一定互相衝突；
+          # 原始行情 rebase 會自己合好，衍生產物採用這一趟的版本，下一趟會再重算。
+          derived: data/aipick data/chipflow data/valuations.csv
 
       # 價格進了 repo，網頁還沒換。這兩步讓今天的收盤當天就出現在個股頁上。
       # 手動觸發一定建站：那是「上游剛更新、要把它們帶進網站」的時候按的，
