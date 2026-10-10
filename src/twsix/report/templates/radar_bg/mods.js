@@ -1057,6 +1057,26 @@ var __fetch = API.fetch;
     return arr.slice(0, n).reverse();
   }
 
+  // 疊加股價（2026-10-10）：灰色虛線、自己的高低（不另畫刻度），月營收那一組用「營收公告日股價」
+  var T3PX = bgPxPref(), LAST = null;
+  function drawPx(svg, px, xAt, top, height){
+    if(!T3PX || !px) return;
+    var nums = px.filter(function(v){ return v !== null && v !== undefined; });
+    if(nums.length < 2) return;
+    var lo = Math.min.apply(null, nums), hi = Math.max.apply(null, nums);
+    if(lo === hi){ lo -= 1; hi += 1; }
+    var pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+    var d = "", on = false;
+    for(var i=0;i<px.length;i++){
+      var v = px[i];
+      if(v === null || v === undefined){ on = false; continue; }
+      d += (on ? "L" : "M") + xAt(i).toFixed(2) + "," + (top + height - (v - lo) / (hi - lo) * height).toFixed(2) + " ";
+      on = true;
+    }
+    svg.appendChild(el("path", {d:d, fill:"none", stroke:BG_PX_COLOR, "stroke-width":1.4, "stroke-dasharray":"4 3"}));
+  }
+  function pxTip(px, i){ var v = T3PX && px ? px[i] : null; return v === null || v === undefined ? "" : '<br><span style="color:#8a929b">┅</span> 股價 ' + fmtNum(v, 1) + ' 元'; }
+
   function renderBarChart(container, opts){
     // opts: labels(oldest->newest), values(oldest->newest), unit, diverging(bool), fmt(fn), height
     var labels = opts.labels, values = opts.values;
@@ -1110,12 +1130,13 @@ var __fetch = API.fetch;
       }
       hitAreas.push({x:PAD_L+bw*i, w:bw, i:i});
     }
+    drawPx(svg, opts.px, function(i){ return PAD_L + bw*i + bw/2; }, PAD_T, innerH);
 
     var hitRect = el("rect", {x:PAD_L, y:0, width: innerW, height:h, fill:"transparent"});
     svg.appendChild(hitRect);
     attachHover(svg, container, hitAreas, function(i){
       var v = values[i];
-      return { label: labels[i], html: labels[i] + '<br><b>' + (opts.fmt? opts.fmt(v) : fmtNum(v)) + (opts.unit? (' ' + opts.unit) : '') + '</b>' };
+      return { label: labels[i], html: labels[i] + '<br><b>' + (opts.fmt? opts.fmt(v) : fmtNum(v)) + (opts.unit? (' ' + opts.unit) : '') + '</b>' + pxTip(opts.px, i) };
     });
 
     container.innerHTML = "";
@@ -1192,6 +1213,7 @@ var __fetch = API.fetch;
     var hitAreas = [];
     var stepW = n>1 ? innerW/(n-1) : innerW;
     for(var k=0;k<n;k++) hitAreas.push({x: xScale(k)-stepW/2, w: stepW, i:k});
+    drawPx(svg, opts.px, xScale, PAD_T, innerH);
 
     var hitRect = el("rect", {x:PAD_L, y:0, width: innerW, height:h, fill:"transparent"});
     svg.appendChild(hitRect);
@@ -1200,7 +1222,7 @@ var __fetch = API.fetch;
         var v = s.values[i];
         return '<span style="color:'+s.color+'">●</span> ' + (s.name? s.name+': ' : '') + (opts.fmt? opts.fmt(v) : fmtNum(v)) + (opts.unit? (' '+opts.unit):'');
       }).join("<br>");
-      return { label: labels[i], html: labels[i] + '<br>' + lines };
+      return { label: labels[i], html: labels[i] + '<br>' + lines + pxTip(opts.px, i) };
     });
 
     container.innerHTML = "";
@@ -1291,6 +1313,7 @@ var __fetch = API.fetch;
   }
 
   function render(code, meta, rec){
+    LAST = [code, meta, rec];
     __id("stockHead").hidden = false;
     __id("kpis").hidden = false;
     __id("stockName").textContent = meta.name || code;
@@ -1389,12 +1412,21 @@ var __fetch = API.fetch;
     // --- group 3: 月營收與股價 ---
     var g3 = group("月營收與股價(近兩年)", 4);
     var grid3 = g3.querySelector(".grid");
+    var pxLab = document.createElement("label");
+    pxLab.className = "bg3-px"; pxLab.title = "在月營收的圖上疊一條營收公告日股價（灰色虛線）";
+    pxLab.innerHTML = '<input type="checkbox" class="bg-pxsync"' + (T3PX ? " checked" : "") + '> 📈 疊加股價線';
+    g3.insertBefore(pxLab, grid3);
+    pxLab.querySelector("input").addEventListener("change", function(e){
+      if(T3PX === e.target.checked) return;
+      T3PX = e.target.checked; bgPxPref(T3PX);
+      var y = window.pageYOffset; if(LAST) render(LAST[0], LAST[1], LAST[2]); window.scrollTo(0, y);
+    });
     var c8 = card("單月營收", "百萬元", latestValueHtml(d.rev_m, fmtMoney, MLABELS.rev));
     grid3.appendChild(c8);
-    renderBarChart(c8.querySelector(".chart-box"), {labels:mRevLabels, values:rev_m, fmt:fmtMoney, unit:"百萬"});
+    renderBarChart(c8.querySelector(".chart-box"), {labels:mRevLabels, values:rev_m, fmt:fmtMoney, unit:"百萬", px:price_m});
     var c9 = card("單月營收年增率", "%", latestValueHtml(d.rev_yoy_m, fmtPct, MLABELS.rev));
     grid3.appendChild(c9);
-    renderLineChart(c9.querySelector(".chart-box"), {labels:mRevLabels, series:[{values:rev_yoy_m, color:cssVar("--accent")}], zeroBase:true, fmt:fmtPct, unit:""});
+    renderLineChart(c9.querySelector(".chart-box"), {labels:mRevLabels, series:[{values:rev_yoy_m, color:cssVar("--accent")}], zeroBase:true, fmt:fmtPct, unit:"", px:price_m});
     var c7 = card("月營收公告日股價", "元", latestValueHtml(d.price_m, function(v){return fmtNum(v,1);}, MLABELS.price));
     grid3.appendChild(c7);
     renderLineChart(c7.querySelector(".chart-box"), {labels:mPriceLabels, series:[{values:price_m, color:cssVar("--accent")}], fmt:function(v){return fmtNum(v,1);}, unit:"元"});
@@ -1406,7 +1438,7 @@ var __fetch = API.fetch;
     renderLineChart(c10.querySelector(".chart-box"), {labels:mRevLabels, series:[
       {values:rev_yoy3_m, color:cssVar("--accent"), name:"3月"},
       {values:rev_yoy12_m, color:cssVar("--accent-2"), name:"12月"}
-    ], zeroBase:true, fmt:fmtPct, unit:""});
+    ], zeroBase:true, fmt:fmtPct, unit:"", px:price_m});
 
     // --- group 4: 存貨 ---
     var g4 = group("存貨(近五年)", 3);

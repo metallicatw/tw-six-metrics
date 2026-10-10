@@ -1306,7 +1306,7 @@ window.TWSIXStarMenu = (function(){
   var tally = document.getElementById('tally');
   var watchOnlyPage = table.getAttribute('data-watchlist') === '1';
   var QF = [
-            ['ai', document.getElementById('f-ai')], ['cf', document.getElementById('f-cf')]];
+            ['ai', document.getElementById('f-ai')], ['cf', document.getElementById('f-cf')], ['gf', document.getElementById('f-gf')]];
   var qfReset = document.getElementById('f-reset');
   /* 產業（複選）與綜合評分（範圍），2026-09-29。 */
   var indBtn = document.getElementById('f-indbtn'), indPanel = document.getElementById('f-indpanel');
@@ -1378,7 +1378,8 @@ window.TWSIXStarMenu = (function(){
       var sel = QF[fi][1], want = sel && sel.value;
       if(!want) continue;
       var got = tr.getAttribute('data-f-' + QF[fi][0]) || '';
-      if(want === 'any' ? !got : got !== want) return false;
+      /* data-f-* 可以是空白分隔的好幾個記號（〔貪婪恐懼〕同時有 20 與 60 日的），選的那一個在裡面就算 */
+      if(want === 'any' ? !got : (' ' + got + ' ').indexOf(' ' + want + ' ') < 0) return false;
     }
     var v = q ? q.value.trim().toLowerCase() : '';
     return !v || tr.textContent.toLowerCase().indexOf(v) > -1;

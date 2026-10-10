@@ -81,7 +81,7 @@ def _stamp_key(data_dir: Path) -> dict[str, str]:
         # 內容雜湊而不是修改時間：CI 每次 checkout，檔案時間都是「現在」。
         "radar": hashlib.sha1(radar.read_bytes()).hexdigest() if radar.exists() else "",
         "levels": str(len(list((data_dir / "ownership" / "levels").glob("*.csv.gz")))),
-        "version": "5",   # 3：radar.json 按欄存（2026-09-28）；4：逐日歷史 hist（2026-09-29）
+        "version": "6",   # 6：①② 長歷史 long.json＋*.L.bin（2026-10-10，舊版網站沒有這些檔，要重產）；3：radar.json 按欄存（2026-09-28）；4：逐日歷史 hist（2026-09-29）
     }
 
 

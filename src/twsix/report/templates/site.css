@@ -1618,6 +1618,18 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
   :root:not([data-theme=light]) .cf-mk-l1{color:#e3d35a;border-color:#e3d35a}
 }
 :root[data-theme=dark] .cf-mk-pick{background:#e3d35a;color:var(--ground)}
+/* 〔貪婪恐懼〕那一欄（2026-10-10）：金叉實心紅、死叉實心綠（台股慣例），將交叉用外框。
+   一格可能同時有 20 與 60 日兩顆，上下疊。 */
+#t thead th.gf-cell{vertical-align:middle}
+#t thead th.gf-cell .hdtip{justify-content:center}
+a.gf-mk-a{display:inline-flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none}
+.gf-mk{display:inline-block;padding:1px 6px;border-radius:9px;font-size:11px;font-weight:700;line-height:17px;white-space:nowrap}
+.gf-mk-g{color:#fff;background:var(--up)}
+.gf-mk-x{color:#fff;background:var(--down)}
+.gf-mk-ng{color:var(--up);border:1px solid var(--up)}
+.gf-mk-nx{color:var(--down);border:1px solid var(--down)}
+a.gf-mk-a:hover .gf-mk{filter:brightness(1.1)}
+#t.compact .gf-mk{font-size:10px;padding:0 4px}
 :root[data-theme=dark] .cf-mk-l1{color:#e3d35a;border-color:#e3d35a}
 /* 快速篩選那一列：五個下拉＋一顆清除。 */
 .qf{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}

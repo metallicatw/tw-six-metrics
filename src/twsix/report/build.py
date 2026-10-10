@@ -1285,6 +1285,14 @@ def build_site(
     except Exception as exc:  # noqa: BLE001 - 試行中的一欄不能讓清單畫不出來
         print(f"::warning::清單的籌碼雷達欄讀不到（那一欄會是空白）：{exc!r}")
         base["cf_marks"] = {}
+    # 〔貪婪恐懼〕那一欄：貪婪／恐懼指標的黃金／死亡交叉與即將交叉（2026-10-10）。
+    try:
+        from ..chipflow.gfcross import load_marks as load_gf_marks  # noqa: PLC0415
+
+        base["gf_marks"] = load_gf_marks(sheets_dir.parent if sheets_dir is not None else None)
+    except Exception as exc:  # noqa: BLE001 - 一欄不能讓清單畫不出來
+        print(f"::warning::清單的貪婪恐懼欄算不出來（那一欄會是空白）：{exc!r}")
+        base["gf_marks"] = {}
 
 
     # 〔評等清單〕 is the front door.  It used to be 〔具投資價值〕, which ranks

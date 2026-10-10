@@ -202,7 +202,8 @@ def test_清單多了籌碼雷達欄與五個快速篩選():
         assert "quick_filters(rows)" in src and "cf=cf_marks" in src, page
     js = (T / "site.js").read_text("utf-8")
     assert "function rrPass(tr)" in js and "if(cat === 'free') return st.hi === null;" in js
-    assert "var QF = [" in js and "want === 'any' ? !got : got !== want" in js
+    assert "var QF = [" in js and "want === 'any' ? !got : (' ' + got + ' ').indexOf(' ' + want + ' ') < 0" in js
+    assert "['gf', document.getElementById('f-gf')]" in js and 'id="f-gf"' in m and 'class="gf-cell mid"' in m
     assert "INDS.has(tr.getAttribute('data-f-ind')" in js and "tr.getAttribute('data-f-score')" in js
     assert 'data-f-score=' in m
 

@@ -722,3 +722,15 @@ def test_長歷史編碼_頁面解得回來():
     assert got["cl"] == [10.5, None, 11.25]
     assert got["z"] == [0.0123, 0.02, None]
     assert got["hp"] == [None, None, None]
+
+
+def test_貪婪恐懼交叉的判定():
+    from twsix.chipflow.gfcross import classify
+
+    assert classify([-1, -0.2, 0.3]) == "g", "今天由負轉正：黃金交叉"
+    assert classify([0.4, 0.2, -0.1]) == "x", "今天由正轉負：死亡交叉"
+    assert classify([-0.5, -0.3, 0.2, 0.5, 0.9]) == "g", "兩天前交叉，還在 3 日內"
+    assert classify([-1, -0.8, -0.4]) == "ng", "差 0.4、比昨天更近：即將黃金交叉"
+    assert classify([1, 0.9, 0.4]) == "nx"
+    assert classify([-1, -0.3, -0.4]) is None, "差距在拉大，不算即將交叉"
+    assert classify([-1, -0.8, float("nan")]) is None

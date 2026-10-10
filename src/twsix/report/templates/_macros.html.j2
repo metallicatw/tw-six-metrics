@@ -44,11 +44,12 @@
    「+0.50」「—」「AA」照字串排會排出胡說，而把「怎麼比大小」放進 JS 去猜每一欄
    的型別，等於在兩個地方各寫一次規則。這裡一次寫好：數字就是數字，等第換成
    0~4，沒有值一律是最小的 -999——排序時沉到底，而不是插在中間。 #}
-{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False, price_date='', ai=None, cf=None, start_hidden=False) -%}
+{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False, price_date='', ai=None, cf=None, start_hidden=False, gf=None) -%}
 {% set when = (fetched_at or {}).get(r.stock_id) %}
 {% set has_full = when or (rich_ids and r.stock_id in rich_ids) %}
 {%- set mk = (ai or {}).get(r.stock_id) %}
 {%- set cm = (cf or {}).get(r.stock_id) %}
+{%- set gm = (gf or {}).get(r.stock_id) %}
 {# data-f-*：快速篩選用的分類（2026-09-29）。寫在列上而不是讓 JavaScript 去讀格子裡
    的字——字是給人看的（「具投資價值」「1.46」），分類是給程式比對的，兩者分開，改了
    顯示方式也不會讓篩選失靈。 #}
@@ -56,7 +57,7 @@
 {#- start_hidden：〔觀察清單〕上每一列先藏著，由 site.js 只打開目前群組那幾列（2026-10-06）。
    原本 2,000 列先全部排版一次、JS 再藏起其中 1,990 列——那一次白做的排版就要幾秒。 #}
 <tr{% if start_hidden %} hidden{% endif %} data-code="{{ r.stock_id }}" data-f-ind="{{ ind_key(r.industry) }}" data-f-score="{{ '%.4f'|format(sc) if sc is not none else '' }}" data-f-pick="{{ 1 if r.value_pick else 0 }}"
-    data-f-rr="{{ reward_cat(r) }}" data-f-rrv="{{ '%.6f'|format(r.reward_risk) if (r.reward_risk is not none and not r.risk_free) else '' }}" data-f-ai="{{ mk.kind if mk else '' }}" data-f-cf="{{ cm.kind if cm else '' }}">
+    data-f-rr="{{ reward_cat(r) }}" data-f-rrv="{{ '%.6f'|format(r.reward_risk) if (r.reward_risk is not none and not r.risk_free) else '' }}" data-f-ai="{{ mk.kind if mk else '' }}" data-f-cf="{{ cm.kind if cm else '' }}" data-f-gf="{{ gm.tokens if gm else '' }}">
   {# 流水號。內容留空，數字由 CSS 的計數器產生——這樣它數的是**畫面上的位置**：
      排序之後從 1 重新數，篩選之後跳過被隱藏的列。若改成建站時寫死的數字，排一次
      序就會變成一欄亂跳的號碼，比沒有還糟。 #}
@@ -138,6 +139,10 @@
      系統的意見」，放在評等的後面，也不會讓前面的欄號位移。 #}
   <td class="cf-cell mid" data-s="{{ cm.key if cm else 0 }}"
       {%- if cm %} title="{{ cm.title }}"{% endif %}>{% if cm %}<a class="cf-mk cf-mk-{{ cm.kind }}" href="{{ rel }}radar.html#t1-{{ r.stock_id }}">{{ cm.label }}</a>{% endif %}</td>
+  {# 〔貪婪恐懼〕：貪婪／恐懼指標的交叉（chipflow/gfcross.py）。點標籤另開分頁看那四張圖。 #}
+  <td class="gf-cell mid" data-s="{{ gm.key if gm else 0 }}"
+      {%- if gm %} title="{{ gm.title }}"{% endif %}>{% if gm %}<a class="gf-mk-a" href="{{ rel }}radar.html#t1-{{ r.stock_id }}-gf" target="_blank" rel="noopener">
+      {%- for txt, k in gm["items"] %}<span class="gf-mk gf-mk-{{ k }}">{{ txt }}</span>{% endfor %}</a>{% endif %}</td>
 </tr>
 {%- endmacro %}
 
@@ -206,6 +211,11 @@
     <option value="veto">財報否決</option><option value="any">任一標記</option></select></label>
   <label>籌碼雷達 <select id="f-cf"><option value="">全部</option><option value="pick">精選</option><option value="l1">共振</option>
     <option value="any">精選或共振</option></select></label>
+  <label>貪婪恐懼 <select id="f-gf"><option value="">全部</option>
+    <option value="g">黃金交叉（20或60）</option><option value="g20">黃金交叉 20 日</option><option value="g60">黃金交叉 60 日</option>
+    <option value="ng">即將黃金交叉</option><option value="nx">即將死亡交叉</option>
+    <option value="x">死亡交叉（20或60）</option><option value="x20">死亡交叉 20 日</option><option value="x60">死亡交叉 60 日</option>
+    <option value="any">任一記號</option></select></label>
   {#- 呼叫端可以把說明燈泡接在〔清除篩選〕右邊，不必自己再佔一列（2026-10-04）；
       兩個包在一起，窄螢幕換行時才不會只剩燈泡掉到下一列。 -#}
   <span class="qf-end"><button type="button" id="f-reset" class="qf-reset">清除篩選</button>
@@ -436,6 +446,21 @@
   </ul>
   <p class="stop">點標題排序：精選 → 共振（同一級依共振分數）→ 空白。</p>
   <p class="stop">⚠️ 清單由公開籌碼資料自動產生，不是投資建議；每週回頭驗證的成績見〔籌碼雷達〕的〔指標驗證〕。</p>
+{% endcall %}</span></th>
+  <th class="mid gf-cell"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 19 + o }}">貪婪<br>恐懼</button>{% call tip() %}
+  <b>貪婪／恐懼指標的交叉</b>（每個交易日收盤後更新；點標籤另開分頁看〔籌碼雷達〕那一檔的四張圖）。
+  貪婪指標＝買盤比例 20（或 60）日加總、恐懼指標＝賣盤比例加總，兩者相加是 20（60），
+  所以看的是「貪婪 − 恐懼」的正負：
+  <ul class="rrguide">
+    <li><b>金叉20／60</b><em>3 個交易日內</em>
+        <span>貪婪由下往上穿過恐懼（差值由 ≤0 轉 &gt;0）：多方開始占優。</span></li>
+    <li><b>死叉20／60</b><em>3 個交易日內</em>
+        <span>貪婪跌破恐懼：空方開始占優。BG 的提醒：死亡交叉時股價常已先跑一段。</span></li>
+    <li><b>將金叉／將死叉</b><em>差距 ≤ 0.5</em>
+        <span>還沒交叉，但兩條線只差 0.5 以內，而且比前一天更接近。</span></li>
+  </ul>
+  <p class="stop">點標題排序：金叉（20 日優先）→ 將金叉 → 空白 → 將死叉 → 死叉。上方〔貪婪恐懼〕快篩可以只看某一種。</p>
+  <p class="stop">⚠️ 這是落後的確認訊號，20 日那一組在盤整時會來回交叉，不是買賣建議。</p>
 {% endcall %}</span></th>
 </tr></thead>
 {%- endmacro %}

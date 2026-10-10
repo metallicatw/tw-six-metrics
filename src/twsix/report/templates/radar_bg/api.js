@@ -103,11 +103,14 @@ function bgRangeUI(host, opt){
   var BTN = opt.buttons || [[63, "近3月"], [120, "近120日"], [250, "近1年"], [0, "全部"]];
   host.innerHTML = '<div class="bg-rng"><span class="lab">縮放區間：</span>' +
     BTN.map(function(b){ return '<button type="button" data-n="' + b[0] + '">' + b[1] + "</button>"; }).join("") +
-    (opt.price ? '<label class="px"><input type="checkbox"> 疊加股價</label>' : "") + "</div>" +
+    (opt.price ? '<label class="px" title="在每一張指標圖上疊一條股價（灰色虛線，左邊刻度）"><input type="checkbox" class="bg-pxsync"> 📈 疊加股價線</label>' : "") + "</div>" +
     '<div class="bg-rng-sl"><input type="range" min="0" value="0" aria-label="區間起點"><input type="range" min="0" value="0" aria-label="區間終點"></div>' +
     '<p class="bg-rng-note"></p>';
   var r = host.querySelectorAll(".bg-rng-sl input"), r0 = r[0], r1 = r[1], note = host.querySelector(".bg-rng-note");
-  var cb = host.querySelector(".px input"), n = 0, dates = [], view = [0, 0], pending = 0, span = opt.span || 120, want = 0;
+  var cb = host.querySelector(".px input");
+  // 疊加股價預設開著（2026-10-10），關掉之後記在這台瀏覽器，①②③ 共用同一個設定
+  if (cb){ cb.checked = bgPxPref(); cb.addEventListener("change", function(){ bgPxPref(cb.checked); }); }
+  var n = 0, dates = [], view = [0, 0], pending = 0, span = opt.span || 120, want = 0;
   function mark(){
     var len = view[1] - view[0] + 1, atEnd = view[1] === n - 1;
     [].forEach.call(host.querySelectorAll("button[data-n]"), function(b){
@@ -142,6 +145,14 @@ function bgRangeUI(host, opt){
   };
 }
 
+function bgPxPref(v){
+  try {
+    if (v === undefined) return localStorage.getItem("twsix.cf.px") !== "0";
+    localStorage.setItem("twsix.cf.px", v ? "1" : "0");
+    document.querySelectorAll("#cf .bg-pxsync").forEach(function(x){ if (x.checked !== !!v){ x.checked = !!v; x.dispatchEvent(new Event("change")); } });
+  } catch (e) { if (v === undefined) return true; }
+  return !!v;
+}
 // 疊加股價時，股價那條線的樣子（灰色虛線、右側另一個刻度）
 var BG_PX_COLOR = "rgba(150,156,166,.85)";
 function t1Fetch(path){
