@@ -25,17 +25,23 @@ from twsix.chipflow import radar as RD
 # 算式
 
 
-def test_K線買賣盤比例_紅K黑K與一字線():
-    # 紅 K：開 10 低 9 高 12 收 11 → 賣 =（10−9）+（12−11）= 2、買 = 3
-    assert abs(I.kline_buy_ratio(10, 12, 9, 11) - 3 / 5) < 1e-12
-    # 黑 K：開 11 高 12 低 9 收 10 → 買 =（12−11）+（10−9）= 2、賣 = 3
-    assert abs(I.kline_buy_ratio(11, 12, 9, 10) - 2 / 5) < 1e-12
-    # 跳空開高算買盤：昨收 9、開 10，其餘同紅 K → 買 = 3 + 1
-    assert abs(I.kline_buy_ratio(10, 12, 9, 11, 9) - 4 / 6) < 1e-12
-    # 一字線：鎖漲停是 1、鎖跌停是 0、不知道昨收是 0.5
+def test_K線買賣盤比例_BG算法():
+    # 上漲日（收 11 ＞ 昨收 10）：買 =（開−低）+（高−昨收）= 1 + 2、賣 =（開−低）+（高−收）= 1 + 1
+    assert abs(I.kline_buy_ratio(10, 12, 9, 11, 10) - 3 / 5) < 1e-12
+    # 下跌日（收 10 ＜ 昨收 11）：買 =（高−開）+（收−低）= 1 + 1、賣 =（高−開）+（昨收−低）= 1 + 2
+    assert abs(I.kline_buy_ratio(11, 12, 9, 10, 11) - 2 / 5) < 1e-12
+    # 跳空開低後一路拉到最高、收在昨收之上：缺口不算賣盤 → 1（BG 2008 2026-05-20）
+    assert I.kline_buy_ratio(27.5, 27.9, 27.5, 27.9, 27.75) == 1.0
+    # 平盤收（收 ＝ 昨收）走下跌日的式子（BG 2008 2026-04-07 是 0）
+    assert I.kline_buy_ratio(27.05, 27.05, 27.0, 27.0, 27.0) == 0.0
+    # 台積電 2026-09-21：開 2445 高 2485 低 2445 收 2480、昨收 2460 → 25 ÷ 30
+    assert abs(I.kline_buy_ratio(2445, 2485, 2445, 2480, 2460) - 25 / 30) < 1e-12
+    # 一字線：鎖漲停 1、鎖跌停 0、完全沒動 0
     assert I.kline_buy_ratio(11, 11, 11, 11, 10) == 1.0
     assert I.kline_buy_ratio(9, 9, 9, 9, 10) == 0.0
-    assert I.kline_buy_ratio(9, 9, 9, 9) == 0.5
+    assert I.kline_buy_ratio(9, 9, 9, 9, 9) == 0.0
+    # 不知道昨收：當作開盤平盤
+    assert abs(I.kline_buy_ratio(10, 12, 9, 11) - 3 / 5) < 1e-12
     assert I.isnan(I.kline_buy_ratio(float("nan"), 1, 1, 1))
 
 
@@ -678,3 +684,41 @@ def test_籌碼雷達十三項工具_版面照BG移植_預設台積電():
     for t in ("function run13()", "function buildForms(", "x6-tbl", "cf-form"):
         assert t not in src, t
 
+
+
+def test_基本面_資本結構三條線與平均資產ROA():
+    """2026-10-10：(保留盈餘＋資本公積) 比例的分母是「股本＋資本公積＋保留盈餘」（舊版除以
+    股本，台積電算出 2,361%）；四季 ROA 用平均總資產（本季末與四季前季末）。"""
+    from twsix.chipflow import site as S
+
+    income, balance = {}, {}
+    # 民國 113Q1～115Q2，累計制：每季淨利 100、EPS 1、營收 1000、營業利益 200
+    seq = [(y, q) for y in (113, 114, 115) for q in (1, 2, 3, 4)][:10]
+    for y, q in seq:
+        income[(y, q)] = {"rev": 1000.0 * q, "op": 200.0 * q, "ni": 100.0 * q, "eps": 1.0 * q}
+        balance[(y, q)] = {"capital": 100.0, "apic": 50.0, "retained": 850.0,
+                           "assets": 2000.0 + 100 * seq.index((y, q))}
+    out = S.fundamentals_series(income, balance)
+    assert out["rap"][-1] == 90.0 and out["rer"][-1] == 85.0 and out["apr"][-1] == 5.0
+    # 115Q2：近四季淨利 400 ÷ ((2900 + 2500) ÷ 2)
+    assert out["roa"][-1] == round(400 / 2700 * 100, 2)
+    assert out["eps4y"][-1] == 0.0
+
+
+def test_長歷史編碼_頁面解得回來():
+    import gzip
+
+    from twsix.chipflow import history as H
+    from twsix.chipflow import site as S
+
+    n = 3
+    blob = S.encode_long({"cl": [10.5, None, 11.25], "z": [0.0123, 0.02, None]}, n)
+    raw = gzip.decompress(blob)
+    pos, got = 0, {}
+    for key, scale in S.LONG_FIELDS:
+        vals, pos = H.decode_series(raw, pos, n)
+        got[key] = [None if v is None else v / scale for v in vals]
+    assert pos == len(raw)
+    assert got["cl"] == [10.5, None, 11.25]
+    assert got["z"] == [0.0123, 0.02, None]
+    assert got["hp"] == [None, None, None]

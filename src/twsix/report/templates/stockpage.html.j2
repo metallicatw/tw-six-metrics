@@ -19,7 +19,10 @@
     {%- if p.industry %}<span class="chip ind">{{ p.industry }}</span>{% endif -%}
     <button type="button" class="star" data-star="{{ p.stock_id }}"
           aria-pressed="false" aria-label="把 {{ p.stock_id }} 加入觀察清單"
-          title="加入觀察清單">☆</button></h2>
+          title="加入觀察清單">☆</button>
+    {#- 2026-10-10：一鍵開〔籌碼雷達〕這一檔的貪婪／恐懼指標（另開分頁）。 -#}
+    <a class="gf-link" href="{{ rel }}radar.html#t1-{{ p.stock_id }}-gf" target="_blank" rel="noopener"
+       title="籌碼雷達：{{ p.stock_id }} 的貪婪／恐懼指標（另開分頁）">貪婪／恐懼<span aria-hidden="true">↗</span></a></h2>
   <p class="facts">
     <span>財報 <b>{{ p.fiscal_quarter or "—" }}</b></span>
     <span>營收 <b>{{ p.revenue_month or "—" }}</b></span>
@@ -890,9 +893,25 @@
   <div class="card"><b>{{ "%.2f"|format(ls.share["三大法人"] * 100) if ls and ls.share["三大法人"] is not none else "—" }}%</b>
     <span>三大法人持股比重</span></div>
 </div>
-<p class="muted note-s">圖近 {{ i.chart_span }} 日・表近 {{ i.days|length }} 日・<a href="{{ rel }}radar.html#t1-{{ p.stock_id }}">看完整籌碼多圖 →</a></p>
+<p class="muted note-s">圖預設近 {{ i.chart_span }} 日（下方可縮放到約三年）・表近 {{ i.days|length }} 日・<a href="{{ rel }}radar.html#t1-{{ p.stock_id }}">看完整籌碼多圖 →</a></p>
+{#- 2026-10-10：縮放區間＋滑桿（和〔股價健診〕同一種操作）。JS 下載 stock/<代號>.i.json
+    之後改用可縮放的圖；讀不到就留著下面這兩張建站時畫好的（近 120 日）。 #}
+<div id="inst-static" data-src="{{ p.stock_id }}.i.json">
 {{ i.figures.foreign_net|safe }}
 {{ i.figures.foreign_share|safe }}
+</div>
+<div id="inst-live" hidden>
+  <h4 class="pxh-h">外資買賣超（張）與股價</h4>
+  <div class="pxc" id="inst-c1"></div>
+  <h4 class="pxh-h">外資持股比重（%）與股價</h4>
+  <div class="pxc" id="inst-c2"></div>
+  <div class="pxh-zoom" id="inst-zoom">
+    <span>縮放區間：</span>
+    <button type="button" data-zoom="21">近1月</button><button type="button" data-zoom="63">近3月</button><button type="button" data-zoom="120" class="on">近120日</button><button type="button" data-zoom="252">近1年</button><button type="button" data-zoom="0">全部</button>
+  </div>
+  <div class="pxh-range"><input type="range" id="inst-r0" min="0" value="0" aria-label="區間起點"><input type="range" id="inst-r1" min="0" value="0" aria-label="區間終點"></div>
+  <p class="note-s" id="inst-span"></p>
+</div>
 <div class="scroll">
   <table>
     <thead>
@@ -986,6 +1005,7 @@
   <div class="card"><b>{{ "%.3f"|format(h.latest.custody) if h.latest.custody is not none else "—" }}</b>
     <span>集保庫存（萬張）</span></div>
 </div>
+<p class="muted note-s"><a href="{{ rel }}radar.html#t2-{{ p.stock_id }}">看完整大戶籌碼 →</a></p>
 {% if h.alt %}{{ range_bar("holders", ["1Y"] + h.alt.keys()|list, "1Y") }}{% endif %}
 <div class="rng-fig" data-rng-fig="holders" data-part="big">{{ h.figures.big|safe }}</div>
 <div class="rng-fig" data-rng-fig="holders" data-part="small">{{ h.figures.small|safe }}</div>

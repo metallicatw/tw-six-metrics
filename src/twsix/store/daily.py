@@ -267,6 +267,48 @@ def qfii_by_day(
     return out
 
 
+def foreign_daily(
+    data_dir: Path, *, days: int = 760
+) -> dict[str, dict[str, tuple[float | None, float | None]]]:
+    """`{代號: {日期: (外資買賣超張數, 外資持股比率 %)}}`，最多 *days* 個交易日。
+
+    個股頁〔外資投信〕的縮放區間用（2026-10-10）：圖可以拉到行情檔的全長（約三年），
+    不只券商鏡像那二十天加每日補的八個月。買賣超每天都有（2023-06 起）；持股比率的
+    每日檔從 2026-04 起才齊，更早只有月底那一天——沒有的日子是 None，圖上就是斷的。
+    """
+    root = data_dir / "market" / "daily"
+    out: dict[str, dict[str, tuple[float | None, float | None]]] = {}
+    inst = root / "institutional"
+    keep = sorted(p.name[:10] for p in (root / "prices").glob("*.csv.gz"))[-days:] \
+        if (root / "prices").is_dir() else []
+    first = keep[0] if keep else ""
+    if inst.is_dir():
+        for path in sorted(inst.glob("*.csv.gz")):
+            if path.name[:10] < first:
+                continue
+            for row in _rows(path):
+                code = (row.get("code") or "").strip()
+                day = (row.get("date") or path.name[:10]).strip()
+                if code:
+                    out.setdefault(code, {})[day] = (_lots(row.get("foreign", "")), None)
+    q = root / "qfii"
+    if q.is_dir():
+        for path in sorted(q.glob("*.csv.gz")):
+            if path.name[:10] < first:
+                continue
+            for row in _rows(path):
+                code = (row.get("code") or "").strip()
+                day = (row.get("date") or path.name[:10]).strip()
+                pct = _num(row.get("pct", ""))
+                if not code or pct is None:
+                    continue
+                slot = out.setdefault(code, {})
+                net = slot.get(day, (None, None))[0]
+                # 三大法人沒列到、但外資持股統計有的那一天：外資當天沒有進出（見上面 institutional_history）
+                slot[day] = (0.0 if net is None and len(code) == 4 else net, pct)
+    return out
+
+
 def foreign_month_end(data_dir: Path) -> dict[str, dict[str, float]]:
     """`{代號: {"2026/08": 69.2, ...}}`——每個月最後一個有資料的交易日的外資持股比率（%）。
 

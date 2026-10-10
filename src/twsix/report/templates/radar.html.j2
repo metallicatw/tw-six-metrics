@@ -112,6 +112,31 @@ window.CF_V = "@@CFV@@";
 #cf .bgm .bg-err{color:#c92a2a;font-weight:600;padding:8px 12px}
 #cf .bgm a.bg-t1,#cf .bgm a.bg-lk{color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 #cf .bgm a.bg-t1{text-decoration-style:dotted}
+/* ①②③ 標題列（2026-10-10）：代號、名稱連個股頁；產業小標；☆ 加入觀察清單 */
+#cf .bgm .bg-ind{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600;
+  color:var(--muted,#8a929b);border:1px solid var(--border,#2a2f36);vertical-align:middle;white-space:nowrap}
+#cf .bgm button.bg-star{appearance:none;border:none;background:none;cursor:pointer;font-size:18px;line-height:1;
+  margin-left:6px;padding:2px 5px;border-radius:6px;color:var(--muted,#8a929b);vertical-align:middle}
+#cf .bgm button.bg-star.on{color:#f5b301}
+#cf .bgm button.bg-star:hover{background:rgba(127,127,127,.15)}
+/* ①② 縮放區間＋滑桿＋疊加股價（2026-10-10，和個股頁〔股價健診〕同一種操作） */
+#cf .bgm .bg-rng-host{margin:10px 0 14px}
+#cf .bgm .bg-rng{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;color:var(--muted,#8a929b)}
+#cf .bgm .bg-rng button{appearance:none;border:1px solid var(--border,#2a2f36);background:transparent;color:inherit;
+  border-radius:7px;padding:4px 10px;font-size:12.5px;cursor:pointer;line-height:1.3}
+#cf .bgm .bg-rng button.on{background:#4fb3c8;border-color:#4fb3c8;color:#0b1016;font-weight:600}
+#cf .bgm .bg-rng button:disabled{opacity:.4;cursor:default}
+#cf .bgm .bg-rng .px{margin-left:auto;display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:var(--ink-2,inherit)}
+#cf .bgm .bg-rng .px input{accent-color:#4fb3c8;width:15px;height:15px}
+#cf .bgm .bg-rng-sl{position:relative;height:26px;margin:6px 0 2px}
+#cf .bgm .bg-rng-sl input{position:absolute;left:0;right:0;top:0;width:100%;margin:0;height:26px;background:none;
+  pointer-events:none;-webkit-appearance:none;appearance:none;accent-color:#4fb3c8}
+#cf .bgm .bg-rng-sl input::-webkit-slider-thumb{pointer-events:auto;-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:#fff;border:3px solid #4fb3c8;cursor:pointer}
+#cf .bgm .bg-rng-sl input::-moz-range-thumb{pointer-events:auto;width:12px;height:12px;border-radius:50%;background:#fff;border:3px solid #4fb3c8;cursor:pointer}
+#cf .bgm .bg-rng-sl input::-webkit-slider-runnable-track{height:4px;background:#4fb3c8;border-radius:2px}
+#cf .bgm .bg-rng-sl input+input::-webkit-slider-runnable-track{background:transparent}
+#cf .bgm .bg-rng-note{margin:2px 0 0;font-size:12px;color:var(--muted,#8a929b)}
 #cf .bgm a.bg-t1:hover,#cf .bgm a.bg-lk:hover{color:var(--accent-2)}
 /* 全站的 .yf 被上面的還原抹掉了，在 BG 頁裡再寫一次（::before 的圖示不受影響） */
 #cf .bgm a.yf{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:3px;vertical-align:-3px;border-radius:4px;color:var(--accent-2);border:1px solid var(--rule);background:var(--surface-2);text-decoration:none}
@@ -166,9 +191,9 @@ window.CF_V = "@@CFV@@";
 <section class="cf-panel" id="cf-about">
 <div class="cf-card"><dl>
 <dt>十三項工具（版面照 BG財報 會員工具一比一還原，數字全部換成本站自己算的）</dt>
-<dd>各分頁預設個股是台積電（2330）。所有表格裡：點<b>代號</b>看〔① 個股籌碼多圖〕、點<b>名稱</b>開個股資訊頁、點收盤價旁的圖示開 Yahoo 技術分析。</dd>
-<dt>① 個股籌碼多圖</dt><dd>近 120 個交易日的股價，以及外資法人、大戶籌碼、成交量能、貪婪恐懼四組共十多張走勢圖；滑鼠移到圖上看當天數值。</dd>
-<dt>② 大戶籌碼</dt><dd>每日：收盤、大戶比例、大戶人數、總股東人數。每週（集保）：集保股權分散表各級距的持股張數與人數趨勢。</dd>
+<dd>各分頁預設個股是台積電（2330）。所有表格裡：點<b>代號</b>看〔① 個股籌碼多圖〕、點<b>名稱</b>開個股資訊頁、點收盤價旁的圖示開 Yahoo 技術分析。①②③ 標題列的代號與名稱開個股資訊頁，旁邊是產業別與 ☆（加入觀察清單）。</dd>
+<dt>① 個股籌碼多圖</dt><dd>預設近 120 個交易日、可用〔縮放區間〕按鈕與滑桿拉到約三年（可勾〔疊加股價〕）的股價，以及外資法人、大戶籌碼、成交量能、貪婪恐懼四組共十多張走勢圖；滑鼠移到圖上看當天數值。</dd>
+<dt>② 大戶籌碼</dt><dd>每日：收盤、大戶比例、大戶人數、總股東人數。每週（集保）：集保股權分散表各級距的持股張數與人數趨勢。每日那一組可拉到約一年（大戶資料的長度），週資料跟著同一段期間；可勾〔疊加股價〕。</dd>
 <dt>③ 基本面</dt><dd>月營收、損益表（單季 EPS、營益率、淨利率……）、存貨／資本支出／合約負債，近幾年逐季逐月。</dd>
 <dt>④ 籌碼篩選、⑤ 基本面篩選、⑥ 籌碼×基本面</dt><dd>自訂條件篩全上市櫃，留空＝不套用；可選最近 20 個交易日中的任一天重新篩（基本面只用那一天已經公布的資料），也有 20 天回測彙總表與匯出。排名一律「第 1 名最大」。</dd>
 <dt>⑦⑧ 排名軌跡、⑨⑩ 排名榜、⑪⑫ 金額軌跡</dt><dd>法人 60 日累計買超與 20 日成交資金，在全市場的排名（或金額）怎麼一天一天移動；⑦⑨⑪ 看單檔，⑧⑩⑫ 多檔對照。排名會隨市場溫度自動校準——大盤跌時某一檔的法人排名一路往前，才是資金真正的選擇。</dd>
@@ -179,7 +204,7 @@ window.CF_V = "@@CFV@@";
 ・<b>成交金額、法人買進／賣出</b>：證交所 MI_INDEX、T86，櫃買中心每日收盤與三大法人明細（官方成交金額；法人金額 ＝ 股數 × 當日均價，均價 ＝ 成交金額 ÷ 成交股數）。法人預估成交額 ＝（外資＋投信的買進＋賣出）÷ 2 × 均價。<br>
 ・<b>5,000 萬大戶</b>：集保原始 15 級（含人數）。每週全市場一份，另逐檔回補近 51 週；回補依流動性排序、每晚接著補，還沒補到的個股先用八級持股比例（級距較粗，頁面上會標示）。<br>
 ・<b>資本額</b>：每一天用「那一天看得到的」季報股本（法定公告期限之後才算數），增減資前後的比值不會混在一起。<br>
-・<b>存貨、合約負債、資本支出</b>：個股季報（近八季）；損益與月營收：官方全市場彙總。<br>
+・<b>存貨、合約負債、資本支出</b>：個股季報（最多近 20 季，從開始存檔的季別起逐季累積）；損益與月營收：官方全市場彙總。<br>
 ・<b>指標驗證</b>：每週回頭算一次，財報、月營收、E 否決都用「那一週看得到的」版本（月營收次月 10 日、季報公告期限後才算數），所以精選（整條漏斗）也能回測，不偷看答案。</dd>
 <dt>唯一無法用公開資料重現的</dt><dd>
 ・<b>內外盤</b>（逐筆成交是主動買還是主動賣）：證交所與櫃買中心的公開資料只給每日彙總，沒有逐筆明細，只能向資訊商購買。本站以 K 線買賣盤比例（貪婪／恐懼）代替——BG財報 的「含內外盤因子的買賣盤力道」因此無法一比一重現。</dd>
@@ -200,7 +225,7 @@ window.CF_V = "@@CFV@@";
 <dd><b>成交金額 ÷ 大戶人數 20 日（千元）</b>與<b>…排名</b>：20 日成交金額加總 ÷ 5,000 萬大戶人數。市場資金相對於大戶規模的熱度。<br>
 <b>成交金額 20 日佔全市場比例</b>、<b>成交資金佔比排名</b>、<b>成交金額 ÷ 資本額 20 日</b>：這一檔 20 日成交金額佔全市場的比重、它的名次，以及除以股本後的倍數。</dd>
 <dt>① 個股籌碼多圖：貪婪恐懼</dt>
-<dd>每根 K 線拆成往上（買盤）與往下（賣盤）的路徑：開盤跳空算一段；紅 K 假設走「開→低→高→收」，黑 K 假設走「開→高→低→收」。<b>買盤比例</b>＝往上的長度 ÷ 全部長度（0～1），一字線比昨收高記 1、低記 0。<br>
+<dd>每根 K 線拆成買盤與賣盤兩股力道（BG財報 的算法，跳空缺口併進當天的主方向）：<b>收盤比昨收高</b>的日子，買＝（開−低）＋（高−昨收），賣＝（開−低）＋（高−收）；<b>其餘日子</b>，買＝（高−開）＋（收−低），賣＝（高−開）＋（昨收−低）。<b>買盤比例</b>＝買 ÷（買＋賣），0～1；鎖漲停一字線是 1、鎖跌停是 0，完全沒動是 0。<br>
 <b>貪婪指標 1／2</b>＝買盤比例最近 20／60 天的<b>加總</b>；<b>恐懼指標 1／2</b>＝天數 − 貪婪（也就是賣盤比例的加總）。<br>
 <b>買盤比例 20／60 日 − 賣盤比例</b>＝貪婪 − 恐懼＝買賣盤力道；> 0 表示買方較主動。20 日力道轉正且比五天前強，就是 <b>T2 蓄勢</b>。它用來代替公開資料沒有的內外盤。</dd>
 <dt>流動性母體（L0 流動性）</dt>
@@ -333,7 +358,7 @@ function tipEl(html){
 }
 var G_FI = "外資＋投信（不含自營商）每天的買賣超股數 × 當日均價（成交金額 ÷ 成交股數）＝買賣超金額。";
 var G_WHALE = "<b>大戶</b>＝持股市值 ≥ 5,000 萬元的股東。每天用收盤價把 5,000 萬換算成張數門檻，加總集保 15 級裡門檻以上各級；門檻落在某一級中間時按對數比例只算一部分，所以股價跨級時不會突然跳動。";
-var G_GF = "每根 K 線拆成往上（買盤）和往下（賣盤）的路徑：開盤跳空算一段；紅 K 假設走「開→低→高→收」，黑 K 假設走「開→高→低→收」。買盤比例＝往上的長度 ÷ 全部長度（0～1）。一字線（高＝低）比昨收高記 1、低記 0。";
+var G_GF = "每根 K 線拆成買盤與賣盤（BG財報 的算法，跳空缺口併進當天的主方向）：收盤比昨收高的日子，買＝（開−低）＋（高−昨收）、賣＝（開−低）＋（高−收）；其餘日子，買＝（高−開）＋（收−低）、賣＝（高−開）＋（昨收−低）。買盤比例＝買 ÷（買＋賣），0～1。鎖漲停一字線是 1、鎖跌停是 0。";
 var G_L0 = "<b>流動性母體（L0）</b>＝普通股、收盤 > 10 元、20 日平均成交金額 > 5,000 萬，而且不在 E 否決名單上。所有排名、百分位、共振分數都只在這一群裡比；太冷門的股票價格容易被少數單子推動，排名沒有意義。";
 var G_E = "<b>E 否決名單</b>＝〔AI 選股〕的財報品質否決：財報八面（本業虧損、連兩季虧損、獲利靠業外、有獲利沒現金、應計比率偏高、負債快速上升、營收大幅衰退、董監高質押）加重大訊息四面，合計三面以上就擋掉。這裡直接沿用，被否決的不進漏斗。";
 var G_IC = "<b>rank IC</b>（等級相關係數）＝每一週，把流動性母體裡每一檔的某個特徵排名，和它<b>之後 20 個交易日</b>的報酬排名算 Spearman 相關。+1＝特徵越高的之後漲越多、完全一致；0＝沒關係；負的＝反過來。股票市場裡平均 IC 在 ±0.02 左右算很弱，0.05 以上已經算強。";
@@ -645,7 +670,7 @@ function fundRow(block, s, j){
 
 // ── 分頁與事件 ─────────────────────────────────────────────────────────
 var done = {};
-function open(tab, code){
+function open(tab, code, focus){
   document.querySelectorAll(".cf-tab").forEach(function(b){ b.setAttribute("aria-selected", b.getAttribute("data-t") === tab ? "true" : "false"); });
   // 分頁列在手機上橫向捲：點了哪一顆就停在原處，不把整列拉回最左邊；只有選中的那一顆
   // 被切到一半（或網址 #t12 直接開、它在畫面外）時才捲，而且只捲到剛好露出來。
@@ -661,12 +686,23 @@ function open(tab, code){
   if (tab === "val" && !done.val){ done.val = 1; showVal(); }
   if (CF_MODS[tab]){
     bgBoot(tab);
-    if (code) bgShow(tab, code);
+    if (code) bgShow(tab, code, focus);
   }
+}
+// 帶 #t1-2330-gf 進來（個股頁、清單上的名稱）：① 畫好之後捲到〔貪婪恐懼〕那一組
+function bgFocus(tab, code, focus){
+  if (tab !== "t1" || focus !== "gf") return;
+  var tries = 0;
+  (function wait(){
+    var bar = document.getElementById("m1-sbCode"), sec = document.querySelector('#m1-grid .section[data-grp="d"]');
+    var ready = bar && bar.textContent.indexOf(code) >= 0 && sec && !document.getElementById("m1-grid").hidden;
+    if (ready){ setTimeout(function(){ sec.scrollIntoView({block: "start"}); }, 120); return; }
+    if (++tries < 60) setTimeout(wait, 150);
+  })();
 }
 var done = {};
 // 從別的地方帶一檔進來（表格裡的名稱、網址 #t1-2330）：填進那個分頁的輸入框再按查詢
-function bgShow(tab, code){
+function bgShow(tab, code, focus){
   var root = document.querySelector("#cf-" + tab + " .bgm"); if (!root) return;
   var n = tab.slice(1), inp = {t1: "codeInput", t2: "stockInput", t3: "search", t7: "code", t11: "code"}[tab];
   var go = {t1: "searchBtn", t2: "goBtn", t7: "go", t11: "go"}[tab];
@@ -677,6 +713,7 @@ function bgShow(tab, code){
     if (tab === "t3"){ i.value = code; i.dispatchEvent(new Event("input")); i.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter"})); return; }
     i.value = tab === "t1" ? code : code + " " + ((ROWS[code] || {}).n || "");  // ① 只認代號或名稱
     var b = document.getElementById("m" + n + "-" + go); if (b) b.click();
+    bgFocus(tab, code, focus);
   }, BG_BOOTED[tab] === 2 ? 50 : 1500);
   BG_BOOTED[tab] = 2;
 }
@@ -693,7 +730,18 @@ function init(){
   document.querySelectorAll(".cf-tab").forEach(function(b){ b.addEventListener("click", function(){ open(b.getAttribute("data-t")); }); });
   var h = (location.hash || "").replace("#", "").split("-");
   var tab = h[0] && document.querySelector('.cf-tab[data-t="' + h[0] + '"]') ? h[0] : "picks";
-  open(tab, h[1] && ROWS[h[1]] ? h[1] : null);
+  open(tab, h[1] && ROWS[h[1]] ? h[1] : null, h[2] || null);
+  // ①②③ 標題列的☆（bgDecorate 畫的）：和個股頁同一份觀察清單
+  $("cf").addEventListener("click", function(e){
+    var btn = e.target.closest && e.target.closest(".bgm button.bg-star");
+    if (!btn || typeof TWSIXWatch === "undefined") return;
+    if (window.TWSIXStarMenu) TWSIXStarMenu.open(btn); else TWSIXWatch.toggle(btn.getAttribute("data-star"));
+    TWSIXWatch.paint(btn);
+  });
+  document.addEventListener("twsix:wgroup", function(){
+    if (typeof TWSIXWatch === "undefined") return;
+    document.querySelectorAll("#cf .bgm button.bg-star").forEach(function(b){ TWSIXWatch.paint(b); });
+  });
 }
 
 {% include "radar_bg/mods.js" %}

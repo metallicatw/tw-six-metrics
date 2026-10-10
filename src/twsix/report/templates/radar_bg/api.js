@@ -18,6 +18,24 @@ function bgAttr(v){ return String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot
 function bgCode(c){ return '<a class="bg-t1" href="#t1-' + bgAttr(c) + '" title="① 個股籌碼多圖">' + c + '</a>'; }
 function bgName(c, n){ return '<a class="bg-lk" href="stock/' + encodeURIComponent(c) + '.html" title="個股資訊頁">' + (n || c) + '</a>'; }
 function bgYf(c){ return '<a class="yf bg-lk" href="' + bgAttr(yahooTA(c)) + '" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="' + bgAttr(c) + ' Yahoo 技術分析"></a>'; }
+// ①②③ 的標題列（2026-10-10）：代號與名稱連個股資訊頁、名稱後面加產業與☆。
+// codeEl／nameEl 是移植程式原本填字的那兩格；額外的東西插在 after（預設 nameEl）後面，
+// 重查另一檔時先拿掉上一次插的。
+function bgDecorate(code, codeEl, nameEl, after){
+  if (!code) return;
+  var r = ROWS[code] || {}, href = "stock/" + encodeURIComponent(code) + ".html";
+  var name = (nameEl && nameEl.textContent) || r.n || "";
+  if (codeEl) codeEl.innerHTML = '<a class="bg-lk" href="' + href + '" title="個股資訊頁">' + bgAttr(code) + '</a>';
+  if (nameEl && name) nameEl.innerHTML = '<a class="bg-lk" href="' + href + '" title="個股資訊頁">' + bgAttr(name) + '</a>';
+  after = after || nameEl; if (!after || !after.parentNode) return;
+  var host = after.parentNode;
+  host.querySelectorAll(".bg-deco").forEach(function(x){ x.remove(); });
+  var html = (r.ind && after !== nameEl ? "" : (r.ind ? '<span class="bg-ind bg-deco">' + bgAttr(r.ind) + '</span>' : "")) +
+    '<button type="button" class="star bg-star bg-deco" data-star="' + bgAttr(code) + '" aria-pressed="false" title="加入觀察清單">☆</button>';
+  after.insertAdjacentHTML("afterend", html);
+  var star = host.querySelector("button.bg-star");
+  if (star && typeof TWSIXWatch !== "undefined") TWSIXWatch.paint(star);
+}
 BG.ind = function(c){ var r = ROWS[c]; return r && r.ind ? r.ind : "#N/A"; };
 // 匯出：移植過去的程式用 window.claude.use("downloads").save({filename, data})
 if (!window.claude) window.claude = {use: function(k){
@@ -38,6 +56,10 @@ var T1_KEYS = ["price", "fi_ti_cap60", "fi_amt20", "fi_turnover20", "turn_ex_hol
 function t1Stock(code){
   return stock(code).then(function(s){
     var d = s && s.d; if (!d) return null;
+    return t1Map(d);
+  }).catch(function(){ return null; });
+}
+function t1Map(d){
     var m = function(a, f){ return (a || []).map(function(v){ return v == null ? null : f(v); }); };
     var id = function(v){ return v; };
     return {price: d.cl, fi_ti_cap60: d.z, fi_amt20: m(d.fa20, function(v){ return v * 100; }), val_amt20: m(d.va, function(v){ return v * 100; }),
@@ -46,8 +68,82 @@ function t1Stock(code){
       val_20d_pct: d.vs, val_over_cap20: d.vc, val_per_holder20: d.vpw, val_per_holder20_rank: d.xr,
       greed1: m(d.g20, id), greed2: m(d.g60, id), fear1: m(d.g20, function(v){ return 20 - v; }), fear2: m(d.g60, function(v){ return 60 - v; }),
       diff20: m(d.g20, function(v){ return 2 * v - 20; }), diff60: m(d.g60, function(v){ return 2 * v - 60; })};
-  }).catch(function(){ return null; });
 }
+
+// ── ①② 的長歷史（2026-10-10）：stock/<代號>.L.bin，按需下載 ────────────────────
+// 表頭 long.json（日期、欄位、倍率）全站一份；每檔一個 gzip 檔，格式和 hist_*.bin 相同
+// （逐日差分＋zigzag＋varint，缺值是 int32 最小值），用同一個 readSeq 解。
+var BG_LONG = {head: null, cache: {}};
+function bgLong(code){
+  if (BG_LONG.cache[code]) return BG_LONG.cache[code];
+  var head = BG_LONG.head || (BG_LONG.head = getJSON("long.json"));
+  var p = head.then(function(h){
+    return getBin("stock/" + code + ".L.bin").then(function(u){
+      var n = h.dates.length, A = new Int32Array(n), pos = 0, d = {};
+      h.fields.forEach(function(f){
+        pos = readSeq(u, pos, A, 0, n);
+        var arr = new Array(n), any = false;
+        for (var j = 0; j < n; j++){ var v = A[j]; arr[j] = v === SENT ? null : v / f[1]; if (arr[j] !== null) any = true; }
+        if (any) d[f[0]] = arr;
+      });
+      return {dates: h.dates, d: d};
+    });
+  });
+  p.catch(function(){ delete BG_LONG.cache[code]; });
+  return (BG_LONG.cache[code] = p);
+}
+function t1Long(code){ return bgLong(code).then(function(L){ return {dates: L.dates, s: t1Map(L.d)}; }); }
+function t2Long(code){ return bgLong(code).then(function(L){ return {dates: L.dates, c: L.d.cl || [], hr: L.d.hp || [], hc: L.d.hc || [], sh: L.d.sh || []}; }); }
+
+// ── 縮放區間＋雙滑桿＋疊加股價（①② 共用，2026-10-10）───────────────────────────
+// 和個股頁〔股價健診〕同一種操作：按鈕跳到固定長度、滑桿拉起訖。onChange(a, b, px) 的
+// a、b 是陣列索引（含兩端），px 是「疊加股價」有沒有勾。setData(n, dates) 在長歷史載入後
+// 換成更長的那一份：目前看的是「最後 k 天」就維持最後 k 天。
+function bgRangeUI(host, opt){
+  var BTN = opt.buttons || [[63, "近3月"], [120, "近120日"], [250, "近1年"], [0, "全部"]];
+  host.innerHTML = '<div class="bg-rng"><span class="lab">縮放區間：</span>' +
+    BTN.map(function(b){ return '<button type="button" data-n="' + b[0] + '">' + b[1] + "</button>"; }).join("") +
+    (opt.price ? '<label class="px"><input type="checkbox"> 疊加股價</label>' : "") + "</div>" +
+    '<div class="bg-rng-sl"><input type="range" min="0" value="0" aria-label="區間起點"><input type="range" min="0" value="0" aria-label="區間終點"></div>' +
+    '<p class="bg-rng-note"></p>';
+  var r = host.querySelectorAll(".bg-rng-sl input"), r0 = r[0], r1 = r[1], note = host.querySelector(".bg-rng-note");
+  var cb = host.querySelector(".px input"), n = 0, dates = [], view = [0, 0], pending = 0, span = opt.span || 120, want = 0;
+  function mark(){
+    var len = view[1] - view[0] + 1, atEnd = view[1] === n - 1;
+    [].forEach.call(host.querySelectorAll("button[data-n]"), function(b){
+      var k = +b.getAttribute("data-n");
+      var on = want ? (k ? want === k : want === 1e9) : (atEnd && (k ? len === k : view[0] === 0));
+      b.classList.toggle("on", on);
+      b.disabled = !!k && k > n && !opt.more;
+    });
+    note.textContent = n ? dates[view[0]] + " ～ " + dates[view[1]] + "（" + len + " 個交易日）" + (opt.more ? "　較早的資料載入中…" : "") : "";
+  }
+  function fire(){ pending = 0; mark(); opt.onChange(view[0], view[1], cb ? cb.checked : false); }
+  function set(a, b, now){
+    view = [Math.max(0, Math.min(a, b)), Math.min(n - 1, Math.max(a, b))];
+    r0.value = view[0]; r1.value = view[1];
+    if (now) fire(); else if (!pending) pending = requestAnimationFrame(fire);
+  }
+  r0.addEventListener("input", function(){ want = 0; set(+r0.value, +r1.value); });
+  r1.addEventListener("input", function(){ want = 0; set(+r0.value, +r1.value); });
+  if (cb) cb.addEventListener("change", function(){ fire(); });
+  [].forEach.call(host.querySelectorAll("button[data-n]"), function(b){
+    b.addEventListener("click", function(){ var k = +b.getAttribute("data-n"); want = k || 1e9; set(k ? n - k : 0, n - 1, true); });
+  });
+  return {
+    setData: function(len, ds, more){
+      var keep = want || (n ? Math.max(1, view[1] - view[0] + 1) : span);
+      var endNow = !n || view[1] === n - 1;
+      n = len; dates = ds; opt.more = !!more;
+      r0.max = r1.max = Math.max(0, n - 1);
+      if (endNow) set(n - Math.min(keep, n), n - 1, true); else set(view[0], view[1], true);
+    },
+    price: function(){ return cb ? cb.checked : false; }
+  };
+}
+
+// 疊加股價時，股價那條線的樣子（灰色虛線、右側另一個刻度）
+var BG_PX_COLOR = "rgba(150,156,166,.85)";
 function t1Fetch(path){
   if (path === "meta.json") return Promise.resolve(bgResp(BG.names()));
   if (path === "dates.json") return getJSON("market.json").then(function(mk){ var o = {}; T1_KEYS.forEach(function(k){ o[k] = mk.dates; }); return bgResp(o); });
@@ -100,7 +196,7 @@ function t3Rec(code){
     return {QL: QL, ML: {rev: ML, price: ML, notes: notesL}, d: {
       eps_q: byQ(null, q.q, q.eps), eps4_q: byQ(null, q.q, q.eps4), eps4_yoy_q: byQ(null, q.q, q.eps4y),
       opm_q: byQ(null, q.q, q.opm), opinc_q: byQ(null, q.q, q.op), opinc_yoy_q: byQ(null, q.q, q.opy),
-      retained_apic_ratio_q: byQ(null, q.q, q.rap), retained_q: byQ(null, q.q, q.retained), apic_q: byQ(null, q.q, q.apic),
+      retained_apic_ratio_q: byQ(null, q.q, q.rap), retained_ratio_q: byQ(null, q.q, q.rer), apic_ratio_q: byQ(null, q.q, q.apr), retained_q: byQ(null, q.q, q.retained), apic_q: byQ(null, q.q, q.apic),
       capital_q: byQ(null, q.q, q.capital), roa_q: byQ(null, q.q, q.roa),
       inv_q: byQ(null, f.q, f.inv), inv_turn_q: byQ(null, f.q, f.inv_turn), inv_rev_ratio_q: byQ(null, f.q, f.inv_rev),
       cl_q: byQ(null, f.q, f.cl), cl_rev_ratio_q: byQ(null, f.q, f.cl_rev), cl_capital_ratio_q: byQ(null, f.q, f.cl_cap),
@@ -256,7 +352,7 @@ function t13Fetch(path){
 }
 
 var BG_API = {
-  t1: {fetch: t1Fetch, stock: t1Stock}, t2: {fetch: t2Fetch, entry: t2Entry}, t3: {fetch: t3Fetch, rec: t3Rec},
+  t1: {fetch: t1Fetch, stock: t1Stock, long: t1Long}, t2: {fetch: t2Fetch, entry: t2Entry, long: t2Long}, t3: {fetch: t3Fetch, rec: t3Rec},
   t4: {fetch: t4Fetch}, t5: {fetch: t5Fetch}, t6: {fetch: t6Fetch}, t7: {fetch: t7Fetch}, t8: {fetch: t7Fetch},
   t9: {fetch: t9Fetch}, t10: {fetch: t9Fetch}, t11: {fetch: t11Fetch}, t12: {fetch: t11Fetch}, t13: {fetch: t13Fetch}
 };

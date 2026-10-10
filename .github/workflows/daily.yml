@@ -179,7 +179,7 @@ jobs:
           YEARLY_LIMIT: ${{ github.event.inputs.yearly_limit || '40' }}
         run: |
           twsix backfill-yearly --limit "$YEARLY_LIMIT" || true
-          twsix backfill-statements --quarters 12 || true
+          twsix backfill-statements --quarters 28 || true
 
       # 〔全市場估值〕：EPS 預估、本益比估價、報酬風險比，1,958 檔寫進
       # data/valuations.csv。

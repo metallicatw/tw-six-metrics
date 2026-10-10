@@ -2136,7 +2136,11 @@ var TWSIXChart = (function(){
     if(i1 < i0){ var t = i0; i0 = i1; i1 = t; }
     var n = i1 - i0 + 1;
     var lo = Infinity, hi = -Infinity;
-    o.series.forEach(function(s){
+    /* 2026-10-10：s.bar（以 0 為基準的長條，正負兩色 s.up／s.down）與 s.axis2（右邊另一個
+       刻度，例如疊在法人買賣超上的股價）。axis2 的序列不參與左邊刻度的高低。 */
+    var main = o.series.filter(function(s){ return !s.axis2; }), sec = o.series.filter(function(s){ return s.axis2; });
+    if(main.some(function(s){ return s.bar; })){ lo = 0; hi = 0; }
+    main.forEach(function(s){
       for(var i = i0; i <= i1; i++){
         var v = s.values[i];
         if(v === null || v === undefined || isNaN(v)) continue;
@@ -2152,9 +2156,16 @@ var TWSIXChart = (function(){
       ? (function(){ var a = []; for(var v = o.yMin; v <= o.yMax; v++) a.push(v); return a; })()
       : nice(lo - pad, hi + pad, 5);
     var y0 = ticks[0], y1 = ticks[ticks.length - 1];
+    if(sec.length) m.r = 52;
     var pw = W - m.l - m.r, ph = H - m.t - m.b;
+    var lo2 = Infinity, hi2 = -Infinity;
+    sec.forEach(function(s){
+      for(var i = i0; i <= i1; i++){ var v = s.values[i]; if(v === null || v === undefined || isNaN(v)) continue; if(v < lo2) lo2 = v; if(v > hi2) hi2 = v; }
+    });
+    var t2 = isFinite(lo2) ? nice(lo2 - (hi2 - lo2) * 0.04, hi2 + (hi2 - lo2) * 0.04, 4) : null;
     function X(i){ return m.l + (n <= 1 ? pw / 2 : (i - i0) / (n - 1) * pw); }
     function Y(v){ return m.t + ph - (v - y0) / (y1 - y0) * ph; }
+    function Y2(v){ return m.t + ph - (v - t2[0]) / (t2[t2.length - 1] - t2[0]) * ph; }
     var ink = cssVar('--ink', '#111'), muted = cssVar('--muted', '#777'), rule = cssVar('--rule', '#ddd');
     var svg = el('svg', {viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, class: 'pxsvg', role: 'img'});
     if(o.title){
@@ -2175,18 +2186,34 @@ var TWSIXChart = (function(){
       lx.textContent = o.x[i]; svg.appendChild(lx);
       svg.appendChild(el('line', {x1: X(i), x2: X(i), y1: m.t, y2: m.t + ph, stroke: rule, 'stroke-width': 1, opacity: .6}));
     }
+    if(t2) t2.forEach(function(v){
+      var tx2 = el('text', {x: W - m.r + 6, y: Y2(v) + 4, 'text-anchor': 'start', class: 'pxa'});
+      tx2.textContent = fmtNum(v); svg.appendChild(tx2);
+    });
     (o.hlines || []).forEach(function(h){
       svg.appendChild(el('line', {x1: m.l, x2: W - m.r, y1: Y(h.value), y2: Y(h.value),
         stroke: h.color, 'stroke-width': 1.4, 'stroke-dasharray': '6 4'}));
     });
+    main.filter(function(s){ return s.bar; }).forEach(function(s){
+      var bw = Math.max(1, pw / n * 0.7), base = Y(0);
+      for(var i = i0; i <= i1; i++){
+        var v = s.values[i];
+        if(v === null || v === undefined || isNaN(v) || v === 0) continue;
+        var yv = Y(v);
+        svg.appendChild(el('rect', {x: (X(i) - bw / 2).toFixed(1), y: Math.min(yv, base).toFixed(1), width: bw.toFixed(1),
+          height: Math.max(0.5, Math.abs(base - yv)).toFixed(1), fill: v > 0 ? (s.up || s.color) : (s.down || s.color)}));
+      }
+    });
     o.series.forEach(function(s, si){
+      if(s.bar) return;
+      var YY = s.axis2 && t2 ? Y2 : Y;
       var d = '', started = false, prevY = null;
       for(var i = i0; i <= i1; i++){
         var v = s.values[i];
         if(v === null || v === undefined || isNaN(v)){ started = false; continue; }
-        if(!started){ d += 'M' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); started = true; }
-        else if(s.step){ d += 'H' + X(i).toFixed(1) + 'V' + Y(v).toFixed(1); }
-        else d += 'L' + X(i).toFixed(1) + ' ' + Y(v).toFixed(1);
+        if(!started){ d += 'M' + X(i).toFixed(1) + ' ' + YY(v).toFixed(1); started = true; }
+        else if(s.step){ d += 'H' + X(i).toFixed(1) + 'V' + YY(v).toFixed(1); }
+        else d += 'L' + X(i).toFixed(1) + ' ' + YY(v).toFixed(1);
         prevY = v;
       }
       if(s.area && d){
@@ -2223,7 +2250,7 @@ var TWSIXChart = (function(){
       var h = '<b>' + o.x[i] + '</b>';
       o.series.forEach(function(s){
         h += '<span><i style="background:' + (s.color === 'ink' ? ink : s.color) + '"></i>' + s.name +
-             '<em>' + (o.fmt ? o.fmt(s.values[i]) : fmtNum(s.values[i])) + '</em></span>';
+             '<em>' + (s.fmt ? s.fmt(s.values[i]) : o.fmt ? o.fmt(s.values[i]) : fmtNum(s.values[i])) + '</em></span>';
       });
       tip.innerHTML = h; tip.hidden = false;
       var px = X(i) * r.width / W;
@@ -2260,6 +2287,66 @@ var TWSIXChart = (function(){
       box._pxObs.observe(box);
     }
   };
+})();
+
+/* =========================================================================
+ * 〔外資投信〕縮放區間（2026-10-10）
+ *
+ * 建站時畫好的兩張圖只有近 120 日。打開這個分頁時下載 stock/<代號>.i.json（外資
+ * 買賣超與持股比率，和 px-hist 的每日收盤逐日對齊），改畫成可以縮放、拉滑桿的圖，
+ * 最長到行情檔的全長（約三年）。讀不到就留著原本那兩張。
+ * ========================================================================= */
+(function(){
+  var stat = document.getElementById('inst-static'), live = document.getElementById('inst-live');
+  if(!stat || !live) return;
+  var tab = document.getElementById('tab-inst'), started = false;
+  function $(id){ return document.getElementById(id); }
+  function start(){
+    if(started || live.offsetParent === null && stat.offsetParent === null) return;
+    started = true;
+    var H = typeof pxHistory === 'function' ? pxHistory() : null;
+    if(!H) return;
+    fetch(stat.getAttribute('data-src'), {cache: 'no-cache'}).then(function(r){
+      if(!r.ok) throw new Error(r.status); return r.json();
+    }).then(function(j){
+      if(!j || j.d0 !== H.d[0] || j.n !== H.d.length) return;
+      var D = H.d, C = H.c, N = D.length, F = j.f, S = j.s;
+      var r0 = $('inst-r0'), r1 = $('inst-r1'), view = [Math.max(0, N - 120), N - 1];
+      var fmtLot = function(v){ return v === null || v === undefined ? '—' : Math.round(v).toLocaleString() + ' 張'; };
+      var fmtPx = function(v){ return v === null || v === undefined ? '—' : v.toLocaleString(); };
+      function draw(){
+        TWSIXChart($('inst-c1'), {x: D, range: view, height: 240, series: [
+          {name: '外資買賣超', color: '#e0582a', up: '#e5484d', down: '#2fa86b', bar: true, values: F, fmt: fmtLot},
+          {name: '收盤價', color: '#8a929b', values: C, axis2: true, width: 1.3, dash: '4 3', fmt: fmtPx}]});
+        TWSIXChart($('inst-c2'), {x: D, range: view, height: 240, series: [
+          {name: '外資持股比重', color: '#2563eb', values: S, width: 1.6, fmt: function(v){ return v === null || v === undefined ? '—' : v.toFixed(2) + '%'; }},
+          {name: '收盤價', color: '#8a929b', values: C, axis2: true, width: 1.3, dash: '4 3', fmt: fmtPx}]});
+        /* 外資持股比重：每日檔從 2026-04 起才齊，更早只有每月一天。往回找到第一段連續缺 5 天以上的地方，
+           那之後才是「每天都有」。 */
+        var dense = view[0], miss = 0;
+        for(var k = view[1]; k >= view[0]; k--){
+          if(S[k] === null || S[k] === undefined){ if(++miss >= 5){ dense = k + miss; break; } } else miss = 0;
+        }
+        $('inst-span').textContent = D[view[0]] + ' ～ ' + D[view[1]] + '（' + (view[1] - view[0] + 1) + ' 個交易日）' +
+          (dense > view[0] + 5 && dense <= view[1] ? '；外資持股比重從 ' + D[dense] + ' 起每天都有，更早只有零星幾天（圖上是斷的）' : '');
+      }
+      function setView(a, b){ view = [Math.max(0, Math.min(a, b)), Math.min(N - 1, Math.max(a, b))]; r0.value = view[0]; r1.value = view[1]; draw(); }
+      r0.max = r1.max = N - 1; r0.value = view[0]; r1.value = view[1];
+      var pend = 0;
+      function slide(){ if(pend) return; pend = requestAnimationFrame(function(){ pend = 0; setView(+r0.value, +r1.value); }); }
+      r0.addEventListener('input', slide); r1.addEventListener('input', slide);
+      [].forEach.call(live.querySelectorAll('[data-zoom]'), function(b){
+        b.addEventListener('click', function(){
+          [].forEach.call(live.querySelectorAll('[data-zoom]'), function(x){ x.classList.toggle('on', x === b); });
+          var n = +b.getAttribute('data-zoom'); setView(n ? N - n : 0, N - 1);
+        });
+      });
+      stat.hidden = true; live.hidden = false;
+      draw();
+    }).catch(function(){ /* 留著建站時畫的那兩張 */ });
+  }
+  if(tab) tab.addEventListener('click', function(){ setTimeout(start, 0); });
+  if(location.hash === '#inst') setTimeout(start, 300);
 })();
 
 /* 每日收盤：還原 `report/health.py` 的 encode_history。
@@ -2402,7 +2489,8 @@ function pxChecks(C, MA, i, P){
       fmt: function(v){ return v === null || v === undefined ? '資料不足' : String(v); },
       series: [{name: '總評分', color: '#e0582a', values: score, step: true, width: 1.6,
         area: [[0, '#ef4444', .32], [.5, '#f59e0b', .22], [1, '#10b981', .28]]}]});
-    $('pxh-span').textContent = D[view[0]] + ' ～ ' + D[view[1]] + '（' + (view[1] - view[0] + 1) + ' 個交易日）';
+    $('pxh-span').textContent = D[view[0]] + ' ～ ' + D[view[1]] + '（' + (view[1] - view[0] + 1) + ' 個交易日）' +
+      (f0 > view[0] ? '；總評分從 ' + D[f0] + ' 起才有（年線要累積 240 個交易日，之前的評分算不出來）' : '');
   }
 
   function setView(a, b){

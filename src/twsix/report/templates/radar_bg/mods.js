@@ -109,6 +109,11 @@ var __fetch = API.fetch;
   ];
 
   var currentCode = null, currentStock = null;
+  // 縮放區間（2026-10-10）：FULL 是目前手上最長的一份（先 120 天，長歷史載入後換掉），
+  // VIEW 是畫面上那一段的索引（含兩端），SHOWPX 是「疊加股價」。
+  var FULL = null, VIEW = [0, 0], SHOWPX = false, RUI = null, reqId = 0;
+  function cut(arr){ return (arr || []).slice(VIEW[0], VIEW[1] + 1); }
+  function viewLabels(){ return FULL.dates.slice(VIEW[0], VIEW[1] + 1).map(fmtMD); }
 
   function buildGrid(){
     var grid = __id('grid');
@@ -217,7 +222,8 @@ var __fetch = API.fetch;
   function renderHero(price){
     if(heroChart){ try{ heroChart.destroy(); }catch(e){} heroChart = null; }
     var ctx = __id('heroCanvas');
-    var xLabels = (DATES.price || []).map(fmtMD);
+    var xLabels = viewLabels();
+    price = cut(price);
     heroChart = new Chart(ctx, {
       type:'line',
       data:{ labels: xLabels, datasets:[ lineDataset('股價', price, '--accent') ] },
@@ -234,34 +240,42 @@ var __fetch = API.fetch;
 
   function renderPanel(panel, stock){
     var canvas = __id('panel-' + panel._i);
-    var dLabels = (DATES[panel.dk] || []).map(fmtMD);
+    var dLabels = viewLabels();
     var opts = commonOptions(dLabels);
-    var chart;
+    opts.animation = { duration: 0 };
+    var chart, px = SHOWPX ? cut(stock.price) : null;
+    // 疊加股價：灰色細線、左側自己的刻度（不和指標共用一個 y 軸）
+    function withPx(datasets){
+      if(!px) return datasets;
+      opts.scales.yp = { position:'left', beginAtZero:false, grace:'4%', grid:{ display:false }, ticks:{ color: cssVar('--ink-soft'), font:{ size:9 }, maxTicksLimit:4 } };
+      return datasets.concat([{ type:'line', label:'股價', data:px, yAxisID:'yp', borderColor:BG_PX_COLOR, backgroundColor:BG_PX_COLOR,
+        borderWidth:1.2, borderDash:[4,3], pointRadius:0, tension:0.15, spanGaps:true, order:-1 }]);
+    }
 
     if(panel.type === 'bar'){
-      var data = stock[panel.key] || [];
+      var data = cut(stock[panel.key]);
       var color = cssVar('--' + panel.color);
       chart = new Chart(canvas, {
         type:'bar',
-        data:{ labels:dLabels, datasets:[{ label:panel.title, data:data, backgroundColor: color, borderWidth:0, barPercentage:0.9, categoryPercentage:0.9 }] },
+        data:{ labels:dLabels, datasets:withPx([{ label:panel.title, data:data, backgroundColor: color, borderWidth:0, barPercentage:0.9, categoryPercentage:0.9 }]) },
         options: opts
       });
     } else if(panel.type === 'dual'){
-      var d1 = stock[panel.keys[0]] || [];
-      var d2 = stock[panel.keys[1]] || [];
+      var d1 = cut(stock[panel.keys[0]]);
+      var d2 = cut(stock[panel.keys[1]]);
       chart = new Chart(canvas, {
         type:'line',
-        data:{ labels:dLabels, datasets:[
+        data:{ labels:dLabels, datasets:withPx([
           lineDataset(panel.keys[0], d1, '--' + panel.colors[0]),
           lineDataset(panel.keys[1], d2, '--' + panel.colors[1])
-        ]},
+        ])},
         options: opts
       });
     } else {
-      var vals = stock[panel.key] || [];
+      var vals = cut(stock[panel.key]);
       chart = new Chart(canvas, {
         type:'line',
-        data:{ labels:dLabels, datasets:[ lineDataset(panel.title, vals, '--' + panel.color) ] },
+        data:{ labels:dLabels, datasets:withPx([ lineDataset(panel.title, vals, '--' + panel.color) ]) },
         options: opts
       });
     }
@@ -285,11 +299,27 @@ var __fetch = API.fetch;
 
     __id('sbCode').textContent = code;
     __id('sbName').textContent = META[code] || '';
+    bgDecorate(code, __id('sbCode'), __id('sbName'));
     var pd = DATES.price || [];
     __id('sbAsof').textContent = pd.length ? ('資料至 ' + pd[pd.length-1]) : '';
 
-    renderHero(stock.price || []);
-    renderAllPanels();
+    // 先用 120 天畫出來；長歷史（近 3 年）在背景下載，到了再把滑桿拉長
+    FULL = { dates: pd, s: stock };
+    if(!RUI){
+      var host = document.createElement('div'); host.className = 'bg-rng-host';
+      __id('heroCard').insertAdjacentElement('afterend', host);
+      RUI = bgRangeUI(host, { price:true, span:120, buttons:[[63,'近3月'],[120,'近120日'],[250,'近1年'],[0,'全部（約3年）']],
+        onChange: function(a, b, px){ VIEW = [a, b]; SHOWPX = px; renderHero(currentStock.price || []); renderAllPanels(); } });
+    }
+    var my = ++reqId;
+    RUI.setData(pd.length, pd, !!API.long);
+    if(API.long){
+      API.long(code).then(function(L){
+        if(my !== reqId || !L || !L.dates || L.dates.length <= pd.length) { if(my === reqId) RUI.setData(pd.length, pd, false); return; }
+        FULL = { dates: L.dates, s: L.s }; currentStock = L.s;
+        RUI.setData(L.dates.length, L.dates, false);
+      }).catch(function(){ if(my === reqId) RUI.setData(pd.length, pd, false); });
+    }
   }
 
   function doLookup(raw){
@@ -538,6 +568,24 @@ var __fetch = API.fetch;
     // grid: baseline only (recessive)
     svg.appendChild(el('line', { class: 'grid-line', x1: padL, x2: W - padR, y1: padT + plotH, y2: padT + plotH }));
 
+    // 疊加股價（2026-10-10）：灰色虛線、自己的高低（不和指標共用刻度），畫在指標底下
+    if (opts.px) {
+      var pmin = Infinity, pmax = -Infinity;
+      for (var q = 0; q < opts.px.length; q++) { var pv = opts.px[q]; if (pv === null || pv === undefined) continue; if (pv < pmin) pmin = pv; if (pv > pmax) pmax = pv; }
+      if (pmin < Infinity) {
+        if (pmin === pmax) { pmin -= 1; pmax += 1; }
+        var ppad = (pmax - pmin) * 0.12; pmin -= ppad; pmax += ppad;
+        var pd = '', pstarted = false;
+        for (var q2 = 0; q2 < opts.px.length; q2++) {
+          var pv2 = opts.px[q2];
+          if (pv2 === null || pv2 === undefined) { pstarted = false; continue; }
+          pd += (pstarted ? 'L' : 'M') + xAt(q2).toFixed(2) + ' ' + (padT + (1 - (pv2 - pmin) / (pmax - pmin)) * plotH).toFixed(2) + ' ';
+          pstarted = true;
+        }
+        svg.appendChild(el('path', { d: pd, fill: 'none', stroke: BG_PX_COLOR, 'stroke-width': 1.3, 'stroke-dasharray': '4 3', 'vector-effect': 'non-scaling-stroke' }));
+      }
+    }
+
     // path
     var d = '';
     for (var j = 0; j < pts.length; j++) {
@@ -605,7 +653,8 @@ var __fetch = API.fetch;
       crossV.setAttribute('x1', x); crossV.setAttribute('x2', x); crossV.style.opacity = 1;
       crossH.setAttribute('y1', y); crossH.setAttribute('y2', y); crossH.style.opacity = 1;
       hoverDot.setAttribute('cx', x); hoverDot.setAttribute('cy', y); hoverDot.style.opacity = 1;
-      tooltip.innerHTML = date + '　<b>' + opts.format(val) + '</b>';
+      var pxv = opts.px ? opts.px[idx] : null;
+      tooltip.innerHTML = date + '　<b>' + opts.format(val) + '</b>' + (pxv !== null && pxv !== undefined ? '　股價 ' + fmtPrice(pxv) : '');
       tooltip.style.left = evt.clientX + 'px';
       tooltip.style.top = evt.clientY + 'px';
       tooltip.style.opacity = 1;
@@ -646,12 +695,12 @@ var __fetch = API.fetch;
     return { panel: panel, now: now, box: box };
   }
 
-  function renderMetric(gridEl, title, accentClass, dates, values, color, format, ticks, rowStart) {
+  function renderMetric(gridEl, title, accentClass, dates, values, color, format, ticks, rowStart, px) {
     var p = makePanel(gridEl, title, accentClass, rowStart);
     var lastVal = null;
     for (var i = values.length - 1; i >= 0; i--) { if (values[i] !== null && values[i] !== undefined) { lastVal = values[i]; break; } }
     p.now.textContent = format(lastVal);
-    drawChart(p.box, { dates: dates, values: values, color: color, format: format, ticks: ticks });
+    drawChart(p.box, { dates: dates, values: values, color: color, format: format, ticks: ticks, px: px || null });
   }
 
   function clearGrid(id) { __id(id).innerHTML = ''; }
@@ -674,36 +723,73 @@ var __fetch = API.fetch;
     state.current = code;
     __id('curCode').textContent = code;
     __id('curName').textContent = state.meta[code] || '';
+    bgDecorate(code, __id('curCode'), __id('curName'));
 
-    var dd = state.dailyDates, di = state.dailyIdx, wd = state.weeklyDates, wi = state.weeklyIdx;
-    __id('dailyCaption').textContent = '每日資料（近' + DAILY_WINDOW_TRADING_DAYS + '個交易日）　' + dd[0] + ' ～ ' + dd[dd.length - 1];
-    __id('stockCaption').textContent = '集保股權分散表（週更，近' + DAILY_WINDOW_TRADING_DAYS + '個交易日）　' + wd[0] + ' ～ ' + wd[wd.length - 1];
-    __id('peopleCaption').textContent = '集保股權分散表（週更，近' + DAILY_WINDOW_TRADING_DAYS + '個交易日）　' + wd[0] + ' ～ ' + wd[wd.length - 1];
+    // 縮放區間＋疊加股價（2026-10-10）：每日那一組可以拉到約一年（大戶資料的長度），
+    // 「疊加股價」對每日與週資料的圖都有效
+    state.entry = entry;
+    state.full = { dates: state.dailyDates, c: sliceArr(entry.c, state.dailyIdx), hr: sliceArr(entry.hr, state.dailyIdx), hc: sliceArr(entry.hc, state.dailyIdx), sh: sliceArr(entry.sh, state.dailyIdx) };
+    if (!state.rui) {
+      var host = document.createElement('div'); host.className = 'bg-rng-host';
+      __id('dailyCaption').insertAdjacentElement('afterend', host);
+      state.rui = bgRangeUI(host, { price: true, span: DAILY_WINDOW_TRADING_DAYS, buttons: [[63, '近3月'], [120, '近120日'], [250, '近1年'], [0, '全部']],
+        onChange: function (a, b, px) { state.view = [a, b]; state.px = px; renderDaily(); renderWeekly(); } });
+    }
+    state.px = state.rui.price();
+    var my = state.req = (state.req || 0) + 1;
+    state.rui.setData(state.full.dates.length, state.full.dates, !!API.long);
+    if (API.long) {
+      API.long(code).then(function (L) {
+        if (my !== state.req) return;
+        if (!L || !L.dates || L.dates.length <= state.full.dates.length) { state.rui.setData(state.full.dates.length, state.full.dates, false); return; }
+        // 長歷史前面沒有大戶資料的那一段（集保 15 級約一年）不畫：從第一個有大戶比例的那天起
+        var f = 0; while (f < L.dates.length && (L.hr[f] === null || L.hr[f] === undefined)) f++;
+        if (L.dates.length - f <= state.full.dates.length) { state.rui.setData(state.full.dates.length, state.full.dates, false); return; }
+        state.full = { dates: L.dates.slice(f), c: L.c.slice(f), hr: L.hr.slice(f), hc: L.hc.slice(f), sh: L.sh.slice(f) };
+        state.rui.setData(state.full.dates.length, state.full.dates, false);
+      }).catch(function () { if (my === state.req) state.rui.setData(state.full.dates.length, state.full.dates, false); });
+    }
+  }
 
-    clearGrid('dailyGrid'); clearGrid('stockGrid'); clearGrid('peopleGrid');
-
+  function renderDaily() {
+    var F = state.full, a = state.view[0], b = state.view[1] + 1;
+    var dd = F.dates.slice(a, b), cut = function (arr) { return (arr || []).slice(a, b); }, px = state.px ? cut(F.c) : null;
+    __id('dailyCaption').textContent = '每日資料（' + dd.length + ' 個交易日）　' + dd[0] + ' ～ ' + dd[dd.length - 1];
+    clearGrid('dailyGrid');
     var dailyGrid = __id('dailyGrid');
-    renderMetric(dailyGrid, '收盤價', 'accent-orange', dd, sliceArr(entry.c, di), 'var(--orange)', fmtPrice, 6);
-    renderMetric(dailyGrid, '大戶比例（持股市值5000萬以上）', 'accent-blue', dd, sliceArr(entry.hr, di), 'var(--blue)', fmtPct, 6);
-    renderMetric(dailyGrid, '大戶人數', 'accent-blue', dd, sliceArr(entry.hc, di), 'var(--blue)', fmtInt, 6);
-    renderMetric(dailyGrid, '總股東人數', 'accent-aqua', dd, sliceArr(entry.sh, di), 'var(--aqua)', fmtInt, 6);
+    renderMetric(dailyGrid, '收盤價', 'accent-orange', dd, cut(F.c), 'var(--orange)', fmtPrice, 6);
+    renderMetric(dailyGrid, '大戶比例（持股市值5000萬以上）', 'accent-blue', dd, cut(F.hr), 'var(--blue)', fmtPct, 6, false, px);
+    renderMetric(dailyGrid, '大戶人數', 'accent-blue', dd, cut(F.hc), 'var(--blue)', fmtInt, 6, false, px);
+    renderMetric(dailyGrid, '總股東人數', 'accent-aqua', dd, cut(F.sh), 'var(--aqua)', fmtInt, 6, false, px);
+  }
+
+  function renderWeekly() {
+    // 週資料跟著上面每日那一段的起訖走（集保週報約一年，拉到「全部」就是全部的週）
+    var F = state.full, d0 = F.dates[state.view[0]], d1 = F.dates[state.view[1]], wAll = state.dates.weekly, wi = [];
+    for (var k = 0; k < wAll.length; k++) { if (wAll[k] >= d0 && wAll[k] <= d1) wi.push(k); }
+    if (wi.length < 2) { wi = []; for (var k2 = Math.max(0, wAll.length - 2); k2 < wAll.length; k2++) wi.push(k2); }
+    var entry = state.entry, wd = sliceArr(wAll, wi), wpx = state.px ? sliceArr(entry.cp, wi) : null;
+    __id('stockCaption').textContent = '集保股權分散表（週更，和上面每日同一段期間，' + wd.length + ' 週）　' + wd[0] + ' ～ ' + wd[wd.length - 1];
+    __id('peopleCaption').textContent = '集保股權分散表（週更，和上面每日同一段期間，' + wd.length + ' 週）　' + wd[0] + ' ～ ' + wd[wd.length - 1];
+
+    clearGrid('stockGrid'); clearGrid('peopleGrid');
 
     var ROW_START_TIERS = { '1': true, '30': true, '400': true };
 
     var stockGrid = __id('stockGrid');
-    renderMetric(stockGrid, '總集保張數（張）', 'accent-aqua', wd, sliceArr(entry.cw, wi), 'var(--aqua)', fmtLot, 5, true);
+    renderMetric(stockGrid, '總集保張數（張）', 'accent-aqua', wd, sliceArr(entry.cw, wi), 'var(--aqua)', fmtLot, 5, true, wpx);
     renderMetric(stockGrid, '收盤價（對應週）', 'accent-orange', wd, sliceArr(entry.cp, wi), 'var(--orange)', fmtPrice, 5);
     for (var i = 0; i < TIERS.length; i++) {
       var t = TIERS[i];
-      renderMetric(stockGrid, t + '張以上－持股合計數（張）', 'accent-blue', wd, sliceArr(entry.st[t], wi), 'var(--blue)', fmtLot, 5, !!ROW_START_TIERS[t]);
+      renderMetric(stockGrid, t + '張以上－持股合計數（張）', 'accent-blue', wd, sliceArr(entry.st[t], wi), 'var(--blue)', fmtLot, 5, !!ROW_START_TIERS[t], wpx);
     }
 
     var peopleGrid = __id('peopleGrid');
-    renderMetric(peopleGrid, '總股東人數', 'accent-aqua', wd, sliceArr(entry.shw, wi), 'var(--aqua)', fmtInt, 5, true);
+    renderMetric(peopleGrid, '總股東人數', 'accent-aqua', wd, sliceArr(entry.shw, wi), 'var(--aqua)', fmtInt, 5, true, wpx);
     renderMetric(peopleGrid, '收盤價（對應週）', 'accent-orange', wd, sliceArr(entry.cp, wi), 'var(--orange)', fmtPrice, 5);
     for (var j = 0; j < TIERS.length; j++) {
       var t2 = TIERS[j];
-      renderMetric(peopleGrid, t2 + '張以上－股東人數', 'accent-blue', wd, sliceArr(entry.pt[t2], wi), 'var(--blue)', fmtInt, 5, !!ROW_START_TIERS[t2]);
+      renderMetric(peopleGrid, t2 + '張以上－股東人數', 'accent-blue', wd, sliceArr(entry.pt[t2], wi), 'var(--blue)', fmtInt, 5, !!ROW_START_TIERS[t2], wpx);
     }
   }
 
@@ -1210,6 +1296,7 @@ var __fetch = API.fetch;
     __id("stockName").textContent = meta.name || code;
     __id("stockCode").textContent = code;
     __id("stockInd").textContent = meta.ind || "";
+    bgDecorate(code, __id("stockCode"), __id("stockName"), __id("stockInd"));
 
     QLABELS = rec.QL; MLABELS = rec.ML;
     var qLabels = recentChrono(QLABELS, RECENT_QUARTERS);
@@ -1268,9 +1355,19 @@ var __fetch = API.fetch;
     // --- group 2b: 資本結構與保留盈餘 ---
     var g2b = group("資本結構與保留盈餘(近五年)", 4);
     var grid2b = g2b.querySelector(".grid");
-    var c2b1 = card("(保留盈餘+資本公積)比例", "%", latestValueHtml(d.retained_apic_ratio_q, fmtPct, QLABELS));
+    var retained_ratio_q = recentChrono(d.retained_ratio_q || [], RECENT_QUARTERS), apic_ratio_q = recentChrono(d.apic_ratio_q || [], RECENT_QUARTERS);
+    var c2b1 = card("保留盈餘與資本公積比例", "%", latestValueHtml(d.retained_apic_ratio_q, fmtPct, QLABELS));
+    c2b1.querySelector(".chead").insertAdjacentHTML("afterend",
+      '<div class="legend"><span><span class="sw" style="background:'+cssVar("--accent")+'"></span>(保留盈餘+資本公積)比例</span>'+
+      '<span><span class="sw" style="background:'+cssVar("--accent-2")+'"></span>保留盈餘比例</span>'+
+      '<span><span class="sw" style="background:#e8a33d"></span>資本公積比例</span></div>'+
+      '<p class="card-note">分母＝股本＋資本公積＋保留盈餘</p>');
     grid2b.appendChild(c2b1);
-    renderLineChart(c2b1.querySelector(".chart-box"), {labels:qLabels, series:[{values:retained_apic_ratio_q, color:cssVar("--accent")}], fmt:fmtPct, unit:""});
+    renderLineChart(c2b1.querySelector(".chart-box"), {labels:qLabels, series:[
+      {values:retained_apic_ratio_q, color:cssVar("--accent"), name:"合計"},
+      {values:retained_ratio_q, color:cssVar("--accent-2"), name:"保留盈餘"},
+      {values:apic_ratio_q, color:"#e8a33d", name:"資本公積"}
+    ], fmt:fmtPct, unit:""});
     var c2b2 = card("保留盈餘", "百萬元", latestValueHtml(d.retained_q, fmtMoney, QLABELS));
     grid2b.appendChild(c2b2);
     renderBarChart(c2b2.querySelector(".chart-box"), {labels:qLabels, values:retained_q, fmt:fmtMoney, unit:"百萬"});
@@ -1347,6 +1444,7 @@ var __fetch = API.fetch;
     grid6.appendChild(c18);
     renderLineChart(c18.querySelector(".chart-box"), {labels:qLabels, series:[{values:capex_cap_ratio_q, color:cssVar("--accent")}], fmt:fmtPct, unit:""});
     var c19 = card("四季ROA", "%", latestValueHtml(d.roa_q, fmtPct, QLABELS));
+    c19.querySelector(".chead").insertAdjacentHTML("afterend", '<p class="card-note">近四季稅後淨利 ÷ 平均總資產（本季末與四季前季末）</p>');
     grid6.appendChild(c19);
     renderLineChart(c19.querySelector(".chart-box"), {labels:qLabels, series:[{values:roa_q, color:cssVar("--accent")}], fmt:fmtPct, unit:""});
 
@@ -1468,16 +1566,21 @@ var __fetch = API.fetch;
 
   // 回測欄位一律讀依日期索引的 _h 陣列；dayIdx=0 是最新一天（跟舊版單日邏輯完全一致）
   var FIELD_MAP = { price:'price_h', wr:'wr_h', xr:'xr_h', yr:'yr_h', z:'z_h', hr:'hr_h' };
+  function escInd(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
   function valueAt(s, key, dayIdx){
     if(key==='hp') return s.hp_h ? s.hp_h[dayIdx] : null;
     if(key==='sh') return s.sh_h ? s.sh_h[dayIdx] : null;
     if(key==='c' || key==='n') return s[key];
+    if(key==='ind') return BG.ind(s.c);
     var arr = s[FIELD_MAP[key]];
     return arr ? arr[dayIdx] : null;
   }
 
   function passesFilters(s, dayIdx){
     var v;
+    // 那一天沒有收盤（已下市、停牌、還沒上市）的不算進母體（2026-10-10）：逐日歷史收的是
+    // 「近 230 天內出現過」的 1,991 檔，⑬ 回測要它們，但「今天」的篩選不該把它們算進去。
+    if(valueAt(s,'price',dayIdx) == null) return false;
 
     var hr = valueAt(s,'hr',dayIdx), z = valueAt(s,'z',dayIdx), wr = valueAt(s,'wr',dayIdx),
         xr = valueAt(s,'xr',dayIdx), yr = valueAt(s,'yr',dayIdx);
@@ -1531,7 +1634,7 @@ var __fetch = API.fetch;
 
   function render(){
     $('matchCount').textContent = STATE.filtered.length.toLocaleString('zh-TW');
-    $('totalCount').textContent = STATE.stocks.length.toLocaleString('zh-TW');
+    $('totalCount').textContent = STATE.stocks.filter(function(s){ return valueAt(s,'price',STATE.dayIdx) != null; }).length.toLocaleString('zh-TW');
     $('dayLabelText').textContent = STATE.dates.length ? ('（篩選日：' + fmtDate(STATE.dates[STATE.dayIdx]) + '）') : '';
 
     var pages = Math.max(1, Math.ceil(STATE.filtered.length / STATE.pageSize));
@@ -1545,7 +1648,7 @@ var __fetch = API.fetch;
     var body = $('resultBody');
 
     if(slice.length===0){
-      body.innerHTML = '<tr><td colspan="10" class="empty">沒有符合條件的個股，試著放寬篩選門檻。</td></tr>';
+      body.innerHTML = '<tr><td colspan="11" class="empty">沒有符合條件的個股，試著放寬篩選門檻。</td></tr>';
       return;
     }
 
@@ -1553,6 +1656,7 @@ var __fetch = API.fetch;
       return '<tr>'+
         '<td class="code num">'+bgCode(s.c)+'</td>'+
         '<td class="name">'+bgName(s.c, s.n)+'</td>'+
+        '<td class="ind">'+escInd(BG.ind(s.c))+'</td>'+
         '<td class="num">'+fmtNum(valueAt(s,'price',STATE.dayIdx),2)+bgYf(s.c)+'</td>'+
         '<td class="num">'+fmtNum(valueAt(s,'wr',STATE.dayIdx),0)+'</td>'+
         '<td class="num">'+fmtNum(valueAt(s,'xr',STATE.dayIdx),0)+'</td>'+
@@ -1660,7 +1764,7 @@ var __fetch = API.fetch;
     ROOT.querySelectorAll('#m4-resultTable thead th').forEach(function(th){
       th.addEventListener('click', function(){
         var key = th.getAttribute('data-key');
-        if(STATE.sortKey===key){ STATE.sortDir *= -1; } else { STATE.sortKey = key; STATE.sortDir = (key==='n'||key==='c') ? 1 : 1; }
+        if(STATE.sortKey===key){ STATE.sortDir *= -1; } else { STATE.sortKey = key; STATE.sortDir = 1; }
         ROOT.querySelectorAll('#m4-resultTable thead th').forEach(function(t){ t.classList.remove('sorted'); });
         th.classList.add('sorted');
         sortFiltered(); STATE.page=1; render();
@@ -1703,10 +1807,10 @@ var __fetch = API.fetch;
     if(!window.claude || !window.claude.use){ alert('此檢視環境不支援匯出檔案功能。'); return; }
     var downloads = await window.claude.use('downloads');
     if(!downloads){ alert('此檢視環境目前無法匯出檔案。'); return; }
-    var headers = ['代號','名稱','收盤價','法人/大戶排名','量/大戶排名','法人60日排名','大戶比例%','總股東人數','買賣超/資本額','大戶人數排名'];
+    var headers = ['代號','名稱','產業類別','收盤價','法人/大戶排名','量/大戶排名','法人60日排名','大戶比例%','總股東人數','買賣超/資本額','大戶人數排名'];
     var rows = STATE.filtered.map(function(s){
       return [
-        s.c, s.n,
+        s.c, s.n, BG.ind(s.c),
         fmtNum(valueAt(s,'price',STATE.dayIdx),2),
         fmtNum(valueAt(s,'wr',STATE.dayIdx),0),
         fmtNum(valueAt(s,'xr',STATE.dayIdx),0),
@@ -2633,6 +2737,7 @@ var __fetch = API.fetch;
   // ---------------------------------------------------------------
   function passesChipFilters(s, day){
     var v;
+    if(valueAtDay(s,"price",day) == null) return false;   // 那一天沒有收盤的不算（同 ④）
     var hr = valueAtDay(s,"hr",day), z = valueAtDay(s,"z",day), wr = valueAtDay(s,"wr",day),
         xr = valueAtDay(s,"xr",day), yr = valueAtDay(s,"yr",day);
 
@@ -3041,7 +3146,7 @@ var __fetch = API.fetch;
     });
 
     ALL = Object.keys(byCode).map(function(c){ return byCode[c]; });
-    __id("totalCount").textContent = ALL.length.toLocaleString("en-US");
+    __id("totalCount").textContent = ALL.filter(function(r){ return valueAtDay(r, "price", 0) != null; }).length.toLocaleString("en-US");
 
     var sel = __id("asOfDay");
     sel.innerHTML = DATES.slice(0, BACKTEST_DAYS).map(function(d, i){

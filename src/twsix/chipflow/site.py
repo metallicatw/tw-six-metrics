@@ -36,6 +36,18 @@ from .radar import OUT_DIR, RADAR_FILE, VALIDATE_FILE, Engine, _dump, _r
 
 SITE_DIR = "chipflow"
 DAYS = 120
+#: ①② 的長歷史（2026-10-10）：按「近1年／近3年」才下載的 `stock/<代號>.L.bin`。
+#: 行情與法人從 2023-06 起才有，大戶（集保 15 級）約一年——不夠長的那幾條前面是空的。
+LONG_DAYS = 750
+#: 長歷史的欄位與倍率（整數化之後逐日差分＋varint＋gzip，見 history.encode_series）。
+#: 和 :func:`daily_series` 的鍵一樣；倍率配合它四捨五入到的小數位數。
+LONG_FIELDS = (
+    ("cl", 100), ("fa", 100), ("z", 10000), ("yr", 1), ("va", 100), ("vs", 1000),
+    ("vr", 1), ("vc", 1000), ("hp", 100), ("hc", 1), ("sh", 1), ("g20", 100),
+    ("g60", 100), ("tex", 100), ("fpw", 10), ("vpw", 10), ("wr", 1), ("xr", 1),
+    ("fa20", 100), ("ft", 100), ("hk", 1),
+)
+LONG_HEAD = "long.json"
 RANK_DAYS = 20
 RANK_TOP = 100
 QUARTERS = 20        # 近五年
@@ -142,8 +154,12 @@ def _single(st: dict, yq: tuple[int, int], key: str) -> float:
 
 
 def sheet_series(quarters: dict[str, dict[str, float]], income: dict) -> dict:
-    """③ 的存貨、合約負債、資本支出（個股季報，近八季，舊→新）。"""
-    labels = sorted(quarters)[-8:]
+    """③ 的存貨、合約負債、資本支出（個股季報，舊→新，最多 :data:`QUARTERS` 季）。
+
+    券商鏡像一次只給八季，但 :mod:`twsix.ingest.merge_sheets` 會把滾出視窗的
+    舊季接在後面，所以抓得越久這裡就越長。
+    """
+    labels = sorted(quarters)[-QUARTERS:]
     if not labels:
         return {}
 
@@ -183,12 +199,28 @@ def sheet_series(quarters: dict[str, dict[str, float]], income: dict) -> dict:
     return {"q": [f"{lb[:4]}Q{lb[5]}" for lb in labels], **out}
 
 
+#: 往前多算幾季：四季 EPS 年增率要「四季加總」再「比四季前」，最舊那一格要往回看 7 季。
+LOOKBACK = 7
+
+
 def fundamentals_series(income: dict, balance: dict) -> dict:
-    """③ 的季序列（舊→新）。"""
+    """③ 的季序列（舊→新，最多 :data:`QUARTERS` 季）。
+
+    ## 算式（2026-10-10 和 BG財報 逐項對過）
+
+    * 四季 EPS 年增率 ＝ 近四季 EPS 合計 ÷ 四季前的近四季合計 − 1。
+    * 四季 ROA ＝ 近四季稅後淨利 ÷ 平均總資產（本季末與四季前季末的平均）。
+      分母用期末會讓成長中的公司偏低（台積電 2026Q2：期末 23.9%、平均 27.3%）。
+    * 資本結構三條線，分母都是「股本＋資本公積＋保留盈餘」（股東自己投入的錢加上
+      公司賺來留下的錢；不含其他權益、庫藏股、非控制權益，免得匯率換算之類的
+      帳面波動混進來）：保留盈餘比例、資本公積比例、兩者合計比例。三條線加上
+      股本比例剛好 100%。舊版把分母寫成「股本」，台積電算出 2,361%——那是倍數
+      不是比例。
+    """
     quarters = sorted(yq for yq, v in income.items() if "rev" in v)
     if not quarters:
         return {}
-    seq = _quarter_seq(quarters[-1], QUARTERS)
+    seq = _quarter_seq(quarters[-1], QUARTERS + LOOKBACK)
     rev = [_single(income, yq, "rev") for yq in seq]
     op = [_single(income, yq, "op") for yq in seq]
     ni = [_single(income, yq, "ni") for yq in seq]
@@ -198,47 +230,53 @@ def fundamentals_series(income: dict, balance: dict) -> dict:
         w = vals[k - 3:k + 1] if k >= 3 else []
         return sum(w) if len(w) == 4 and not any(isnan(v) for v in w) else NAN
 
-    eps4 = [ttm(eps, k) for k in range(len(seq))]
-    ni4 = [ttm(ni, k) for k in range(len(seq))]
-
     def yoy(vals, k):
         if k < 4 or isnan(vals[k]) or isnan(vals[k - 4]) or vals[k - 4] <= 0:
             return NAN
         return (vals[k] / vals[k - 4] - 1) * 100
 
+    eps4 = [ttm(eps, k) for k in range(len(seq))]
+    ni4 = [ttm(ni, k) for k in range(len(seq))]
+    eps4y = [yoy(eps4, k) for k in range(len(seq))]
+    opy = [yoy(op, k) for k in range(len(seq))]
+
     bal = [balance.get(yq, {}) for yq in seq]
-    ret_apic = []
-    roa = []
+    re_r, ap_r, rap, roa = [], [], [], []
     for k, b in enumerate(bal):
         cap, re_, ap = b.get("capital", NAN), b.get("retained", NAN), b.get("apic", NAN)
-        ret_apic.append((re_ + (0 if isnan(ap) else ap)) / cap * 100
-                        if not isnan(cap) and cap > 0 and not isnan(re_) else NAN)
-        assets = b.get("assets", NAN)
-        roa.append(ni4[k] / assets * 100 if not isnan(ni4[k]) and assets > 0 else NAN)
-    # 前面整段沒有資料的季不畫（官方彙總只留 12 季，20 格裡前面會空一大段）
-    first = next((k for k, v in enumerate(rev) if not isnan(v)), 0)
-    seq, rev, op, ni, eps = seq[first:], rev[first:], op[first:], ni[first:], eps[first:]
-    eps4, ni4 = eps4[first:], ni4[first:]
-    bal = bal[first:]
-    ret_apic, roa = ret_apic[first:], roa[first:]
+        ap0 = 0.0 if isnan(ap) else ap
+        base = cap + ap0 + re_ if not isnan(cap) and not isnan(re_) else NAN
+        ok = not isnan(base) and base > 0
+        re_r.append(re_ / base * 100 if ok else NAN)
+        ap_r.append(ap0 / base * 100 if ok else NAN)
+        rap.append((re_ + ap0) / base * 100 if ok else NAN)
+        a_now = b.get("assets", NAN)
+        a_old = bal[k - 4].get("assets", NAN) if k >= 4 else NAN
+        avg = (a_now + a_old) / 2 if not isnan(a_now) and not isnan(a_old) else NAN
+        roa.append(ni4[k] / avg * 100 if not isnan(ni4[k]) and avg > 0 else NAN)
 
-    def yoy(vals, k):  # noqa: F811 - 截掉前段之後重新定義，索引才對得上
-        if k < 4 or isnan(vals[k]) or isnan(vals[k - 4]) or vals[k - 4] <= 0:
-            return NAN
-        return (vals[k] / vals[k - 4] - 1) * 100
+    # 只留最後 QUARTERS 季；前面整段沒有資料的季不畫
+    keep = len(seq) - QUARTERS
+    first = next((k for k in range(keep, len(seq)) if not isnan(rev[k])), keep)
+    sl = slice(first, None)
+    seq, rev, op, ni, eps = seq[sl], rev[sl], op[sl], ni[sl], eps[sl]
+    eps4, eps4y, opy, bal = eps4[sl], eps4y[sl], opy[sl], bal[sl]
+    re_r, ap_r, rap, roa = re_r[sl], ap_r[sl], rap[sl], roa[sl]
 
     return {
         "q": [f"{y + 1911}Q{q}" for y, q in seq],
         "eps": [_r(v, 2) for v in eps],
         "eps4": [_r(v, 2) for v in eps4],
-        "eps4y": [_r(yoy(eps4, k), 1) for k in range(len(seq))],
+        "eps4y": [_r(v, 1) for v in eps4y],
         "op": [_r(v / 1000, 1) for v in op],                     # 仟元 → 百萬
-        "opy": [_r(yoy(op, k), 1) for k in range(len(seq))],
+        "opy": [_r(v, 1) for v in opy],
         "opm": [_r(o / r * 100, 2) if not isnan(o) and not isnan(r) and r > 0 else None
                 for o, r in zip(op, rev, strict=True)],
         "npm": [_r(x / r * 100, 2) if not isnan(x) and not isnan(r) and r > 0 else None
                 for x, r in zip(ni, rev, strict=True)],
-        "rap": [_r(v, 1) for v in ret_apic],
+        "rap": [_r(v, 1) for v in rap],
+        "rer": [_r(v, 1) for v in re_r],
+        "apr": [_r(v, 1) for v in ap_r],
         "retained": [_r(b.get("retained", NAN) / 1000, 0) for b in bal],
         "apic": [_r(b.get("apic", NAN) / 1000, 0) for b in bal],
         "capital": [_r(b.get("capital", NAN) / 1000, 0) for b in bal],
@@ -373,6 +411,21 @@ def daily_series(engine: Engine, code: str, days: list[int], ranks: dict[int, di
     return {k: v for k, v in out.items() if any(x is not None for x in v)}
 
 
+def encode_long(series: dict[str, list], n: int) -> bytes:
+    """①② 的長歷史：:data:`LONG_FIELDS` 每一條各 n 天，整數化、逐日差分、varint、gzip。
+
+    格式和 ④⑥⑬ 的 hist_*.bin 一樣（頁面用同一個 readSeq 解），只是一檔一個檔：
+    按下「近1年／近3年」才下載那一檔的，約十幾 KB。
+    """
+    from .history import _q, encode_series  # noqa: PLC0415
+
+    body = bytearray()
+    for key, scale in LONG_FIELDS:
+        vals = series.get(key) or [None] * n
+        encode_series([None if v is None else _q(v, scale) for v in vals], body)
+    return gzip.compress(bytes(body), compresslevel=9, mtime=0)
+
+
 def _whale_counts(engine: Engine, i: int) -> dict[str, float]:
     day = engine.p.dates[i]
     out = {}
@@ -483,18 +536,19 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
     p = engine.p
     ia = p.asof_index
     days = list(range(max(0, ia - DAYS + 1), ia + 1))
+    long_days = list(range(max(0, ia - LONG_DAYS + 1), ia + 1))
     ranks: dict[int, dict] = {}
-    avg_va = []
-    for i in days:
+    for i in long_days:
         st = engine.day_stats(i)
         vals = [v for v in st["val20"].values() if not isnan(v)]
         wn = _whale_counts(engine, i)
         per_fi = {c: st["fi60"].get(c, NAN) / n for c, n in wn.items()}
         per_val = {c: st["val20"].get(c, NAN) / n for c, n in wn.items()}
         ranks[i] = {"fi": rank_desc(st["fi60"]), "val": rank_desc(st["val20"]),
-                    "val_total": sum(vals), "wr": rank_desc(per_fi),
+                    "val_total": sum(vals), "val_n": len(vals), "wr": rank_desc(per_fi),
                     "xr": rank_desc(per_val)}
-        avg_va.append(_r(sum(vals) / len(vals) / 1e8, 3) if vals else None)
+    avg_va = [_r(ranks[i]["val_total"] / ranks[i]["val_n"] / 1e8, 3) if ranks[i]["val_n"] else None
+              for i in days]
 
     # ⑨⑩：近 20 日兩張排名表的前 100 名（最新的在前）
     names = {r["c"]: r["n"] for r in radar_doc.get("rows", [])}
@@ -556,13 +610,19 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
                                   engine.names.get(c, (c, ""))[0] or c,
                                   "asof": p.asof}
         if c in daily_codes:
-            doc["d"] = daily_series(engine, c, days, ranks)
+            full = daily_series(engine, c, long_days, ranks)
+            cut = len(long_days) - len(days)
+            recent = {k: v[cut:] for k, v in full.items()}
+            doc["d"] = {k: v for k, v in recent.items() if any(x is not None for x in v)}
+            (out / "stock" / f"{c}.L.bin").write_bytes(encode_long(full, len(long_days)))
         doc["h"] = holders_series(engine, c)
         doc["fq"] = fundamentals_series(income.get(c, {}), balance.get(c, {}))
         doc["fs"] = sheet_series(engine.fund.sheets.get(c, {}), income.get(c, {}))
         doc["fm"] = revenue_series(engine, c, revenue.get(c, {}), notes.get(c, {}))
         (out / "stock" / f"{c}.json").write_bytes(_dump(doc))
         written += 1
+    (out / LONG_HEAD).write_bytes(_dump({"dates": [p.dates[i] for i in long_days],
+                                         "fields": [[k, sc] for k, sc in LONG_FIELDS]}))
     stamp.write_text(json.dumps(key), encoding="utf-8")
     return {"資料日": p.asof, "個股檔": written, "含日序列": len(daily_codes), "逐日歷史": hist}
 

@@ -492,19 +492,20 @@ def test_the_stamp_is_not_mistaken_for_a_fourteenth_sheet(tmp_path=None):
     assert written.get("  其中完整版") == 1      # 還是照常算得出完整報告
 
 
-def test_the_name_links_to_the_same_page_as_the_code(tmp_path=None):
-    """掃清單時眼睛落在名稱上，卻要把游標移回四位數字才點得到。
+def test_the_name_links_to_greed_fear_in_a_new_tab(tmp_path=None):
+    """代號連個股頁；名稱（2026-10-10 起）另開分頁連〔籌碼雷達〕的貪婪／恐懼指標。
 
-    每一列都要付一次的小摩擦，而兩個連結指向同一頁，沒有任何歧義。
+    掃清單時最常接著問「現在多空誰占優」，那四張圖要對照清單看，所以另開分頁。
     """
     tmp = tmp_path or _tmp()
     out = tmp / "site"
     build_site(_records(), out, sheets_dir=_sheets(tmp))
 
     listing = (out / "index.html").read_text(encoding="utf-8")
-    assert '<a href="stock/5439.html">高技</a>' in listing
-    assert '<a href="stock/2330.html">台積電</a>' in listing
-    # 代號那一格也還是連結——兩個都指同一頁。
+    assert '<a href="radar.html#t1-5439-gf" target="_blank" rel="noopener"' in listing
+    assert '>高技</a>' in listing
+    assert '<a href="radar.html#t1-2330-gf" target="_blank"' in listing
+    # 代號那一格照舊連個股頁
     assert '<a href="stock/5439.html">5439</a>' in listing
 
 

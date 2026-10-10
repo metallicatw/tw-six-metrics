@@ -1247,6 +1247,16 @@ def build_site(
         ).dump(str(out_dir / "stock" / f"{stock_id}.html"))
         count += 1
     written["stock/*.html"] = count
+    # 〔外資投信〕縮放區間要的長歷史（2026-10-10）：每檔一個小檔，按需下載。
+    if sheets_dir is not None and long_hist:
+        try:
+            wanted = {c for c in grouped if (sheets_dir / c).is_dir()}
+            if only is not None:
+                wanted &= set(only)
+            written["stock/*.i.json（外資投信長歷史）"] = write_inst_series(
+                out_dir, sheets_dir.parent, long_hist, wanted)
+        except Exception as exc:  # noqa: BLE001 - 一張圖的長歷史不能讓建站失敗
+            print(f"::warning::外資投信的長歷史沒有寫（圖只看得到近 120 日）：{exc!r}")
     if reused:
         written["  其中沿用上一次"] = reused
     if rich_ids:
@@ -1964,6 +1974,39 @@ def range_figures(page: Any) -> dict[str, Any]:
     if holders is not None and getattr(holders, "alt", None):
         out["holders"] = {k: dict(v) for k, v in holders.alt.items()}
     return out
+
+
+def write_inst_series(out_dir: Path, data_dir: Path,
+                      long_hist: dict[str, tuple[list[str], list[float]]],
+                      codes: set[str]) -> int:
+    """寫 `stock/<代號>.i.json`：外資買賣超（張）與外資持股比率（%），和頁面上
+    〔股價健診〕那份每日收盤（px-hist）逐日對齊——日期與收盤不重複存。
+
+    頁面在〔外資投信〕按縮放區間或拉滑桿時才下載（2026-10-10）。
+    """
+    from ..store.daily import foreign_daily  # noqa: PLC0415
+
+    fd = foreign_daily(data_dir)
+    n = 0
+    for code in sorted(codes):
+        hist = long_hist.get(code)
+        m = fd.get(code)
+        path = out_dir / "stock" / f"{code}.i.json"
+        if not hist or not m:
+            path.unlink(missing_ok=True)
+            continue
+        dates = hist[0]
+        f = [m.get(d, (None, None))[0] for d in dates]
+        sh = [m.get(d, (None, None))[1] for d in dates]
+        if not any(v is not None for v in f):
+            path.unlink(missing_ok=True)
+            continue
+        doc = {"d0": dates[0], "n": len(dates),
+               "f": [None if v is None else int(v) for v in f],
+               "s": [None if v is None else round(v, 2) for v in sh]}
+        path.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+        n += 1
+    return n
 
 
 def write_range_figures(page: Any, out_file: Path) -> Path | None:
