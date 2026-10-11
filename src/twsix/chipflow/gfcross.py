@@ -12,7 +12,8 @@ n20g  即將黃金交叉：還沒交叉、d20 在 −NEAR～0 之間，而且比
 n20x  即將死亡交叉：還沒交叉、d20 在 0～+NEAR 之間，而且比前一天更接近 0
 ====  ==============================================================
 
-60 日那一組是 g60／x60／n60g／n60x。另外附上不分天期的 g／x／ng／nx，給快篩用。
+60 日那一組是 g60／x60／n60g／n60x。另外附上不分天期的 g／x／ng／nx，以及
+gn20／gn60（黃金交叉或即將黃金交叉）、xn20／xn60（死亡交叉或即將死亡交叉），給快篩用。
 
 直接讀每日行情算（最近 ``DAYS`` 個交易日），不靠籌碼雷達的輸出：那一份一天只產生
 一次，而清單每次建站都畫。買盤比例和籌碼雷達同一個函式
@@ -131,7 +132,9 @@ def load_marks(data_dir: Path | None) -> dict[str, dict]:
             s = classify(d[-(RECENT + 2):])
             if s is None:
                 continue
-            tokens += [_token(s, window), s]
+            # gn20／xn20：「黃金交叉或即將黃金交叉」（死亡同理），給快篩的「or」選項用
+            side = "g" if s in ("g", "ng") else "x"
+            tokens += [_token(s, window), s, f"{side}n{window}"]
             items.append((f"{LABEL[s]}{window}", s))
             titles.append(f"{window} 日：{WHAT[s]}，貪婪−恐懼 {d[-1]:+.2f}")
             key += RANK[s] * (10 if window == 20 else 1)

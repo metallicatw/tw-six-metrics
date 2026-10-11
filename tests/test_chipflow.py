@@ -734,3 +734,13 @@ def test_貪婪恐懼交叉的判定():
     assert classify([1, 0.9, 0.4]) == "nx"
     assert classify([-1, -0.3, -0.4]) is None, "差距在拉大，不算即將交叉"
     assert classify([-1, -0.8, float("nan")]) is None
+
+
+def test_貪婪恐懼快篩的or選項():
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "chipflow" / "gfcross.py").read_text("utf-8")
+    assert 'tokens += [_token(s, window), s, f"{side}n{window}"]' in src
+    m = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates" / "_macros.html.j2").read_text("utf-8")
+    for v in ("g20", "n20g", "gn20", "g60", "n60g", "gn60", "x20", "n20x", "xn20", "x60", "n60x", "xn60"):
+        assert f'<option value="{v}">' in m, v
