@@ -1300,6 +1300,14 @@ thead th .hsub{display:block;margin-top:1px;font-size:10px;font-weight:400;
 #t.compact thead th .hdtip .bulb{width:var(--bulb);min-width:0;height:var(--bulb);
   padding:0;font-size:11px;box-sizing:border-box;display:inline-flex;
   align-items:center;justify-content:center}
+/* 最右邊那幾欄（報酬風險比、AI、籌碼雷達、貪婪恐懼）的燈泡改放在標題**下面**（2026-10-11）：
+   並排的話每一欄都多出「左邊空白＋燈泡」約 30px，四欄加起來就是表格在 1,200px 寬的版面裡
+   被裁掉的那一截。疊起來之後欄寬只剩標題或標籤本身那麼寬。 */
+#t.compact thead th .hdtip{flex-direction:column;gap:1px}
+#t.compact thead th .hdtip::before{display:none}
+#t.compact thead th .hdtip>button.sortable{align-self:center}
+/* 評等／觀察清單這張表本身就寬（23 欄）：版面上限放寬一點，大螢幕上不必橫向捲。 */
+.wrap:has(table#t.compact){max-width:1340px}
 /* =========================================================================
  * 〔財務健診〕〔股價健診〕〔推估三年目標價〕
  * ========================================================================= */
@@ -1623,7 +1631,7 @@ a.cf-mk:hover{text-decoration:none;filter:brightness(1.1)}
 #t thead th.gf-cell{vertical-align:middle}
 #t thead th.gf-cell .hdtip{justify-content:center}
 a.gf-mk-a{display:inline-flex;flex-direction:column;align-items:center;gap:2px;text-decoration:none}
-.gf-mk{display:inline-block;padding:1px 6px;border-radius:9px;font-size:11px;font-weight:700;line-height:17px;white-space:nowrap}
+.gf-mk{display:inline-block;padding:0 5px;border-radius:9px;font-size:10.5px;font-weight:700;line-height:16px;white-space:nowrap}
 .gf-mk-g{color:#fff;background:var(--up)}
 .gf-mk-x{color:#fff;background:var(--down)}
 .gf-mk-ng{color:var(--up);border:1px solid var(--up)}
