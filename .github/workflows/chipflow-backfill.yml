@@ -25,6 +25,16 @@ on:
         required: false
         default: "200"
         type: string
+      qfii_days:
+        description: "外資持股比率（每日）：往回補幾個交易日（排程 125；一次補齊三年填 760）"
+        required: false
+        default: "125"
+        type: string
+      qfii_minutes:
+        description: "外資持股比率：這一趟最多跑幾分鐘（補 760 天約要 45 分鐘，填 90）"
+        required: false
+        default: "20"
+        type: string
   schedule:
     # 台北 00:53，避開每日行情（15:41、21:47）與股權（週一、週四 09:37）
     - cron: "53 16 * * *"
@@ -55,12 +65,17 @@ jobs:
       - name: 成交金額與法人明細
         env:
           IN_DAYS: ${{ inputs.flows_days || '800' }}
+          Q_DAYS: ${{ inputs.qfii_days || '125' }}
+          Q_MIN: ${{ inputs.qfii_minutes || '20' }}
         run: |
           case "$IN_DAYS" in ''|*[!0-9]*) IN_DAYS=800 ;; esac
+          case "$Q_DAYS" in ''|*[!0-9]*) Q_DAYS=125 ;; esac
+          case "$Q_MIN" in ''|*[!0-9]*) Q_MIN=20 ;; esac
           twsix backfill-prices --days "$IN_DAYS" --pause 5 --minutes 30 || true
           twsix backfill-institutional --days "$IN_DAYS" --minutes 60 || true
-          # 外資持股比重（個股頁〔外資投信〕圖畫近 120 個交易日；已補過的日子會跳過）
-          twsix backfill-qfii --days 125 --minutes 20 || true
+          # 外資持股比重（個股頁〔外資投信〕可縮放到約三年；已補過的日子會跳過）。
+          # 排程每晚補近 125 天；手動按的時候可以填 760 一次補齊（2026-10-11）。
+          twsix backfill-qfii --days "$Q_DAYS" --minutes "$Q_MIN" || true
           # 〔董監持股〕表格 36 個月的「外資(%)」是月底值：每個月補一天就夠。
           # 已經有的月份不連網，穩定狀態下這一行幾乎不花時間（2026-10-05）。
           twsix backfill-qfii --month-ends 36 --minutes 6 || true
