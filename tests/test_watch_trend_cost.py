@@ -197,7 +197,7 @@ def test_觀察清單上真的畫出價格與走勢圖連結():
 def test_兩張表都收緊了():
     assert '<table id="t" class="compact" data-watchlist="1">' in _watch()
     assert '<table id="t" class="compact">' in _listing()
-    assert "#t.compact th,#t.compact td{padding:3px 3px}" in CSS
+    assert "#t.compact th,#t.compact td{padding:3px 2px}" in CSS  # 2026-10-11 再收 1px（多了〔貪婪恐懼〕欄）
     assert re.search(r"#t\.compact td\.ind\{[^}]*white-space:normal", CSS), "產業不會折行"
     # 2026-09-24：名稱也折行（多了〔AI〕欄之後，1280 寬又要橫捲）
     assert re.search(r"#t\.compact td\.nm\{[^}]*white-space:normal", CSS), "名稱不會折行"
