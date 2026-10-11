@@ -1242,7 +1242,7 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
  *   3. 產業折行。「電子零組件業」這種六個字的產業名讓整欄寬 114px，而這張表
  *      每一列本來就有兩行高（財報基準、上移下移），折成兩行不多佔一分高度。
  * ========================================================================= */
-#t.compact th,#t.compact td{padding:3px 3px}
+#t.compact th,#t.compact td{padding:3px 2px}
 /* 2026-09-29 加〔籌碼雷達〕之後是二十三欄：字小半號、標題按鈕左右各 1px，
    1,280 以上的螢幕仍然一眼看完、左右切齊標題分隔線。 */
 #t.compact{font-size:12px}
@@ -1257,8 +1257,8 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 #t.compact .ai-mk{font-size:10.5px;padding:0 5px}
 #t.compact td.muted{font-size:11.5px}
 #t.compact td.ind{white-space:normal;min-width:3.6em;max-width:4.6em;line-height:1.3}
-#t.compact .basis{font-size:10.5px}
-#t.compact .basis b{font-size:11px}
+#t.compact .basis{font-size:9.5px;gap:0;line-height:1.2}
+#t.compact .basis b{font-size:10px}
 #t.compact .pick{font-size:11px}
 #t.compact .g{min-width:24px;padding:1px 4px;font-size:11px}
 /* 「數據不足」「不評分」四個字把六個等第欄各撐到 49px（其他格只要 30px）：
@@ -1294,18 +1294,12 @@ thead th .hsub{display:block;margin-top:1px;font-size:10px;font-weight:400;
 .flat{color:var(--muted)}
 /* 報酬風險比那一欄的燈泡：這一頁上縮成 22px。左邊那塊等寬的空白（讓標題落在
    格子中心的那一塊，見上面的 .hdtip::before）跟著一起縮，所以兩邊仍然同軸。 */
-#t.compact thead th .hdtip{--bulb:14px;gap:1px}
+#t.compact thead th .hdtip{--bulb:12px;gap:1px}
 /* 寬度寫死（不是 min-width）：左邊那塊空白也是 --bulb 寬，兩邊一樣寬標題才真的
    落在格子中心——燈泡實際比 --bulb 寬的話，標題會被往左推（量到偏 5px）。 */
 #t.compact thead th .hdtip .bulb{width:var(--bulb);min-width:0;height:var(--bulb);
-  padding:0;font-size:11px;box-sizing:border-box;display:inline-flex;
+  padding:0;font-size:10px;box-sizing:border-box;display:inline-flex;
   align-items:center;justify-content:center}
-/* 最右邊那幾欄（報酬風險比、AI、籌碼雷達、貪婪恐懼）的燈泡改放在標題**下面**（2026-10-11）：
-   並排的話每一欄都多出「左邊空白＋燈泡」約 30px，四欄加起來就是表格在 1,200px 寬的版面裡
-   被裁掉的那一截。疊起來之後欄寬只剩標題或標籤本身那麼寬。 */
-#t.compact thead th .hdtip{flex-direction:column;gap:1px}
-#t.compact thead th .hdtip::before{display:none}
-#t.compact thead th .hdtip>button.sortable{align-self:center}
 /* 評等／觀察清單這張表本身就寬（23 欄）：版面上限放寬一點，大螢幕上不必橫向捲。 */
 .wrap:has(table#t.compact){max-width:1340px}
 /* =========================================================================
@@ -1663,6 +1657,19 @@ a.gf-mk-a:hover .gf-mk{filter:brightness(1.1)}
 .qf-rrpanel .qf-rrrange{flex-wrap:wrap}
 .qf-rrpanel input[type=number]{width:5em}
 .qf-note{font-size:11.5px;color:var(--muted);margin:0 0 4px 22px;line-height:1.4}
+/* 電腦版快篩維持一列（2026-10-11）：字小半號、間距收窄，下拉框不跟著最長的選項撐寬
+   （select 的預設寬度是最長那個選項的字數，〔貪婪恐懼〕一加就把整列擠到第二行），
+   改成固定窄寬，展開時選項照樣完整顯示。 */
+@media (min-width:641px){
+  .qf{flex-wrap:nowrap;gap:6px 9px}
+  .qf label,.qf .qf-inds{font-size:12px;gap:4px}
+  .qf select,.qf .qf-btn,.qf .qf-reset{font-size:12px;padding:4px 5px}
+  .qf input[type=number]{font-size:12px;width:3.9em;padding:4px 4px}
+  .qf select{width:5.6em}
+  .qf #f-gf{width:7.4em}
+  .qf .qf-btn{max-width:7.5em;overflow:hidden;text-overflow:ellipsis}
+  .qf-end{gap:4px}
+}
 /* 手機：固定三列——①產業＋綜合評分 ②具投資價值＋報酬風險比 ③AI＋籌碼雷達＋清除＋💡。
    字小半號、框收窄，三列各自塞得進一行；真的太窄（＜340px）才在列內換行。 */
 @media (max-width:640px){
