@@ -700,7 +700,19 @@ function bgFocus(tab, code, focus){
   (function wait(){
     var bar = document.getElementById("m1-sbCode"), sec = document.querySelector('#m1-grid .section[data-grp="d"]');
     var ready = bar && bar.textContent.indexOf(code) >= 0 && sec && !document.getElementById("m1-grid").hidden;
-    if (ready){ setTimeout(function(){ sec.scrollIntoView({block: "start"}); }, 120); return; }
+    if (ready){
+      // 捲到〔紅:貪婪指標1／藍:恐懼指標1〕那一列（和〔…指標2〕並排），不是〔貪婪恐懼〕組的第一列；
+      // 扣掉黏在上方的標題列，否則卡片頂端會被它蓋住（2026-10-12）。
+      var go = function(){
+        var h3 = [].filter.call(document.querySelectorAll("#m1-grid .card h3"), function(x){ return x.textContent.indexOf("紅:貪婪指標1") === 0; })[0];
+        var card = h3 ? h3.closest(".card") : sec;
+        var head = document.querySelector("#cf-t1 header.top"), off = 8;
+        if (head){ var cs = getComputedStyle(head); off += (parseFloat(cs.top) || 0) + head.offsetHeight; }
+        window.scrollTo(0, card.getBoundingClientRect().top + window.pageYOffset - off);
+      };
+      setTimeout(go, 150); setTimeout(go, 900);   // 第二次：長歷史載入、圖重畫之後版面可能動了一點
+      return;
+    }
     if (++tries < 60) setTimeout(wait, 150);
   })();
 }

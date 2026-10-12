@@ -1664,10 +1664,10 @@ a.gf-mk-a:hover .gf-mk{filter:brightness(1.1)}
   .qf{flex-wrap:nowrap;gap:6px 9px}
   .qf label,.qf .qf-inds{font-size:12px;gap:4px}
   .qf select,.qf .qf-btn,.qf .qf-reset{font-size:12px;padding:4px 5px}
-  .qf input[type=number]{font-size:12px;width:3.9em;padding:4px 4px}
-  .qf select{width:5.6em}
-  .qf #f-gf{width:7.4em}
-  .qf .qf-btn{max-width:7.5em;overflow:hidden;text-overflow:ellipsis}
+  .qf input[type=number]{font-size:12px;width:4.6em;padding:4px 6px}
+  .qf select{width:6.4em}
+  .qf #f-gf{width:9.6em}
+  .qf .qf-btn{max-width:9em;overflow:hidden;text-overflow:ellipsis}
   .qf-end{gap:4px}
 }
 /* 手機：固定三列——①產業＋綜合評分 ②具投資價值＋報酬風險比 ③AI＋籌碼雷達＋清除＋💡。
