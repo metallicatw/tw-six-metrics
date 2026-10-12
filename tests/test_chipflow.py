@@ -473,9 +473,13 @@ def test_籌碼雷達分頁各自一色_符合檔數跟分頁同色_標記欄可
     for t in ("外資＋投信買賣超 ÷ 資本額 60 日累計（倍）", "扣掉大戶之 20 日周轉率（%）", "大戶庫存張數",
               "貪婪指標 1（買盤比例 20 日總和）", "買盤比例 60 日 − 賣盤比例 60 日"):
         assert f'"{t}":' in src, t
-    about = src.split('id="cf-gloss"', 1)[1].split("</dl>", 1)[0]
+    # 名詞解釋改成可搜尋的〔指標查詢〕（2026-10-12）：資料在 radar_gloss.json
+    assert 'id="cf-gloss"' in src and '{% include "radar_gloss.json" %}' in src
+    gloss = json.loads((Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+                        / "radar_gloss.json").read_text("utf-8"))
+    names = " ".join(g["name"] for g in gloss)
     for t in ("流動性母體", "E 否決名單", "rank IC", "共振分數", "三根柱子", "成長旗標", "T1 趨勢", "精選（整條漏斗）"):
-        assert t in about, t
+        assert t in names, t
 
 
 def test_radar_json按欄存_還原後和原本一樣_頁面網址帶版本碼():
@@ -761,7 +765,50 @@ def test_籌碼雷達頁面的模板編譯得過():
     root = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(root)))
     env.get_template("radar.html.j2")
+    env.get_template("radar_guide.html.j2")
     for name in ("style.css", "mods.js", "api.js"):
         src = (root / "radar_bg" / name).read_text("utf-8").rstrip()
         assert src.startswith("{% raw %}") and src.endswith("{% endraw %}"), name
         assert src.count("{% endraw %}") == 1, name
+
+
+def test_籌碼雷達使用手冊_每個工具一節_連結都對得到():
+    """〔📖 使用手冊〕分頁（2026-10-12）：①～⑬、精選漏斗、指標驗證各一節；各工具左上角的
+    〔📖 這個工具怎麼用〕跳到對應的那一節；手冊裡〔打開 ⑤ →〕這類按鈕指到真的分頁。"""
+    import re as _re
+
+    tpl = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+    src = (tpl / "radar.html.j2").read_text("utf-8")
+    guide = (tpl / "radar_guide.html.j2").read_text("utf-8")
+    assert 'data-t="guide" role="tab">📖 使用手冊' in src
+    assert '<section class="cf-panel" id="cf-guide">{% include "radar_guide.html.j2" %}</section>' in src
+    ids = set(_re.findall(r'id="(g-[\w-]+)"', guide))
+    for k in [f"t{n}" for n in range(1, 14)] + ["picks", "val"]:
+        assert f"g-{k}" in ids, k
+        assert f'data-guide="g-{k}"' in src, f"{k} 分頁上要有〔怎麼用〕連到手冊"
+        assert f'data-go="{k}"' in guide, f"手冊的 {k} 那一節要有按鈕打開工具"
+    for g in set(_re.findall(r'data-g="(g-[\w-]+)"', guide)) - {"g-toc"}:
+        assert g in ids, g
+    tabs = set(_re.findall(r'data-t="(\w+)" role="tab"', src))
+    for t in set(_re.findall(r'data-go="(\w+)"', guide + src)):
+        assert t in tabs, t
+    # 手冊與指標查詢是本站自己寫的，來源網站只稱 BG
+    for t in (guide, (tpl / "radar_gloss.json").read_text("utf-8")):
+        assert ("ben" + "go") not in t.lower() and ("笨" + "狗") not in t and "{#" not in t.replace("{#-", "", 1)
+
+
+def test_指標查詢_每一條都有算法白話與出處():
+    tpl = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+    gloss = json.loads((tpl / "radar_gloss.json").read_text("utf-8"))
+    assert len(gloss) >= 60
+    seen = set()
+    for g in gloss:
+        assert set(g) == {"cat", "name", "calc", "plain", "t"}, g
+        assert g["name"] not in seen, g["name"]
+        seen.add(g["name"])
+        assert g["calc"].strip() and g["plain"].strip() and g["t"], g["name"]
+        for t in g["t"]:
+            assert t in ("p", "v") or (isinstance(t, int) and 1 <= t <= 13), (g["name"], t)
+    src = (tpl / "radar.html.j2").read_text("utf-8")
+    for t in ('id="gl-q"', 'id="gl-tool"', 'id="gl-cats"', 'id="gl-list"', "function setupGuide()", "setupGuide();"):
+        assert t in src, t

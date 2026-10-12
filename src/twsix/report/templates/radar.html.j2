@@ -40,7 +40,7 @@ window.CF_V = "@@CFV@@";
   ('t4','#1864ab','#6fb0f5'),('t5','#0b7285','#3bc9db'),('t6','#6741d9','#b39cff'),
   ('t7','#b25a00','#ffa94d'),('t8','#a61e4d','#faa2c1'),('t9','#5c7c00','#a9e34b'),
   ('t10','#087f5b','#38d9a9'),('t11','#862e9c','#e599f7'),('t12','#364fc7','#91a7ff'),
-  ('t13','#9c6500','#ffc94d'),('picks','#c92a2a','#ff8787'),('val','#7a5230','#e0b084'),('about','#495057','#adb5bd')] %}
+  ('t13','#9c6500','#ffc94d'),('picks','#c92a2a','#ff8787'),('val','#7a5230','#e0b084'),('guide','#2f4b7c','#8fb0e8'),('about','#495057','#adb5bd')] %}
 {% for k, c, d in cf_colors %}.cf-tab[data-t={{ k }}],#cf-{{ k }}{--tc:{{ c }}}
 {% endfor %}@media (prefers-color-scheme:dark){
 {% for k, c, d in cf_colors %}  :root:not([data-theme=light]) .cf-tab[data-t={{ k }}],:root:not([data-theme=light]) #cf-{{ k }}{--tc:{{ d }}}
@@ -148,13 +148,66 @@ window.CF_V = "@@CFV@@";
 /* 釘住的表頭要壓在 Yahoo 圖示上面（圖示用 CSS mask，會自成疊放層）；.bgm.bgm 是為了權重高過 BG 各頁的 thead th */
 #cf .bgm.bgm thead th{z-index:3}
 {% include "radar_bg/style.css" %}
+/* 〔📖 使用手冊〕與〔指標查詢〕（2026-10-12） */
+.cf-howto{margin:0 0 6px;display:flex;justify-content:flex-end;max-width:none}
+.cf-howto button,.gd-link,.gd-go,.gd-top button,.gd-toc button{appearance:none;font:inherit;cursor:pointer}
+.cf-howto button{border:1px solid var(--rule);background:var(--surface);color:var(--accent-2);border-radius:999px;padding:2px 10px;font-size:12px}
+.cf-howto button:hover,.gd-toc button:hover,.gd-go:hover{background:var(--surface-2)}
+.gd-link{border:none;background:none;color:var(--accent-2);text-decoration:underline;padding:0 2px;font-size:inherit}
+.cf-guide{max-width:960px}
+.cf-guide h3{margin:0 0 6px;font-size:17px}
+.cf-guide h4{margin:12px 0 4px;font-size:14px;color:var(--ink)}
+.cf-guide p,.cf-guide li,.cf-guide dd{font-size:14px;line-height:1.75;color:var(--ink-2)}
+.cf-guide p{margin:4px 0;max-width:none}
+.cf-guide ol,.cf-guide ul{margin:4px 0;padding-left:1.4em}
+.cf-guide li{margin:2px 0}
+.cf-guide li ul{margin:2px 0}
+.cf-guide dt{font-weight:700;margin-top:10px;font-size:14px}
+.cf-guide dd{margin:2px 0 0 1em}
+.cf-guide code{font-size:12.5px;background:var(--surface-2);padding:1px 5px;border-radius:5px}
+.gd-hero{border-left:4px solid var(--tc,var(--accent))}
+.gd-meta{font-size:13px!important}
+.gd-toc h4{margin-top:0}
+.gd-toc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 18px}
+.gd-toc-grid>div{display:flex;flex-wrap:wrap;gap:5px;align-items:center;align-content:flex-start}
+.gd-toc-grid b{flex-basis:100%;font-size:13.5px}
+.gd-toc-grid b+span{display:none}
+.gd-toc button{border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 10px;font-size:13px}
+.gd-tool header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:8px;margin-bottom:4px}
+.gd-tool header>div{flex:1 1 220px;min-width:0}
+.gd-tool header h3{margin:0}
+.gd-no{flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:var(--tc,var(--accent));color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:700}
+.gd-tag{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.gd-go{border:1.5px solid var(--tc,var(--accent));background:var(--surface);color:var(--tc,var(--accent));border-radius:999px;padding:4px 12px;font-size:13px;font-weight:600;white-space:nowrap}
+.gd-note{background:var(--surface-2);border-radius:8px;padding:8px 10px!important;margin-top:10px!important;font-size:13.5px!important}
+.gd-note b{color:var(--ink);margin-right:4px}
+.gd-top{text-align:right;margin:6px 0 0!important}
+.gd-top button{border:none;background:none;color:var(--muted);font-size:12.5px}
+.gl-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.gl-bar input[type=search]{flex:1 1 240px;min-width:0;border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:14px}
+.gl-n{font-size:12.5px;color:var(--muted)}
+#cf-gloss .cf-note{max-width:none}
+.gl-cats{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 8px}
+.gl-cats button{appearance:none;font:inherit;cursor:pointer;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:2px 10px;font-size:12.5px}
+.gl-cats button[aria-pressed=true]{background:var(--tc,var(--accent));border-color:var(--tc,var(--accent));color:#fff}
+.gl-sec{margin:12px 0 4px;font-size:13.5px;color:var(--ink-2);border-left:4px solid var(--tc,var(--accent));padding-left:8px}
+.gl-it{border-top:1px solid var(--rule);padding:8px 2px}
+.gl-it .gl-h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.gl-it b{font-size:14px}
+.gl-t{font-size:11.5px;color:var(--muted)}
+.gl-it p{max-width:none;margin:3px 0 0;font-size:13.5px;line-height:1.7;color:var(--ink-2)}
+.gl-it p span{display:inline-block;min-width:3.2em;font-size:12px;font-weight:600;color:var(--muted)}
+.gl-it mark{background:var(--cf-hl);color:var(--cf-hl-ink);border-radius:2px}
+.gl-empty{color:var(--muted);font-size:13.5px;padding:10px 2px}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .gd-no,:root:not([data-theme=light]) .gl-cats button[aria-pressed=true]{color:var(--ground)}}
+:root[data-theme=dark] .gd-no,:root[data-theme=dark] .gl-cats button[aria-pressed=true]{color:var(--ground)}
 </style>
 
 <div class="cf" id="cf">
 {# 頁面標題和導覽列上目前那一顆重複，畫面上不再顯示（2026-10-04）；留給螢幕閱讀器與頁內大綱。 #}
 <h2 class="sr">籌碼雷達</h2>
 {# 開頭那段介紹收進燈泡，畫面上只留資料日（2026-10-04）。 #}
-<p class="cf-note"><span id="cf-asof"></span> {% call tip() %}<b>法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面。</b>十三項工具的設計參考 BG財報公開的方法，數字全部由本站用政府資料開放平臺（證交所、櫃買中心、集保結算所、公開資訊觀測站）自行計算。完整說明在最後一個分頁〔說明〕。<br><br>不構成任何投資建議；清單由公開資料自動產生，不代表推薦。{% endcall %}</p>
+<p class="cf-note"><span id="cf-asof"></span> {% call tip() %}<b>法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面。</b>十三項工具的設計參考 BG財報公開的方法，數字全部由本站用政府資料開放平臺（證交所、櫃買中心、集保結算所、公開資訊觀測站）自行計算。每個工具怎麼操作看〔📖 使用手冊〕，指標怎麼算看〔說明・指標查詢〕。<br><br>不構成任何投資建議；清單由公開資料自動產生，不代表推薦。{% endcall %}</p>
 <p class="cf-note" id="cf-msg">載入中…</p>
 
 <div class="cf-tabs" role="tablist" id="cf-tabs">
@@ -173,37 +226,30 @@ window.CF_V = "@@CFV@@";
   <button class="cf-tab cf-sep" data-t="t13" role="tab">⑬ 籌碼回測</button>
   <button class="cf-tab cf-sep" data-t="picks" role="tab">精選漏斗</button>
   <button class="cf-tab" data-t="val" role="tab">指標驗證</button>
-  <button class="cf-tab" data-t="about" role="tab">說明</button>
+  <button class="cf-tab cf-sep" data-t="guide" role="tab">📖 使用手冊</button>
+  <button class="cf-tab" data-t="about" role="tab">說明・指標查詢</button>
 </div>
 <datalist id="cf-codes"></datalist>
 
-<section class="cf-panel" id="cf-t1">{% include "radar_bg/t1.html" %}</section>
-<section class="cf-panel" id="cf-t2">{% include "radar_bg/t2.html" %}</section>
-<section class="cf-panel" id="cf-t3">{% include "radar_bg/t3.html" %}</section>
-<section class="cf-panel" id="cf-t4">{% include "radar_bg/t4.html" %}</section>
-<section class="cf-panel" id="cf-t5">{% include "radar_bg/t5.html" %}</section>
-<section class="cf-panel" id="cf-t6">{% include "radar_bg/t6.html" %}</section>
-<section class="cf-panel" id="cf-t7">{% include "radar_bg/t7.html" %}</section>
-<section class="cf-panel" id="cf-t8">{% include "radar_bg/t8.html" %}</section>
-<section class="cf-panel" id="cf-t9">{% include "radar_bg/t9.html" %}</section>
-<section class="cf-panel" id="cf-t10">{% include "radar_bg/t10.html" %}</section>
-<section class="cf-panel" id="cf-t11">{% include "radar_bg/t11.html" %}</section>
-<section class="cf-panel" id="cf-t12">{% include "radar_bg/t12.html" %}</section>
-<section class="cf-panel" id="cf-t13">{% include "radar_bg/t13.html" %}</section>
-<section class="cf-panel" id="cf-picks"><div id="cf-opicks"></div></section>
-<section class="cf-panel" id="cf-val"><div id="cf-oval"></div></section>
+<section class="cf-panel" id="cf-t1"><p class="cf-howto"><button type="button" data-guide="g-t1">📖 這個工具怎麼用</button></p>{% include "radar_bg/t1.html" %}</section>
+<section class="cf-panel" id="cf-t2"><p class="cf-howto"><button type="button" data-guide="g-t2">📖 這個工具怎麼用</button></p>{% include "radar_bg/t2.html" %}</section>
+<section class="cf-panel" id="cf-t3"><p class="cf-howto"><button type="button" data-guide="g-t3">📖 這個工具怎麼用</button></p>{% include "radar_bg/t3.html" %}</section>
+<section class="cf-panel" id="cf-t4"><p class="cf-howto"><button type="button" data-guide="g-t4">📖 這個工具怎麼用</button></p>{% include "radar_bg/t4.html" %}</section>
+<section class="cf-panel" id="cf-t5"><p class="cf-howto"><button type="button" data-guide="g-t5">📖 這個工具怎麼用</button></p>{% include "radar_bg/t5.html" %}</section>
+<section class="cf-panel" id="cf-t6"><p class="cf-howto"><button type="button" data-guide="g-t6">📖 這個工具怎麼用</button></p>{% include "radar_bg/t6.html" %}</section>
+<section class="cf-panel" id="cf-t7"><p class="cf-howto"><button type="button" data-guide="g-t7">📖 這個工具怎麼用</button></p>{% include "radar_bg/t7.html" %}</section>
+<section class="cf-panel" id="cf-t8"><p class="cf-howto"><button type="button" data-guide="g-t8">📖 這個工具怎麼用</button></p>{% include "radar_bg/t8.html" %}</section>
+<section class="cf-panel" id="cf-t9"><p class="cf-howto"><button type="button" data-guide="g-t9">📖 這個工具怎麼用</button></p>{% include "radar_bg/t9.html" %}</section>
+<section class="cf-panel" id="cf-t10"><p class="cf-howto"><button type="button" data-guide="g-t10">📖 這個工具怎麼用</button></p>{% include "radar_bg/t10.html" %}</section>
+<section class="cf-panel" id="cf-t11"><p class="cf-howto"><button type="button" data-guide="g-t11">📖 這個工具怎麼用</button></p>{% include "radar_bg/t11.html" %}</section>
+<section class="cf-panel" id="cf-t12"><p class="cf-howto"><button type="button" data-guide="g-t12">📖 這個工具怎麼用</button></p>{% include "radar_bg/t12.html" %}</section>
+<section class="cf-panel" id="cf-t13"><p class="cf-howto"><button type="button" data-guide="g-t13">📖 這個工具怎麼用</button></p>{% include "radar_bg/t13.html" %}</section>
+<section class="cf-panel" id="cf-picks"><p class="cf-howto"><button type="button" data-guide="g-picks">📖 怎麼看精選漏斗</button></p><div id="cf-opicks"></div></section>
+<section class="cf-panel" id="cf-val"><p class="cf-howto"><button type="button" data-guide="g-val">📖 怎麼看指標驗證</button></p><div id="cf-oval"></div></section>
+<section class="cf-panel" id="cf-guide">{% include "radar_guide.html.j2" %}</section>
 <section class="cf-panel" id="cf-about">
 <div class="cf-card"><dl>
-<dt>十三項工具（版面照 BG財報 會員工具一比一還原，數字全部換成本站自己算的）</dt>
-<dd>各分頁預設個股是台積電（2330）。所有表格裡：點<b>代號</b>看〔① 個股籌碼多圖〕、點<b>名稱</b>開個股資訊頁、點收盤價旁的圖示開 Yahoo 技術分析。①②③ 標題列的代號與名稱開個股資訊頁，旁邊是產業別與 ☆（加入觀察清單）。</dd>
-<dt>① 個股籌碼多圖</dt><dd>預設近 120 個交易日、可用〔縮放區間〕按鈕與滑桿拉到約三年（可勾〔疊加股價〕）的股價，以及外資法人、大戶籌碼、成交量能、貪婪恐懼四組共十多張走勢圖；滑鼠移到圖上看當天數值。</dd>
-<dt>② 大戶籌碼</dt><dd>每日：收盤、大戶比例、大戶人數、總股東人數。每週（集保）：集保股權分散表各級距的持股張數與人數趨勢。每日那一組可拉到約一年（大戶資料的長度），週資料跟著同一段期間；可勾〔疊加股價〕。</dd>
-<dt>③ 基本面</dt><dd>月營收、損益表（單季 EPS、營益率、淨利率……）、存貨／資本支出／合約負債，近幾年逐季逐月。</dd>
-<dt>④ 籌碼篩選、⑤ 基本面篩選、⑥ 籌碼×基本面</dt><dd>自訂條件篩全上市櫃，留空＝不套用；可選最近 20 個交易日中的任一天重新篩（基本面只用那一天已經公布的資料），也有 20 天回測彙總表與匯出。排名一律「第 1 名最大」。</dd>
-<dt>⑦⑧ 排名軌跡、⑨⑩ 排名榜、⑪⑫ 金額軌跡</dt><dd>法人 60 日累計買超與 20 日成交資金，在全市場的排名（或金額）怎麼一天一天移動；⑦⑨⑪ 看單檔，⑧⑩⑫ 多檔對照。排名會隨市場溫度自動校準——大盤跌時某一檔的法人排名一路往前，才是資金真正的選擇。</dd>
-<dt>⑬ 籌碼回測</dt><dd>用篩選日<b>當天</b>的籌碼資料套入條件，看那一天會篩出哪些股票，再算它們 20／60 個交易日後的漲跌；連續往回 50 個交易日，每天各自重篩。報酬以收盤價直接計算、未還原除權息，口徑和 BG 相同。<br>
-・大戶人數相關的條件要集保 15 級的人數：開放資料只給最新一週，過去的週要逐檔向集保查詢頁回補（每晚依流動性由大到小接著補），還沒補到的個股在那些日子碰到這些條件一律不符合。</dd>
-<dt>精選漏斗</dt><dd>L0 流動性（股價 &gt; 10、20 日均額 &gt; 5,000 萬、不在 AI 選股的 E 財報否決名單）→ L1 籌碼共振（七個特徵的加權百分位前 10%，且法人、大戶、股東三根柱子至少兩根同向）→ 精選再要求共振前 5%、兩面以上成長旗標、趨勢成立（收盤 &gt; 60 日線且 20 日線 &gt; 60 日線）。權重每週用過去已實現的 20 日報酬學（rank IC，負的歸零），不是人工拍板。</dd>
+<dt>怎麼用</dt><dd>十三項工具的版面參考 BG財報 的會員工具，數字全部由本站自己算。每個工具「做什麼、怎麼操作、舉例」都在〔📖 使用手冊〕<button type="button" class="gd-link" data-go="guide">打開使用手冊 →</button>；各工具左上角的〔📖 這個工具怎麼用〕會直接跳到那一節。下面是資料來源、口徑與限制，再往下是可以搜尋的〔指標查詢〕。</dd>
 <dt>資料來源與口徑</dt><dd>
 ・<b>成交金額、法人買進／賣出</b>：證交所 MI_INDEX、T86，櫃買中心每日收盤與三大法人明細（官方成交金額；法人金額 ＝ 股數 × 當日均價，均價 ＝ 成交金額 ÷ 成交股數）。法人預估成交額 ＝（外資＋投信的買進＋賣出）÷ 2 × 均價。<br>
 ・<b>5,000 萬大戶</b>：集保原始 15 級（含人數）。每週全市場一份，另逐檔回補近 51 週；回補依流動性排序、每晚接著補，還沒補到的個股先用八級持股比例（級距較粗，頁面上會標示）。<br>
@@ -214,47 +260,22 @@ window.CF_V = "@@CFV@@";
 ・<b>內外盤</b>（逐筆成交是主動買還是主動賣）：證交所與櫃買中心的公開資料只給每日彙總，沒有逐筆明細，只能向資訊商購買。本站以 K 線買賣盤比例（貪婪／恐懼）代替——BG財報 的「含內外盤因子的買賣盤力道」因此無法一比一重現。</dd>
 <dt>免責</dt><dd>本頁僅為公開財務及籌碼數據之整理與自訂條件篩選輔助，不構成任何投資建議、推介、要約或招攬。各項排名與清單是過去交易資料的統計，不代表未來走勢；清單由數字自動產生，不代表推薦。</dd>
 </dl></div>
-<div class="cf-card cf-gl" id="cf-gloss"><h4>名詞解釋</h4>
-<p class="cf-note">頁面上各張圖、各個表頭旁的 💡 是同一份說明的節錄。排名一律「第 1 名＝最大」，而且只在流動性母體裡排。</p>
-<dl>
-<dt>① 個股籌碼多圖：外資法人</dt>
-<dd><b>外資＋投信買賣超 ÷ 資本額 60 日累計（倍）</b>：外資＋投信（不含自營商）每天買賣超股數 × 當日均價（成交金額 ÷ 成交股數）＝買賣超金額；最近 60 個交易日加總，再除以資本額（那一天看得到的季報股本）。0.05 倍＝兩個多月法人淨買進股本 5% 的金額，大小型股可以直接比。<br>
-<b>紅：法人預估成交額 20 日／藍：成交金額 20 日</b>：法人預估成交額＝（外資＋投信的買進＋賣出股數）÷ 2 × 均價，是法人參與的成交金額；紅線是它的 20 日加總，藍線是全部成交金額的 20 日加總。紅佔藍越多，這段行情越是法人在做。<br>
-<b>外資投信 20 日市值周轉率（%）</b>：法人預估成交額 20 日加總 ÷ 市值 × 100。法人換手變積極時會上升（買賣都算，方向看買賣超）。<br>
-<b>扣掉大戶之 20 日周轉率（%）</b>：20 日成交金額 ÷（市值 ×（1 − 大戶比例））× 100。大戶的股票通常不動，扣掉之後才是真正流通的籌碼；比例高＝流通籌碼換手快、短線資金多。<br>
-<b>外資投信買賣超 ÷ 大戶人數 60 日（千元）</b>與<b>…排名</b>：60 日累計買賣超金額 ÷ 5,000 萬大戶人數。同樣的法人買超，大戶越少、每位大戶「分到」的越多，籌碼越容易被推動。排名是它在母體裡的名次。需要集保 15 級（含人數）資料。</dd>
-<dt>② 大戶籌碼</dt>
-<dd><b>大戶</b>＝持股市值 ≥ 5,000 萬元的股東，每天用收盤價換算成張數門檻，加總集保 15 級裡門檻以上的各級（跨級時按對數比例內插，所以不會突然跳）。<b>大戶比例</b>＝大戶持股 ÷ 集保總股數；<b>大戶人數</b>＝門檻以上的人數；<b>大戶庫存張數</b>＝大戶比例 × 集保總股數 ÷ 1,000，也就是大戶手上合計幾張——股本變動時比看比例更不容易誤判。</dd>
-<dt>① 個股籌碼多圖：成交量能</dt>
-<dd><b>成交金額 ÷ 大戶人數 20 日（千元）</b>與<b>…排名</b>：20 日成交金額加總 ÷ 5,000 萬大戶人數。市場資金相對於大戶規模的熱度。<br>
-<b>成交金額 20 日佔全市場比例</b>、<b>成交資金佔比排名</b>、<b>成交金額 ÷ 資本額 20 日</b>：這一檔 20 日成交金額佔全市場的比重、它的名次，以及除以股本後的倍數。</dd>
-<dt>① 個股籌碼多圖：貪婪恐懼</dt>
-<dd>每根 K 線拆成買盤與賣盤兩股力道（BG財報 的算法，跳空缺口併進當天的主方向）：<b>收盤比昨收高</b>的日子，買＝（開−低）＋（高−昨收），賣＝（開−低）＋（高−收）；<b>其餘日子</b>，買＝（高−開）＋（收−低），賣＝（高−開）＋（昨收−低）。<b>買盤比例</b>＝買 ÷（買＋賣），0～1；鎖漲停一字線是 1、鎖跌停是 0，完全沒動是 0。<br>
-<b>貪婪指標 1／2</b>＝買盤比例最近 20／60 天的<b>加總</b>；<b>恐懼指標 1／2</b>＝天數 − 貪婪（也就是賣盤比例的加總）。<br>
-<b>買盤比例 20／60 日 − 賣盤比例</b>＝貪婪 − 恐懼＝買賣盤力道；> 0 表示買方較主動。20 日力道轉正且比五天前強，就是 <b>T2 蓄勢</b>。它用來代替公開資料沒有的內外盤。</dd>
-<dt>流動性母體（L0 流動性）</dt>
-<dd>普通股、收盤 &gt; 10 元、20 日平均成交金額 &gt; 5,000 萬，而且不在 E 否決名單上。所有排名、百分位、共振分數、驗證的「母體平均」都只在這一群裡算。</dd>
-<dt>E 否決名單</dt>
-<dd>沿用〔AI 選股〕的財報品質否決：財報八面（本業虧損、連兩季虧損、獲利靠業外、有獲利沒現金、應計比率偏高、負債快速上升、營收大幅衰退、董監高質押）加重大訊息四面（更換簽證會計師、財會主管異動、退票／重整／繼續經營疑慮、停工災害），合計三面以上就擋掉。表格〔標記〕欄的「E否決」就是它。</dd>
-<dt>rank IC、平均 IC、t 值</dt>
-<dd><b>rank IC</b>：每一週把母體裡每一檔的某個特徵排名，和它之後 20 個交易日的報酬排名算 Spearman 相關；+1＝完全一致、0＝無關、負的＝相反。平均 IC 在 ±0.02 左右算很弱，0.05 以上已經算強。<b>平均 IC</b>＝各週 IC 的平均；<b>t 值</b>＝平均 ÷ 標準差 × √週數，|t| &gt; 2 大致算顯著——但週與週的 20 日持有期重疊，t 值會偏高。</dd>
-<dt>共振分數</dt>
-<dd>七個特徵（外資投信 60 日買超 ÷ 資本額、法人 60 日買超排名 20 日進步、5,000 萬大戶持股比例四週增加、總股東人數四週減少、成交資金佔比排名 20 日進步、20 日成交金額 ÷ 資本額、買賣盤力道 20 日）各自取母體百分位，用權重加權平均（至少 4 個特徵有值），再取一次百分位（0～1）。權重＝每個特徵過去已實現各週的平均 rank IC，負的歸零；不到 8 週時等權。</dd>
-<dt>籌碼共振（L1）與三根柱子</dt>
-<dd>L1＝共振分數前 10%，而且三根柱子至少兩根同向：① <b>法人</b>：外資投信 60 日累計買超 &gt; 0 且在全市場前 30%；② <b>大戶</b>：5,000 萬大戶持股比例比四週前高；③ <b>股東</b>：總股東人數比四週前少。</dd>
-<dt>成長旗標（L2）</dt>
-<dd>① 月營收創 12 個月新高且 3 個月累計年增 &gt; 0（不成立時，單月營收年增 &gt; 20% 也算這一面）；② 近四季 EPS 年增；③ 單季 EPS 創近 4 季新高；④ 營益率創近 4 季新高。精選要兩面以上。</dd>
-<dt>趨勢成立（T1 趨勢）、T2 蓄勢</dt>
-<dd><b>T1</b>：收盤 &gt; 60 日均線，且 20 日均線 &gt; 60 日均線，精選的必要條件。<b>T2</b>：買賣盤力道 20 日 &gt; 0 且比五個交易日前強，只標示、不設門檻。</dd>
-<dt>精選（整條漏斗）</dt>
-<dd>L0 流動性 ∩（L1 且共振分數前 5%）∩ 兩面以上成長旗標 ∩ T1。每天的精選寫進精選日誌，之後對答案。</dd>
-<dt>回檔警戒</dt>
-<dd>資金轉弱＝成交資金佔比百分位比 20 天前掉 10 個百分點以上且 20 日成交金額變少；籌碼轉弱＝大戶比例連兩週下降，或股東人數比四週前多且法人 20 日賣超。兩邊都轉弱＝高風險、一邊＝待觀察、都穩＝相對安心。</dd>
-<dt>指標驗證的欄位</dt>
-<dd><b>母體</b>：那一週的 L0 檔數。<b>L1 檔數／L1 超額%</b>：那一週照規則選出的 L1 檔數，與它們之後 20 日平均報酬減去母體平均。<b>L1+T1</b>：L1 再加上 T1。<b>精選檔數／精選超額%</b>：整條漏斗。<b>母體報酬%</b>：母體之後 20 日報酬的平均（超額就是扣掉它）。財報、營收、E 否決都用那一週看得到的版本；沒有扣交易成本。</dd>
-<dt>〔標記〕欄（④⑤⑥）</dt>
-<dd><b>精選</b>、<b>共振</b>（L1 但不是精選）、<b>E否決</b>。點表頭可以排序：精選 ＞ 共振 ＞ 無標記，被 E 否決的排在同級之後。</dd>
-</dl></div>
+<div class="cf-card cf-gl" id="cf-gloss"><h4>📖 指標查詢：怎麼算、白話是什麼</h4>
+<p class="cf-note">頁面上各張圖、各個表頭旁的 💡 是同一份說明的節錄。打關鍵字（例如「大戶比例」「貪婪」「合約負債」），或用分類、工具縮小範圍。</p>
+<div class="gl-bar">
+  <input type="search" id="gl-q" placeholder="搜尋指標，例如 大戶比例、貪婪、合約負債" aria-label="搜尋指標">
+  <select id="gl-tool" aria-label="只看出現在哪個工具"><option value="">全部工具</option>
+    <option value="1">① 個股籌碼多圖</option><option value="2">② 大戶籌碼</option><option value="3">③ 基本面</option>
+    <option value="4">④ 籌碼篩選</option><option value="5">⑤ 基本面篩選</option><option value="6">⑥ 籌碼×基本面</option>
+    <option value="7">⑦ 排名軌跡</option><option value="8">⑧ 多檔排名軌跡</option><option value="9">⑨ 排名榜（單檔）</option>
+    <option value="10">⑩ 排名榜（多檔）</option><option value="11">⑪ 金額軌跡</option><option value="12">⑫ 多檔金額軌跡</option>
+    <option value="13">⑬ 籌碼回測</option><option value="p">精選漏斗</option><option value="v">指標驗證</option></select>
+  <span class="gl-n" id="gl-n"></span>
+</div>
+<div class="gl-cats" id="gl-cats" role="group" aria-label="分類"></div>
+<div id="gl-list"></div>
+<script type="application/json" id="gl-data">{% include "radar_gloss.json" %}</script>
+</div>
 </section>
 </div>
 
@@ -747,6 +768,7 @@ function init(){
   var h = (location.hash || "").replace("#", "").split("-");
   var tab = h[0] && document.querySelector('.cf-tab[data-t="' + h[0] + '"]') ? h[0] : "picks";
   open(tab, h[1] && ROWS[h[1]] ? h[1] : null, h[2] || null);
+  if (tab === "guide" && h[1] && document.getElementById("g-" + h[1])){ setTimeout(function(){ guideGo("g-" + h[1]); }, 0); setTimeout(function(){ guideGo("g-" + h[1]); }, 400); }
   // ①②③ 標題列的☆（bgDecorate 畫的）：和個股頁同一份觀察清單
   $("cf").addEventListener("click", function(e){
     var btn = e.target.closest && e.target.closest(".bgm button.bg-star");
@@ -759,6 +781,85 @@ function init(){
     document.querySelectorAll("#cf .bgm button.bg-star").forEach(function(b){ TWSIXWatch.paint(b); });
   });
 }
+
+// ── 〔📖 使用手冊〕與〔指標查詢〕（2026-10-12）──────────────────────────────
+// 不需要 radar.json：資料還沒產生時也看得到手冊與指標說明。
+function guideGo(id){
+  var t = id === "g-toc" ? document.querySelector("#cf-guide .gd-toc") : document.getElementById(id);
+  if (!t) return;
+  // 扣掉黏在上方的站名列（手機與桌機高度不同，每次量）
+  var head = document.querySelector("header.top"), off = 10;
+  if (head && getComputedStyle(head).position === "sticky") off += head.offsetHeight;
+  window.scrollTo(0, Math.max(0, t.getBoundingClientRect().top + window.pageYOffset - off));
+}
+function setupGuide(){
+  document.addEventListener("click", function(e){
+    var b = e.target.closest && e.target.closest("[data-g],[data-go],[data-guide]");
+    if (!b || !b.closest("#cf")) return;
+    if (b.hasAttribute("data-g")){ guideGo(b.getAttribute("data-g")); return; }
+    if (b.hasAttribute("data-guide")){
+      if (typeof open === "function" && $("cf-tabs") && !$("cf-tabs").querySelector(".cf-tab:disabled")) open("guide");
+      else document.querySelectorAll(".cf-panel").forEach(function(p){ p.classList.toggle("on", p.id === "cf-guide"); });
+      var id = b.getAttribute("data-guide");
+      setTimeout(function(){ guideGo(id); }, 0);
+      return;
+    }
+    var tab = b.getAttribute("data-go");
+    if ($("cf-tabs").querySelector('.cf-tab[data-t="' + tab + '"]:not(:disabled)')){
+      open(tab);
+      var top = $("cf-tabs").getBoundingClientRect().top + window.pageYOffset - 10;
+      window.scrollTo(0, Math.max(0, top));
+    }
+  });
+  // 指標查詢
+  var box = $("gl-list"), dataEl = $("gl-data");
+  if (!box || !dataEl) return;
+  var G = [];
+  try { G = JSON.parse(dataEl.textContent); } catch (err) { return; }
+  var NAMES = {"p": "精選漏斗", "v": "指標驗證"}, CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬";
+  function tname(t){ return NAMES[t] || CIRC.charAt(t - 1); }
+  var cats = [];
+  G.forEach(function(g){ if (cats.indexOf(g.cat) < 0) cats.push(g.cat); });
+  var curCat = "", q = $("gl-q"), sel = $("gl-tool"), cb = $("gl-cats");
+  cb.appendChild(el("button", {type: "button", "data-c": "", "aria-pressed": "true", text: "全部"}));
+  cats.forEach(function(c){ cb.appendChild(el("button", {type: "button", "data-c": c, "aria-pressed": "false", text: c})); });
+  function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
+  function hl(t, words){
+    var h = esc(t);
+    words.forEach(function(w){
+      if (!w) return;
+      var ew = esc(w).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      h = h.replace(new RegExp("(" + ew + ")", "gi"), "<mark>$1</mark>");
+    });
+    return h;
+  }
+  function draw(){
+    var words = (q.value || "").trim().toLowerCase().split(/\s+/).filter(Boolean), tool = sel.value, n = 0, last = null, html = "";
+    G.forEach(function(g){
+      if (curCat && g.cat !== curCat) return;
+      if (tool && g.t.map(String).indexOf(tool) < 0) return;
+      var hay = (g.name + " " + g.calc + " " + g.plain + " " + g.cat).toLowerCase();
+      for (var i = 0; i < words.length; i++) if (hay.indexOf(words[i]) < 0) return;
+      if (g.cat !== last){ html += '<h5 class="gl-sec">' + esc(g.cat) + "</h5>"; last = g.cat; }
+      n++;
+      html += '<div class="gl-it"><div class="gl-h"><b>' + hl(g.name, words) + "</b>" +
+        (g.t.length ? '<span class="gl-t">出現在：' + g.t.map(tname).join("、") + "</span>" : "") + "</div>" +
+        "<p><span>怎麼算</span>" + hl(g.calc, words) + "</p><p><span>白話</span>" + hl(g.plain, words) + "</p></div>";
+    });
+    box.innerHTML = html || '<p class="gl-empty">找不到符合的指標，換個關鍵字或把分類、工具改回「全部」。</p>';
+    $("gl-n").textContent = "共 " + n + " 項";
+  }
+  q.addEventListener("input", draw);
+  sel.addEventListener("change", draw);
+  cb.addEventListener("click", function(e){
+    var b = e.target.closest("button[data-c]"); if (!b) return;
+    curCat = b.getAttribute("data-c");
+    [].forEach.call(cb.querySelectorAll("button"), function(x){ x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+    draw();
+  });
+  draw();
+}
+setupGuide();
 
 {% include "radar_bg/mods.js" %}
 // radar.json 按欄存（chipflow/site.py 的 pack_rows）：還原成一列一檔，null 的欄位略過
