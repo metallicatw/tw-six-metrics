@@ -59,6 +59,9 @@ var __fetch = API.fetch;
     raw = (raw || '').trim();
     if(!raw) return null;
     if(META[raw]) return raw;
+    // 輸入框顯示的是「代號 名稱」（2026-10-12）：再按一次查詢時取第一段
+    var first = raw.split(/\s+/)[0];
+    if(META[first]) return first;
     // 允許輸入名稱做模糊比對
     var hit = null;
     for(var code in META){
@@ -299,6 +302,8 @@ var __fetch = API.fetch;
 
     __id('sbCode').textContent = code;
     __id('sbName').textContent = META[code] || '';
+    // 查詢欄永遠寫著「代號 名稱」：捲到下面的圖時，黏在上方的那一列還看得出是哪一檔
+    __id('codeInput').value = code + (META[code] ? ' ' + META[code] : '');
     bgDecorate(code, __id('sbCode'), __id('sbName'));
     var pd = DATES.price || [];
     __id('sbAsof').textContent = pd.length ? ('資料至 ' + pd[pd.length-1]) : '';
@@ -414,6 +419,7 @@ var __fetch = API.fetch;
       doLookup(input.value);
     });
     input.addEventListener('input', function(){ updateSuggest(input.value); });
+    input.addEventListener('focus', function(){ setTimeout(function(){ input.select(); }, 0); });
     input.addEventListener('keydown', function(e){
       if(e.key === 'Enter'){
         if(suggestIndex >= 0 && suggestList[suggestIndex]){
@@ -723,6 +729,7 @@ var __fetch = API.fetch;
     state.current = code;
     __id('curCode').textContent = code;
     __id('curName').textContent = state.meta[code] || '';
+    __id('stockInput').value = code + ' ' + (state.meta[code] || '');   // 和 ① 一樣寫著「代號 名稱」
     bgDecorate(code, __id('curCode'), __id('curName'));
 
     // 縮放區間＋疊加股價（2026-10-10）：每日那一組可以拉到約一年（大戶資料的長度），
@@ -826,6 +833,7 @@ var __fetch = API.fetch;
       return;
     }
     __id('goBtn').addEventListener('click', handleSubmit);
+    __id('stockInput').addEventListener('focus', function () { var i = this; setTimeout(function () { i.select(); }, 0); });
     __id('stockInput').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') handleSubmit();
     });
@@ -902,6 +910,9 @@ var __fetch = API.fetch;
   function matchStock(q){
     q = q.trim();
     if(!q) return [];
+    // 輸入框顯示「代號 名稱」（2026-10-12）：第一段是代號就用它
+    var first = q.split(/\s+/)[0];
+    if(first !== q && META[first]) q = first;
     var out = [];
     var qUpper = q.toUpperCase();
     for(var i=0;i<searchIndex.length && out.length < 8;i++){
@@ -978,10 +989,10 @@ var __fetch = API.fetch;
 
   function selectStock(code){
     closeDropdown();
-    $search.value = "";
     $search.blur();
     loadAndRender(code);
   }
+  $search.addEventListener("focus", function(){ setTimeout(function(){ $search.select(); }, 0); });
 
   // ---------------------------------------------------------------
   // number formatting
@@ -1136,8 +1147,9 @@ var __fetch = API.fetch;
     svg.appendChild(hitRect);
     attachHover(svg, container, hitAreas, function(i){
       var v = values[i];
-      return { label: labels[i], html: labels[i] + '<br><b>' + (opts.fmt? opts.fmt(v) : fmtNum(v)) + (opts.unit? (' ' + opts.unit) : '') + '</b>' + pxTip(opts.px, i) };
-    });
+      return { label: labels[i], html: '<span class="t-d">' + labels[i] + '</span>　<b>' + (opts.fmt? opts.fmt(v) : fmtNum(v)) + (opts.unit? (' ' + opts.unit) : '') + '</b>' + pxTip(opts.px, i),
+        x: PAD_L + bw*i + bw/2, pts: (v === null || v === undefined) ? [] : [{y: yScale(v), color: opts.diverging ? (v >= 0 ? good : crit) : accent}] };
+    }, h);
 
     container.innerHTML = "";
     container.appendChild(svg);
@@ -1220,24 +1232,36 @@ var __fetch = API.fetch;
     attachHover(svg, container, hitAreas, function(i){
       var lines = opts.series.map(function(s){
         var v = s.values[i];
-        return '<span style="color:'+s.color+'">●</span> ' + (s.name? s.name+': ' : '') + (opts.fmt? opts.fmt(v) : fmtNum(v)) + (opts.unit? (' '+opts.unit):'');
+        return '<span style="color:'+s.color+'">●</span> ' + (s.name? s.name+': ' : '') + '<b>' + (opts.fmt? opts.fmt(v) : fmtNum(v)) + (opts.unit? (' '+opts.unit):'') + '</b>';
       }).join("<br>");
-      return { label: labels[i], html: labels[i] + '<br>' + lines + pxTip(opts.px, i) };
-    });
+      var pts = [];
+      opts.series.forEach(function(s){ var v = s.values[i]; if(v !== null && v !== undefined) pts.push({y: yScale(v), color: s.color}); });
+      return { label: labels[i], html: '<span class="t-d">' + labels[i] + '</span>' + (opts.series.length > 1 ? '<br>' : '　') + lines + pxTip(opts.px, i), x: xScale(i), pts: pts };
+    }, h);
 
     container.innerHTML = "";
     container.appendChild(svg);
   }
 
-  function attachHover(svg, container, hitAreas, tooltipFn){
+  // 滑鼠移過：和 ② 大戶籌碼一樣畫一條垂直準線、在數值點上畫圓點，提示框跟著游標（2026-10-12）
+  function attachHover(svg, container, hitAreas, tooltipFn, h){
+    var cross = el("line", {x1:0, x2:0, y1:PAD_T, y2:(h || 190) - PAD_B, stroke:cssVar("--muted"), "stroke-width":1, "stroke-dasharray":"3 3", "pointer-events":"none", visibility:"hidden"});
+    var dots = el("g", {"pointer-events":"none"});
+    svg.appendChild(cross); svg.appendChild(dots);
+    function hideAll(){ hideTooltip(); cross.setAttribute("visibility", "hidden"); dots.innerHTML = ""; }
     function handleMove(clientX, clientY, svgX){
       var found = null;
       for(var i=0;i<hitAreas.length;i++){
         var ha = hitAreas[i];
         if(svgX >= ha.x && svgX <= ha.x + ha.w){ found = ha.i; break; }
       }
-      if(found === null){ hideTooltip(); return; }
+      if(found === null){ hideAll(); return; }
       var info = tooltipFn(found);
+      if(info.x !== undefined){
+        cross.setAttribute("x1", info.x); cross.setAttribute("x2", info.x); cross.setAttribute("visibility", "visible");
+        dots.innerHTML = "";
+        (info.pts || []).forEach(function(p){ dots.appendChild(el("circle", {cx:info.x, cy:p.y, r:4.5, fill:p.color, stroke:cssVar("--bg"), "stroke-width":2})); });
+      }
       showTooltip(clientX, clientY, info.html);
     }
     function toSvgX(clientX){
@@ -1248,7 +1272,7 @@ var __fetch = API.fetch;
     svg.addEventListener("mousemove", function(e){
       handleMove(e.clientX, e.clientY, toSvgX(e.clientX));
     });
-    svg.addEventListener("mouseleave", hideTooltip);
+    svg.addEventListener("mouseleave", hideAll);
     svg.addEventListener("touchstart", function(e){
       var touch = e.touches[0];
       handleMove(touch.clientX, touch.clientY, toSvgX(touch.clientX));
@@ -1258,7 +1282,7 @@ var __fetch = API.fetch;
       handleMove(touch.clientX, touch.clientY, toSvgX(touch.clientX));
       e.preventDefault();
     }, {passive:false});
-    svg.addEventListener("touchend", hideTooltip);
+    svg.addEventListener("touchend", function(){ setTimeout(hideAll, 1500); });
   }
 
   // ---------------------------------------------------------------
@@ -1319,6 +1343,7 @@ var __fetch = API.fetch;
     __id("stockName").textContent = meta.name || code;
     __id("stockCode").textContent = code;
     __id("stockInd").textContent = meta.ind || "";
+    __id("search").value = code + " " + (meta.name || "");   // 和 ① 一樣：查詢欄寫著「代號 名稱」
     bgDecorate(code, __id("stockCode"), __id("stockName"), __id("stockInd"));
 
     QLABELS = rec.QL; MLABELS = rec.ML;
@@ -1384,13 +1409,29 @@ var __fetch = API.fetch;
       '<div class="legend"><span><span class="sw" style="background:'+cssVar("--accent")+'"></span>(保留盈餘+資本公積)比例</span>'+
       '<span><span class="sw" style="background:'+cssVar("--accent-2")+'"></span>保留盈餘比例</span>'+
       '<span><span class="sw" style="background:#e8a33d"></span>資本公積比例</span></div>'+
-      '<p class="card-note">分母＝股本＋資本公積＋保留盈餘</p>');
+      '<p class="card-note">分母＝股本＋資本公積＋保留盈餘・點圖例可顯示／隱藏線條</p>');
     grid2b.appendChild(c2b1);
-    renderLineChart(c2b1.querySelector(".chart-box"), {labels:qLabels, series:[
-      {values:retained_apic_ratio_q, color:cssVar("--accent"), name:"合計"},
-      {values:retained_ratio_q, color:cssVar("--accent-2"), name:"保留盈餘"},
-      {values:apic_ratio_q, color:"#e8a33d", name:"資本公積"}
-    ], fmt:fmtPct, unit:""});
+    // 三條線相差太多（台積電 95.9%／94.8%／1.1%）：點圖例可以隱藏或顯示某一條，刻度跟著剩下的線重算。
+    // 預設只看合計與保留盈餘（兩條都在 90% 上下，變化看得清楚）；資本公積點圖例才顯示。
+    var ratioSeries = [
+      {values:retained_apic_ratio_q, color:cssVar("--accent"), name:"合計", on:true},
+      {values:retained_ratio_q, color:cssVar("--accent-2"), name:"保留盈餘", on:true},
+      {values:apic_ratio_q, color:"#e8a33d", name:"資本公積", on:false}
+    ];
+    var ratioLegend = c2b1.querySelectorAll(".legend > span");
+    function drawRatio(){
+      ratioSeries.forEach(function(s, k){ if(ratioLegend[k]) ratioLegend[k].classList.toggle("off", !s.on); });
+      var vis = ratioSeries.filter(function(s){ return s.on; });
+      renderLineChart(c2b1.querySelector(".chart-box"), {labels:qLabels, series:vis.length ? vis : [ratioSeries[0]], fmt:fmtPct, unit:""});
+    }
+    [].forEach.call(ratioLegend, function(sp, k){
+      sp.classList.add("tg"); sp.setAttribute("role", "button"); sp.setAttribute("tabindex", "0");
+      sp.title = "點一下顯示／隱藏這條線";
+      var flip = function(){ ratioSeries[k].on = !ratioSeries[k].on; drawRatio(); };
+      sp.addEventListener("click", flip);
+      sp.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); flip(); } });
+    });
+    drawRatio();
     var c2b2 = card("保留盈餘", "百萬元", latestValueHtml(d.retained_q, fmtMoney, QLABELS));
     grid2b.appendChild(c2b2);
     renderBarChart(c2b2.querySelector(".chart-box"), {labels:qLabels, values:retained_q, fmt:fmtMoney, unit:"百萬"});
@@ -1496,7 +1537,12 @@ var __fetch = API.fetch;
         '<div class="notes-cell"><span class="nd">'+lyDate+'</span><span class="nt'+(lyText==="-"?" dim":"")+'">'+escapeHtml(lyText)+'</span></div>' +
       '</div>';
     }
-    notesCard.innerHTML = '<div class="notes-head"><span style="padding-left:14px">當期公告說明</span><span style="padding-left:14px">去年同期公告說明</span></div>' + rows;
+    // 只顯示最近 3 個月，其餘收在「顯示更早的月份」裡（2026-10-12）
+    var rowList = rows.split('<div class="notes-row">').slice(1).map(function(x){ return '<div class="notes-row">' + x; });
+    var more = rowList.slice(3);
+    notesCard.innerHTML = '<div class="notes-head"><span style="padding-left:14px">當期公告說明</span><span style="padding-left:14px">去年同期公告說明</span></div>' +
+      rowList.slice(0, 3).join("") +
+      (more.length ? '<details class="notes-more"><summary>顯示更早的 ' + more.length + ' 個月</summary>' + more.join("") + '</details>' : '');
     g7.querySelector(".grid").replaceWith(notesCard);
     main.appendChild(g3);
     main.appendChild(g7);

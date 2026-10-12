@@ -744,3 +744,19 @@ def test_貪婪恐懼快篩的or選項():
     m = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates" / "_macros.html.j2").read_text("utf-8")
     for v in ("g20", "n20g", "gn20", "g60", "n60g", "gn60", "x20", "n20x", "xn20", "x60", "n60x", "xn60"):
         assert f'<option value="{v}">' in m, v
+
+
+def test_籌碼雷達頁面的模板編譯得過():
+    """radar_bg/*.css／*.js 是 {% raw %} 包起來 include 進去的；加在 endraw 後面的 CSS 裡只要出現
+    「{#cf」就被 Jinja 當成註解開頭，整頁畫不出來（2026-10-12 踩過，建站只留一行 ::error::）。"""
+    from pathlib import Path
+
+    import jinja2
+
+    root = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(root)))
+    env.get_template("radar.html.j2")
+    for name in ("style.css", "mods.js", "api.js"):
+        src = (root / "radar_bg" / name).read_text("utf-8").rstrip()
+        assert src.startswith("{% raw %}") and src.endswith("{% endraw %}"), name
+        assert src.count("{% endraw %}") == 1, name
