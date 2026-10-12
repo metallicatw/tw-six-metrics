@@ -751,7 +751,12 @@ def test_籌碼雷達頁面的模板編譯得過():
     「{#cf」就被 Jinja 當成註解開頭，整頁畫不出來（2026-10-12 踩過，建站只留一行 ::error::）。"""
     from pathlib import Path
 
-    import jinja2
+    try:
+        import jinja2
+    except ImportError:
+        # 零相依那一步沒裝 jinja2：記成「跳過」，裝完相依的 pytest 那一步照跑
+        from twsix.report.build import MissingOptional
+        raise MissingOptional("這一條需要 jinja2") from None
 
     root = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(root)))
