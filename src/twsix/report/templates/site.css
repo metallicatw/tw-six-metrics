@@ -1789,6 +1789,9 @@ a.gf-mk-a:hover .gf-mk{filter:brightness(1.1)}
   box-shadow:0 14px 40px rgba(0,0,0,.28);padding:10px 8px 8px;text-align:left}
 .wg-mh{display:flex;flex-direction:column;gap:2px;padding:0 6px 8px;border-bottom:1px solid var(--rule)}
 .wg-mh b{font-size:14px}
+.wg-mt{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.wg-mh .wg-bulk{display:flex;gap:6px;color:inherit;font-size:inherit}
+.wg-bulk .wg-mini.wg-eye{font-size:12px}
 .wg-mh span{font-size:11.5px;color:var(--muted)}
 .wg-rows{list-style:none;margin:0;padding:4px 0;max-height:min(60vh,460px);overflow-y:auto;overscroll-behavior:contain}
 .wg-row{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:8px}

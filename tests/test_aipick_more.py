@@ -888,3 +888,15 @@ def test_AI頁的代號與名稱只連到真的有個股資訊頁的():
     tpl = (ROOT / "src/twsix/report/templates/ai.html.j2").read_text("utf-8")
     assert "{% macro sl(code, text)" in tpl and "not ai_pages or code in ai_pages" in tpl
     assert "<td>{{ x.name }}</td>" not in tpl and "<td>{{ c.name }}</td>" not in tpl
+
+
+def test_管理群組有全部隱藏與全部顯示():
+    """〔台股觀察清單〕〔管理群組〕的〔全部隱藏〕〔全部顯示〕（2026-10-12）：一次切換所有群組，
+    全部藏起來時目前的群組跳到總交集。"""
+    js = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.js").read_text("utf-8")
+    assert 'data-act="hideall"' in js and 'data-act="showall"' in js
+    assert ">全部隱藏<" in js and ">全部顯示<" in js
+    assert "hideAll: hideAll" in js
+    body = js.split("function hideAll(on){", 1)[1].split("\n  }\n", 1)[0]
+    assert "if(on) doc.cur = ALL;" in body and "save(); changed();" in body
+    assert "TWSIXWatch.hideAll(true)" in js and "TWSIXWatch.hideAll(false)" in js

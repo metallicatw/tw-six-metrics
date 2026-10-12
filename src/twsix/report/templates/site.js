@@ -974,6 +974,21 @@ var TWSIXWatch = (function(){
     save(); changed();
     return true;
   }
+  /* 〔管理群組〕的〔全部隱藏〕／〔全部顯示〕（2026-10-12）。全部藏起來時目前的群組也藏了，
+     照 hideGroup 的規則跳到總交集。回傳有沒有東西變了。 */
+  function hideAll(on){
+    on = !!on;
+    var n = 0;
+    doc.groups.forEach(function(g){
+      if(!!g.hidden === on) return;
+      if(on) g.hidden = true; else delete g.hidden;
+      n++;
+    });
+    if(!n) return false;
+    if(on) doc.cur = ALL;
+    save(); changed();
+    return true;
+  }
   /* 把 id 那個群組挪到 before 前面（before 為空＝挪到最後）。拖曳與 ◀ ▶ 都走這一條。 */
   function placeGroup(id, before){
     var g = find(id);
@@ -1037,7 +1052,7 @@ var TWSIXWatch = (function(){
           groups: groups, current: function(){ return {id: cur.id, name: cur.name, n: order.length, virtual: !!cur.virtual}; },
           select: select, addGroup: addGroup, renameGroup: renameGroup, removeGroup: removeGroup,
           placeGroup: placeGroup, moveGroup: moveGroup, importGroup: importGroup, sourceGroup: sourceGroup,
-          hideGroup: hideGroup, nameTaken: function(n){ return nameTaken(n); },
+          hideGroup: hideGroup, hideAll: hideAll, nameTaken: function(n){ return nameTaken(n); },
           groupsOf: groupsOf, inAny: inAny, setIn: setIn};
 })();
 
@@ -3083,8 +3098,14 @@ function reveal(bar, el){
   }
   function menu(gs, cur){
     var real = gs.filter(function(g){ return !g.virtual; }), last = real.length - 1;
+    var nHid = real.filter(function(g){ return g.hidden; }).length;
     var h = '<div class="wg-menu" role="dialog" aria-label="管理群組">' +
-      '<div class="wg-mh"><b>管理群組</b><span>拖曳或 ▲▼ 排序・隱藏的不在分頁列、也不算進總交集</span></div><ul class="wg-rows">';
+      '<div class="wg-mh"><div class="wg-mt"><b>管理群組</b><span class="wg-bulk">' +
+      '<button type="button" class="wg-mini wg-eye" data-act="hideall" title="把所有群組藏起來（只剩總交集）"' +
+        (nHid === real.length ? ' disabled' : '') + '>全部隱藏</button>' +
+      '<button type="button" class="wg-mini wg-eye" data-act="showall" title="把所有隱藏的群組放回分頁列"' +
+        (nHid ? '' : ' disabled') + '>全部顯示</button></span></div>' +
+      '<span>拖曳或 ▲▼ 排序・隱藏的不在分頁列、也不算進總交集</span></div><ul class="wg-rows">';
     real.forEach(function(g, i){
       var nm = esc(g.name);
       h += '<li class="wg-row wg-dr' + (g.hidden ? ' wg-hid' : '') + (g.id === cur ? ' on' : '') + '" data-id="' + esc(g.id) + '" draggable="true">' +
@@ -3188,6 +3209,8 @@ function reveal(bar, el){
     }else if(act === 'edit') setOpen(!open);
     else if(act === 'close') setOpen(false);
     else if(act === 'rename') rename(id);
+    else if(act === 'hideall') TWSIXWatch.hideAll(true);
+    else if(act === 'showall') TWSIXWatch.hideAll(false);
     else if(act === 'hide') TWSIXWatch.hideGroup(id, b.getAttribute('aria-pressed') !== 'true');
     else if(act === 'del'){
       var g = TWSIXWatch.groups().filter(function(x){ return x.id === id; })[0];
