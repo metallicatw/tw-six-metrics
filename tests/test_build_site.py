@@ -766,7 +766,14 @@ def test_the_update_date_is_its_own_column_with_a_header(tmp_path=None):
     sheets = _sheets(tmp)
     (sheets / "5439" / "_fetched.txt").write_text("2026-08-30\n", encoding="utf-8")
     out = tmp / "site"
-    build_site(_records(), out, sheets_dir=sheets)
+    # 期別要釘死：data/ratings.csv 會被排程自動更新（5439 的最新期會從 115/08
+    # 變成 115/09），不能拿活資料來斷言一個會變的數字。
+    records = _records()
+    for r in records:
+        if r["stock_id"] == "5439":
+            r["fiscal_quarter"] = "2026.2Q"
+            r["revenue_month"] = "115/08"
+    build_site(records, out, sheets_dir=sheets)
     listing = (out / "index.html").read_text("utf-8")
 
     assert ">財報基準</button>" in listing   # 一行，不斷行（2026-09-23）
