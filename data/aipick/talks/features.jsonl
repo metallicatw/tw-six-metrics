@@ -881,3 +881,4 @@
 {"code":"4934","name":"太極","date":"2026-10-12","file":"493420261012M001.pdf","processed":"2026-10-13","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":46},"llm":null,"model":""}
 {"code":"6281","name":"全國電","date":"2026-10-12","file":"628120261008M001.pdf","processed":"2026-10-13","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":41},"llm":null,"model":""}
 {"code":"2408","name":"南亞科","date":"2026-10-12","file":"240820261012M001.pdf","processed":"2026-10-13","source":"pdf","rules":{"pos":17,"neg":0,"tone":0.7727,"chars":7695},"llm":null,"model":""}
+{"code":"1725","name":"元禎","date":"2026-10-13","file":"172520261013M001.pdf","processed":"2026-10-13","source":"pdf","rules":{"pos":6,"neg":3,"tone":0.2143,"chars":3618},"llm":null,"model":""}
