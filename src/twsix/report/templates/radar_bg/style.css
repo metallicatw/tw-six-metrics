@@ -48,6 +48,9 @@
 #cf .bg1 .card{border-radius:14px; border:1px solid var(--border); box-shadow:var(--shadow); padding:16px 16px 10px; display:flex; flex-direction:column; gap:8px; min-width:0;}
 #cf .bg1 .card .tag{font-size:.68rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; opacity:.75;}
 #cf .bg1 .card h3{margin:0; font-size:.95rem; line-height:1.3; font-weight:700;}
+/* 〔布林通道〕開關（2026-10-13）：在〔貪婪恐懼〕兩張紅藍雙線圖的標籤列右側 */
+#cf .bg1 .card .tag .bb-tg{float:right; display:inline-flex; align-items:center; gap:4px; font-size:.72rem; font-weight:600; letter-spacing:0; text-transform:none; cursor:pointer; user-select:none;}
+#cf .bg1 .card .tag .bb-tg input{margin:0; accent-color:var(--accent);}
 #cf .bg1 .card .canvas-wrap{height:220px; position:relative;}
 #cf .bg1 .card .canvas-wrap canvas{position:absolute; inset:0;}
 #cf .bg1 .g-a{background:var(--group-a); color:var(--group-a-ink);}

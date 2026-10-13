@@ -812,3 +812,47 @@ def test_指標查詢_每一條都有算法白話與出處():
     src = (tpl / "radar.html.j2").read_text("utf-8")
     for t in ('id="gl-q"', 'id="gl-tool"', 'id="gl-cats"', 'id="gl-list"', "function setupGuide()", "setupGuide();"):
         assert t in src, t
+
+
+def test_貪婪恐懼疊圖_布林通道開關與算法():
+    """2026-10-13：〈紅:貪婪指標1／藍:恐懼指標1〉〈…2〉加〔布林通道〕開關。
+
+    算法要和〔趨勢×六大×報酬〕的 compute_bollinger 一樣：20 期平均 ± 2 倍
+    **樣本**標準差（pandas rolling().std()，ddof=1）。用 node 實際跑一次那支函式，
+    和這裡用 Python 算的逐點比。
+    """
+    import re as _re
+    import shutil
+    import subprocess
+
+    tpl = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+    js = (tpl / "radar_bg" / "mods.js").read_text("utf-8")
+    for k in ("greed1", "greed2"):
+        line = next(x for x in js.splitlines() if f"keys:['{k}'," in x and "type:'dual'" in x)
+        assert "boll:true" in line, f"{k} 那張疊圖沒有布林通道開關"
+    # 只有那兩張有，其他雙線圖不受影響
+    assert js.count(", boll:true") == 2
+    assert "twsix.cf.bb" in js and "class=\"bg-bbsync\"" in js and "function setBoll(" in js
+    assert "布林通道" in (tpl / "radar_guide.html.j2").read_text("utf-8")
+    assert "布林通道" in (tpl / "radar_gloss.json").read_text("utf-8")
+
+    node = shutil.which("node")
+    if not node:
+        from twsix.report.build import MissingOptional
+        raise MissingOptional("這一條需要 node")
+    fn = _re.search(r"  function bollinger\(arr\)\{.*?\n  \}\n", js, _re.S).group(0)
+    rnd = random.Random(7)
+    arr = [round(rnd.uniform(5, 15), 3) for _ in range(60)]
+    arr[30] = None   # 有缺值的視窗不畫
+    prog = ("var BB_N = 20, BB_K = 2;\n" + fn +
+            f"\nprocess.stdout.write(JSON.stringify(bollinger({json.dumps(arr)})));")
+    out = json.loads(subprocess.run([node, "-e", prog], capture_output=True, text=True, check=True).stdout)
+    for i in range(len(arr)):
+        win = arr[i - 19:i + 1] if i >= 19 else None
+        if win is None or any(v is None for v in win):
+            assert out["up"][i] is None and out["mid"][i] is None and out["dn"][i] is None, i
+            continue
+        m = sum(win) / 20
+        sd = math.sqrt(sum((v - m) ** 2 for v in win) / 19)
+        assert abs(out["mid"][i] - m) < 1e-9
+        assert abs(out["up"][i] - (m + 2 * sd)) < 1e-9 and abs(out["dn"][i] - (m - 2 * sd)) < 1e-9
