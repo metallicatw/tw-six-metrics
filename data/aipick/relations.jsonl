@@ -119,3 +119,6 @@
 {"a":"2352","b":"3047","asked":"2026-10-12","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.9,"note":"佳世達與訊舟同屬明基友達集團（BenQ Qisda Group）之關係企業。"}
 {"a":"2352","b":"4760","asked":"2026-10-12","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.8,"note":"佳世達為大型電子集團，勤凱專精於導電漿料，兩者業務領域不同，無直接上下游或集團關係。"}
 {"a":"2352","b":"8109","asked":"2026-10-12","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.95,"note":"博大科技為佳世達集團旗下之電源供應器廠，兩者具備母子公司或集團企業之投資與業務合作關係。"}
+{"a":"8358","b":"1815","asked":"2026-10-13","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"金居與富喬皆為台灣知名的銅箔基板（CCL）與玻纖布相關上游廠，同屬PCB產業鏈並常受相同題材驅動。"}
+{"a":"3042","b":"2484","asked":"2026-10-13","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"晶技與希華皆為台灣知名的石英元件製造廠，屬於直接競爭對手。"}
+{"a":"3042","b":"6278","asked":"2026-10-13","model":"gemini-flash-lite-latest","relation":"供應商","confidence":0.85,"note":"台表科（B）為晶技（A）之頻率元件產品提供表面黏著加工等相關供應鏈服務。"}
