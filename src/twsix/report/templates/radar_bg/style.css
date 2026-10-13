@@ -1,5 +1,6 @@
 {% raw %}/* ── t1 ← BG 01stockchart ── */
-#cf .bg1{--bg:#eef1ef; --surface:#ffffff; --surface-2:#f6f8f6; --ink:#182420; --ink-soft:#5c6b64; --ink-faint:#8b9993; --border:#d9e1dc; --accent:#0f6b5c; --accent-ink:#0a4a40; --accent-soft:#e2f1ec; --red:#c8443b; --blue:#2f6fb0; --purple:#7859c4; --bar:#3f7fae; --group-a:#fbf1d6; --group-a-ink:#7a5a12; --group-a-line:#caa53a; --group-b:#fae7e0; --group-b-ink:#8a4a34; --group-b-line:#c97b5c; --group-c:#e2ecf7; --group-c-ink:#2c5578; --group-c-line:#3f7fae; --group-d:#e2f2e4; --group-d-ink:#2f6b3f; --group-d-line:#4a9260; --group-e:#edeeec; --group-e-ink:#4a534e; --group-e-line:#7a877f; --shadow: 0 1px 2px rgba(20,30,26,0.06), 0 6px 16px -8px rgba(20,30,26,0.12);}
+#cf .bg1{--bg:#eef1ef; --surface:#ffffff; --surface-2:#f6f8f6; --ink:#182420; --ink-soft:#5c6b64; --ink-faint:#8b9993; --border:#d9e1dc; --accent:#0f6b5c; --accent-ink:#0a4a40; --accent-soft:#e2f1ec; --red:#c8443b; --blue:#2f6fb0; --purple:#7859c4; --bar:#3f7fae; --group-a:#fbf1d6; --group-a-ink:#7a5a12; --group-a-line:#a07d14; --group-b:#fae7e0; --group-b-ink:#8a4a34; --group-b-line:#b05a3a; --group-c:#e2ecf7; --group-c-ink:#2c5578; --group-c-line:#3f7fae; --group-d:#e2f2e4; --group-d-ink:#2f6b3f; --group-d-line:#4a9260; --group-e:#edeeec; --group-e-ink:#4a534e; --group-e-line:#7a877f; --shadow: 0 1px 2px rgba(20,30,26,0.06), 0 6px 16px -8px rgba(20,30,26,0.12);}
+/* 2026-10-13：外資法人（金）與大戶籌碼（磚紅）兩組的線原本是 #caa53a／#c97b5c，在同色系的卡片底上對比只有 2.1／2.7（< 3:1），調深成 #a07d14／#b05a3a */
 @media (prefers-color-scheme: dark){:root:not([data-theme=light]) #cf .bg1{--bg:#121815; --surface:#182220; --surface-2:#1d2926; --ink:#eaf1ed; --ink-soft:#a9bab2; --ink-faint:#748179; --border:#2c3a35; --accent:#3ecdae; --accent-ink:#8fe9d3; --accent-soft:#183530; --red:#e8746a; --blue:#6ea6df; --purple:#a893e6; --bar:#6ea6df; --group-a:#2c2712; --group-a-ink:#e3c470; --group-a-line:#d7b859; --group-b:#2c1e19; --group-b-ink:#e7a98d; --group-b-line:#d99274; --group-c:#171f2a; --group-c-ink:#9cc2e8; --group-c-line:#6ea6df; --group-d:#16261a; --group-d-ink:#8fd19f; --group-d-line:#5fb377; --group-e:#1e2422; --group-e-ink:#b7c2bb; --group-e-line:#8b978f; --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 20px -10px rgba(0,0,0,0.5);}}
 :root[data-theme=dark] #cf .bg1{--bg:#121815; --surface:#182220; --surface-2:#1d2926; --ink:#eaf1ed; --ink-soft:#a9bab2; --ink-faint:#748179; --border:#2c3a35; --accent:#3ecdae; --accent-ink:#8fe9d3; --accent-soft:#183530; --red:#e8746a; --blue:#6ea6df; --purple:#a893e6; --bar:#6ea6df; --group-a:#2c2712; --group-a-ink:#e3c470; --group-a-line:#d7b859; --group-b:#2c1e19; --group-b-ink:#e7a98d; --group-b-line:#d99274; --group-c:#171f2a; --group-c-ink:#9cc2e8; --group-c-line:#6ea6df; --group-d:#16261a; --group-d-ink:#8fd19f; --group-d-line:#5fb377; --group-e:#1e2422; --group-e-ink:#b7c2bb; --group-e-line:#8b978f; --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 20px -10px rgba(0,0,0,0.5);}
 #cf .bg1 *{box-sizing:border-box;}
@@ -48,9 +49,10 @@
 #cf .bg1 .card{border-radius:14px; border:1px solid var(--border); box-shadow:var(--shadow); padding:16px 16px 10px; display:flex; flex-direction:column; gap:8px; min-width:0;}
 #cf .bg1 .card .tag{font-size:.68rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; opacity:.75;}
 #cf .bg1 .card h3{margin:0; font-size:.95rem; line-height:1.3; font-weight:700;}
-/* 〔布林通道〕開關（2026-10-13）：在〔貪婪恐懼〕兩張紅藍雙線圖的標籤列右側 */
-#cf .bg1 .card .tag .bb-tg{float:right; display:inline-flex; align-items:center; gap:4px; font-size:.72rem; font-weight:600; letter-spacing:0; text-transform:none; cursor:pointer; user-select:none;}
-#cf .bg1 .card .tag .bb-tg input{margin:0; accent-color:var(--accent);}
+/* 卡片右上角的〔股價〕〔布林通道〕開關、卡片裡的小縮放列（2026-10-13）。圖仍是 220px：畫布讓出 20px 給縮放列 */
+#cf .bg1 .card .tag .tgs{float:right; display:inline-flex; gap:10px; text-transform:none; letter-spacing:0;}
+#cf .bg1 .card .canvas-wrap.has-mr{display:flex; flex-direction:column;}
+#cf .bg1 .card .canvas-wrap.has-mr .cv{position:relative; flex:1; min-height:0;}
 #cf .bg1 .card .canvas-wrap{height:220px; position:relative;}
 #cf .bg1 .card .canvas-wrap canvas{position:absolute; inset:0;}
 #cf .bg1 .g-a{background:var(--group-a); color:var(--group-a-ink);}
@@ -96,6 +98,14 @@
 #cf .bg2 .panel .ptitle{font-size: 14px; font-weight: 600; color: var(--text-2);}
 #cf .bg2 .panel .pnow{font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px;}
 #cf .bg2 .panel .pnow small{font-size: 12px; font-weight: 500; color: var(--text-mut); margin-left: 4px;}
+/* 〔股價〕開關在標題列右邊、這張圖的縮放列在數值那一列右邊（2026-10-13），圖的比例不變 */
+#cf .bg2 .panel .ptitle{display:flex; align-items:center; gap:8px;}
+#cf .bg2 .panel .ptitle .pt{flex:1; min-width:0;}
+#cf .bg2 .panel .ptitle .tgs{flex:none; color:var(--text-2);}
+#cf .bg2 .panel .pnow{display:flex; align-items:center; gap:10px;}
+#cf .bg2 .panel .pnow .pv{flex:none;}
+#cf .bg2 .panel .pnow .pctl{flex:1; min-width:0; display:flex; justify-content:flex-end;}
+#cf .bg2 .panel .pnow .pctl .bg-mr{width:100%; max-width:260px;}
 #cf .bg2 .chartbox{width: 100%; aspect-ratio: 400 / 230; margin-top: 10px;}
 #cf .bg2 .chartbox svg{width: 100%; height: 100%; display: block; overflow: visible;}
 #cf .bg2 .chartbox svg text{font-size: 12px; fill: var(--text-mut); font-family: system-ui, -apple-system, sans-serif;}
@@ -176,6 +186,13 @@
 #cf .bg3 .card .cunit{font-size:11px; color:var(--muted); flex:none;}
 #cf .bg3 .card .clatest{font-size:20px; font-weight:600; margin-bottom:2px;}
 #cf .bg3 .card .clatest .d{font-size:12px; color:var(--muted); font-weight:400; margin-left:6px;}
+/* 這張圖自己的縮放列（2026-10-13）：在「最新值」那一列（或圖例那一列）的右邊；〔股價〕在標題列右邊 */
+#cf .bg3 .card .clatest{display:flex; align-items:center; gap:8px;}
+#cf .bg3 .card .cctl{margin-left:auto; flex:1; min-width:0; display:flex; justify-content:flex-end; font-weight:400;}
+#cf .bg3 .card .cctl .bg-mr{width:100%; max-width:220px;}
+#cf .bg3 .card .legend .cctl{flex:1 1 160px;}
+#cf .bg3 .card .chead .cunit{margin-left:auto;}
+#cf .bg3 .card .chead .bg-ctg{margin-left:4px; color:var(--ink-2); align-self:center;}
 #cf .bg3 .card .legend{display:flex; gap:12px; font-size:11px; color:var(--ink-2); margin-top:2px;}
 #cf .bg3 .card .legend .sw{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:middle;}
 #cf .bg3 .card .legend{flex-wrap:wrap; row-gap:2px;}

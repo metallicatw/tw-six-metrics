@@ -835,10 +835,11 @@ def test_貪婪恐懼疊圖_布林通道開關與算法():
     # 只有那兩張有，其他雙線圖不受影響
     assert js.count(", boll:true") == 2
     assert "twsix.cf.bb" in js and "class=\"bg-bbsync\"" in js and "function setBoll(" in js
-    assert "priceBollDatasets(stock.price)" in js
+    assert "priceBollDatasets(stock.price, i)" in js
     fn_ds = js[js.index("function priceBollDatasets("):js.index("function setBoll(")]
     assert "yAxisID:'yp'" in fn_ds and "fill:'+1'" in fn_ds
-    assert "BB_LINE = '#58a6ff'" in js   # 和趨勢圖同一個顏色
+    # 2026-10-13：藍色和〔恐懼指標〕撞色，改成金色（bgBandColor），細實線＋淡填色
+    assert "bgBandColor(" in fn_ds and "'#58a6ff'" not in js
     assert "布林通道" in (tpl / "radar_guide.html.j2").read_text("utf-8")
     assert "布林通道" in (tpl / "radar_gloss.json").read_text("utf-8")
 
@@ -862,3 +863,43 @@ def test_貪婪恐懼疊圖_布林通道開關與算法():
         sd = math.sqrt(sum((v - m) ** 2 for v in win) / 19)
         assert abs(out["mid"][i] - m) < 1e-9
         assert abs(out["up"][i] - (m + 2 * sd)) < 1e-9 and abs(out["dn"][i] - (m - 2 * sd)) < 1e-9
+
+
+def test_每張卡片自己的股價開關與縮放區間():
+    """2026-10-13：①②③ 每張圖右上角有〔股價〕、圖裡有自己的縮放列（小按鈕＋雙頭細滑桿）。
+
+    * 每張完全獨立：存在 localStorage 的 twsix.cf.cards，最上面的總滑桿只管 ① 那張股價圖。
+    * 圖的大小不變：① 的 canvas-wrap 還是 220px（畫布讓出 20px 給縮放列），②③ 把縮放列塞在
+      原本就有的「數值」那一列。
+    * 不適合疊股價的不放：股價本身那幾張、① 的兩張排名、③ 的季資料（沒有季股價）。
+    * 股價線是 1px 實線（原本是灰色粗虛線，看不出細部）。
+    """
+    tpl = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
+    api = (tpl / "radar_bg" / "api.js").read_text("utf-8")
+    js = (tpl / "radar_bg" / "mods.js").read_text("utf-8")
+    css = (tpl / "radar_bg" / "style.css").read_text("utf-8")
+    for t in ("function bgMiniRange(", "function bgPxToggle(", "function bgCardPx(", 'BG_CARD_KEY = "twsix.cf.cards"',
+              "function bgPxColor(", "function bgBandColor(", "function bgPxMaster("):
+        assert t in api, t
+    assert "BG_PX_COLOR" not in api + js, "股價線的顏色改由 bgPxColor() 依深淺色模式決定"
+    # 總開關一動，每張卡片的〔股價〕都回到總開關的值
+    pref = api[api.index("function bgPxPref("):api.index("function bgDark(")]
+    assert "delete st[id].px" in pref and ".bg-cpx" in pref
+    # ①：每張卡片一個縮放列；排名那兩張不疊股價
+    t1 = js[js.index('CF_MODS["t1"]'):js.index('CF_MODS["t2"]')]
+    assert "MR[p._i] = bgMiniRange(" in t1 and "if(p.px !== false)" in t1
+    assert t1.count("px:false}") == 2
+    assert "#cf .bg1 .card .canvas-wrap{height:220px; position:relative;}" in css
+    assert "borderDash:[4,3], pointRadius:0, tension:0.15" not in t1   # 股價線不再是虛線
+    # ②：每張卡片自己的縮放，收盤價那兩、三張不放〔股價〕
+    t2 = js[js.index('CF_MODS["t2"]'):js.index('CF_MODS["t3"]')]
+    assert "bgMiniRange(p.ctl" in t2 and "bgPxMaster(" in t2 and "bgRangeUI(" not in t2
+    assert t2.count("fmtPrice, 6, false, null,") == 1 and t2.count("fmtPrice, 5, false, null,") == 2
+    assert "'stroke-dasharray': '4 3'" not in t2
+    # ③：只有月營收那三張有〔股價〕；第三條線不再是和橘色太像的琥珀色
+    t3 = js[js.index('CF_MODS["t3"]'):js.index('CF_MODS["t4"]')]
+    assert t3.count("}, true);") == 3 and "color:\"#e8a33d\"" not in t3
+    assert '"stroke-dasharray":"4 3"' not in t3
+    # 手冊寫到了
+    guide = (tpl / "radar_guide.html.j2").read_text("utf-8")
+    assert "每張圖自己的縮放區間" in guide and "〔股價〕開關" in guide

@@ -98,9 +98,9 @@ var __fetch = API.fetch;
     {grp:'d', tag:'貪婪恐懼', title:'買盤比例60日－賣盤比例60日', type:'line', key:'diff60', dk:'diff60', color:'purple'},
 
     {grp:'a', tag:'外資法人', title:'外資投信買賣超除以大戶人數60日(千)', type:'line', key:'fi_ti_per_holder60', dk:'fi_ti_per_holder60', color:'group-a-line'},
-    {grp:'a', tag:'外資法人', title:'外資投信買賣超除以大戶人數60日排名', type:'line', key:'fi_ti_per_holder60_rank', dk:'fi_ti_per_holder60_rank', color:'group-a-line'},
+    {grp:'a', tag:'外資法人', title:'外資投信買賣超除以大戶人數60日排名', type:'line', key:'fi_ti_per_holder60_rank', dk:'fi_ti_per_holder60_rank', color:'group-a-line', px:false},
     {grp:'c', tag:'成交量能', title:'成交金額除以大戶人數20日(千)', type:'line', key:'val_per_holder20', dk:'val_per_holder20', color:'group-c-line'},
-    {grp:'c', tag:'成交量能', title:'成交金額除以大戶人數20日排名', type:'line', key:'val_per_holder20_rank', dk:'val_per_holder20_rank', color:'group-c-line'}
+    {grp:'c', tag:'成交量能', title:'成交金額除以大戶人數20日排名', type:'line', key:'val_per_holder20_rank', dk:'val_per_holder20_rank', color:'group-c-line', px:false}
   ];
 
   PANELS.forEach(function(p, i){ p._i = i; });
@@ -115,18 +115,26 @@ var __fetch = API.fetch;
   var currentCode = null, currentStock = null;
   // 縮放區間（2026-10-10）：FULL 是目前手上最長的一份（先 120 天，長歷史載入後換掉），
   // VIEW 是畫面上那一段的索引（含兩端），SHOWPX 是「疊加股價」。
-  var FULL = null, VIEW = [0, 0], SHOWPX = false, RUI = null, reqId = 0;
+  var FULL = null, VIEW = [0, 0], SHOWPX = null, RUI = null, reqId = 0;
   function cut(arr){ return (arr || []).slice(VIEW[0], VIEW[1] + 1); }
   function viewLabels(){ return FULL.dates.slice(VIEW[0], VIEW[1] + 1).map(fmtMD); }
+  // 每張卡片自己的區間（2026-10-13）：PV[i] 是第 i 張的 [起, 訖]，MR[i] 是它的小滑桿。
+  // 和最上面那張股價圖的 VIEW 完全獨立。排名那兩張（px:false）不疊股價：名次不是走勢。
+  var PV = {}, MR = {};
+  var PRESETS = [[63,'3月'],[120,'半年'],[250,'1年'],[0,'全部']];
+  function cutP(arr, i){ var v = PV[i] || VIEW; return (arr || []).slice(v[0], v[1] + 1); }
+  function labelsP(i){ var v = PV[i] || VIEW; return FULL.dates.slice(v[0], v[1] + 1).map(fmtMD); }
+  function cardId(p){ return 't1.' + p._i; }
 
   // ---- 股價的布林通道（2026-10-13）----
   // 就是〔趨勢×六大×報酬〕K 線圖上那一組：由**收盤價**算 20 日移動平均 ± 2 倍「樣本」標準差
-  // （tw-trend-filter 的 compute_bollinger，pandas rolling().std() 的 ddof=1），樣式也照搬：
-  // 上下軌 #58a6ff 點虛線、中間淡藍填色，中軌灰色細點線。畫在股價那一側（左邊）的刻度上，
-  // 和〔📈 疊加股價線〕共用同一個軸，所以股價線碰到上軌／下軌就是真的碰到。
+  // （tw-trend-filter 的 compute_bollinger，pandas rolling().std() 的 ddof=1）。畫在股價那一側（左邊）的刻度上，
+  // 和那張圖的〔股價〕共用同一個軸，所以股價線碰到上軌／下軌就是真的碰到。
   // 在**整段**股價上算完才切出畫面那一段，拉近之後最左邊那 19 天的通道不會是空的；
   // 視窗裡有缺值的那一天不畫。開關預設關著，打開之後記在這台瀏覽器，兩張圖一起開關。
-  var BB_N = 20, BB_K = 2, BB_LINE = '#58a6ff', BB_FILL = 'rgba(88,166,255,0.08)', BB_MID = '#8b949e';
+  // 顏色（2026-10-13）：原本照搬趨勢圖的藍色（#58a6ff），和〔恐懼指標〕的藍線撞色，改成金色細實線＋淡金填色
+  // （bgBandColor，深淺色模式各一組），中軌是同色短虛線。
+  var BB_N = 20, BB_K = 2;
   var BOLL = (function(){ try { return localStorage.getItem('twsix.cf.bb') === '1'; } catch(e){ return false; } })();
   function bollinger(arr){
     var n = (arr || []).length, up = new Array(n), mid = new Array(n), dn = new Array(n);
@@ -148,15 +156,15 @@ var __fetch = API.fetch;
     return { up: up, mid: mid, dn: dn };
   }
   // 上軌（往下填到下軌）、下軌、中軌，全部掛在股價的 yp 軸上
-  function priceBollDatasets(price){
+  function priceBollDatasets(price, i){
     var b = bollinger(price);
-    var line = { yAxisID:'yp', pointRadius:0, tension:0.15, spanGaps:false, order:3 };
+    var line = { yAxisID:'yp', pointRadius:0, tension:0, spanGaps:false, order:3 };
     return [
-      Object.assign({ label:'布林上軌', data:cut(b.up), borderColor:BB_LINE, borderWidth:1.2, borderDash:[2,3],
-        backgroundColor:BB_FILL, fill:'+1' }, line),
-      Object.assign({ label:'布林下軌', data:cut(b.dn), borderColor:BB_LINE, borderWidth:1.2, borderDash:[2,3],
-        backgroundColor:BB_FILL, fill:false }, line),
-      Object.assign({ label:'布林中軌', data:cut(b.mid), borderColor:BB_MID, borderWidth:0.8, borderDash:[2,3],
+      Object.assign({ label:'布林上軌', data:cutP(b.up, i), borderColor:bgBandColor(.95), borderWidth:1,
+        backgroundColor:bgBandColor(.10), fill:'+1' }, line),
+      Object.assign({ label:'布林下軌', data:cutP(b.dn, i), borderColor:bgBandColor(.95), borderWidth:1,
+        backgroundColor:bgBandColor(.10), fill:false }, line),
+      Object.assign({ label:'布林中軌', data:cutP(b.mid, i), borderColor:bgBandColor(.6), borderWidth:0.8, borderDash:[4,3],
         backgroundColor:'transparent', fill:false }, line)
     ];
   }
@@ -192,19 +200,29 @@ var __fetch = API.fetch;
         tag.className = 'tag'; tag.textContent = p.tag;
         var h3 = document.createElement('h3');
         h3.textContent = p.title;
+        // 右上角的開關（2026-10-13）：〔股價〕每張各自開關；〔布林通道〕只在貪婪恐懼那兩張
+        var tgs = document.createElement('span'); tgs.className = 'tgs';
+        tag.appendChild(tgs);
+        if(p.px !== false){
+          tgs.appendChild(bgPxToggle(cardId(p), function(){ if(currentStock) renderOne(p); }));
+        }
         if(p.boll){
           var bb = document.createElement('label');
-          bb.className = 'bb-tg';
+          bb.className = 'bb-tg bg-ctg';
           bb.title = '疊上股價的布林通道（收盤價 20 日均線 ± 2 倍標準差，和〔趨勢×六大×報酬〕K 線圖上的同一組），刻度在左邊、和疊加股價線共用';
           bb.innerHTML = '<input type="checkbox" class="bg-bbsync"' + (BOLL ? ' checked' : '') + '> 布林通道';
           bb.querySelector('input').addEventListener('change', function(e){ setBoll(e.target.checked); });
-          tag.appendChild(bb);
+          tgs.appendChild(bb);
         }
+        // 圖的高度不變（220px）：畫布和底下那條小縮放列一起分這 220px
         var wrap = document.createElement('div');
-        wrap.className = 'canvas-wrap';
+        wrap.className = 'canvas-wrap has-mr';
+        var cv = document.createElement('div'); cv.className = 'cv';
         var canvas = document.createElement('canvas');
         canvas.id = PFX + 'panel-' + p._i;
-        wrap.appendChild(canvas);
+        cv.appendChild(canvas); wrap.appendChild(cv);
+        MR[p._i] = bgMiniRange(wrap, { id: cardId(p), presets: PRESETS, def: 120,
+          onChange: function(a, b){ PV[p._i] = [a, b]; if(currentStock) renderOne(p); } });
         card.appendChild(tag); card.appendChild(h3); card.appendChild(wrap);
         cards.appendChild(card);
       });
@@ -299,21 +317,23 @@ var __fetch = API.fetch;
   }
 
   function renderPanel(panel, stock){
-    var canvas = __id('panel-' + panel._i);
-    var dLabels = viewLabels();
+    var canvas = __id('panel-' + panel._i), i = panel._i;
+    var dLabels = labelsP(i);
+    var cut = function(arr){ return cutP(arr, i); };   // 這張卡片自己的區間
     var opts = commonOptions(dLabels);
     opts.animation = { duration: 0 };
-    var chart, px = SHOWPX ? cut(stock.price) : null;
-    // 疊加股價：灰色細線、左側自己的刻度（不和指標共用一個 y 軸）
+    opts.layout = { padding: { bottom: 2 } };
+    var chart, px = panel.px !== false && bgCardPx(cardId(panel)) && stock.price ? cut(stock.price) : null;
+    // 疊加股價：深炭灰 1px 實線、不平滑（細部起伏才看得出來），左側自己的刻度
     function withPx(datasets){
       var bb = panel.boll && BOLL && stock.price;
       if(!px && !bb) return datasets;
       opts.scales.yp = { position:'left', beginAtZero:false, grace:'4%', grid:{ display:false }, ticks:{ color: cssVar('--ink-soft'), font:{ size:9 }, maxTicksLimit:4 } };
-      if(px) datasets = datasets.concat([{ type:'line', label:'股價', data:px, yAxisID:'yp', borderColor:BG_PX_COLOR, backgroundColor:BG_PX_COLOR,
-        borderWidth:1.2, borderDash:[4,3], pointRadius:0, tension:0.15, spanGaps:true, order:-1 }]);
+      if(px) datasets = datasets.concat([{ type:'line', label:'股價', data:px, yAxisID:'yp', borderColor:bgPxColor(), backgroundColor:bgPxColor(),
+        borderWidth:1, pointRadius:0, tension:0, spanGaps:true, order:-1 }]);
       if(bb){
         // 股價布林通道（2026-10-13）：墊在最底下（order 大的先畫）
-        datasets = datasets.concat(priceBollDatasets(stock.price));
+        datasets = datasets.concat(priceBollDatasets(stock.price, i));
         opts.plugins.tooltip.callbacks.label = function(item){
           var v = item.parsed.y;
           return v === null || v === undefined ? null : item.dataset.label + ' ' + Number(v).toFixed(2);
@@ -354,12 +374,21 @@ var __fetch = API.fetch;
     return chart;
   }
 
+  // 只重畫一張（那張卡片的開關或小滑桿動了）
+  function renderOne(p){
+    var old = activeCharts[p._i];
+    if(old){ try{ old.destroy(); }catch(e){} }
+    activeCharts[p._i] = renderPanel(p, currentStock);
+  }
   function renderAllPanels(){
     destroyCharts();
-    PANELS.forEach(function(p){
-      var chart = renderPanel(p, currentStock);
-      activeCharts.push(chart);
-    });
+    PANELS.forEach(function(p){ activeCharts[p._i] = renderPanel(p, currentStock); });
+  }
+  // 資料長度變了（換股票、長歷史到了）：每張卡片照自己記得的「看幾天、終點在哪」換算，再一起畫
+  function syncPanels(){
+    var n = FULL.dates.length;
+    PANELS.forEach(function(p){ MR[p._i].setData(n, FULL.dates, true); PV[p._i] = MR[p._i].view(); });
+    renderAllPanels();
   }
 
   function showStock(code, stock){
@@ -378,19 +407,27 @@ var __fetch = API.fetch;
     __id('sbAsof').textContent = pd.length ? ('資料至 ' + pd[pd.length-1]) : '';
 
     // 先用 120 天畫出來；長歷史（近 3 年）在背景下載，到了再把滑桿拉長
+    // 最上面的總滑桿只管股價那張圖（2026-10-13）；下面每張卡片有自己的區間。
+    // 總滑桿旁的〔📈 疊加股價線（全部）〕一動，所有卡片的〔股價〕一起跟著變。
     FULL = { dates: pd, s: stock };
     if(!RUI){
       var host = document.createElement('div'); host.className = 'bg-rng-host';
       __id('heroCard').insertAdjacentElement('afterend', host);
       RUI = bgRangeUI(host, { price:true, span:120, buttons:[[63,'近3月'],[120,'近120日'],[250,'近1年'],[0,'全部（約3年）']],
-        onChange: function(a, b, px){ VIEW = [a, b]; SHOWPX = px; renderHero(currentStock.price || []); renderAllPanels(); } });
+        onChange: function(a, b, px){
+          VIEW = [a, b]; renderHero(currentStock.price || []);
+          if(SHOWPX !== null && SHOWPX !== px) renderAllPanels();
+          SHOWPX = px;
+        } });
     }
     var my = ++reqId;
+    syncPanels();
     RUI.setData(pd.length, pd, !!API.long);
     if(API.long){
       API.long(code).then(function(L){
         if(my !== reqId || !L || !L.dates || L.dates.length <= pd.length) { if(my === reqId) RUI.setData(pd.length, pd, false); return; }
         FULL = { dates: L.dates, s: L.s }; currentStock = L.s;
+        syncPanels();
         RUI.setData(L.dates.length, L.dates, false);
       }).catch(function(){ if(my === reqId) RUI.setData(pd.length, pd, false); });
     }
@@ -643,7 +680,8 @@ var __fetch = API.fetch;
     // grid: baseline only (recessive)
     svg.appendChild(el('line', { class: 'grid-line', x1: padL, x2: W - padR, y1: padT + plotH, y2: padT + plotH }));
 
-    // 疊加股價（2026-10-10）：灰色虛線、自己的高低（不和指標共用刻度），畫在指標底下
+    // 疊加股價（2026-10-10）：自己的高低（不和指標共用刻度），畫在指標底下。
+    // 2026-10-13 改成深炭灰 1px 實線：虛線的空隙會吃掉每天的小起伏
     if (opts.px) {
       var pmin = Infinity, pmax = -Infinity;
       for (var q = 0; q < opts.px.length; q++) { var pv = opts.px[q]; if (pv === null || pv === undefined) continue; if (pv < pmin) pmin = pv; if (pv > pmax) pmax = pv; }
@@ -657,7 +695,7 @@ var __fetch = API.fetch;
           pd += (pstarted ? 'L' : 'M') + xAt(q2).toFixed(2) + ' ' + (padT + (1 - (pv2 - pmin) / (pmax - pmin)) * plotH).toFixed(2) + ' ';
           pstarted = true;
         }
-        svg.appendChild(el('path', { d: pd, fill: 'none', stroke: BG_PX_COLOR, 'stroke-width': 1.3, 'stroke-dasharray': '4 3', 'vector-effect': 'non-scaling-stroke' }));
+        svg.appendChild(el('path', { d: pd, fill: 'none', stroke: bgPxColor(), 'stroke-width': 1, 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' }));
       }
     }
 
@@ -759,23 +797,44 @@ var __fetch = API.fetch;
     overlay.addEventListener('pointerleave', function (evt) { if (!evt || evt.pointerType !== 'touch') hideCrosshair(); });
   }
 
+  // 標題列右邊放〔股價〕開關、數值那一列右邊放這張圖自己的縮放列（2026-10-13）——
+  // 都是原本就有的兩列，圖的大小（chartbox 400:230）一點都沒動。
   function makePanel(gridEl, title, accentClass, rowStart) {
     var panel = document.createElement('div');
     panel.className = 'panel ' + accentClass + (rowStart ? ' row-start' : '');
-    var t = document.createElement('div'); t.className = 'ptitle'; t.textContent = title;
-    var now = document.createElement('div'); now.className = 'pnow';
+    var t = document.createElement('div'); t.className = 'ptitle';
+    var tt = document.createElement('span'); tt.className = 'pt'; tt.textContent = title;
+    var tgs = document.createElement('span'); tgs.className = 'tgs';
+    t.appendChild(tt); t.appendChild(tgs);
+    var row = document.createElement('div'); row.className = 'pnow';
+    var now = document.createElement('span'); now.className = 'pv';
+    var ctl = document.createElement('div'); ctl.className = 'pctl';
+    row.appendChild(now); row.appendChild(ctl);
     var box = document.createElement('div'); box.className = 'chartbox';
-    panel.appendChild(t); panel.appendChild(now); panel.appendChild(box);
+    panel.appendChild(t); panel.appendChild(row); panel.appendChild(box);
     gridEl.appendChild(panel);
-    return { panel: panel, now: now, box: box };
+    return { panel: panel, now: now, box: box, tgs: tgs, ctl: ctl };
   }
 
-  function renderMetric(gridEl, title, accentClass, dates, values, color, format, ticks, rowStart, px) {
+  var DAILY_PRESETS = [[63, '3月'], [120, '半年'], [250, '1年'], [0, '全部']];
+  var WEEKLY_PRESETS = [[13, '1季'], [26, '半年'], [0, '全部']];
+
+  // spec: {id, presets, def}；dates/values/px 都是整段，區間由這張卡片自己決定
+  function renderMetric(gridEl, title, accentClass, dates, values, color, format, ticks, rowStart, px, spec) {
     var p = makePanel(gridEl, title, accentClass, rowStart);
     var lastVal = null;
     for (var i = values.length - 1; i >= 0; i--) { if (values[i] !== null && values[i] !== undefined) { lastVal = values[i]; break; } }
     p.now.textContent = format(lastVal);
-    drawChart(p.box, { dates: dates, values: values, color: color, format: format, ticks: ticks, px: px || null });
+    var view = [0, Math.max(0, dates.length - 1)];
+    function draw() {
+      var a = view[0], b = view[1] + 1, on = px && bgCardPx(spec.id);
+      drawChart(p.box, { dates: dates.slice(a, b), values: values.slice(a, b), color: color, format: format, ticks: ticks, px: on ? px.slice(a, b) : null });
+    }
+    if (px) p.tgs.appendChild(bgPxToggle(spec.id, draw));
+    var mr = bgMiniRange(p.ctl, { id: spec.id, presets: spec.presets, def: spec.def, onChange: function (a, b) { view = [a, b]; draw(); } });
+    mr.setData(dates.length, dates, true);
+    view = mr.view();
+    draw();
   }
 
   function clearGrid(id) { __id(id).innerHTML = ''; }
@@ -801,71 +860,67 @@ var __fetch = API.fetch;
     __id('stockInput').value = code + ' ' + (state.meta[code] || '');   // 和 ① 一樣寫著「代號 名稱」
     bgDecorate(code, __id('curCode'), __id('curName'));
 
-    // 縮放區間＋疊加股價（2026-10-10）：每日那一組可以拉到約一年（大戶資料的長度），
-    // 「疊加股價」對每日與週資料的圖都有效
+    // 每張卡片自己縮放（2026-10-13）：每日那一組可以拉到約一年（大戶資料的長度），週那一組是集保週報的全部週。
+    // 上面只剩〔📈 疊加股價線（全部）〕總開關；每張卡片右上角的〔股價〕可以單獨開關。
     state.entry = entry;
     state.full = { dates: state.dailyDates, c: sliceArr(entry.c, state.dailyIdx), hr: sliceArr(entry.hr, state.dailyIdx), hc: sliceArr(entry.hc, state.dailyIdx), sh: sliceArr(entry.sh, state.dailyIdx) };
-    if (!state.rui) {
+    if (!state.master) {
       var host = document.createElement('div'); host.className = 'bg-rng-host';
       __id('dailyCaption').insertAdjacentElement('afterend', host);
-      state.rui = bgRangeUI(host, { price: true, span: DAILY_WINDOW_TRADING_DAYS, buttons: [[63, '近3月'], [120, '近120日'], [250, '近1年'], [0, '全部']],
-        onChange: function (a, b, px) { state.view = [a, b]; state.px = px; renderDaily(); renderWeekly(); } });
+      state.master = bgPxMaster(host, '全部卡片一起疊上或拿掉股價線；每張卡片右上角的〔股價〕可以單獨開關', function () { renderDaily(); renderWeekly(); });
     }
-    state.px = state.rui.price();
+    renderDaily(); renderWeekly();
     var my = state.req = (state.req || 0) + 1;
-    state.rui.setData(state.full.dates.length, state.full.dates, !!API.long);
     if (API.long) {
       API.long(code).then(function (L) {
-        if (my !== state.req) return;
-        if (!L || !L.dates || L.dates.length <= state.full.dates.length) { state.rui.setData(state.full.dates.length, state.full.dates, false); return; }
+        if (my !== state.req || !L || !L.dates || L.dates.length <= state.full.dates.length) return;
         // 長歷史前面沒有大戶資料的那一段（集保 15 級約一年）不畫：從第一個有大戶比例的那天起
         var f = 0; while (f < L.dates.length && (L.hr[f] === null || L.hr[f] === undefined)) f++;
-        if (L.dates.length - f <= state.full.dates.length) { state.rui.setData(state.full.dates.length, state.full.dates, false); return; }
+        if (L.dates.length - f <= state.full.dates.length) return;
         state.full = { dates: L.dates.slice(f), c: L.c.slice(f), hr: L.hr.slice(f), hc: L.hc.slice(f), sh: L.sh.slice(f) };
-        state.rui.setData(state.full.dates.length, state.full.dates, false);
-      }).catch(function () { if (my === state.req) state.rui.setData(state.full.dates.length, state.full.dates, false); });
+        renderDaily();
+      }).catch(function () {});
     }
   }
 
   function renderDaily() {
-    var F = state.full, a = state.view[0], b = state.view[1] + 1;
-    var dd = F.dates.slice(a, b), cut = function (arr) { return (arr || []).slice(a, b); }, px = state.px ? cut(F.c) : null;
-    __id('dailyCaption').textContent = '每日資料（' + dd.length + ' 個交易日）　' + dd[0] + ' ～ ' + dd[dd.length - 1];
+    var F = state.full, dd = F.dates;
+    __id('dailyCaption').textContent = '每日資料（共 ' + dd.length + ' 個交易日，' + dd[0] + ' ～ ' + dd[dd.length - 1] + '）　每張圖可以各自縮放';
     clearGrid('dailyGrid');
     var dailyGrid = __id('dailyGrid');
-    renderMetric(dailyGrid, '收盤價', 'accent-orange', dd, cut(F.c), 'var(--orange)', fmtPrice, 6);
-    renderMetric(dailyGrid, '大戶比例（持股市值5000萬以上）', 'accent-blue', dd, cut(F.hr), 'var(--blue)', fmtPct, 6, false, px);
-    renderMetric(dailyGrid, '大戶人數', 'accent-blue', dd, cut(F.hc), 'var(--blue)', fmtInt, 6, false, px);
-    renderMetric(dailyGrid, '總股東人數', 'accent-aqua', dd, cut(F.sh), 'var(--aqua)', fmtInt, 6, false, px);
+    var D = function (k) { return { id: 't2.d.' + k, presets: DAILY_PRESETS, def: DAILY_WINDOW_TRADING_DAYS }; };
+    renderMetric(dailyGrid, '收盤價', 'accent-orange', dd, F.c, 'var(--orange)', fmtPrice, 6, false, null, D('c'));
+    renderMetric(dailyGrid, '大戶比例（持股市值5000萬以上）', 'accent-blue', dd, F.hr, 'var(--blue)', fmtPct, 6, false, F.c, D('hr'));
+    renderMetric(dailyGrid, '大戶人數', 'accent-blue', dd, F.hc, 'var(--blue)', fmtInt, 6, false, F.c, D('hc'));
+    renderMetric(dailyGrid, '總股東人數', 'accent-aqua', dd, F.sh, 'var(--aqua)', fmtInt, 6, false, F.c, D('sh'));
   }
 
   function renderWeekly() {
-    // 週資料跟著上面每日那一段的起訖走（集保週報約一年，拉到「全部」就是全部的週）
-    var F = state.full, d0 = F.dates[state.view[0]], d1 = F.dates[state.view[1]], wAll = state.dates.weekly, wi = [];
-    for (var k = 0; k < wAll.length; k++) { if (wAll[k] >= d0 && wAll[k] <= d1) wi.push(k); }
-    if (wi.length < 2) { wi = []; for (var k2 = Math.max(0, wAll.length - 2); k2 < wAll.length; k2++) wi.push(k2); }
-    var entry = state.entry, wd = sliceArr(wAll, wi), wpx = state.px ? sliceArr(entry.cp, wi) : null;
-    __id('stockCaption').textContent = '集保股權分散表（週更，和上面每日同一段期間，' + wd.length + ' 週）　' + wd[0] + ' ～ ' + wd[wd.length - 1];
-    __id('peopleCaption').textContent = '集保股權分散表（週更，和上面每日同一段期間，' + wd.length + ' 週）　' + wd[0] + ' ～ ' + wd[wd.length - 1];
+    // 集保週報的全部週（約一年），每張圖各自縮放，預設看最近半年
+    var entry = state.entry, wd = state.dates.weekly, wpx = entry.cp;
+    var cap = '集保股權分散表（週更，共 ' + wd.length + ' 週，' + wd[0] + ' ～ ' + wd[wd.length - 1] + '）　每張圖可以各自縮放';
+    __id('stockCaption').textContent = cap;
+    __id('peopleCaption').textContent = cap;
 
     clearGrid('stockGrid'); clearGrid('peopleGrid');
 
     var ROW_START_TIERS = { '1': true, '30': true, '400': true };
+    var Wk = function (k) { return { id: 't2.w.' + k, presets: WEEKLY_PRESETS, def: 26 }; };
 
     var stockGrid = __id('stockGrid');
-    renderMetric(stockGrid, '總集保張數（張）', 'accent-aqua', wd, sliceArr(entry.cw, wi), 'var(--aqua)', fmtLot, 5, true, wpx);
-    renderMetric(stockGrid, '收盤價（對應週）', 'accent-orange', wd, sliceArr(entry.cp, wi), 'var(--orange)', fmtPrice, 5);
+    renderMetric(stockGrid, '總集保張數（張）', 'accent-aqua', wd, entry.cw, 'var(--aqua)', fmtLot, 5, true, wpx, Wk('cw'));
+    renderMetric(stockGrid, '收盤價（對應週）', 'accent-orange', wd, entry.cp, 'var(--orange)', fmtPrice, 5, false, null, Wk('cp.s'));
     for (var i = 0; i < TIERS.length; i++) {
       var t = TIERS[i];
-      renderMetric(stockGrid, t + '張以上－持股合計數（張）', 'accent-blue', wd, sliceArr(entry.st[t], wi), 'var(--blue)', fmtLot, 5, !!ROW_START_TIERS[t], wpx);
+      renderMetric(stockGrid, t + '張以上－持股合計數（張）', 'accent-blue', wd, entry.st[t], 'var(--blue)', fmtLot, 5, !!ROW_START_TIERS[t], wpx, Wk('st.' + t));
     }
 
     var peopleGrid = __id('peopleGrid');
-    renderMetric(peopleGrid, '總股東人數', 'accent-aqua', wd, sliceArr(entry.shw, wi), 'var(--aqua)', fmtInt, 5, true, wpx);
-    renderMetric(peopleGrid, '收盤價（對應週）', 'accent-orange', wd, sliceArr(entry.cp, wi), 'var(--orange)', fmtPrice, 5);
+    renderMetric(peopleGrid, '總股東人數', 'accent-aqua', wd, entry.shw, 'var(--aqua)', fmtInt, 5, true, wpx, Wk('shw'));
+    renderMetric(peopleGrid, '收盤價（對應週）', 'accent-orange', wd, entry.cp, 'var(--orange)', fmtPrice, 5, false, null, Wk('cp.p'));
     for (var j = 0; j < TIERS.length; j++) {
       var t2 = TIERS[j];
-      renderMetric(peopleGrid, t2 + '張以上－股東人數', 'accent-blue', wd, sliceArr(entry.pt[t2], wi), 'var(--blue)', fmtInt, 5, !!ROW_START_TIERS[t2], wpx);
+      renderMetric(peopleGrid, t2 + '張以上－股東人數', 'accent-blue', wd, entry.pt[t2], 'var(--blue)', fmtInt, 5, !!ROW_START_TIERS[t2], wpx, Wk('pt.' + t2));
     }
   }
 
@@ -1137,10 +1192,12 @@ var __fetch = API.fetch;
     return arr.slice(0, n).reverse();
   }
 
-  // 疊加股價（2026-10-10）：灰色虛線、自己的高低（不另畫刻度），月營收那一組用「營收公告日股價」
-  var T3PX = bgPxPref(), LAST = null;
+  // 疊加股價（2026-10-10）：自己的高低（不另畫刻度），月營收那一組用「營收公告日股價」。
+  // 2026-10-13：深炭灰 1px 實線（原本灰色粗虛線看不出細部）；有沒有疊由每張卡片自己的〔股價〕決定，
+  // 呼叫的人只在開著的時候傳 px 進來。季資料那幾張沒有對應的季股價，不放〔股價〕開關。
+  var LAST = null, T3M = null;
   function drawPx(svg, px, xAt, top, height){
-    if(!T3PX || !px) return;
+    if(!px) return;
     var nums = px.filter(function(v){ return v !== null && v !== undefined; });
     if(nums.length < 2) return;
     var lo = Math.min.apply(null, nums), hi = Math.max.apply(null, nums);
@@ -1153,9 +1210,25 @@ var __fetch = API.fetch;
       d += (on ? "L" : "M") + xAt(i).toFixed(2) + "," + (top + height - (v - lo) / (hi - lo) * height).toFixed(2) + " ";
       on = true;
     }
-    svg.appendChild(el("path", {d:d, fill:"none", stroke:BG_PX_COLOR, "stroke-width":1.4, "stroke-dasharray":"4 3"}));
+    svg.appendChild(el("path", {d:d, fill:"none", stroke:bgPxColor(), "stroke-width":1, "stroke-linejoin":"round", "vector-effect":"non-scaling-stroke"}));
   }
-  function pxTip(px, i){ var v = T3PX && px ? px[i] : null; return v === null || v === undefined ? "" : '<br><span style="color:#8a929b">┅</span> 股價 ' + fmtNum(v, 1) + ' 元'; }
+  function pxTip(px, i){ var v = px ? px[i] : null; return v === null || v === undefined ? "" : '<br><span style="color:' + bgPxColor() + '">━</span> 股價 ' + fmtNum(v, 1) + ' 元'; }
+
+  // 每張卡片自己的縮放列與〔股價〕開關（2026-10-13）：縮放列放在「最新值」那一列（沒有的話放圖例那一列）的右邊，
+  // 〔股價〕放在標題列右邊——都是卡片原本就有的列，圖的高度不變。draw(a, b, px) 用 slice(a, b) 畫那一段。
+  var QP = [[8,"2年"],[12,"3年"],[0,"5年"]], MP = [[12,"1年"],[0,"2年"]];
+  function zoomable(cardEl, id, labels, presets, draw, withPx){
+    var n = labels.length, view = [0, Math.max(0, n - 1)];
+    var host = cardEl.querySelector(".clatest") || cardEl.querySelector(".legend");
+    if(!host){ host = document.createElement("div"); host.className = "clatest"; cardEl.querySelector(".chead").insertAdjacentElement("afterend", host); }
+    var ctl = document.createElement("div"); ctl.className = "cctl"; host.appendChild(ctl);
+    function go(){ draw(view[0], view[1] + 1, !!withPx && bgCardPx(id)); }
+    if(withPx) cardEl.querySelector(".chead").appendChild(bgPxToggle(id, go));
+    var mr = bgMiniRange(ctl, {id: id, presets: presets, def: 0, onChange: function(a, b){ view = [a, b]; go(); }});
+    mr.setData(n, labels, true); view = mr.view();
+    go();
+  }
+  function S(arr, a, b){ return (arr || []).slice(a, b); }
 
   function renderBarChart(container, opts){
     // opts: labels(oldest->newest), values(oldest->newest), unit, diverging(bool), fmt(fn), height
@@ -1446,38 +1519,36 @@ var __fetch = API.fetch;
     // --- group 1: EPS ---
     var g1 = group("獲利能力(近五年)", 3);
     var grid1 = g1.querySelector(".grid");
-    var c1 = card("單季EPS", "元", latestValueHtml(d.eps_q, function(v){return fmtNum(v,2);}, QLABELS));
-    grid1.appendChild(c1);
-    renderBarChart(c1.querySelector(".chart-box"), {labels:qLabels, values:eps_q, fmt:function(v){return fmtNum(v,2);}, unit:"元"});
-    var c2 = card("四季EPS", "元", latestValueHtml(d.eps4_q, function(v){return fmtNum(v,2);}, QLABELS));
-    grid1.appendChild(c2);
-    renderBarChart(c2.querySelector(".chart-box"), {labels:qLabels, values:eps4_q, fmt:function(v){return fmtNum(v,2);}, unit:"元"});
-    var c3 = card("四季EPS年增率", "%", latestValueHtml(d.eps4_yoy_q, function(v){return fmtPct(v);}, QLABELS));
-    grid1.appendChild(c3);
-    renderBarChart(c3.querySelector(".chart-box"), {labels:qLabels, values:eps4_yoy_q, diverging:true, fmt:fmtPct, unit:""});
+    var Q = function(cardEl, id, fn){ grid_.appendChild(cardEl); zoomable(cardEl, "t3." + id, qLabels, QP, function(a, b){ fn(cardEl.querySelector(".chart-box"), a, b); }); };
+    var grid_ = grid1;
+    Q(card("單季EPS", "元", latestValueHtml(d.eps_q, function(v){return fmtNum(v,2);}, QLABELS)), "eps", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(eps_q,a,b), fmt:function(v){return fmtNum(v,2);}, unit:"元"}); });
+    Q(card("四季EPS", "元", latestValueHtml(d.eps4_q, function(v){return fmtNum(v,2);}, QLABELS)), "eps4", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(eps4_q,a,b), fmt:function(v){return fmtNum(v,2);}, unit:"元"}); });
+    Q(card("四季EPS年增率", "%", latestValueHtml(d.eps4_yoy_q, function(v){return fmtPct(v);}, QLABELS)), "eps4y", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(eps4_yoy_q,a,b), diverging:true, fmt:fmtPct, unit:""}); });
 
     // --- group 2: 營運 ---
     var g2 = group("營運與獲利率(近五年)", 3);
-    var grid2 = g2.querySelector(".grid");
-    var c4 = card("單季營業利益", "百萬元", latestValueHtml(d.opinc_q, fmtMoney, QLABELS));
-    grid2.appendChild(c4);
-    renderBarChart(c4.querySelector(".chart-box"), {labels:qLabels, values:opinc_q, fmt:fmtMoney, unit:"百萬"});
-    var c5 = card("營業利益年增率", "%", latestValueHtml(d.opinc_yoy_q, fmtPct, QLABELS));
-    grid2.appendChild(c5);
-    renderBarChart(c5.querySelector(".chart-box"), {labels:qLabels, values:opinc_yoy_q, diverging:true, fmt:fmtPct, unit:""});
-    var c6 = card("營益率", "%", latestValueHtml(d.opm_q, fmtPct, QLABELS));
-    grid2.appendChild(c6);
-    renderLineChart(c6.querySelector(".chart-box"), {labels:qLabels, series:[{values:opm_q, color:cssVar("--accent")}], fmt:fmtPct, unit:""});
+    grid_ = g2.querySelector(".grid");
+    Q(card("單季營業利益", "百萬元", latestValueHtml(d.opinc_q, fmtMoney, QLABELS)), "op", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(opinc_q,a,b), fmt:fmtMoney, unit:"百萬"}); });
+    Q(card("營業利益年增率", "%", latestValueHtml(d.opinc_yoy_q, fmtPct, QLABELS)), "opy", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(opinc_yoy_q,a,b), diverging:true, fmt:fmtPct, unit:""}); });
+    Q(card("營益率", "%", latestValueHtml(d.opm_q, fmtPct, QLABELS)), "opm", function(box, a, b){
+      renderLineChart(box, {labels:S(qLabels,a,b), series:[{values:S(opm_q,a,b), color:cssVar("--accent")}], fmt:fmtPct, unit:""}); });
 
     // --- group 2b: 資本結構與保留盈餘 ---
     var g2b = group("資本結構與保留盈餘(近五年)", 4);
     var grid2b = g2b.querySelector(".grid");
     var retained_ratio_q = recentChrono(d.retained_ratio_q || [], RECENT_QUARTERS), apic_ratio_q = recentChrono(d.apic_ratio_q || [], RECENT_QUARTERS);
+    // 第三條線原本是 #e8a33d（琥珀），和「保留盈餘比例」的橘色太像（一般視覺 ΔE 13）——改成綠松色（2026-10-13）
+    var C3 = bgDark() ? "#199e70" : "#1baf7a";
     var c2b1 = card("保留盈餘與資本公積比例", "%", latestValueHtml(d.retained_apic_ratio_q, fmtPct, QLABELS));
     c2b1.querySelector(".chead").insertAdjacentHTML("afterend",
       '<div class="legend"><span><span class="sw" style="background:'+cssVar("--accent")+'"></span>(保留盈餘+資本公積)比例</span>'+
       '<span><span class="sw" style="background:'+cssVar("--accent-2")+'"></span>保留盈餘比例</span>'+
-      '<span><span class="sw" style="background:#e8a33d"></span>資本公積比例</span></div>'+
+      '<span><span class="sw" style="background:'+C3+'"></span>資本公積比例</span></div>'+
       '<p class="card-note">分母＝股本＋資本公積＋保留盈餘・點圖例可顯示／隱藏線條</p>');
     grid2b.appendChild(c2b1);
     // 三條線相差太多（台積電 95.9%／94.8%／1.1%）：點圖例可以隱藏或顯示某一條，刻度跟著剩下的線重算。
@@ -1485,13 +1556,16 @@ var __fetch = API.fetch;
     var ratioSeries = [
       {values:retained_apic_ratio_q, color:cssVar("--accent"), name:"合計", on:true},
       {values:retained_ratio_q, color:cssVar("--accent-2"), name:"保留盈餘", on:true},
-      {values:apic_ratio_q, color:"#e8a33d", name:"資本公積", on:false}
+      {values:apic_ratio_q, color:C3, name:"資本公積", on:false}
     ];
     var ratioLegend = c2b1.querySelectorAll(".legend > span");
+    var ratioView = [0, qLabels.length];
     function drawRatio(){
       ratioSeries.forEach(function(s, k){ if(ratioLegend[k]) ratioLegend[k].classList.toggle("off", !s.on); });
+      var a = ratioView[0], b = ratioView[1];
       var vis = ratioSeries.filter(function(s){ return s.on; });
-      renderLineChart(c2b1.querySelector(".chart-box"), {labels:qLabels, series:vis.length ? vis : [ratioSeries[0]], fmt:fmtPct, unit:""});
+      vis = (vis.length ? vis : [ratioSeries[0]]).map(function(s){ return {values:S(s.values,a,b), color:s.color, name:s.name}; });
+      renderLineChart(c2b1.querySelector(".chart-box"), {labels:S(qLabels,a,b), series:vis, fmt:fmtPct, unit:""});
     }
     [].forEach.call(ratioLegend, function(sp, k){
       sp.classList.add("tg"); sp.setAttribute("role", "button"); sp.setAttribute("tabindex", "0");
@@ -1500,16 +1574,14 @@ var __fetch = API.fetch;
       sp.addEventListener("click", flip);
       sp.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); flip(); } });
     });
-    drawRatio();
-    var c2b2 = card("保留盈餘", "百萬元", latestValueHtml(d.retained_q, fmtMoney, QLABELS));
-    grid2b.appendChild(c2b2);
-    renderBarChart(c2b2.querySelector(".chart-box"), {labels:qLabels, values:retained_q, fmt:fmtMoney, unit:"百萬"});
-    var c2b3 = card("資本公積", "百萬元", latestValueHtml(d.apic_q, fmtMoney, QLABELS));
-    grid2b.appendChild(c2b3);
-    renderBarChart(c2b3.querySelector(".chart-box"), {labels:qLabels, values:apic_q, fmt:fmtMoney, unit:"百萬"});
-    var c2b4 = card("股本", "百萬元", latestValueHtml(d.capital_q, fmtMoney, QLABELS));
-    grid2b.appendChild(c2b4);
-    renderBarChart(c2b4.querySelector(".chart-box"), {labels:qLabels, values:capital_q, fmt:fmtMoney, unit:"百萬"});
+    zoomable(c2b1, "t3.ratio", qLabels, QP, function(a, b){ ratioView = [a, b]; drawRatio(); });
+    grid_ = grid2b;
+    Q(card("保留盈餘", "百萬元", latestValueHtml(d.retained_q, fmtMoney, QLABELS)), "retained", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(retained_q,a,b), fmt:fmtMoney, unit:"百萬"}); });
+    Q(card("資本公積", "百萬元", latestValueHtml(d.apic_q, fmtMoney, QLABELS)), "apic", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(apic_q,a,b), fmt:fmtMoney, unit:"百萬"}); });
+    Q(card("股本", "百萬元", latestValueHtml(d.capital_q, fmtMoney, QLABELS)), "capital", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(capital_q,a,b), fmt:fmtMoney, unit:"百萬"}); });
     var noteCard = document.createElement("div");
     noteCard.className = "card note-card";
     noteCard.innerHTML =
@@ -1523,72 +1595,63 @@ var __fetch = API.fetch;
     var g3 = group("月營收與股價(近兩年)", 4);
     var grid3 = g3.querySelector(".grid");
     var pxLab = document.createElement("label");
-    pxLab.className = "bg3-px"; pxLab.title = "在月營收的圖上疊一條營收公告日股價（灰色虛線）";
-    pxLab.innerHTML = '<input type="checkbox" class="bg-pxsync"' + (T3PX ? " checked" : "") + '> 📈 疊加股價線';
+    pxLab.className = "bg3-px"; pxLab.title = "月營收那三張圖一起疊上或拿掉營收公告日股價；每張卡片右上角的〔股價〕可以單獨開關";
+    T3M = bgPxPref();
+    pxLab.innerHTML = '<input type="checkbox" class="bg-pxsync"' + (T3M ? " checked" : "") + '> 📈 疊加股價線（全部）';
     g3.insertBefore(pxLab, grid3);
     pxLab.querySelector("input").addEventListener("change", function(e){
-      if(T3PX === e.target.checked) return;
-      T3PX = e.target.checked; bgPxPref(T3PX);
+      if(T3M === e.target.checked) return;
+      T3M = e.target.checked; bgPxPref(T3M);
       var y = window.pageYOffset; if(LAST) render(LAST[0], LAST[1], LAST[2]); window.scrollTo(0, y);
     });
-    var c8 = card("單月營收", "百萬元", latestValueHtml(d.rev_m, fmtMoney, MLABELS.rev));
-    grid3.appendChild(c8);
-    renderBarChart(c8.querySelector(".chart-box"), {labels:mRevLabels, values:rev_m, fmt:fmtMoney, unit:"百萬", px:price_m});
-    var c9 = card("單月營收年增率", "%", latestValueHtml(d.rev_yoy_m, fmtPct, MLABELS.rev));
-    grid3.appendChild(c9);
-    renderLineChart(c9.querySelector(".chart-box"), {labels:mRevLabels, series:[{values:rev_yoy_m, color:cssVar("--accent")}], zeroBase:true, fmt:fmtPct, unit:"", px:price_m});
-    var c7 = card("月營收公告日股價", "元", latestValueHtml(d.price_m, function(v){return fmtNum(v,1);}, MLABELS.price));
-    grid3.appendChild(c7);
-    renderLineChart(c7.querySelector(".chart-box"), {labels:mPriceLabels, series:[{values:price_m, color:cssVar("--accent")}], fmt:function(v){return fmtNum(v,1);}, unit:"元"});
+    var M = function(cardEl, id, labels, fn, withPx){ grid3.appendChild(cardEl); zoomable(cardEl, "t3." + id, labels, MP, function(a, b, px){ fn(cardEl.querySelector(".chart-box"), a, b, px ? S(price_m,a,b) : null); }, withPx); };
+    M(card("單月營收", "百萬元", latestValueHtml(d.rev_m, fmtMoney, MLABELS.rev)), "rev", mRevLabels, function(box, a, b, px){
+      renderBarChart(box, {labels:S(mRevLabels,a,b), values:S(rev_m,a,b), fmt:fmtMoney, unit:"百萬", px:px}); }, true);
+    M(card("單月營收年增率", "%", latestValueHtml(d.rev_yoy_m, fmtPct, MLABELS.rev)), "revy", mRevLabels, function(box, a, b, px){
+      renderLineChart(box, {labels:S(mRevLabels,a,b), series:[{values:S(rev_yoy_m,a,b), color:cssVar("--accent")}], zeroBase:true, fmt:fmtPct, unit:"", px:px}); }, true);
+    M(card("月營收公告日股價", "元", latestValueHtml(d.price_m, function(v){return fmtNum(v,1);}, MLABELS.price)), "pricem", mPriceLabels, function(box, a, b){
+      renderLineChart(box, {labels:S(mPriceLabels,a,b), series:[{values:S(price_m,a,b), color:cssVar("--accent")}], fmt:function(v){return fmtNum(v,1);}, unit:"元"}); }, false);
     var c10 = card("3月／12月營收年增率", "%");
     c10.querySelector(".chead").insertAdjacentHTML("afterend",
       '<div class="legend"><span><span class="sw" style="background:'+cssVar("--accent")+'"></span>3個月累計年增率</span>'+
       '<span><span class="sw" style="background:'+cssVar("--accent-2")+'"></span>12個月累計年增率</span></div>');
-    grid3.appendChild(c10);
-    renderLineChart(c10.querySelector(".chart-box"), {labels:mRevLabels, series:[
-      {values:rev_yoy3_m, color:cssVar("--accent"), name:"3月"},
-      {values:rev_yoy12_m, color:cssVar("--accent-2"), name:"12月"}
-    ], zeroBase:true, fmt:fmtPct, unit:"", px:price_m});
+    M(c10, "revy312", mRevLabels, function(box, a, b, px){
+      renderLineChart(box, {labels:S(mRevLabels,a,b), series:[
+        {values:S(rev_yoy3_m,a,b), color:cssVar("--accent"), name:"3月"},
+        {values:S(rev_yoy12_m,a,b), color:cssVar("--accent-2"), name:"12月"}
+      ], zeroBase:true, fmt:fmtPct, unit:"", px:px}); }, true);
 
     // --- group 4: 存貨 ---
     var g4 = group("存貨(近五年)", 3);
-    var grid4 = g4.querySelector(".grid");
-    var c11 = card("單季存貨", "百萬元", latestValueHtml(d.inv_q, fmtMoney, QLABELS));
-    grid4.appendChild(c11);
-    renderBarChart(c11.querySelector(".chart-box"), {labels:qLabels, values:inv_q, fmt:fmtMoney, unit:"百萬"});
-    var c12 = card("存貨周轉率", "次", latestValueHtml(d.inv_turn_q, function(v){return fmtNum(v,3);}, QLABELS));
-    grid4.appendChild(c12);
-    renderLineChart(c12.querySelector(".chart-box"), {labels:qLabels, series:[{values:inv_turn_q, color:cssVar("--accent")}], fmt:function(v){return fmtNum(v,3);}, unit:""});
-    var c13 = card("存貨營收比", "%", latestValueHtml(d.inv_rev_ratio_q, fmtPct, QLABELS));
-    grid4.appendChild(c13);
-    renderLineChart(c13.querySelector(".chart-box"), {labels:qLabels, series:[{values:inv_rev_ratio_q, color:cssVar("--accent")}], fmt:fmtPct, unit:""});
+    grid_ = g4.querySelector(".grid");
+    Q(card("單季存貨", "百萬元", latestValueHtml(d.inv_q, fmtMoney, QLABELS)), "inv", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(inv_q,a,b), fmt:fmtMoney, unit:"百萬"}); });
+    Q(card("存貨周轉率", "次", latestValueHtml(d.inv_turn_q, function(v){return fmtNum(v,3);}, QLABELS)), "invt", function(box, a, b){
+      renderLineChart(box, {labels:S(qLabels,a,b), series:[{values:S(inv_turn_q,a,b), color:cssVar("--accent")}], fmt:function(v){return fmtNum(v,3);}, unit:""}); });
+    Q(card("存貨營收比", "%", latestValueHtml(d.inv_rev_ratio_q, fmtPct, QLABELS)), "invr", function(box, a, b){
+      renderLineChart(box, {labels:S(qLabels,a,b), series:[{values:S(inv_rev_ratio_q,a,b), color:cssVar("--accent")}], fmt:fmtPct, unit:""}); });
 
     // --- group 5: 合約負債 ---
     var g5 = group("合約負債(近五年)", 3);
-    var grid5 = g5.querySelector(".grid");
-    var c14 = card("單季合約負債(全部)", "百萬元", latestValueHtml(d.cl_q, fmtMoney, QLABELS));
-    grid5.appendChild(c14);
-    renderBarChart(c14.querySelector(".chart-box"), {labels:qLabels, values:cl_q, fmt:fmtMoney, unit:"百萬"});
-    var c15 = card("合約負債年增額佔四季營收比", "%", latestValueHtml(d.cl_rev_ratio_q, fmtPct, QLABELS));
-    grid5.appendChild(c15);
-    renderLineChart(c15.querySelector(".chart-box"), {labels:qLabels, series:[{values:cl_rev_ratio_q, color:cssVar("--accent")}], zeroBase:true, fmt:fmtPct, unit:""});
-    var c16 = card("合約負債佔股本比", "%", latestValueHtml(d.cl_capital_ratio_q, fmtPct, QLABELS));
-    grid5.appendChild(c16);
-    renderLineChart(c16.querySelector(".chart-box"), {labels:qLabels, series:[{values:cl_capital_ratio_q, color:cssVar("--accent")}], fmt:fmtPct, unit:""});
+    grid_ = g5.querySelector(".grid");
+    Q(card("單季合約負債(全部)", "百萬元", latestValueHtml(d.cl_q, fmtMoney, QLABELS)), "cl", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(cl_q,a,b), fmt:fmtMoney, unit:"百萬"}); });
+    Q(card("合約負債年增額佔四季營收比", "%", latestValueHtml(d.cl_rev_ratio_q, fmtPct, QLABELS)), "clr", function(box, a, b){
+      renderLineChart(box, {labels:S(qLabels,a,b), series:[{values:S(cl_rev_ratio_q,a,b), color:cssVar("--accent")}], zeroBase:true, fmt:fmtPct, unit:""}); });
+    Q(card("合約負債佔股本比", "%", latestValueHtml(d.cl_capital_ratio_q, fmtPct, QLABELS)), "clc", function(box, a, b){
+      renderLineChart(box, {labels:S(qLabels,a,b), series:[{values:S(cl_capital_ratio_q,a,b), color:cssVar("--accent")}], fmt:fmtPct, unit:""}); });
 
     // --- group 6: 資本支出 / ROA ---
     var g6 = group("資本支出與資產報酬(近五年)", 3);
-    var grid6 = g6.querySelector(".grid");
-    var c17 = card("單季取得不動產廠房設備", "百萬元", latestValueHtml(d.capex_q, fmtMoney, QLABELS));
-    grid6.appendChild(c17);
-    renderBarChart(c17.querySelector(".chart-box"), {labels:qLabels, values:capex_q, fmt:fmtMoney, unit:"百萬"});
-    var c18 = card("資本支出(四季)佔股本比", "%", latestValueHtml(d.capex_cap_ratio_q, fmtPct, QLABELS));
-    grid6.appendChild(c18);
-    renderLineChart(c18.querySelector(".chart-box"), {labels:qLabels, series:[{values:capex_cap_ratio_q, color:cssVar("--accent")}], fmt:fmtPct, unit:""});
+    grid_ = g6.querySelector(".grid");
+    Q(card("單季取得不動產廠房設備", "百萬元", latestValueHtml(d.capex_q, fmtMoney, QLABELS)), "capex", function(box, a, b){
+      renderBarChart(box, {labels:S(qLabels,a,b), values:S(capex_q,a,b), fmt:fmtMoney, unit:"百萬"}); });
+    Q(card("資本支出(四季)佔股本比", "%", latestValueHtml(d.capex_cap_ratio_q, fmtPct, QLABELS)), "capexc", function(box, a, b){
+      renderLineChart(box, {labels:S(qLabels,a,b), series:[{values:S(capex_cap_ratio_q,a,b), color:cssVar("--accent")}], fmt:fmtPct, unit:""}); });
     var c19 = card("四季ROA", "%", latestValueHtml(d.roa_q, fmtPct, QLABELS));
     c19.querySelector(".chead").insertAdjacentHTML("afterend", '<p class="card-note">近四季稅後淨利 ÷ 平均總資產（本季末與四季前季末）</p>');
-    grid6.appendChild(c19);
-    renderLineChart(c19.querySelector(".chart-box"), {labels:qLabels, series:[{values:roa_q, color:cssVar("--accent")}], fmt:fmtPct, unit:""});
+    Q(c19, "roa", function(box, a, b){
+      renderLineChart(box, {labels:S(qLabels,a,b), series:[{values:S(roa_q,a,b), color:cssVar("--accent")}], fmt:fmtPct, unit:""}); });
 
     // --- group 7: 月營收變動說明 ---
     var g7 = group("月營收變動說明", 1);

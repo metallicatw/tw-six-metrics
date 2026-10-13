@@ -103,7 +103,7 @@ function bgRangeUI(host, opt){
   var BTN = opt.buttons || [[63, "近3月"], [120, "近120日"], [250, "近1年"], [0, "全部"]];
   host.innerHTML = '<div class="bg-rng"><span class="lab">縮放區間：</span>' +
     BTN.map(function(b){ return '<button type="button" data-n="' + b[0] + '">' + b[1] + "</button>"; }).join("") +
-    (opt.price ? '<label class="px" title="在每一張指標圖上疊一條股價（灰色虛線，左邊刻度）"><input type="checkbox" class="bg-pxsync"> 📈 疊加股價線</label>' : "") + "</div>" +
+    (opt.price ? '<label class="px" title="全部卡片一起疊上或拿掉股價線；每張卡片右上角的〔股價〕可以單獨開關"><input type="checkbox" class="bg-pxsync"> 📈 疊加股價線（全部）</label>' : "") + "</div>" +
     '<div class="bg-rng-sl"><input type="range" min="0" value="0" aria-label="區間起點"><input type="range" min="0" value="0" aria-label="區間終點"></div>' +
     '<p class="bg-rng-note"></p>';
   var r = host.querySelectorAll(".bg-rng-sl input"), r0 = r[0], r1 = r[1], note = host.querySelector(".bg-rng-note");
@@ -149,12 +149,115 @@ function bgPxPref(v){
   try {
     if (v === undefined) return localStorage.getItem("twsix.cf.px") !== "0";
     localStorage.setItem("twsix.cf.px", v ? "1" : "0");
+    // 總開關一動，每張卡片自己的〔股價〕開關全部回到總開關的值（2026-10-13）
+    var st = bgCardStore(); for (var id in st) delete st[id].px; bgCardSave(st);
+    document.querySelectorAll("#cf .bg-cpx").forEach(function(x){ x.checked = !!v; });
     document.querySelectorAll("#cf .bg-pxsync").forEach(function(x){ if (x.checked !== !!v){ x.checked = !!v; x.dispatchEvent(new Event("change")); } });
   } catch (e) { if (v === undefined) return true; }
   return !!v;
 }
-// 疊加股價時，股價那條線的樣子（灰色虛線、右側另一個刻度）
-var BG_PX_COLOR = "rgba(150,156,166,.85)";
+
+// ── 疊加股價線與股價布林通道的樣式（2026-10-13）──────────────────────────────
+// 股價線原本是灰色粗虛線（1.2～1.4px、4-3 虛線）：虛線的空隙把每天的小起伏切掉了，
+// 看不出細部變化；灰色又和藍色指標線、格線太接近。改成**實線、1px、深炭灰**（深色模式
+// 用淡灰），不做曲線平滑。布林通道改成金色細實線＋淡金填色——原本的藍色和〔恐懼指標〕
+// 的藍線撞色。配色都跑過 dataviz 的 validate_palette（紅／藍／炭灰／金在綠底卡片上：
+// 一般視覺 ΔE ≥ 16、色盲模擬 ΔE ≥ 8.7）。
+function bgDark(){
+  var a = document.documentElement.getAttribute("data-theme");
+  if (a === "dark") return true;
+  if (a === "light") return false;
+  return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+function bgPxColor(){ return bgDark() ? "rgba(227,230,234,.92)" : "rgba(43,47,54,.88)"; }
+function bgBandColor(a){ return bgDark() ? "rgba(224,184,74," + (a == null ? 1 : a) + ")" : "rgba(184,134,11," + (a == null ? 1 : a) + ")"; }
+
+// ── 每張卡片自己的〔股價〕開關與縮放區間（2026-10-13）───────────────────────────
+// 存在同一個 localStorage 鍵裡：{卡片 id: {px: 有沒有疊股價, len: 看幾個點（0＝全部）, off: 終點離最新幾個點}}。
+// 每張卡片完全獨立，換股票、重新整理都記得；最上面的總滑桿只管它自己那張股價圖。
+var BG_CARD_KEY = "twsix.cf.cards";
+function bgCardStore(){ try { return JSON.parse(localStorage.getItem(BG_CARD_KEY) || "{}") || {}; } catch (e) { return {}; } }
+function bgCardSave(st){ try { localStorage.setItem(BG_CARD_KEY, JSON.stringify(st)); } catch (e) {} }
+function bgCardGet(id){ return bgCardStore()[id] || {}; }
+function bgCardPut(id, patch){ var st = bgCardStore(), o = st[id] || {}; for (var k in patch) o[k] = patch[k]; st[id] = o; bgCardSave(st); }
+function bgCardPx(id){ var o = bgCardGet(id); return o.px === undefined ? bgPxPref() : !!o.px; }
+
+// 卡片右上角的〔股價〕勾選框
+function bgPxToggle(id, onChange){
+  var lab = document.createElement("label");
+  lab.className = "bg-ctg";
+  lab.title = "在這張圖疊上股價線（實線、左側自己的刻度）。最上面的〔📈 疊加股價線〕是全部一起開關。";
+  lab.innerHTML = '<input type="checkbox" class="bg-cpx"> 股價';
+  var cb = lab.querySelector("input");
+  cb.checked = bgCardPx(id);
+  cb.addEventListener("change", function(){ bgCardPut(id, {px: cb.checked}); onChange(cb.checked); });
+  return lab;
+}
+
+// 卡片裡的縮放區間：一排小按鈕＋一條雙頭細滑桿，放在卡片原本就有的一列裡（不加高卡片）。
+// opt: {id, presets: [[點數, 名稱], …]（0＝全部）, def: 預設點數, onChange(a, b)}；
+// setData(n, labels, silent) 換資料長度時，依「看幾個點、終點離最新幾個點」換算回索引。
+function bgMiniRange(host, opt){
+  var wrap = document.createElement("div");
+  wrap.className = "bg-mr";
+  wrap.innerHTML = '<span class="ps">' + opt.presets.map(function(b){ return '<button type="button" data-n="' + b[0] + '">' + b[1] + "</button>"; }).join("") +
+    '</span><span class="sl"><input type="range" min="0" value="0" aria-label="這張圖的區間起點"><input type="range" min="0" value="0" aria-label="這張圖的區間終點"></span>';
+  host.appendChild(wrap);
+  var r = wrap.querySelectorAll("input"), r0 = r[0], r1 = r[1];
+  var n = 0, labels = [], view = [0, 0], pending = 0;
+  function mark(){
+    var len = view[1] - view[0] + 1, atEnd = view[1] === n - 1;
+    [].forEach.call(wrap.querySelectorAll("button"), function(b){
+      var k = +b.getAttribute("data-n");
+      b.classList.toggle("on", atEnd && (k ? len === k : view[0] === 0));
+      b.disabled = !!k && k >= n;
+    });
+    wrap.title = n ? "這張圖：" + labels[view[0]] + " ～ " + labels[view[1]] + "（" + len + " 個點）" : "";
+  }
+  function save(){
+    var len = view[1] - view[0] + 1;
+    bgCardPut(opt.id, {len: view[0] === 0 && view[1] === n - 1 ? 0 : len, off: n - 1 - view[1]});
+  }
+  function fire(){ pending = 0; mark(); opt.onChange(view[0], view[1]); }
+  function apply(a, b){
+    a = Math.max(0, Math.min(a, n - 1)); b = Math.max(0, Math.min(b, n - 1));
+    if (a > b){ var t = a; a = b; b = t; }
+    if (b - a < 1 && n > 1){ if (b < n - 1) b = a + 1; else a = b - 1; }   // 至少兩個點才畫得出線
+    view = [a, b]; r0.value = a; r1.value = b;
+  }
+  function set(a, b, now){
+    if (!n) return;
+    apply(a, b); save();
+    if (now) fire(); else if (!pending) pending = requestAnimationFrame(fire);
+  }
+  r0.addEventListener("input", function(){ set(+r0.value, +r1.value); });
+  r1.addEventListener("input", function(){ set(+r0.value, +r1.value); });
+  [].forEach.call(wrap.querySelectorAll("button"), function(b){
+    b.addEventListener("click", function(){ var k = +b.getAttribute("data-n"); set(k ? n - k : 0, n - 1, true); });
+  });
+  return {
+    // silent：只換長度、不重畫（呼叫的人自己會一起畫）
+    setData: function(len, labs, silent){
+      n = len; labels = labs || [];
+      r0.max = r1.max = Math.max(0, n - 1);
+      if (!n){ mark(); return; }
+      var o = bgCardGet(opt.id), k = o.len === undefined ? (opt.def || 0) : o.len, off = o.off || 0;
+      var b = Math.max(0, n - 1 - off);
+      apply(k ? b - k + 1 : 0, b);
+      if (silent) mark(); else fire();
+    },
+    view: function(){ return view.slice(); }
+  };
+}
+
+// ② 的總開關：只剩〔📈 疊加股價線〕（每張卡片各自縮放之後，那一排總縮放就不需要了）
+function bgPxMaster(host, title, onChange){
+  host.innerHTML = '<div class="bg-rng"><label class="px" title="' + title + '"><input type="checkbox" class="bg-pxsync"> 📈 疊加股價線（全部）</label></div>';
+  var cb = host.querySelector("input");
+  cb.checked = bgPxPref();
+  cb.addEventListener("change", function(){ bgPxPref(cb.checked); onChange(cb.checked); });
+  return cb;
+}
 function t1Fetch(path){
   if (path === "meta.json") return Promise.resolve(bgResp(BG.names()));
   if (path === "dates.json") return getJSON("market.json").then(function(mk){ var o = {}; T1_KEYS.forEach(function(k){ o[k] = mk.dates; }); return bgResp(o); });
