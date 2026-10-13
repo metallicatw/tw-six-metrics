@@ -87,7 +87,7 @@ var __fetch = API.fetch;
     {grp:'a', tag:'外資法人', title:'外資投信20日市值周轉率', type:'line', key:'fi_turnover20', dk:'fi_turnover20', color:'group-a-line'},
     {grp:'b', tag:'大戶籌碼', title:'大戶庫存張數', type:'line', key:'holder_stock', dk:'wide', color:'group-b-line', int:true},
     {grp:'c', tag:'成交量能', title:'紅:法人預估成交額20日(M) / 藍:成交金額20日(M)', type:'dual', keys:['fi_amt20','val_amt20'], dk:'fi_amt20', colors:['red','blue']},
-    // boll:true → 卡片右上角有〔布林通道〕開關（2026-10-13），算法和〔趨勢×六大×報酬〕同一套
+    // boll:true → 卡片右上角有〔布林通道〕開關（2026-10-13）：疊上股價的布林通道，和〔趨勢×六大×報酬〕同一套
     {grp:'d', tag:'貪婪恐懼', title:'紅:貪婪指標1 / 藍:恐懼指標1', type:'dual', keys:['greed1','fear1'], dk:'greed1', colors:['red','blue'], boll:true, names:['貪婪1','恐懼1']},
     {grp:'d', tag:'貪婪恐懼', title:'紅:貪婪指標2 / 藍:恐懼指標2', type:'dual', keys:['greed2','fear2'], dk:'greed2', colors:['red','blue'], boll:true, names:['貪婪2','恐懼2']},
 
@@ -119,12 +119,14 @@ var __fetch = API.fetch;
   function cut(arr){ return (arr || []).slice(VIEW[0], VIEW[1] + 1); }
   function viewLabels(){ return FULL.dates.slice(VIEW[0], VIEW[1] + 1).map(fmtMD); }
 
-  // ---- 布林通道（2026-10-13）----
-  // 和〔趨勢×六大×報酬〕的 compute_bollinger 同一套：20 期移動平均 ± 2 倍「樣本」標準差
-  // （pandas rolling().std() 的 ddof=1）。在**整段**資料上算完才切出畫面那一段，
-  // 所以拉近之後最左邊那 19 天的通道不會是空的。視窗裡有缺值的那一天不畫。
-  // 開關預設關著（和 BG 原版一樣），打開之後記在這台瀏覽器，兩張圖共用同一個設定。
-  var BB_N = 20, BB_K = 2;
+  // ---- 股價的布林通道（2026-10-13）----
+  // 就是〔趨勢×六大×報酬〕K 線圖上那一組：由**收盤價**算 20 日移動平均 ± 2 倍「樣本」標準差
+  // （tw-trend-filter 的 compute_bollinger，pandas rolling().std() 的 ddof=1），樣式也照搬：
+  // 上下軌 #58a6ff 點虛線、中間淡藍填色，中軌灰色細點線。畫在股價那一側（左邊）的刻度上，
+  // 和〔📈 疊加股價線〕共用同一個軸，所以股價線碰到上軌／下軌就是真的碰到。
+  // 在**整段**股價上算完才切出畫面那一段，拉近之後最左邊那 19 天的通道不會是空的；
+  // 視窗裡有缺值的那一天不畫。開關預設關著，打開之後記在這台瀏覽器，兩張圖一起開關。
+  var BB_N = 20, BB_K = 2, BB_LINE = '#58a6ff', BB_FILL = 'rgba(88,166,255,0.08)', BB_MID = '#8b949e';
   var BOLL = (function(){ try { return localStorage.getItem('twsix.cf.bb') === '1'; } catch(e){ return false; } })();
   function bollinger(arr){
     var n = (arr || []).length, up = new Array(n), mid = new Array(n), dn = new Array(n);
@@ -145,23 +147,17 @@ var __fetch = API.fetch;
     }
     return { up: up, mid: mid, dn: dn };
   }
-  function alpha(hex, a){
-    var h = (hex || '').replace('#', '');
-    if(h.length === 3) h = h.replace(/(.)/g, '$1$1');
-    if(!/^[0-9a-f]{6}$/i.test(h)) return hex;
-    return 'rgba(' + parseInt(h.slice(0,2),16) + ',' + parseInt(h.slice(2,4),16) + ',' + parseInt(h.slice(4,6),16) + ',' + a + ')';
-  }
-  // 一條指標的通道＝上軌（往下填到下軌）、下軌、中軌：三條虛線，顏色跟著那條指標
-  function bollDatasets(name, full, colorVar){
-    var b = bollinger(full), c = cssVar(colorVar);
-    var line = { pointRadius:0, borderWidth:1, tension:0.15, spanGaps:false, order:2 };
+  // 上軌（往下填到下軌）、下軌、中軌，全部掛在股價的 yp 軸上
+  function priceBollDatasets(price){
+    var b = bollinger(price);
+    var line = { yAxisID:'yp', pointRadius:0, tension:0.15, spanGaps:false, order:3 };
     return [
-      Object.assign({ label: name + ' 布林上軌', data: cut(b.up), borderColor: alpha(c, .7), borderDash:[3,3],
-        backgroundColor: alpha(c, .08), fill:'+1' }, line),
-      Object.assign({ label: name + ' 布林下軌', data: cut(b.dn), borderColor: alpha(c, .7), borderDash:[3,3],
-        backgroundColor: alpha(c, .08), fill:false }, line),
-      Object.assign({ label: name + ' 布林中軌', data: cut(b.mid), borderColor: alpha(c, .45), borderDash:[1,3],
-        backgroundColor: 'transparent', fill:false }, line)
+      Object.assign({ label:'布林上軌', data:cut(b.up), borderColor:BB_LINE, borderWidth:1.2, borderDash:[2,3],
+        backgroundColor:BB_FILL, fill:'+1' }, line),
+      Object.assign({ label:'布林下軌', data:cut(b.dn), borderColor:BB_LINE, borderWidth:1.2, borderDash:[2,3],
+        backgroundColor:BB_FILL, fill:false }, line),
+      Object.assign({ label:'布林中軌', data:cut(b.mid), borderColor:BB_MID, borderWidth:0.8, borderDash:[2,3],
+        backgroundColor:'transparent', fill:false }, line)
     ];
   }
   function setBoll(on){
@@ -199,7 +195,7 @@ var __fetch = API.fetch;
         if(p.boll){
           var bb = document.createElement('label');
           bb.className = 'bb-tg';
-          bb.title = '在兩條線上各疊一組布林通道（20 日均線 ± 2 倍標準差，和〔趨勢×六大×報酬〕同一套算法）';
+          bb.title = '疊上股價的布林通道（收盤價 20 日均線 ± 2 倍標準差，和〔趨勢×六大×報酬〕K 線圖上的同一組），刻度在左邊、和疊加股價線共用';
           bb.innerHTML = '<input type="checkbox" class="bg-bbsync"' + (BOLL ? ' checked' : '') + '> 布林通道';
           bb.querySelector('input').addEventListener('change', function(e){ setBoll(e.target.checked); });
           tag.appendChild(bb);
@@ -310,10 +306,20 @@ var __fetch = API.fetch;
     var chart, px = SHOWPX ? cut(stock.price) : null;
     // 疊加股價：灰色細線、左側自己的刻度（不和指標共用一個 y 軸）
     function withPx(datasets){
-      if(!px) return datasets;
+      var bb = panel.boll && BOLL && stock.price;
+      if(!px && !bb) return datasets;
       opts.scales.yp = { position:'left', beginAtZero:false, grace:'4%', grid:{ display:false }, ticks:{ color: cssVar('--ink-soft'), font:{ size:9 }, maxTicksLimit:4 } };
-      return datasets.concat([{ type:'line', label:'股價', data:px, yAxisID:'yp', borderColor:BG_PX_COLOR, backgroundColor:BG_PX_COLOR,
+      if(px) datasets = datasets.concat([{ type:'line', label:'股價', data:px, yAxisID:'yp', borderColor:BG_PX_COLOR, backgroundColor:BG_PX_COLOR,
         borderWidth:1.2, borderDash:[4,3], pointRadius:0, tension:0.15, spanGaps:true, order:-1 }]);
+      if(bb){
+        // 股價布林通道（2026-10-13）：墊在最底下（order 大的先畫）
+        datasets = datasets.concat(priceBollDatasets(stock.price));
+        opts.plugins.tooltip.callbacks.label = function(item){
+          var v = item.parsed.y;
+          return v === null || v === undefined ? null : item.dataset.label + ' ' + Number(v).toFixed(2);
+        };
+      }
+      return datasets;
     }
 
     if(panel.type === 'bar'){
@@ -332,16 +338,6 @@ var __fetch = API.fetch;
         lineDataset(names[0], d1, '--' + panel.colors[0]),
         lineDataset(names[1], d2, '--' + panel.colors[1])
       ];
-      if(panel.boll && BOLL){
-        // 指標線放最上層（order 小的畫在上面），通道墊在底下
-        sets[0].order = 0; sets[1].order = 0;
-        sets = sets.concat(bollDatasets(names[0], stock[panel.keys[0]], '--' + panel.colors[0]),
-                           bollDatasets(names[1], stock[panel.keys[1]], '--' + panel.colors[1]));
-        opts.plugins.tooltip.callbacks.label = function(item){
-          var v = item.parsed.y;
-          return v === null || v === undefined ? null : item.dataset.label + ' ' + Number(v).toFixed(2);
-        };
-      }
       chart = new Chart(canvas, {
         type:'line',
         data:{ labels:dLabels, datasets:withPx(sets)},

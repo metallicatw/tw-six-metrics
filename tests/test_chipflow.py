@@ -817,7 +817,9 @@ def test_指標查詢_每一條都有算法白話與出處():
 def test_貪婪恐懼疊圖_布林通道開關與算法():
     """2026-10-13：〈紅:貪婪指標1／藍:恐懼指標1〉〈…2〉加〔布林通道〕開關。
 
-    算法要和〔趨勢×六大×報酬〕的 compute_bollinger 一樣：20 期平均 ± 2 倍
+    疊的是**股價**的布林通道（〔趨勢×六大×報酬〕K 線圖上那一組），不是指標自己的：
+    由收盤價算、掛在股價那一側的 yp 軸上，和疊加股價線共用刻度。
+    算法要和 tw-trend-filter 的 compute_bollinger 一樣：20 期平均 ± 2 倍
     **樣本**標準差（pandas rolling().std()，ddof=1）。用 node 實際跑一次那支函式，
     和這裡用 Python 算的逐點比。
     """
@@ -833,6 +835,10 @@ def test_貪婪恐懼疊圖_布林通道開關與算法():
     # 只有那兩張有，其他雙線圖不受影響
     assert js.count(", boll:true") == 2
     assert "twsix.cf.bb" in js and "class=\"bg-bbsync\"" in js and "function setBoll(" in js
+    assert "priceBollDatasets(stock.price)" in js
+    fn_ds = js[js.index("function priceBollDatasets("):js.index("function setBoll(")]
+    assert "yAxisID:'yp'" in fn_ds and "fill:'+1'" in fn_ds
+    assert "BB_LINE = '#58a6ff'" in js   # 和趨勢圖同一個顏色
     assert "布林通道" in (tpl / "radar_guide.html.j2").read_text("utf-8")
     assert "布林通道" in (tpl / "radar_gloss.json").read_text("utf-8")
 
