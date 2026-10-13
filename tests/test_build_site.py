@@ -2090,3 +2090,16 @@ def test_河流圖有週期切換_其他區間按了才下載(tmp_path=None):
     assert "code + '.r.json'" in js and "window.TWSIXHover = function(root)" in js
     # 沒有完整資料的那一檔（普通版個股頁）沒有按鈕，也沒有旁邊那份檔。
     assert not (out / "stock" / "2330.r.json").exists()
+
+
+def test_匯入觀察清單時打的名字和現有群組同名_可以直接覆蓋那個群組(tmp_path=None):
+    """2026-10-13：另存新群組的名字和現有群組一樣時，原本只說「改一下名字」不給存。
+    改成那顆鈕變成〔覆蓋〔那個名字〕〕，按下去用這一次的結果換掉那個群組的內容，
+    不會多出兩個同名群組；名字和來源群組本身一樣時，那顆鈕藏起來（就是下面的〔覆蓋〕）。"""
+    js = (ROOT.parent / "src" / "twsix" / "report" / "templates" / "site.js").read_text("utf-8")
+    imp = js[js.index("function importGroup(src, name, codes, asName){"):js.index("function sourceGroup(src){")]
+    assert "x.name === asName" in imp and "replaced: true" in imp, "同名就覆蓋那個群組，不另外 push 一個"
+    dlg = js[js.index("function ask(old, n, cb){"):]
+    assert "改一下名字" not in dlg
+    assert "bc.textContent = taken && !self ? '覆蓋〔' + v + '〕' : '另存新群組'" in dlg
+    assert "bc.hidden = self" in dlg and "dlg.close(bc.hidden ? 'over' : 'copy')" in dlg

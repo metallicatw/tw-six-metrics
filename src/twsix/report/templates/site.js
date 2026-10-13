@@ -1008,7 +1008,9 @@ var TWSIXWatch = (function(){
   }
   /* 從其他頁一鍵匯入：同一個來源（src）只有一個群組，再匯入就換掉它的內容。
      asName（2026-10-05）：不覆蓋，另存成一個新群組。新群組**不帶 src**——它是這一刻的
-     快照，下次再從同一頁匯入，換掉的仍然是原本那個來源群組，不會動到這份快照。 */
+     快照，下次再從同一頁匯入，換掉的仍然是原本那個來源群組，不會動到這份快照。
+     asName 跟現有的群組同名（2026-10-13）：覆蓋那個群組的內容（保留它的位置與來源標記），
+     不再另外多出一個同名的群組。 */
   function nameTaken(name){
     name = String(name || '').trim();
     return doc.groups.some(function(g){ return g.name === name; });
@@ -1018,6 +1020,14 @@ var TWSIXWatch = (function(){
     if(asName !== undefined && asName !== null){
       asName = String(asName).trim();
       if(!asName) return null;
+      var same = null;
+      doc.groups.forEach(function(x){ if(x.name === asName) same = x; });
+      if(same){
+        var before = same.codes.length;
+        same.codes = codes; delete same.hidden; doc.cur = same.id;
+        save(); changed();
+        return {name: same.name, n: codes.length, prev: before, existed: true, copy: true, replaced: true};
+      }
       var ng = {id: uid(), name: asName, codes: codes};
       doc.groups.push(ng); doc.cur = ng.id;
       save(); changed();
@@ -3355,7 +3365,7 @@ window.TWSIXImport = window.TWSIXImport || {};
       if(!r) return;
       var rel = (window.TWSIX && TWSIX.rel) || '';
       say('已把 <b>' + r.n + '</b> 檔匯入觀察清單〔' + esc(r.name) + '〕' +
-          (r.copy ? '（新群組，原本的〔' + esc(old.name) + '〕沒動）' : old && old.n ? '（取代原本的 ' + old.n + ' 檔）' : '') +
+          (r.replaced ? '（覆蓋原本的 ' + r.prev + ' 檔）' : r.copy ? '（新群組，原本的〔' + esc(old.name) + '〕沒動）' : old && old.n ? '（取代原本的 ' + old.n + ' 檔）' : '') +
           '　<a href="' + rel + 'watchlist.html">去看 →</a>');
     }
     if(old && old.n) ask(old, codes.length, done);
@@ -3363,7 +3373,8 @@ window.TWSIXImport = window.TWSIXImport || {};
   });
 
   /* 已經有同來源的群組時：〔覆蓋〕或〔另存新群組〕。名稱欄預先帶出原本的名字，
-     改幾個字就能存（例如加上日期）；跟現有群組同名時不給存，免得分不出哪個是哪個。 */
+     改幾個字就能存（例如加上日期）。打的名字跟另一個現有群組同名時（2026-10-13）：
+     那顆鈕變成〔覆蓋〔那個名字〕〕，按下去就用這一次的結果覆蓋那個群組——不會多出兩個同名群組。 */
   var dlg = null;
   function ask(old, n, cb){
     if(typeof HTMLDialogElement === 'undefined'){
@@ -3395,13 +3406,17 @@ window.TWSIXImport = window.TWSIXImport || {};
     dlg.querySelector('.wg-dlg-over').textContent = '覆蓋〔' + old.name + '〕';
     inp.value = old.name;
     function check(){
-      var v = inp.value.trim();
-      var bad = !v ? '請輸入名稱' : TWSIXWatch.nameTaken(v) ? '已經有叫〔' + v + '〕的群組，改一下名字' : '';
-      warn.textContent = bad; bc.disabled = !!bad;
+      var v = inp.value.trim(), taken = !!v && TWSIXWatch.nameTaken(v), self = v === old.name;
+      warn.textContent = !v ? '請輸入名稱' : self ? '' :
+        taken ? '已經有叫〔' + v + '〕的群組——按〔覆蓋〔' + v + '〕〕會用這一次的 ' + n + ' 檔換掉它的內容' : '';
+      bc.disabled = !v;
+      bc.hidden = self;                      /* 跟原本那個同名＝就是下面那顆〔覆蓋〕 */
+      bc.textContent = taken && !self ? '覆蓋〔' + v + '〕' : '另存新群組';
+      warn.classList.toggle('wg-dlg-info', taken && !self);
     }
     inp.oninput = check; check();
     inp.onkeydown = function(e){
-      if(e.key === 'Enter'){ e.preventDefault(); if(!bc.disabled) dlg.close('copy'); }
+      if(e.key === 'Enter'){ e.preventDefault(); if(!bc.disabled) dlg.close(bc.hidden ? 'over' : 'copy'); }
     };
     dlg.onclose = function(){
       var v = dlg.returnValue; dlg.onclose = null;
