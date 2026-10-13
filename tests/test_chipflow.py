@@ -766,6 +766,13 @@ def test_籌碼雷達頁面的模板編譯得過():
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(root)))
     env.get_template("radar.html.j2")
     env.get_template("radar_guide.html.j2")
+    # 編譯會過不代表沒事：「{#cf」開了註解，只要後面某處有 #} 就合法，中間整段 CSS 和 HTML
+    # 就靜靜地消失了（2026-10-13 又踩一次：一行 @media 寫成「{#cf …」，整頁空白）。
+    # 本站自己的 Jinja 註解一律寫成「{# 」或「{#-」，其他的「{#」都是 CSS 黏在一起。
+    import re as _re
+    for name in ("radar.html.j2", "radar_guide.html.j2"):
+        bad = [m.start() for m in _re.finditer(r"\{#(?![ \n-])", (root / name).read_text("utf-8"))]
+        assert not bad, f"{name} 裡有黏在一起的「{{#」（會被當成 Jinja 註解）：位置 {bad}"
     for name in ("style.css", "mods.js", "api.js"):
         src = (root / "radar_bg" / name).read_text("utf-8").rstrip()
         assert src.startswith("{% raw %}") and src.endswith("{% endraw %}"), name
