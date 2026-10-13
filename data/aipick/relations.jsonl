@@ -122,3 +122,6 @@
 {"a":"8358","b":"1815","asked":"2026-10-13","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"金居與富喬皆為台灣知名的銅箔基板（CCL）與玻纖布相關上游廠，同屬PCB產業鏈並常受相同題材驅動。"}
 {"a":"3042","b":"2484","asked":"2026-10-13","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"晶技與希華皆為台灣知名的石英元件製造廠，屬於直接競爭對手。"}
 {"a":"3042","b":"6278","asked":"2026-10-13","model":"gemini-flash-lite-latest","relation":"供應商","confidence":0.85,"note":"台表科（B）為晶技（A）之頻率元件產品提供表面黏著加工等相關供應鏈服務。"}
+{"a":"8358","b":"1802","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.85,"note":"金居為銅箔基板廠，台玻生產玻璃纖維布，兩者同屬AI伺服器與玻纖布供應鏈題材而常同步。"}
+{"a":"8358","b":"2402","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"金居與毅嘉皆屬於台股PCB及零組件相關供應鏈，常因電子業題材同步波動。"}
+{"a":"3042","b":"8182","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"晶技與加高皆為台灣知名的石英元件（Frequency Control Devices）製造廠，屬於直接競爭對手。"}
