@@ -368,7 +368,7 @@ function resolve(q){
 function stock(code){ return getJSON("stock/" + code + ".json"); }
 function label(code){ var r = ROWS[code]; return code + " " + (r ? r.n : ""); }
 // ── 連結 ────────────────────────────────────────────────────────────────
-// 代號 → 本頁的〔① 個股籌碼多圖〕；名稱 → 本站的〔個股資訊頁〕；收盤價旁的小圖示 →
+// 代號 → 本站的〔個股資訊頁〕；名稱 → 本頁〔① 個股籌碼多圖〕那一檔的貪婪／恐懼紅藍疊圖（2026-10-13 對調）；收盤價旁的小圖示 →
 // Yahoo 股市技術分析（和評等清單同一個圖示、同一個網址格式：上市 .TW、上櫃 .TWO）。
 // 不另外加欄位：三種去處各自掛在「最自然會去點的那一格」，表頭的說明列講一次。
 // ①～⑬ 裡的表格用 radar_bg/api.js 的 bgCode / bgName / bgYf，去處相同。
@@ -376,20 +376,20 @@ function yahooTA(code){
   var r = ROWS[code] || {};
   return "https://tw.stock.yahoo.com/quote/" + encodeURIComponent(code) + (r.mk === "上櫃" ? ".TWO" : r.mk === "上市" ? ".TW" : "") + "/technical-analysis";
 }
-function toT1(code){ open("t1", code); window.scrollTo(0, $("cf-tabs").getBoundingClientRect().top + window.pageYOffset - 8); }
+function toT1(code, focus){ open("t1", code, focus || null); window.scrollTo(0, $("cf-tabs").getBoundingClientRect().top + window.pageYOffset - 8); }
 function codeCell(code){
-  var a = el("a", {href: "#t1-" + code, title: "① 個股籌碼多圖", text: code});
-  a.onclick = function(e){ e.preventDefault(); toT1(code); };
-  return el("td", {cls: "l"}, a);
+  return el("td", {cls: "l"}, el("a", {href: "stock/" + encodeURIComponent(code) + ".html", title: "個股資訊頁", text: code}));
 }
 function nameCell(code, name){
-  return el("td", {cls: "l"}, el("a", {href: "stock/" + encodeURIComponent(code) + ".html", title: "個股資訊頁", text: name || code}));
+  var a = el("a", {href: "#t1-" + code + "-gf", title: "① 貪婪／恐懼指標圖", text: name || code});
+  a.onclick = function(e){ e.preventDefault(); toT1(code, "gf"); };
+  return el("td", {cls: "l"}, a);
 }
 function priceCell(code, v, d){
   return el("td", {cls: "cf-px"}, fmt(v, d), el("a", {cls: "yf", href: yahooTA(code), target: "_blank", rel: "noopener", title: "Yahoo股市技術分析", "aria-label": code + " Yahoo 技術分析"}));
 }
 
-var LINK_NOTE = "點代號看 ① 個股籌碼多圖、點名稱開個股資訊頁、點收盤價旁的圖示開 Yahoo 技術分析。";
+var LINK_NOTE = "點代號開個股資訊頁、點名稱看那一檔 ① 的貪婪／恐懼指標圖、點收盤價旁的圖示開 Yahoo 技術分析。";
 
 // ── 💡 名詞說明 ─────────────────────────────────────────────────────────
 // 和全站同一個燈泡（site.js 用事件委派處理，後來才畫出來的也有效）。內容是這裡寫死的
@@ -780,7 +780,7 @@ function init(){
     var a = e.target.closest && e.target.closest(".bgm a.bg-t1, .bgm a.bg-lk");
     if (!a) return;
     e.stopPropagation();
-    if (a.classList.contains("bg-t1")){ e.preventDefault(); toT1(a.getAttribute("href").slice(4)); }
+    if (a.classList.contains("bg-t1")){ e.preventDefault(); var p = a.getAttribute("href").slice(4).split("-"); toT1(p[0], p[1] || null); }
   }, true);
   document.querySelectorAll(".cf-tab").forEach(function(b){ b.addEventListener("click", function(){ open(b.getAttribute("data-t")); }); });
   var h = (location.hash || "").replace("#", "").split("-");

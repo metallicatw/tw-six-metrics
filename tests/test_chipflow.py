@@ -425,29 +425,34 @@ def test_個股季報_合約負債與資本支出比例():
 
 
 def test_籌碼雷達的代號_名稱_收盤價各自連到該去的地方():
-    """代號 → ① 個股籌碼多圖、名稱 → 個股資訊頁、收盤價旁 → Yahoo 技術分析（.TW／.TWO）。
-    2026-09-29 使用者指定對調（原本代號 → 個股資訊頁、名稱 → ①）；①～⑬ 的表格也一樣。"""
+    """代號 → 個股資訊頁、名稱 → ① 那一檔的貪婪／恐懼紅藍疊圖（#t1-代號-gf）、收盤價旁 → Yahoo 技術分析。
+    2026-09-29 曾對調成「代號 → ①、名稱 → 個股資訊頁」；2026-10-13 使用者再指定：所有篩出來的
+    清單一律代號連個股資訊頁、名稱連到〈紅:貪婪指標1／藍:恐懼指標1〉〈…2〉那一列。①～⑬ 的表格也一樣。"""
     src = (Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
            / "radar.html.j2").read_text("utf-8")
-    assert 'href: "stock/" + encodeURIComponent(code) + ".html"' in src
-    assert 'open("t1", code)' in src and 'href: "#t1-" + code' in src
     assert '".TWO"' in src and '".TW"' in src and "/technical-analysis" in src
     assert 'cls: "yf"' in src, "和評等清單同一個圖示"
     # 每一張有代號的表都走同一組 helper，不是各寫各的
     assert src.count("codeCell(") >= 3 and src.count("priceCell(") >= 2 and src.count("nameCell(") >= 3
-    assert 'a.onclick = function(){ open("t1", r.c); }' not in src, "代號不再只連到本頁的 ①"
     import re as _re
     code = _re.search(r"function codeCell\(code\)\{(.*?)\n\}", src, _re.S).group(1)
     name = _re.search(r"function nameCell\(code, name\)\{(.*?)\n\}", src, _re.S).group(1)
-    assert '"#t1-" + code' in code and "toT1(code)" in code and "stock/" not in code
-    assert '"stock/" + encodeURIComponent(code) + ".html"' in name and "#t1-" not in name
+    assert '"stock/" + encodeURIComponent(code) + ".html"' in code and "#t1-" not in code
+    assert '"#t1-" + code + "-gf"' in name and 'toT1(code, "gf")' in name and "stock/" not in name
+    assert 'open("t1", code, focus || null)' in src
     bg = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates" / "radar_bg"
     api = (bg / "api.js").read_text("utf-8")
     mods = (bg / "mods.js").read_text("utf-8")
-    assert "function bgCode(c)" in api and "function bgName(c, n)" in api and "yahooTA(c)" in api
+    bc = api[api.index("function bgCode(c)"):api.index("function bgName(c, n)")]
+    bn = api[api.index("function bgName(c, n)"):api.index("function bgYf(c)")]
+    assert "stock/" in bc and "#t1-" not in bc
+    assert "-gf\"" in bn and 'class="bg-t1"' in bn and "stock/" not in bn
+    assert "yahooTA(c)" in api
     assert mods.count("bgCode(") >= 8 and mods.count("bgName(") >= 8 and mods.count("bgYf(") >= 3
     assert "yahooTA(code))" in mods, "③ 最新收盤價連到 Yahoo 技術分析"
     assert 'closest(".bgm a.bg-t1, .bgm a.bg-lk")' in src, "①～⑬ 表格裡的連結要在捕捉階段攔下"
+    # 點名稱要帶著 gf 一路傳到 bgFocus，才會捲到貪婪恐懼那一列
+    assert 'toT1(p[0], p[1] || null)' in src
 
 
 def test_籌碼雷達釘住的表頭在最上層_圖示不會蓋過去():

@@ -132,8 +132,9 @@ var __fetch = API.fetch;
   // 和那張圖的〔股價〕共用同一個軸，所以股價線碰到上軌／下軌就是真的碰到。
   // 在**整段**股價上算完才切出畫面那一段，拉近之後最左邊那 19 天的通道不會是空的；
   // 視窗裡有缺值的那一天不畫。開關預設關著，打開之後記在這台瀏覽器，兩張圖一起開關。
-  // 顏色（2026-10-13）：原本照搬趨勢圖的藍色（#58a6ff），和〔恐懼指標〕的藍線撞色，改成金色細實線＋淡金填色
-  // （bgBandColor，深淺色模式各一組），中軌是同色短虛線。
+  // 顏色（2026-10-13）：原本照搬趨勢圖的藍色（#58a6ff），和〔恐懼指標〕的藍線撞色，改成金色（bgBandColor，
+  // 深淺色模式各一組）。線型：上下軌淡金長虛線（6-3）＋極淡填色、中軌金色細點線（1-3）——和股價的
+  // 淡灰細點線（2-2）一眼分得出來，兩者都不是實線，不跟指標線搶。
   var BB_N = 20, BB_K = 2;
   var BOLL = (function(){ try { return localStorage.getItem('twsix.cf.bb') === '1'; } catch(e){ return false; } })();
   function bollinger(arr){
@@ -160,11 +161,11 @@ var __fetch = API.fetch;
     var b = bollinger(price);
     var line = { yAxisID:'yp', pointRadius:0, tension:0, spanGaps:false, order:3 };
     return [
-      Object.assign({ label:'布林上軌', data:cutP(b.up, i), borderColor:bgBandColor(.95), borderWidth:1,
-        backgroundColor:bgBandColor(.10), fill:'+1' }, line),
-      Object.assign({ label:'布林下軌', data:cutP(b.dn, i), borderColor:bgBandColor(.95), borderWidth:1,
-        backgroundColor:bgBandColor(.10), fill:false }, line),
-      Object.assign({ label:'布林中軌', data:cutP(b.mid, i), borderColor:bgBandColor(.6), borderWidth:0.8, borderDash:[4,3],
+      Object.assign({ label:'布林上軌', data:cutP(b.up, i), borderColor:bgBandColor(.75), borderWidth:1, borderDash:[6,3],
+        backgroundColor:bgBandColor(.06), fill:'+1' }, line),
+      Object.assign({ label:'布林下軌', data:cutP(b.dn, i), borderColor:bgBandColor(.75), borderWidth:1, borderDash:[6,3],
+        backgroundColor:bgBandColor(.06), fill:false }, line),
+      Object.assign({ label:'布林中軌', data:cutP(b.mid, i), borderColor:bgBandColor(.55), borderWidth:0.8, borderDash:[1,3],
         backgroundColor:'transparent', fill:false }, line)
     ];
   }
@@ -324,13 +325,13 @@ var __fetch = API.fetch;
     opts.animation = { duration: 0 };
     opts.layout = { padding: { bottom: 2 } };
     var chart, px = panel.px !== false && bgCardPx(cardId(panel)) && stock.price ? cut(stock.price) : null;
-    // 疊加股價：深炭灰 1px 實線、不平滑（細部起伏才看得出來），左側自己的刻度
+    // 疊加股價：淡灰 1px 細點線（2-2）、不平滑，左側自己的刻度。配角不搶主角（2026-10-13）
     function withPx(datasets){
       var bb = panel.boll && BOLL && stock.price;
       if(!px && !bb) return datasets;
       opts.scales.yp = { position:'left', beginAtZero:false, grace:'4%', grid:{ display:false }, ticks:{ color: cssVar('--ink-soft'), font:{ size:9 }, maxTicksLimit:4 } };
       if(px) datasets = datasets.concat([{ type:'line', label:'股價', data:px, yAxisID:'yp', borderColor:bgPxColor(), backgroundColor:bgPxColor(),
-        borderWidth:1, pointRadius:0, tension:0, spanGaps:true, order:-1 }]);
+        borderWidth:1, borderDash:[2,2], pointRadius:0, tension:0, spanGaps:true, order:-1 }]);
       if(bb){
         // 股價布林通道（2026-10-13）：墊在最底下（order 大的先畫）
         datasets = datasets.concat(priceBollDatasets(stock.price, i));
@@ -681,7 +682,7 @@ var __fetch = API.fetch;
     svg.appendChild(el('line', { class: 'grid-line', x1: padL, x2: W - padR, y1: padT + plotH, y2: padT + plotH }));
 
     // 疊加股價（2026-10-10）：自己的高低（不和指標共用刻度），畫在指標底下。
-    // 2026-10-13 改成深炭灰 1px 實線：虛線的空隙會吃掉每天的小起伏
+    // 2026-10-13：淡灰 1px 細點線（2-2）——細到看得出每天的起伏，又淡到不跟指標線搶
     if (opts.px) {
       var pmin = Infinity, pmax = -Infinity;
       for (var q = 0; q < opts.px.length; q++) { var pv = opts.px[q]; if (pv === null || pv === undefined) continue; if (pv < pmin) pmin = pv; if (pv > pmax) pmax = pv; }
@@ -695,7 +696,7 @@ var __fetch = API.fetch;
           pd += (pstarted ? 'L' : 'M') + xAt(q2).toFixed(2) + ' ' + (padT + (1 - (pv2 - pmin) / (pmax - pmin)) * plotH).toFixed(2) + ' ';
           pstarted = true;
         }
-        svg.appendChild(el('path', { d: pd, fill: 'none', stroke: bgPxColor(), 'stroke-width': 1, 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' }));
+        svg.appendChild(el('path', { d: pd, fill: 'none', stroke: bgPxColor(), 'stroke-width': 1, 'stroke-dasharray': '2 2', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' }));
       }
     }
 
@@ -1193,7 +1194,7 @@ var __fetch = API.fetch;
   }
 
   // 疊加股價（2026-10-10）：自己的高低（不另畫刻度），月營收那一組用「營收公告日股價」。
-  // 2026-10-13：深炭灰 1px 實線（原本灰色粗虛線看不出細部）；有沒有疊由每張卡片自己的〔股價〕決定，
+  // 2026-10-13：淡灰 1px 細點線（原本灰色粗虛線看不出細部）；有沒有疊由每張卡片自己的〔股價〕決定，
   // 呼叫的人只在開著的時候傳 px 進來。季資料那幾張沒有對應的季股價，不放〔股價〕開關。
   var LAST = null, T3M = null;
   function drawPx(svg, px, xAt, top, height){
@@ -1210,9 +1211,9 @@ var __fetch = API.fetch;
       d += (on ? "L" : "M") + xAt(i).toFixed(2) + "," + (top + height - (v - lo) / (hi - lo) * height).toFixed(2) + " ";
       on = true;
     }
-    svg.appendChild(el("path", {d:d, fill:"none", stroke:bgPxColor(), "stroke-width":1, "stroke-linejoin":"round", "vector-effect":"non-scaling-stroke"}));
+    svg.appendChild(el("path", {d:d, fill:"none", stroke:bgPxColor(), "stroke-width":1, "stroke-dasharray":"2 2", "stroke-linejoin":"round", "vector-effect":"non-scaling-stroke"}));
   }
-  function pxTip(px, i){ var v = px ? px[i] : null; return v === null || v === undefined ? "" : '<br><span style="color:' + bgPxColor() + '">━</span> 股價 ' + fmtNum(v, 1) + ' 元'; }
+  function pxTip(px, i){ var v = px ? px[i] : null; return v === null || v === undefined ? "" : '<br><span style="color:' + bgPxColor() + '">┈</span> 股價 ' + fmtNum(v, 1) + ' 元'; }
 
   // 每張卡片自己的縮放列與〔股價〕開關（2026-10-13）：縮放列放在「最新值」那一列（沒有的話放圖例那一列）的右邊，
   // 〔股價〕放在標題列右邊——都是卡片原本就有的列，圖的高度不變。draw(a, b, px) 用 slice(a, b) 畫那一段。

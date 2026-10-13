@@ -11,12 +11,13 @@ function bgMemo(key, make){ return BG.cache[key] || (BG.cache[key] = make()); }
 BG.names = function(){
   return bgMemo("names", function(){ var m = {}; R.rows.forEach(function(r){ m[r.c] = r.n; }); return m; });
 };
-// ── 連結：代號 → ① 個股籌碼多圖（留在本頁）；名稱 → 個股資訊頁；收盤價旁的圖示 → Yahoo 技術分析。
+// ── 連結（2026-10-13 對調）：代號 → 個股資訊頁；名稱 → ① 那一檔的〈紅:貪婪指標1／藍:恐懼指標1〉
+// 〈紅:貪婪指標2／藍:恐懼指標2〉那一列（#t1-代號-gf，留在本頁）；收盤價旁的圖示 → Yahoo 技術分析。
 // 移植的程式用字串拼 HTML，所以這三個也回字串；點下去的動作由 init() 在 #cf 上統一處理
 // （捕捉階段就攔下來，不會同時觸發那一列原本的點擊）。
 function bgAttr(v){ return String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
-function bgCode(c){ return '<a class="bg-t1" href="#t1-' + bgAttr(c) + '" title="① 個股籌碼多圖">' + c + '</a>'; }
-function bgName(c, n){ return '<a class="bg-lk" href="stock/' + encodeURIComponent(c) + '.html" title="個股資訊頁">' + (n || c) + '</a>'; }
+function bgCode(c){ return '<a class="bg-lk" href="stock/' + encodeURIComponent(c) + '.html" title="個股資訊頁">' + c + '</a>'; }
+function bgName(c, n){ return '<a class="bg-t1" href="#t1-' + bgAttr(c) + '-gf" title="① 貪婪／恐懼指標圖">' + (n || c) + '</a>'; }
 function bgYf(c){ return '<a class="yf bg-lk" href="' + bgAttr(yahooTA(c)) + '" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="' + bgAttr(c) + ' Yahoo 技術分析"></a>'; }
 // ①②③ 的標題列（2026-10-10）：代號與名稱連個股資訊頁、名稱後面加產業與☆。
 // codeEl／nameEl 是移植程式原本填字的那兩格；額外的東西插在 after（預設 nameEl）後面，
@@ -158,10 +159,10 @@ function bgPxPref(v){
 }
 
 // ── 疊加股價線與股價布林通道的樣式（2026-10-13）──────────────────────────────
-// 股價線原本是灰色粗虛線（1.2～1.4px、4-3 虛線）：虛線的空隙把每天的小起伏切掉了，
-// 看不出細部變化；灰色又和藍色指標線、格線太接近。改成**實線、1px、深炭灰**（深色模式
-// 用淡灰），不做曲線平滑。布林通道改成金色細實線＋淡金填色——原本的藍色和〔恐懼指標〕
-// 的藍線撞色。配色都跑過 dataviz 的 validate_palette（紅／藍／炭灰／金在綠底卡片上：
+// 股價線原本是灰色粗虛線（1.2～1.4px、4-3 虛線），太粗、看不出細部。改成**淡灰 1px 細點線
+// （2-2）**、不做曲線平滑：夠細看得出每天的起伏，又是淡色非實線，不跟主角（指標線）搶。
+// 布林通道是金色長虛線（6-3）＋極淡填色、中軌金色細點線——原本的藍色和〔恐懼指標〕的藍線撞色；
+// 股價（灰、細點）和通道（金、長虛）靠顏色和虛線長短兩種方式分得出來。配色都跑過 dataviz 的 validate_palette（紅／藍／炭灰／金在綠底卡片上：
 // 一般視覺 ΔE ≥ 16、色盲模擬 ΔE ≥ 8.7）。
 function bgDark(){
   var a = document.documentElement.getAttribute("data-theme");
@@ -169,7 +170,7 @@ function bgDark(){
   if (a === "light") return false;
   return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
 }
-function bgPxColor(){ return bgDark() ? "rgba(227,230,234,.92)" : "rgba(43,47,54,.88)"; }
+function bgPxColor(){ return bgDark() ? "rgba(227,230,234,.55)" : "rgba(43,47,54,.5)"; }
 function bgBandColor(a){ return bgDark() ? "rgba(224,184,74," + (a == null ? 1 : a) + ")" : "rgba(184,134,11," + (a == null ? 1 : a) + ")"; }
 
 // ── 每張卡片自己的〔股價〕開關與縮放區間（2026-10-13）───────────────────────────
@@ -186,7 +187,7 @@ function bgCardPx(id){ var o = bgCardGet(id); return o.px === undefined ? bgPxPr
 function bgPxToggle(id, onChange){
   var lab = document.createElement("label");
   lab.className = "bg-ctg";
-  lab.title = "在這張圖疊上股價線（實線、左側自己的刻度）。最上面的〔📈 疊加股價線〕是全部一起開關。";
+  lab.title = "在這張圖疊上股價線（淡灰細點線、左側自己的刻度）。最上面的〔📈 疊加股價線〕是全部一起開關。";
   lab.innerHTML = '<input type="checkbox" class="bg-cpx"> 股價';
   var cb = lab.querySelector("input");
   cb.checked = bgCardPx(id);
