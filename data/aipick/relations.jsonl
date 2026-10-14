@@ -125,3 +125,9 @@
 {"a":"8358","b":"1802","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.85,"note":"金居為銅箔基板廠，台玻生產玻璃纖維布，兩者同屬AI伺服器與玻纖布供應鏈題材而常同步。"}
 {"a":"8358","b":"2402","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"金居與毅嘉皆屬於台股PCB及零組件相關供應鏈，常因電子業題材同步波動。"}
 {"a":"3042","b":"8182","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"晶技與加高皆為台灣知名的石英元件（Frequency Control Devices）製造廠，屬於直接競爭對手。"}
+{"a":"3532","b":"6488","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"台勝科與環球晶皆為台灣知名的半導體矽晶圓製造大廠，產品線高度重疊。"}
+{"a":"3532","b":"6182","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"台勝科與合晶皆為台灣主要的半導體矽晶圓廠，業務高度重疊，屬於同業競爭關係。"}
+{"a":"3532","b":"5483","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.9,"note":"中美晶為台勝科之主要法人股東及母集團之一，雙方在半導體矽晶圓領域具高度集團戰略關聯。"}
+{"a":"2338","b":"3707","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"兩者皆為台灣半導體產業鏈中的晶圓代工或相關微影、光罩及特用代工服務廠商，同屬半導體族群。"}
+{"a":"2338","b":"6230","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆屬台股電子零組件與半導體相關類股，常因盤面資金輪動或半導體題材而同步變動。"}
+{"a":"2338","b":"2489","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆為台灣上市櫃電子股，常因盤面資金輪動或電子股整體走勢而呈現連動，無直接業務往來。"}

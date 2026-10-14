@@ -897,3 +897,9 @@
 {"code":"8222","name":"寶一","date":"2026-10-14","file":"822220261012M001.pdf","processed":"2026-10-14","source":"pdf","rules":{"pos":1,"neg":0,"tone":0.1667,"chars":5758},"llm":null,"model":""}
 {"code":"9938","name":"百和","date":"2026-10-14","file":"993820261013M001.pdf","processed":"2026-10-14","source":"pdf","rules":{"pos":0,"neg":0,"tone":0.0,"chars":8450},"llm":null,"model":""}
 {"code":"2707","name":"晶華","date":"2026-10-14","file":"270720261014M001.pdf","processed":"2026-10-14","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":22},"llm":null,"model":""}
+{"code":"2816","name":"旺旺保","date":"2026-10-14","file":"281620261014M001.pdf","processed":"2026-10-14","source":"pdf","rules":{"pos":13,"neg":3,"tone":0.4762,"chars":4892},"llm":null,"model":""}
+{"code":"4722","name":"國精化","date":"2026-10-14","file":"472220261014M001.pdf","processed":"2026-10-14","source":"pdf","rules":{"pos":39,"neg":0,"tone":0.8864,"chars":9030},"llm":null,"model":""}
+{"code":"2745","name":"五福","date":"2026-10-14","file":"274520261014M001.pdf","processed":"2026-10-14","source":"pdf","rules":{"pos":22,"neg":3,"tone":0.6333,"chars":5138},"llm":null,"model":""}
+{"code":"6877","name":"鏵友益","date":"2026-10-14","file":"687720261014M001.pdf","processed":"2026-10-14","source":"pdf","rules":{"pos":13,"neg":3,"tone":0.4762,"chars":2697},"llm":null,"model":""}
+{"code":"8404","name":"百和興業-KY","date":"2026-10-14","file":"840420261014M001.pdf","processed":"2026-10-14","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":39},"llm":null,"model":""}
+{"code":"7806","name":"精華生醫","date":"2026-09-17","file":"780620260914M001.pdf","processed":"2026-10-14","source":"pdf","rules":{"pos":0,"neg":0,"tone":0.0,"chars":9018},"llm":null,"model":""}
