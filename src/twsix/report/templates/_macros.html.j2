@@ -155,8 +155,11 @@
      數字        照四段門檻上色。
      無風險      股價已經低於下檔價——**沒有下檔風險**，是四段裡最好的那一種。
                 全市場有 492 檔在這一類。排序鍵給一個大數，讓它排在最前面。
-     空頭        預期報酬是負的（目標價低於現在的股價），估價那一層把它夾成 0。
+     價格高估    預期報酬是負的（目標價低於現在的股價），估價那一層把它夾成 0。
                 印「0.00」會讀成「算出來剛好是零」，而真正的意思是往下。
+                （2026-10-14 由「空頭」改名：目標價低於股價是**估值**判斷——股價已經
+                超過基本面撐得住的價值，法人報告叫 Overvalued／價格高估；「空頭」是
+                **趨勢**用語，高估值的股票走勢照樣可以是多頭，兩者不能混用。）
      —          算不出來（多半是歷年本益比不足、本益比區間算不出來；
                 也可能是預估 EPS 為負，本益比估價不適用）。排序鍵 -999，沉到底。
 
@@ -203,7 +206,7 @@
         ～ ≤ <input type="number" id="f-rrmax" min="0" step="0.1" placeholder="不限" aria-label="報酬風險比上限"></label>
       <span class="qf-note">無風險視為 ∞：只設下限時一定會一起篩到；設了上限就不含它。</span>
       <label><input type="checkbox" data-rr="free"> 無風險（∞）</label>
-      <label><input type="checkbox" data-rr="bear"> 空頭</label>
+      <label><input type="checkbox" data-rr="bear"> 價格高估</label>
       <label><input type="checkbox" data-rr="na"> — 算不出來</label>
     </span></span>
   </span><span class="qf-row">
@@ -230,7 +233,7 @@
 </div>
 {%- endmacro %}
 
-{# 快速篩選的分類：free 無風險、bear 空頭、ge2 ≥2、lt2 <2（大於 0）、na 算不出來。 #}
+{# 快速篩選的分類：free 無風險、bear 價格高估（目標價低於股價）、ge2 ≥2、lt2 <2（大於 0）、na 算不出來。 #}
 {# 產業的比對鍵：去掉結尾的「業」，空的叫「未分類」。 #}
 {% macro ind_key(name) -%}
 {%- set n = (name or '')|trim -%}
@@ -273,7 +276,7 @@
 {# 預期報酬是負的（目標價低於現在的股價），估價那一層把它夾成 0。
    而 0 在這一欄是個說不通的數字——它看起來像「算出來剛好是零」，
    真正的意思是「往下」。 #}
-<span class="rrv rrv-bad" title="預期報酬為負：目標價低於現在的股價">空頭</span>
+<span class="rrv rrv-bad" title="價格高估：目標價低於現在的股價，預期報酬為負（是估值判斷，不是走勢的空頭）">價格高估</span>
 {%- else -%}
 {%- set v = r.reward_risk -%}
 {%- set cls = 'rrv-best' if v >= 3 else ('rrv-ok' if v >= 2 else ('rrv-weak' if v >= 1 else 'rrv-bad')) -%}
@@ -420,7 +423,7 @@
   </ul>
   <p class="stop">中間那一欄是<b>損益兩平所需的最低勝率</b>＝ 1 ÷（1 ＋ 報酬風險比）。</p>
   <p class="stop"><b>無風險</b>＝股價已經低於下檔價，沒有下檔風險，比 3.0 還好。
-  <b>空頭</b>＝預期報酬是負的（目標價低於現在的股價）。
+  <b>價格高估</b>＝目標價低於現在的股價，預期報酬是負的：股價已經超過基本面（本益比與獲利）撐得住的價值。這是<b>估值</b>判斷，不是走勢的「空頭」——高估的股票走勢照樣可以是多頭。
   <b>—</b>＝算不出來：多半是<b>歷年本益比不足</b>（本益比區間取去年起往前 5 年，至少要 3 個
   完整年度；上市未滿或有虧損年度不計），也可能是預估 EPS 為負、本益比估價不適用。<b>三者不是同一件事</b>。</p>
   <p class="stop">{% for note in reward_risk_notes %}{{ note }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>

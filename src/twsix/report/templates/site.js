@@ -1358,7 +1358,7 @@ window.TWSIXStarMenu = (function(){
     if(!rrBtn) return;
     var st = rrState(), parts = [];
     if(st.range) parts.push(st.lo !== null && st.hi !== null ? st.lo + '～' + st.hi : st.lo !== null ? '≥ ' + st.lo : '≤ ' + st.hi);
-    if(st.free) parts.push('無風險'); if(st.bear) parts.push('空頭'); if(st.na) parts.push('—');
+    if(st.free) parts.push('無風險'); if(st.bear) parts.push('價格高估'); if(st.na) parts.push('—');
     rrBtn.textContent = (parts.length ? parts.join('、') : '全部') + ' ▾';
   }
   function rrPass(tr){

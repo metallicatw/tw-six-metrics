@@ -157,7 +157,10 @@ def test_reward_risk_bands_cover_the_whole_line():
     assert reward_risk_band(2.0)[0] == "靜待"  # 「> 2」 is strict
     assert reward_risk_band(0.67)[0] == "靜待"
     assert reward_risk_band(0.6)[0] == "減碼"
-    assert reward_risk_band(0.4)[0] == "空頭"
+    assert reward_risk_band(0.4)[0] == "空頭"   # 活頁簿第四段：考慮布局空頭部位（操作建議）
+    # 預期報酬為負（目標價低於股價）是估值判斷：價格高估，不是空頭（2026-10-14）
+    assert reward_risk_band(0)[0] == "價格高估"
+    assert reward_risk_band(-0.3)[0] == "價格高估"
     assert reward_risk_band(None)[0] == "—"
 
 

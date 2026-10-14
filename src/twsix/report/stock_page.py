@@ -155,6 +155,11 @@ def reward_risk_band(ratio: Number) -> tuple[str, str]:
     """Which of the four criteria this ratio falls in: (label, why)."""
     if ratio is None:
         return ("—", "無報酬風險比")
+    if ratio <= 0:
+        # 預期報酬為負（目標價低於股價；估價那一層把它夾成 0）。2026-10-14 起叫
+        # 「價格高估」：這是估值判斷，不是走勢的空頭。0 < 比值 < 0.5 仍是活頁簿的
+        # 第四段準則（考慮布局空頭部位），那是作者的操作建議，原文照留。
+        return ("價格高估", "目標價低於現在的股價，預期報酬為負：股價已超過基本面撐得住的價值")
     if ratio > 2:
         return ("買進", REWARD_RISK_RULES[0][2])
     if ratio < 0.5:
