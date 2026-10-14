@@ -896,3 +896,4 @@
 {"code":"7753","name":"星亞","date":"2026-10-14","file":"775320261013M001.pdf","processed":"2026-10-14","source":"pdf","rules":{"pos":11,"neg":1,"tone":0.5882,"chars":2333},"llm":null,"model":""}
 {"code":"8222","name":"寶一","date":"2026-10-14","file":"822220261012M001.pdf","processed":"2026-10-14","source":"pdf","rules":{"pos":1,"neg":0,"tone":0.1667,"chars":5758},"llm":null,"model":""}
 {"code":"9938","name":"百和","date":"2026-10-14","file":"993820261013M001.pdf","processed":"2026-10-14","source":"pdf","rules":{"pos":0,"neg":0,"tone":0.0,"chars":8450},"llm":null,"model":""}
+{"code":"2707","name":"晶華","date":"2026-10-14","file":"270720261014M001.pdf","processed":"2026-10-14","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":22},"llm":null,"model":""}
