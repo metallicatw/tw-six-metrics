@@ -131,3 +131,12 @@
 {"a":"2338","b":"3707","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"兩者皆為台灣半導體產業鏈中的晶圓代工或相關微影、光罩及特用代工服務廠商，同屬半導體族群。"}
 {"a":"2338","b":"6230","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆屬台股電子零組件與半導體相關類股，常因盤面資金輪動或半導體題材而同步變動。"}
 {"a":"2338","b":"2489","asked":"2026-10-14","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆為台灣上市櫃電子股，常因盤面資金輪動或電子股整體走勢而呈現連動，無直接業務往來。"}
+{"a":"2030","b":"5013","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"兩家公司皆屬於台股鋼鐵產業，彰源與強新皆為金屬製品及管線相關之鋼鐵同業。"}
+{"a":"2030","b":"2032","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"彰源與新鋼皆為台灣知名的不鏽鋼管及不鏽鋼板加工買賣廠，屬於同一產業的競爭對手。"}
+{"a":"2030","b":"2033","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"彰源與佳大皆屬於台灣上市櫃鋼鐵股，同屬不鏽鋼管及線材製造同業。"}
+{"a":"2342","b":"3016","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"茂矽與嘉晶皆為台灣知名的功率半導體及晶圓代工廠，同屬半導體晶圓製造領域。"}
+{"a":"2342","b":"3707","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"茂矽與漢磊皆為台灣知名的晶圓代工廠，主力皆聚焦於功率半導體與分離式元件代工領域。"}
+{"a":"2342","b":"3317","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.9,"note":"茂矽與尼克森同屬爭鮮集團旗下或具備緊密的茂矽集團半導體轉投資及晶圓代工合作關係。"}
+{"a":"3673","b":"3714","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.4,"note":"兩者皆屬台股面板及LED相關之科技類股，常受總體電子股資金效應影響而同步。"}
+{"a":"3673","b":"5228","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.3,"note":"TPK-KY為觸控面板廠，鈺鎧為磁性材料與晶片磁珠廠，兩者業務與供應鏈無直接關聯。"}
+{"a":"3673","b":"3031","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.8,"note":"TPK-KY為觸控面板廠，佰鴻為LED封裝與照明廠，業務性質不同，無直接供應鏈或集團關係。"}
