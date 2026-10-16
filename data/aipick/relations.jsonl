@@ -140,3 +140,7 @@
 {"a":"3673","b":"3714","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.4,"note":"兩者皆屬台股面板及LED相關之科技類股，常受總體電子股資金效應影響而同步。"}
 {"a":"3673","b":"5228","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.3,"note":"TPK-KY為觸控面板廠，鈺鎧為磁性材料與晶片磁珠廠，兩者業務與供應鏈無直接關聯。"}
 {"a":"3673","b":"3031","asked":"2026-10-15","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.8,"note":"TPK-KY為觸控面板廠，佰鴻為LED封裝與照明廠，業務性質不同，無直接供應鏈或集團關係。"}
+{"a":"8040","b":"6742","asked":"2026-10-16","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"兩者皆為台股上市櫃公司，股價連動可能來自半導體或電子零組件等大盤類股題材，無直接供應鍊從屬關係。"}
+{"a":"8040","b":"3581","asked":"2026-10-16","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆屬半導體相關類股，常受台股半導體題材連動影響而同步變動。"}
+{"a":"3504","b":"3008","asked":"2026-10-16","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.95,"note":"大立光為揚明光之母公司（持股約三成），雙方同屬光學鏡頭產業並具集團關聯。"}
+{"a":"3504","b":"3362","asked":"2026-10-16","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"揚明光與先進光皆為台股主要的光學鏡頭廠，產品線重疊，常被歸類於光學鏡頭同業競爭族群。"}
