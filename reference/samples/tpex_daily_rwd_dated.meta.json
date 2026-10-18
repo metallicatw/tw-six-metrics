@@ -1,0 +1,10 @@
+{
+  "bytes": 146329,
+  "expect": "未驗證：櫃買盤後行情帶 date 參數（西元 YYYY/MM/DD），用來回補過去交易日的收盤",
+  "fetched_at": "2026-09-07T00:40:39+00:00",
+  "form": {},
+  "group": "daily",
+  "head": "{\"tables\":[{\"title\":\"上櫃股票每日收盤行情(不含定價)\",\"date\":\"115/09/01\",\"category\":\"所有證券(不含權證、牛熊證)\",\"totalCount\":1014,\"fields\":[\"代號\",\"名稱\",\"收盤 \",\"漲跌\",\"開盤 \",\"最高 \",\"最低\",\"成交股數  \",\" 成交金額(元)\",\" 成交筆數 \",\"最後買價\",\"最後買量<br>(張數)\",\"最後賣價\",\"最後賣量<br>(張數)\",\"發行股數 \",\"次日漲停",
+  "name": "tpex_daily_rwd_dated",
+  "url": "https://www.tpex.org.tw/www/zh-tw/afterTrading/otc?date=2026/09/01&type=EW&response=json"
+}

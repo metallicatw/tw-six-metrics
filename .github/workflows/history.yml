@@ -1,0 +1,92 @@
+name: 回補歷史股價（股價健診用）
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "要補到幾個交易日（預設 760 ＝ 500 天的圖＋240 天的年線）"
+        required: false
+        default: "760"
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: history
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[report]"
+
+      - name: 測試
+        run: python scripts/run_tests.py
+
+      - name: 回補
+        env:
+          IN_DAYS: ${{ inputs.days || 760 }}
+        run: |
+          case "$IN_DAYS" in
+            ''|*[!0-9]*)
+              echo "::error::「要補到幾個交易日」只能是正整數，收到的是：$IN_DAYS"
+              exit 1 ;;
+          esac
+          twsix backfill-prices --days "$IN_DAYS" --pause 3
+
+      - name: Commit
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/market/daily/prices
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "::notice::沒有缺的日子，歷史已經是齊的"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          n=$(git diff --cached --name-only | wc -l)
+          git commit -q -m "data"
+
+      - name: 推送
+        if: steps.commit.outputs.changed != 'no'
+        uses: ./.github/actions/push-with-retry
+
+      - name: 建站
+        if: steps.commit.outputs.changed != 'no'
+        uses: ./.github/actions/build-site
+        env:
+          SITE_LOGIN_USER: ${{ secrets.SITE_LOGIN_USER }}
+          SITE_LOGIN_PASSWORD: ${{ secrets.SITE_LOGIN_PASSWORD }}
+          SITE_LOGIN_USERS: ${{ secrets.SITE_LOGIN_USERS }}
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+          SITE_OWNER: ${{ secrets.SITE_OWNER }}
+        with:
+          incremental: "true"
+          test: "false"
+          setup: "false"
+
+      - name: 發布
+        if: steps.commit.outputs.changed != 'no'
+        id: deployment
+        uses: actions/deploy-pages@v4

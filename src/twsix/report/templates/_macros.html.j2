@@ -1,0 +1,328 @@
+{% macro grade(letter) -%}
+{%- if letter in ('AA','A','BB','B','C') -%}
+<span class="g g-{{ letter }}">{{ letter }}</span>
+{%- else -%}
+<span class="g g-na">{{ letter or '—' }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro delta(v) -%}
+{%- if v is none or v == '' -%}<span class="muted">—</span>
+{%- elif v > 0 -%}<span class="up">+{{ '%.2f'|format(v) }}</span>
+{%- elif v < 0 -%}<span class="down">{{ '%.2f'|format(v) }}</span>
+{%- else -%}0.00{%- endif -%}
+{%- endmacro %}
+
+{% macro score(v) -%}
+{%- if v is none or v == '' -%}<span class="muted">—</span>
+{%- else -%}
+{%- set f = v|float(default=none) -%}
+{%- if f is none -%}<span class="muted">{{ v }}</span>
+{%- else -%}<span title="{{ v }}">{{ '%.2f'|format(f) }}</span>{%- endif -%}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro row(r, rel, rich_ids=None, fetched_at=None, prices=False, price_date='', ai=None, cf=None, start_hidden=False, gf=None) -%}
+{% set when = (fetched_at or {}).get(r.stock_id) %}
+{% set has_full = when or (rich_ids and r.stock_id in rich_ids) %}
+{%- set mk = (ai or {}).get(r.stock_id) %}
+{%- set cm = (cf or {}).get(r.stock_id) %}
+{%- set gm = (gf or {}).get(r.stock_id) %}
+{%- set sc = r.composite|float(default=none) %}
+<tr{% if start_hidden %} hidden{% endif %} data-code="{{ r.stock_id }}" data-f-ind="{{ ind_key(r.industry) }}" data-f-score="{{ '%.4f'|format(sc) if sc is not none else '' }}" data-f-pick="{{ 1 if r.value_pick else 0 }}"
+    data-f-rr="{{ reward_cat(r) }}" data-f-rrv="{{ '%.6f'|format(r.reward_risk) if (r.reward_risk is not none and not r.risk_free) else '' }}" data-f-ai="{{ mk.kind if mk else '' }}" data-f-cf="{{ cm.kind if cm else '' }}" data-f-gf="{{ gm.tokens if gm else '' }}">
+    <td class="seq"></td>
+  <td class="star-cell">
+        <button type="button" class="star" data-star="{{ r.stock_id }}"
+            aria-pressed="false" aria-label="把 {{ r.stock_id }} 加入觀察清單"
+            title="加入觀察清單">☆</button>
+        <span class="mv" hidden>
+            <button type="button" class="mv-top" data-move="{{ r.stock_id }}" data-delta="top"
+              aria-label="把 {{ r.stock_id }} 移到最上面" title="移到最上面">頂</button>
+      <button type="button" class="mv-up" data-move="{{ r.stock_id }}" data-delta="-1"
+              aria-label="把 {{ r.stock_id }} 往上移" title="往上移">▲</button>
+      <button type="button" class="mv-dn" data-move="{{ r.stock_id }}" data-delta="1"
+              aria-label="把 {{ r.stock_id }} 往下移" title="往下移">▼</button>
+    </span></td>
+    {%- set href = yahoo_ta(r.stock_id, r.market) if r.unrated else rel ~ 'stock/' ~ r.stock_id ~ '.html' %}
+  {%- set ext = ' target="_blank" rel="noopener" title="不在評等清單（六大指標不適用），開 Yahoo 技術分析"'|safe if r.unrated else '' %}
+  <td data-s="{{ r.stock_id }}"><a href="{{ href }}"{{ ext }}>{{ r.stock_id }}</a></td>
+      {%- set gf = href if r.unrated else rel ~ 'radar.html#t1-' ~ r.stock_id ~ '-gf' %}
+  {%- set gfx = ext if r.unrated else ' target="_blank" rel="noopener" title="籌碼雷達：貪婪／恐懼指標（另開分頁）"'|safe %}
+  <td class="nm" data-s="{{ r.name }}"><a href="{{ gf }}"{{ gfx }}>{{ r.name }}</a></td>
+    <td class="muted mid" data-s="{{ r.market }}">{{ r.market }}</td>
+  <td class="muted ind" data-s="{{ r.industry }}">{{ r.industry }}</td>
+      <td class="when-cell" data-s="{{ r.fiscal_quarter }}|{{ r.revenue_month }}"
+      {%- if when %} title="報表更新於 {{ when }}　完整報告：河流圖、季節性、外資投信、個股新聞（大戶／董監持股另由每週排程更新）"
+      {%- elif has_full %} title="已抓取完整資料，含河流圖、季節性、外資投信與個股新聞"{% endif %}>
+    {% if r.unrated %}<span class="muted" title="金融保險業、存託憑證等六大指標不適用的公司，不在評等清單">不適用評等</span>{% else %}{{ basis(r) }}{% endif %}</td>
+  {% if prices %}{{ price_cells(r, price_date) }}{% endif %}
+  {% for key in ('revenue_yoy','operating_margin','net_income_yoy','eps','inventory_turnover','free_cash_flow') %}
+  <td class="mid" data-s="{{ {'AA':4,'A':3,'BB':2,'B':1,'C':0}.get(r.grades[key], -999) }}">{{ grade(r.grades[key]) }}</td>
+  {% endfor %}
+  <td class="num mid" data-s="{{ r.composite|float(default=-999) }}">{{ score(r.composite) }}</td>
+  <td class="num mid" data-s="{{ r.composite_delta if r.composite_delta is not none else -999 }}">{{ delta(r.composite_delta) }}</td>
+  <td class="pick-cell mid" data-s="{{ 1 if r.value_pick else 0 }}">{% if r.value_pick %}<span class="pick">具投資價值</span>{% endif %}</td>
+  <td class="num mid" data-s="{{ reward_key(r) }}">{{ reward(r) }}</td>
+    <td class="ai-cell mid" data-s="{{ mk.key if mk else 0 }}"
+      {%- if mk %} title="{{ mk.title }}"{% endif %}>{% if mk %}<span class="ai-mk ai-mk-{{ mk.kind }}">{{ mk.label }}</span>{% endif %}</td>
+    <td class="cf-cell mid" data-s="{{ cm.key if cm else 0 }}"
+      {%- if cm %} title="{{ cm.title }}"{% endif %}>{% if cm %}<a class="cf-mk cf-mk-{{ cm.kind }}" href="{{ rel }}radar.html#t1-{{ r.stock_id }}">{{ cm.label }}</a>{% endif %}</td>
+    <td class="gf-cell mid" data-s="{{ gm.key if gm else 0 }}"
+      {%- if gm %} title="{{ gm.title }}"{% endif %}>{% if gm %}<a class="gf-mk-a" href="{{ rel }}radar.html#t1-{{ r.stock_id }}-gf" target="_blank" rel="noopener">
+      {%- for txt, k in gm["items"] %}<span class="gf-mk gf-mk-{{ k }}">{{ txt }}</span>{% endfor %}</a>{% endif %}</td>
+</tr>
+{%- endmacro %}
+
+{% macro quick_filters(rows) -%}
+<div class="qf" role="group" aria-label="快速篩選">
+    <span class="qf-row">
+    <span class="qf-inds">產業 <button type="button" id="f-indbtn" class="qf-btn" aria-expanded="false">全部產業 ▾</button>
+    <span class="qf-indpanel" id="f-indpanel" hidden>
+      <span class="qf-indtools"><button type="button" class="qf-reset" data-inds="all">全選</button><button type="button" class="qf-reset" data-inds="none">全部取消</button></span>
+            {%- set ns = namespace(m={}) %}
+      {%- for ind in rows|map(attribute='industry')|unique %}
+        {%- set k = ind_key(ind) %}
+        {%- if k not in ns.m or (ind or '')|length > ns.m[k]|length %}{% set _ = ns.m.update({k: ind or '未分類'}) %}{% endif %}
+      {%- endfor %}
+      {%- for k, label in ns.m|dictsort(by='value') %}
+      <label><input type="checkbox" value="{{ k }}" checked> {{ label }}</label>{% endfor %}
+    </span></span>
+    <label>綜合評分 <input type="number" id="f-smin" min="0" max="4" step="0.01" placeholder="最小" aria-label="綜合評分最小">
+    ～ <input type="number" id="f-smax" min="0" max="4" step="0.01" placeholder="最大" aria-label="綜合評分最大"></label>
+  </span><span class="qf-row">
+  <label>具投資價值 <select id="only-picks"><option value="">全部</option><option value="1">具投資價值</option><option value="0">不具</option></select></label>
+    <span class="qf-inds qf-rr">報酬風險比 <button type="button" id="f-rrbtn" class="qf-btn" aria-expanded="false">全部 ▾</button>
+    <span class="qf-indpanel qf-rrpanel" id="f-rrpanel" hidden>
+      <label class="qf-rrrange"><input type="checkbox" data-rr="range" checked> 自訂範圍 ≥
+        <input type="number" id="f-rrmin" min="0" step="0.1" placeholder="例 2" aria-label="報酬風險比下限">
+        ～ ≤ <input type="number" id="f-rrmax" min="0" step="0.1" placeholder="不限" aria-label="報酬風險比上限"></label>
+      <span class="qf-note">無風險視為 ∞：只設下限時一定會一起篩到；設了上限就不含它。</span>
+      <label><input type="checkbox" data-rr="free"> 無風險（∞）</label>
+      <label><input type="checkbox" data-rr="bear"> 價格高估</label>
+      <label><input type="checkbox" data-rr="na"> — 算不出來</label>
+    </span></span>
+  </span><span class="qf-row">
+  <label>AI <select id="f-ai"><option value="">全部</option><option value="held">持有中</option><option value="cand">候選</option>
+    <option value="veto">財報否決</option><option value="any">任一標記</option></select></label>
+  <label>籌碼雷達 <select id="f-cf"><option value="">全部</option><option value="pick">精選</option><option value="l1">共振</option>
+    <option value="any">精選或共振</option></select></label>
+  <label>貪婪恐懼 <select id="f-gf"><option value="">全部</option>
+    <option value="g20">黃金交叉 20 日</option><option value="n20g">即將黃金交叉 20 日</option>
+    <option value="gn20">黃金交叉 20 日 or 即將黃金交叉 20 日</option>
+    <option value="g60">黃金交叉 60 日</option><option value="n60g">即將黃金交叉 60 日</option>
+    <option value="gn60">黃金交叉 60 日 or 即將黃金交叉 60 日</option>
+    <option value="g">黃金交叉（20或60）</option>
+    <option value="x20">死亡交叉 20 日</option><option value="n20x">即將死亡交叉 20 日</option>
+    <option value="xn20">死亡交叉 20 日 or 即將死亡交叉 20 日</option>
+    <option value="x60">死亡交叉 60 日</option><option value="n60x">即將死亡交叉 60 日</option>
+    <option value="xn60">死亡交叉 60 日 or 即將死亡交叉 60 日</option>
+    <option value="x">死亡交叉（20或60）</option></select></label>
+    <span class="qf-end"><button type="button" id="f-reset" class="qf-reset">清除篩選</button>
+  {%- if caller %}{{ caller() }}{% endif %}</span>
+  </span>
+</div>
+{%- endmacro %}
+
+{% macro ind_key(name) -%}
+{%- set n = (name or '')|trim -%}
+{{- '未分類' if not n else (n[:-1] if n.endswith('業') and n|length > 2 else n) -}}
+{%- endmacro %}
+
+{% macro reward_cat(r) -%}
+{%- if r.risk_free -%}free
+{%- elif r.reward_risk is none -%}na
+{%- elif r.reward_risk <= 0 -%}bear
+{%- elif r.reward_risk >= 2 -%}ge2
+{%- else -%}lt2{%- endif -%}
+{%- endmacro %}
+
+{% macro reward_key(r) -%}
+{%- if r.risk_free -%}999999
+{%- elif r.reward_risk is none -%}-999
+{%- else -%}{{ '%.6f'|format(r.reward_risk) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro reward(r) -%}
+{%- if r.risk_free -%}
+<span class="rrv rrv-best" title="股價已經低於下檔價，沒有下檔風險——四種裡最好的一種">無風險</span>
+{%- elif r.reward_risk is none -%}<span class="muted">—</span>
+{%- elif r.reward_risk <= 0 -%}
+<span class="rrv rrv-bad" title="價格高估：目標價低於現在的股價，預期報酬為負（是估值判斷，不是走勢的空頭）">價格高估</span>
+{%- else -%}
+{%- set v = r.reward_risk -%}
+{%- set cls = 'rrv-best' if v >= 3 else ('rrv-ok' if v >= 2 else ('rrv-weak' if v >= 1 else 'rrv-bad')) -%}
+<span class="rrv {{ cls }}" title="損益兩平所需的最低勝率約 {{ '%.0f'|format(100 / (1 + v)) }}%">{{ '%.2f'|format(v) }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro basis(r) -%}
+{%- set fq = r.fiscal_quarter or "" -%}
+{%- set rm = r.revenue_month or "" -%}
+{%- if not fq and not rm -%}<span class="muted">—</span>
+{%- else -%}
+<span class="basis">
+  {%- if fq %}<span class="bq">財報 <b>{{ quarter_label(fq) }}</b></span>{% endif -%}
+  {%- if rm %}<span class="br">營收 <b>{{ month_label(rm) }}</b></span>{% endif -%}
+</span>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro quarter_label(fq) -%}
+{%- set bits = fq.split('.') -%}
+{%- if bits|length == 2 and bits[1]|length >= 2 -%}{{ bits[0] }}Q{{ bits[1][0] }}
+{%- else -%}{{ fq }}{%- endif -%}
+{%- endmacro %}
+
+{% macro month_label(rm) -%}
+{%- set bits = rm.split('/') -%}
+{%- if bits|length == 2 and bits[0]|length == 3 and bits[0].isdigit() -%}
+{{ bits[0]|int + 1911 }}/{{ bits[1] }}
+{%- else -%}{{ rm }}{%- endif -%}
+{%- endmacro %}
+
+{% macro chg_class(v) -%}
+{%- if v is none -%}muted{%- elif v > 0 -%}up{%- elif v < 0 -%}down{%- else -%}flat{%- endif -%}
+{%- endmacro %}
+
+{% macro pct_text(v) -%}
+{%- if v is none -%}—{%- else -%}{{ '%+.2f'|format(v) }}%{%- endif -%}
+{%- endmacro %}
+
+{% macro money(v, big) -%}
+{%- if big -%}{{ '{:,.0f}'.format(v) }}{%- else -%}{{ '{:,.2f}'.format(v) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro price_cells(r, price_date='') -%}
+{%- set p = r.px -%}
+{%- set big = p is not none and p.close >= 1000 -%}
+{%- if p is none -%}
+<td class="num px muted" data-s="-999">—</td><td class="num mid" data-s="-999"><span class="muted">—</span></td><td class="num mid" data-s="-999"><span class="muted">—</span></td><td class="num mid" data-s="-999"><span class="muted">—</span></td>
+{%- else -%}
+<td class="num px{{ ' pxold' if p.date.replace('-', '/') != price_date else '' }}" data-s="{{ '%.2f'|format(p.close) }}"{% if p.date.replace('-', '/') != price_date %} title="{{ p.date }} 收盤"{% endif %}><span class="pxv {{ chg_class(p.chg) }}">{{ money(p.close, big) }}</span><a class="yf" href="{{ p.yahoo }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ r.stock_id }} Yahoo 技術分析"></a></td>
+<td class="num mid chg" data-s="{{ '%.2f'|format(p.chg_pct) if p.chg_pct is not none else -999 }}">
+{%- if p.chg is none -%}<span class="muted">—</span>
+{%- else -%}<span class="{{ chg_class(p.chg) }}">{{ ('+' if p.chg > 0 else '') ~ money(p.chg, big) }}</span><small class="{{ chg_class(p.chg) }}">{{ pct_text(p.chg_pct) }}</small>{%- endif -%}</td>
+{%- for n in (5, 20) %}
+{%- set v = p.window.get(n) %}
+<td class="num mid" data-s="{{ '%.2f'|format(v) if v is not none else -999 }}"><span class="{{ chg_class(v) }}">{{ pct_text(v) }}</span></td>
+{%- endfor -%}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro table_head(prices=False, price_date='') -%}
+{%- set o = 4 if prices else 0 -%}
+<thead><tr>
+    <th class="seq" aria-label="序號"></th>
+  <th class="star-cell" title="觀察清單"><button type="button" class="sortable" data-col="1" aria-label="依觀察清單排序">★</button></th>
+  <th><button type="button" class="sortable" data-col="2">代號</button></th>
+  <th><button type="button" class="sortable" data-col="3">名稱</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="4">市場</button></th>
+  <th><button type="button" class="sortable" data-col="5">產業</button></th>
+  <th><button type="button" class="sortable" data-col="6">財報基準</button></th>
+  {% if prices %}
+    <th class="num px"><button type="button" class="sortable" data-col="7">收盤價{% if price_date %}<span class="hsub">{{ price_date }}</span>{% endif %}</button></th>
+  <th class="num mid"><button type="button" class="sortable" data-col="8">日漲跌</button></th>
+  <th class="num mid"><button type="button" class="sortable" data-col="9">5日<br>漲跌</button></th>
+    <th class="num mid"><button type="button" class="sortable" data-col="10">20日<br>漲跌</button></th>
+  {% endif %}
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 7 + o }}">營收<br>年增率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 8 + o }}">營業<br>利益率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 9 + o }}">稅後淨利<br>年增率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 10 + o }}">EPS</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 11 + o }}">存貨<br>周轉率</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 12 + o }}">自由<br>現金流</button></th>
+  <th class="num mid"><button type="button" class="sortable" data-col="{{ 13 + o }}">綜合<br>評分</button></th>
+  <th class="num mid"><button type="button" class="sortable" data-col="{{ 14 + o }}">評分<br>變化</button></th>
+  <th class="mid"><button type="button" class="sortable" data-col="{{ 15 + o }}">具投資<br>價值</button></th>
+    <th class="num mid"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 16 + o }}">報酬<br>風險比</button>{% call tip() %}
+  <b>報酬風險比 ＝ ｜預期報酬 ÷ 預期風險｜</b>，來自〔EPS預估與估價〕。
+  它回答的是一件很具體的事：<b>這一筆要對幾次才不會賠</b>。
+    <ul class="rrguide">
+    <li><b>小於 1</b><em>要贏 50%～100%</em>
+        <span>⚠️ 絕對不要進場。賺的比賠的少，要贏過一半甚至幾乎全對才打平。</span></li>
+    <li><b>1.0</b><em>要贏 50%</em>
+        <span>⚖️ 勝率必須過半，等於把成敗整個押在方向看對。</span></li>
+    <li><b>2.0</b><em>要贏 33.3%</em>
+        <span>✅ 及格的進場低標。三次對一次就打平，錯兩次還活著。</span></li>
+    <li><b>3.0 或以上</b><em>要贏 25% 以下</em>
+        <span>🌟 最理想的交易黃金區。四次對一次就打平，容錯最高。</span></li>
+  </ul>
+  <p class="stop">中間那一欄是<b>損益兩平所需的最低勝率</b>＝ 1 ÷（1 ＋ 報酬風險比）。</p>
+  <p class="stop"><b>無風險</b>＝股價已經低於下檔價，沒有下檔風險，比 3.0 還好。
+  <b>價格高估</b>＝目標價低於現在的股價，預期報酬是負的：股價已經超過基本面（本益比與獲利）撐得住的價值。這是<b>估值</b>判斷，不是走勢的「空頭」——高估的股票走勢照樣可以是多頭。
+  <b>—</b>＝算不出來：多半是<b>歷年本益比不足</b>（本益比區間取去年起往前 5 年，至少要 3 個
+  完整年度；上市未滿或有虧損年度不計），也可能是預估 EPS 為負、本益比估價不適用。<b>三者不是同一件事</b>。</p>
+  <p class="stop">{% for note in reward_risk_notes %}{{ note }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{% endcall %}</span></th>
+  <th class="mid ai-cell"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 17 + o }}">AI</button>{% call tip() %}
+  <b>AI 選股</b>的判斷（每天收盤後更新，詳見〔AI 選股〕頁與個股頁的〔AI 選股〕分頁）：
+  <ul class="rrguide">
+    <li><b>持有 A／B／D</b><em>影子帳戶</em>
+        <span>虛擬帳戶照規則<b>目前持有中</b>；字母是哪一套買進的。</span></li>
+    <li><b>候選 A·B·D</b><em>最近一次訊號</em>
+        <span>符合那一套的全部條件。A＝營收驚喜、B＝供應鏈連動、D＝籌碼共振。</span></li>
+    <li><b>財報否決</b><em>方案 E</em>
+        <span>財報與重大訊息的紅旗三面以上，任何一套都不會買它。</span></li>
+    <li><b>空白</b><em>—</em>
+        <span>不在任何名單上。</span></li>
+  </ul>
+  <p class="stop">點標題排序：持有 → 候選（同時符合越多套越前面）→ 空白 → 財報否決。</p>
+  <p class="stop">⚠️ 這是一組規則的輸出，不是投資建議；回測與影子帳戶的成績見〔AI 選股〕頁。</p>
+{% endcall %}</span></th>
+  <th class="mid cf-cell"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 18 + o }}">籌碼<br>雷達</button>{% call tip() %}
+  <b>籌碼雷達</b>當天的漏斗結果（每個交易日收盤後更新，點標籤看那一檔的〔① 個股籌碼多圖〕）：
+  <ul class="rrguide">
+    <li><b>精選</b><em>整條漏斗</em>
+        <span>流動性母體、非財報否決 ＋ 共振分數前 5% 且法人／大戶／股東三根柱子至少兩根同向 ＋ 兩面以上成長旗標 ＋ 趨勢成立（收盤 &gt; 60 日線且 20 日線 &gt; 60 日線）。</span></li>
+    <li><b>共振</b><em>籌碼共振（L1）</em>
+        <span>共振分數前 10% 且三根柱子至少兩根同向，但沒有通過精選的其他條件；給人工複核。</span></li>
+    <li><b>空白</b><em>—</em>
+        <span>不在兩份名單上。</span></li>
+  </ul>
+  <p class="stop">點標題排序：精選 → 共振（同一級依共振分數）→ 空白。</p>
+  <p class="stop">⚠️ 清單由公開籌碼資料自動產生，不是投資建議；每週回頭驗證的成績見〔籌碼雷達〕的〔指標驗證〕。</p>
+{% endcall %}</span></th>
+  <th class="mid gf-cell"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 19 + o }}">貪婪<br>恐懼</button>{% call tip() %}
+  <b>貪婪／恐懼指標的交叉</b>（每個交易日收盤後更新；點標籤另開分頁看〔籌碼雷達〕那一檔的四張圖）。
+  貪婪指標＝買盤比例 20（或 60）日加總、恐懼指標＝賣盤比例加總，兩者相加是 20（60），
+  所以看的是「貪婪 − 恐懼」的正負：
+  <ul class="rrguide">
+    <li><b>金叉20／60</b><em>3 個交易日內</em>
+        <span>貪婪由下往上穿過恐懼（差值由 ≤0 轉 &gt;0）：多方開始占優。</span></li>
+    <li><b>死叉20／60</b><em>3 個交易日內</em>
+        <span>貪婪跌破恐懼：空方開始占優。留意：死亡交叉時股價常已先跑一段。</span></li>
+    <li><b>將金／將死</b><em>差距 ≤ 0.5</em>
+        <span>還沒交叉，但兩條線只差 0.5 以內，而且比前一天更接近。</span></li>
+  </ul>
+  <p class="stop">點標題排序：金叉（20 日優先）→ 將金叉 → 空白 → 將死叉 → 死叉。上方〔貪婪恐懼〕快篩可以只看某一種。</p>
+  <p class="stop">⚠️ 這是落後的確認訊號，20 日那一組在盤整時會來回交叉，不是買賣建議。</p>
+{% endcall %}</span></th>
+</tr></thead>
+{%- endmacro %}
+
+{% macro tip() -%}
+<span class="tip"><button type="button" class="bulb" aria-expanded="false"
+  title="說明"><span aria-hidden="true">💡</span><span class="sr">說明</span></button
+  ><span class="tipbox" role="note">{{ caller() }}</span></span>
+{%- endmacro %}
+
+{% macro price_note() -%}
+  <b>收盤價、日漲跌、5 日、20 日漲跌</b>每個交易日收盤後更新；收盤價標題底下那一行
+  小字是哪一天的收盤。<b>5 日、20 日</b>是最新收盤和往回第 5、第 20 個<b>交易日</b>的
+  收盤相比。
+  <br><br><b>沒有還原除權息。</b>除息那一天的跳空會算進去——和 Yahoo 股市、
+  券商軟體預設顯示的一樣，是帳面上的價差，不是持有的報酬。一檔剛配息 5% 的
+  股票，在這裡看起來會像跌了 5%。
+  <br><br><b>日漲跌</b>用的是交易所公布的漲跌價差（對參考價），除權息那一天也對；
+  上面一行是元、下面一行是 %。點欄位標題排序時看的是 %。
+  <br><br>收盤價右邊那顆<b>走勢小圖示</b>開 Yahoo 股市那一檔的〔技術分析〕（新分頁）。
+  <br><br><b>點代號</b>開本站的個股資訊頁；<b>點名稱</b>另開分頁看〔籌碼雷達〕那一檔的貪婪／恐懼指標。
+{%- endmacro %}
+
+{% macro range_bar(fig, keys, default) -%}
+<div class="rng" role="group" aria-label="週期切換" data-rng="{{ fig }}">
+  <span class="rng-l">週期切換</span>
+  {%- for k in keys %}<button type="button" data-r="{{ k }}"{% if k == default %} class="on" aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>{{ '全部' if k == 'ALL' else k }}</button>{% endfor %}
+</div>
+{%- endmacro %}

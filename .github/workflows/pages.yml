@@ -1,0 +1,47 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "reference/**"
+  schedule:
+    - cron: "37 23 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: ./.github/actions/build-site
+        env:
+          SITE_LOGIN_USER: ${{ secrets.SITE_LOGIN_USER }}
+          SITE_LOGIN_PASSWORD: ${{ secrets.SITE_LOGIN_PASSWORD }}
+          SITE_LOGIN_USERS: ${{ secrets.SITE_LOGIN_USERS }}
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+          SITE_OWNER: ${{ secrets.SITE_OWNER }}
+        with:
+          incremental: "true"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

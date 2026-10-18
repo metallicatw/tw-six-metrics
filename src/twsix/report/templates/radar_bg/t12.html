@@ -1,0 +1,45 @@
+{% raw %}<div class="bgm bg12">
+<div class="wrap">
+  <header>
+    <h1>法人買超 × 20日成交金額　多檔軌跡對照</h1>
+    <p id="m12-sub">讀取資料中…</p>
+  </header>
+  <div class="controls">
+    <div class="group"><label class="lb" for="m12-code">加入個股</label><input type="text" id="m12-code" list="m12-stocklist" placeholder="代號或名稱"><button id="m12-go">加入</button><span class="err" id="m12-err" role="status"></span></div>
+    <div class="group">
+      <label class="lb">刻度</label>
+      <div class="seg" role="group" aria-label="座標刻度">
+        <button id="m12-scLog" aria-pressed="true">對數（放大小金額）</button>
+        <button id="m12-scLin" aria-pressed="false">線性</button>
+      </div>
+    </div>
+    <div class="group">
+      <label class="lb">範圍</label>
+      <div class="seg" role="group" aria-label="座標範圍">
+        <button id="m12-rgFit" aria-pressed="true">依所選個股</button>
+        <button id="m12-rgAll" aria-pressed="false">全市場</button>
+      </div>
+    </div>
+    <div class="timeline">
+      <button id="m12-play" class="primary" aria-label="播放">▶ 播放</button>
+      <button id="m12-prev" aria-label="前一天">◀</button>
+      <input type="range" id="m12-day" min="0" max="59" value="59" aria-label="日期">
+      <button id="m12-next" aria-label="後一天">▶</button>
+      <span class="date" id="m12-dateLabel">—</span>
+      <select id="m12-speed" aria-label="播放速度"><option value="600">慢</option><option value="300" selected>中</option><option value="120">快</option></select>
+    </div>
+  </div>
+  <div class="main">
+    <div class="chart" id="m12-chartBox">
+      <svg id="m12-svg" viewBox="0 0 660 636" role="img" aria-label="金額點狀圖"></svg>
+      <div class="tip" id="m12-tip" hidden></div>
+    </div>
+    <aside class="side" id="m12-side"></aside>
+  </div>
+  <footer>
+    <p>免責聲明：本工具僅為公開財務及籌碼數據之資料整理與自訂條件篩選輔助工具，頁面所呈現之各項指標與計算結果皆取自公開資訊觀測站及市場公開資料，不構成任何形式之投資建議、推介、要約或招攬。使用者應獨立判斷、審慎評估，並自行承擔所有投資決策與風險。</p>
+    <p>X 軸為「外資投信買賣超金額60日累計」（單位：億元），右邊是累計買超、左邊是累計賣超，虛線是 0；Y 軸為「成交金額20日累計」（單位：億元），是個股最近 20 個交易日的成交金額加總，越上面成交越大，水平虛線是當天全市場平均每檔的 20 日累計成交金額。點越新顏色越深，連線依交易日先後串接。對數刻度下 X 軸用對稱對數（0 附近放大、兩端壓縮），Y 軸低於 0.01 億會畫在最底部。</p>
+    <p>預設的對照股只是為了示範數值變化幅度而挑選，不是推薦，也不是選股建議，可以自行增刪。</p>
+  </footer>
+</div>
+</div>{% endraw %}

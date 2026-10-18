@@ -1,0 +1,10 @@
+{
+  "bytes": 167564,
+  "expect": "已驗證：上市外資及陸資投資持股統計，date=YYYYMMDD。fields＋data，欄位靠名字對：發行股數、全體外資及陸資持有股數、全體外資及陸資持股比率（數字，非字串）。含 ETF（代號非四碼），只收四碼。打太密回 307 FOR SECURITY REASONS。",
+  "fetched_at": "2026-10-03T13:40:56+00:00",
+  "form": {},
+  "group": "daily",
+  "head": "{\"stat\":\"OK\",\"date\":\"20261002\",\"selectType\":\"ALLBUT0999\",\"title\":\"115年10月02日 外資及陸資投資持股統計\",\"hints\":\"單位:股\",\"fields\":[\"證券代號\",\"證券名稱\",\"國際證券編碼\",\"發行股數\",\"外資及陸資尚可投資股數\",\"全體外資及陸資持有股數\",\"外資及陸",
+  "name": "twse_qfii_dated",
+  "url": "https://www.twse.com.tw/rwd/zh/fund/MI_QFIIS?date=20261002&selectType=ALLBUT0999&response=json"
+}

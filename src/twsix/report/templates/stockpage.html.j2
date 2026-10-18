@@ -1,0 +1,1046 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import tip, range_bar %}
+{% import "_macros.html.j2" as m %}
+{% block title %}{{ p.stock_id }} {{ p.name }}｜{{ site_title }}{% endblock %}
+{% block body %}
+
+<div class="ident sticky">
+  <h2 id="top">{{ p.stock_id }}　{{ p.name }}
+        {%- if p.market %}<span class="chip mk">{{ p.market }}</span>{% endif -%}
+    {%- if p.industry %}<span class="chip ind">{{ p.industry }}</span>{% endif -%}
+    <button type="button" class="star" data-star="{{ p.stock_id }}"
+          aria-pressed="false" aria-label="把 {{ p.stock_id }} 加入觀察清單"
+          title="加入觀察清單">☆</button>
+        <a class="gf-link" href="{{ rel }}radar.html#t1-{{ p.stock_id }}-gf" target="_blank" rel="noopener"
+       title="籌碼雷達：{{ p.stock_id }} 的貪婪／恐懼指標（另開分頁）">貪婪／恐懼<span aria-hidden="true">↗</span></a></h2>
+  <p class="facts">
+    <span>財報 <b>{{ p.fiscal_quarter or "—" }}</b></span>
+    <span>營收 <b>{{ p.revenue_month or "—" }}</b></span>
+    {%- if p.market_price %}<span>股價 <b>{{ "%.2f"|format(p.market_price) }}</b>
+      {%- if p.price_date %}<i class="asof">{{ p.price_date }} 收盤</i>{% endif %}
+      {%- if yahoo_ta is defined %}<a class="yf" href="{{ yahoo_ta(p.stock_id, p.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ p.stock_id }} Yahoo 技術分析"></a>{% endif %}</span>{% endif %}
+    {%- if p.latest_composite is not none %}
+    <span>綜合 <b>{{ "%.2f"|format(p.latest_composite) }}</b></span>
+    {%- endif %}
+  </p>
+
+<div class="tabs" role="tablist" aria-label="頁面區塊">
+  <button type="button" role="tab" id="tab-summary" class="tab" aria-controls="panel-summary" aria-selected="true">評價簡表</button>
+  <button type="button" role="tab" id="tab-six" class="tab" aria-controls="panel-six" aria-selected="false" tabindex="-1">六大財務指標評等</button>
+  <button type="button" role="tab" id="tab-eps" class="tab" aria-controls="panel-eps" aria-selected="false" tabindex="-1">EPS預估與估價</button>
+    <button type="button" role="tab" id="tab-health" class="tab" aria-controls="panel-health" aria-selected="false" tabindex="-1">財務健診</button>
+  <button type="button" role="tab" id="tab-pxhealth" class="tab" aria-controls="panel-pxhealth" aria-selected="false" tabindex="-1">股價健診</button>
+  <button type="button" role="tab" id="tab-yield" class="tab" aria-controls="panel-yield" aria-selected="false" tabindex="-1">殖利率估價</button>
+  <button type="button" role="tab" id="tab-river" class="tab" aria-controls="panel-river" aria-selected="false" tabindex="-1">河流圖</button>
+  <button type="button" role="tab" id="tab-season" class="tab" aria-controls="panel-season" aria-selected="false" tabindex="-1">季節性</button>
+  <button type="button" role="tab" id="tab-inst" class="tab" aria-controls="panel-inst" aria-selected="false" tabindex="-1">外資投信</button>
+    {% if p.holders %}
+  <button type="button" role="tab" id="tab-holders" class="tab" aria-controls="panel-holders" aria-selected="false" tabindex="-1">大戶持股</button>
+  {% endif %}
+  {% if p.directors %}
+  <button type="button" role="tab" id="tab-directors" class="tab" aria-controls="panel-directors" aria-selected="false" tabindex="-1">董監持股</button>
+  {% endif %}
+    <button type="button" role="tab" id="tab-news" class="tab" aria-controls="panel-news" aria-selected="false" tabindex="-1">個股新聞</button>
+    <button type="button" role="tab" id="tab-ai" class="tab" aria-controls="panel-ai" aria-selected="false" tabindex="-1">AI 選股</button>
+  {% if p.unbuilt %}
+  <button type="button" role="tab" id="tab-unbuilt" class="tab" aria-controls="panel-unbuilt" aria-selected="false" tabindex="-1">尚未建置</button>
+  {% endif %}
+</div>
+</div>
+
+{% if delisted %}
+<p class="stale">已下市——這一檔已不在證交所／櫃買的公司名單上，以下數字停在下市前那一期，不會再更新。</p>
+{% endif %}
+
+{% if p.excluded %}
+<p class="stale">{{ p.excluded }}——這一檔不適用六大指標。</p>
+{% endif %}
+
+{% if p.history and p.history.c %}
+<script type="application/json" id="px-hist">{{ p.history|tojson }}</script>
+{% endif %}
+<section class="panel" id="panel-summary" role="tabpanel" aria-labelledby="tab-summary">
+<h3 id="summary">評價簡表</h3>
+
+<div class="cards">
+  <div class="card">
+    <b>{{ "%.2f"|format(p.latest_composite) if p.latest_composite is not none else "—" }}</b>
+    <span>最新綜合評分</span>
+  </div>
+    {%- set chg = p.price_change %}
+  {%- set dir = ('up' if chg > 0 else ('down' if chg < 0 else '')) if chg is not none else '' %}
+  <div class="card">
+    <b class="{{ dir }}">{{ "%.2f"|format(p.market_price) if p.market_price else "—" }}</b>
+    {%- if chg is not none %}
+        <span class="chg {{ dir }}">{{ '▲' if chg > 0 else ('▼' if chg < 0 else '') }}
+      {{- ' ' if chg != 0 }}{{ "%.2f"|format(chg|abs) }}
+      {%- if p.price_change_pct is not none %} ({{ "%.2f"|format(p.price_change_pct|abs) }}%){% endif %}</span>
+    {%- endif %}
+    <span>市價{% if p.price_date %}　<i class="asof">{{ p.price_date }} 收盤</i>{% endif %}</span>
+  </div>
+  <div class="card">
+    <b>{{ p.pe.reward_risk if p.pe else "—" }}</b>
+    <span>報酬風險比{% if p.pe %}　{{ p.pe.verdict }}{% endif %}</span>
+  </div>
+  <div class="card">
+    <b>{{ p.dividend.verdict if p.dividend else "—" }}</b>
+    <span>殖利率估價判斷</span>
+  </div>
+</div>
+
+<p class="{{ 'verdict-yes' if p.worth_researching else 'verdict-no' }}">
+  {% if p.worth_researching %}
+    綜合評分 {{ "%.2f"|format(p.latest_composite) }} ≥ 3，依〔操作說明〕的建議<b>值得進一步研究</b>。
+  {% else %}
+    〔操作說明〕建議綜合評價 3 分以上才有研究必要；本檔最新綜合評分
+    {{ "%.2f"|format(p.latest_composite) if p.latest_composite is not none else "不足以計算" }}。
+  {% endif %}
+</p>
+
+<div class="scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>期別</th><th>財報季度</th><th>營收月份</th>
+        {% for label in indicator_labels %}<th>{{ label }}</th>{% endfor %}
+        <th class="num">綜合</th><th>價值</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in p.periods %}
+      <tr>
+        <td>{{ row.index }}</td>
+        <td>{{ row.quarter }}</td>
+        <td>{{ row.month }}</td>
+        {% for key in indicator_keys %}
+        <td>
+          {%- if row.grades[key].badge -%}
+            <span class="g g-{{ row.grades[key].text }}">{{ row.grades[key].text }}</span>
+          {%- else -%}
+            <span class="muted">{{ row.grades[key].text }}</span>
+          {%- endif -%}
+        </td>
+        {% endfor %}
+        <td class="num" title="{{ row.composite }}">{{ row.composite_short }}</td>
+        <td>{% if row.value_pick %}<span class="pick">★</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<details class="sources">
+  <summary>資料來源（{{ p.sources|selectattr("ok")|list|length }}/{{ p.sources|length }}）</summary>
+  <ul class="srclist">
+    {% for s in p.sources %}
+    <li class="{{ 'ok' if s.ok else 'missing' }}"{% if s.note %} title="{{ s.note }}"{% endif %}>{{ s.sheet }}{% if s.note and s.ok %}（推算）{% endif %}{% if not s.ok %}　未取得{% if s.note %}（{{ s.note }}）{% endif %}{% endif %}</li>
+    {% endfor %}
+  </ul>
+</details>
+
+</section>
+
+<section class="panel" id="panel-six" role="tabpanel" aria-labelledby="tab-six" hidden>
+<h3 id="six">六大財務指標評等</h3>
+<p class="muted">最新一期（{{ p.fiscal_quarter }} / {{ p.revenue_month }}）各指標的數列與評分理由。</p>
+
+<div class="scroll">
+  <table>
+    <thead>
+            <tr><th>指標</th><th>評等</th><th class="num">評分</th>
+        <th class="num" colspan="8">近八期數列（最新在左）</th><th>理由</th></tr>
+    </thead>
+    <tbody>
+      {% for ind in p.indicators %}
+      <tr{% if not ind.scored %} class="unscored"{% endif %}>
+                <th scope="row">{{ ind.label }}{% if ind.key == "non_operating_ratio" %}{% call tip() %}<b>業外收益佔稅前利潤比例（%）＝ 業外損益 ÷ 稅前淨利 × 100%</b><br>
+          比例 &lt; 10%：本業主導，盈餘品質較高<br>
+          比例在 10~30%：有一定業外貢獻，需追蹤原因<br>
+          比例 &gt; 30%：警戒，業外收益主導，需深入調查是否一次性<br>
+          比例 &gt; 100%（即本業虧損但業外盈餘）：高度警戒，本業健康度存疑<br><br>
+          這個數字<b>有號</b>。上面那把尺假設稅前淨利是正的；稅前淨利為負（本業加業外仍然虧）的時候比例會翻成負數，那把尺就不適用——那一季要直接看營業利益與業外損益兩個絕對值，不是看比例。{% endcall %}{% endif %}</th>
+        <td>
+          {%- if ind.badge -%}
+            <span class="g g-{{ ind.letter }}">{{ ind.letter }}</span>
+          {%- else -%}
+            <span class="muted">{{ ind.letter or "—" }}</span>
+          {%- endif -%}
+        </td>
+        <td class="num">{{ ind.display }}</td>
+                {% for v in ind["values"] %}
+        <td class="pv">
+          <span class="p">{{ ind["periods"][loop.index0] if loop.index0 < ind["periods"]|length else "" }}</span>
+          <span class="v">{{ "%.2f"|format(v) if v is not none else "—" }}</span>
+        </td>
+        {% endfor %}
+                {% for _ in range(8 - ind["values"]|length) %}<td class="pv"></td>{% endfor %}
+        <td class="reason">{{ ind.reason }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="foot">註：淨利率（歸母）與業外佔比都不列入評分。淨利率（歸母）＝ 歸屬母公司稅後淨利 ÷ 營收。</p>
+
+{% if p.figures.eight_quarters %}{{ p.figures.eight_quarters|safe }}{% endif %}
+
+{% if p.figures.revenue %}{{ p.figures.revenue|safe }}{% endif %}
+
+{% if p.revenue_rows %}
+<details class="chart-data"><summary>數值</summary>
+<div class="scroll">
+  <table class="rev">
+    <thead>
+      <tr>
+        <th>月份</th><th class="num">當月營收<span class="u">百萬</span></th>
+        <th class="num">月增率</th><th class="num">年增率</th>
+        <th class="num">累計營收<span class="u">百萬</span></th><th class="num">累計年增率</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in p.revenue_rows %}
+      <tr>
+        <th scope="row">{{ r.month }}</th>
+        <td class="num">{{ '{:,.0f}'.format(r.revenue) if r.revenue is not none else '—' }}</td>
+        <td class="num">{{ m.delta(r.mom) }}{% if r.mom is not none %}%{% endif %}</td>
+        <td class="num">{{ m.delta(r.yoy) }}{% if r.yoy is not none %}%{% endif %}</td>
+        <td class="num">{{ '{:,.0f}'.format(r.cumulative) if r.cumulative is not none else '—' }}</td>
+        <td class="num">{{ m.delta(r.cumulative_yoy) }}{% if r.cumulative_yoy is not none %}%{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+</details>
+{% endif %}
+
+{% for ind in p.indicators %}
+{% if p.statements[ind.key] %}
+<section class="metric">
+  <h4>
+    {%- if ind.badge -%}<span class="g g-{{ ind.letter }}">{{ ind.letter }}</span>
+    {%- else -%}<span class="g g-na">{{ ind.letter or "—" }}</span>{%- endif -%}
+    <span class="nm">{{ ind.label }}</span>
+    <span class="why">{{ ind.reason }}</span>
+  </h4>
+  {{ p.statements[ind.key]|safe }}
+</section>
+{% endif %}
+{% endfor %}
+
+</section>
+
+<section class="panel" id="panel-eps" role="tabpanel" aria-labelledby="tab-eps" hidden>
+<h3 id="eps">EPS預估與估價</h3>
+
+{% if p.gaps.forecast or p.gaps.pe %}
+<p class="stale">{{ p.gaps.forecast or p.gaps.pe }}——此區塊無法計算。</p>
+{% endif %}
+
+<section class="way way1">
+<h4 class="way-h"><span class="n">估值方式一</span>依規則自動估算
+  <span class="sub">參數在 config/settings.toml，本檔實際代入的數字見下方說明</span></h4>
+
+{% if p.methodology %}
+{% set mo = p.methodology %}
+<details class="methodology">
+  <summary>計算方式說明——公式與本檔實際代入的數字</summary>
+  <ol class="steps">
+    <li>
+      <b>預估成長率</b>　{{ mo.growth_method_label }}
+      <div class="formula">{{ mo.growth_method_formula }}</div>
+      <div class="plug">本檔代入結果：<b>{{ mo.growth_rate }}</b></div>
+    </li>
+    <li>
+      <b>預估營收</b>　去年全年營收 ÷ 1000 ×（1 ＋ 預估成長率）
+      <div class="plug">
+        {{ mo.last_year_revenue }} × (1 + {{ mo.growth_rate }}) ＝
+        <b>{{ mo.projected_revenue }}</b>　百萬元
+      </div>
+    </li>
+    <li>
+      <b>稅後淨利率</b>　{{ mo.margin_method_label }}
+      <div class="formula">{{ mo.margin_method_formula }}</div>
+      <div class="plug">本檔代入結果：<b>{{ mo.net_margin }}</b></div>
+    </li>
+    <li>
+      <b>預估淨利</b>　預估營收 × 稅後淨利率
+      <div class="plug">{{ mo.projected_revenue }} × {{ mo.net_margin }} ＝ <b>{{ mo.projected_income }}</b>　百萬元</div>
+    </li>
+    <li>
+      <b>預估 EPS</b>　預估淨利 ÷ 加權平均股數
+      <div class="plug">{{ mo.projected_income }} ÷ {{ mo.weighted_shares }} ＝ <b>{{ mo.forecast_eps }}</b>　元</div>
+    </li>
+    <li>
+      <b>本益比區間</b>　{{ mo.pe_basis_label }}
+      <div class="formula">{{ mo.pe_basis_formula }}</div>
+      <div class="plug">本檔代入結果：<b>{{ mo.band_low }} – {{ mo.band_high }}</b></div>
+    </li>
+    <li>
+      <b>目標價 / 下檔價</b>　本益比高點 × 預估EPS　／　本益比低點 × 預估EPS
+      <div class="plug">
+        {{ mo.band_high }} × {{ mo.forecast_eps }} ＝ <b>{{ mo.target_price }}</b>　／
+        {{ mo.band_low }} × {{ mo.forecast_eps }} ＝ <b>{{ mo.downside_price }}</b>
+      </div>
+    </li>
+  </ol>
+  <p class="note">
+    以上為本次建置採用的參數（{{ mo.growth_method_label }} ／ {{ mo.margin_method_label }} ／
+    {{ mo.pe_basis_label }}），可在 config/settings.toml 調整；下方「目標價試算盤」可暫時
+    覆寫這些假設重新試算，不影響此處記錄的引擎結果。
+  </p>
+</details>
+{% endif %}
+
+{% if p.forecast %}
+<div class="val">
+  <section>
+    <h4>預估 EPS</h4>
+    <dl>
+      <dt>營收月份</dt><dd>{{ p.forecast.revenue_month }}</dd>
+      <dt>預估成長率</dt><dd>{{ p.forecast.growth_rate }}</dd>
+      <dt>預估營收</dt><dd>{{ p.forecast.projected_revenue }}</dd>
+      <dt>稅後淨利率</dt><dd>{{ p.forecast.net_margin }}</dd>
+      <dt>預估淨利</dt><dd>{{ p.forecast.projected_income }}</dd>
+      <dt>加權平均股數</dt><dd>{{ p.forecast.weighted_shares }}</dd>
+      <dt>預估 EPS</dt><dd class="big">{{ p.forecast.eps }}</dd>
+      <dt>近四季 EPS</dt><dd>{{ p.forecast.trailing_eps }}</dd>
+    </dl>
+  </section>
+  {% if p.pe %}
+  <section>
+    <h4>本益比估價</h4>
+    <dl>
+      <dt>本益比區間</dt><dd>{{ p.pe.band_low }} – {{ p.pe.band_high }}</dd>
+      <dt>目標價</dt><dd class="big">{{ p.pe.target }}</dd>
+      <dt>下檔價</dt><dd>{{ p.pe.downside }}</dd>
+      <dt>預期報酬</dt><dd>{{ p.pe.expected_return }}</dd>
+      <dt>預期風險</dt><dd>{{ p.pe.expected_risk }}</dd>
+      <dt>報酬風險比</dt><dd class="big">{{ p.pe.reward_risk }}</dd>
+    </dl>
+  </section>
+  {% endif %}
+  {% if p.growth %}
+  <section>
+    <h4>成長模型</h4>
+    <dl>
+      <dt>預估本益比</dt><dd>{{ p.growth.forward_pe }}</dd>
+      <dt>EPS 成長率</dt><dd>{{ p.growth.eps_growth }}</dd>
+      <dt>PEG</dt><dd>{{ p.growth.peg }}</dd>
+      <dt>總報酬本益比</dt><dd>{{ p.growth.total_return }}</dd>
+    </dl>
+  </section>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if p.growth %}
+<details class="growth-note">
+  <summary>成長模型在算什麼</summary>
+  <p>
+    上面兩塊都從「市場過去給這一檔幾倍本益比」出發。成長模型換一個問法：
+    <b>以這個成長速度，這一檔值幾倍本益比</b>——完全不看歷史股價。
+    兩邊的答案不一致時，那個差距本身就是資訊。
+  </p>
+  <dl class="terms">
+    <dt>預估本益比</dt>
+    <dd>市價 ÷ 預估 EPS。用的是預估 EPS 而不是近四季 EPS，所以它是「以今天的價格
+        買進、用明年的獲利計算」的倍數。</dd>
+    <dt>EPS 成長率</dt>
+    <dd>(預估 EPS − 近四季 EPS) ÷ ｜近四季 EPS｜。負的代表預估比現在差，
+        此時 PEG 與總報酬本益比都不給值——把負成長代進去會得到負的目標價，
+        那不是便宜，是模型跑到定義域外面。</dd>
+    <dt>PEG</dt>
+    <dd>預估本益比 ÷（EPS 成長率 × 100）。<b>1 是分水嶺</b>：小於 1 表示付出的
+        倍數低於成長速度，大於 1 表示付得比成長快。</dd>
+    <dt>總報酬本益比</dt>
+    <dd>(EPS 成長率 ＋ 平均殖利率) ÷ 預估本益比 × 100。PEG 只看成長，
+        對配息穩定但成長慢的公司不公平；把殖利率加進分子就補上這一塊。
+        <b>越大越好</b>，方向和 PEG 相反。</dd>
+  </dl>
+  {% if p.growth.peg_prices or p.growth.total_return_prices %}
+  <p class="muted">活頁簿把這兩個模型各換算成四檔目標價（成長率的 66% / 75% /
+    100% / 120%），保守到樂觀：</p>
+  <div class="scroll"><table class="mini">
+    <thead><tr><th>模型</th><th class="num">66%</th><th class="num">75%</th>
+      <th class="num">100%</th><th class="num">120%</th></tr></thead>
+    <tbody>
+      {% if p.growth.peg_prices %}
+      <tr><td>PEG 估價</td>
+        {% for lvl in (66, 75, 100, 120) %}
+        <td class="num">{{ p.growth.peg_prices.get(lvl) or '—' }}</td>
+        {% endfor %}
+      </tr>
+      {% endif %}
+      {% if p.growth.total_return_prices %}
+      <tr><td>總報酬估價</td>
+        {% for lvl in (66, 75, 100, 120) %}
+        <td class="num">{{ p.growth.total_return_prices.get(lvl) or '—' }}</td>
+        {% endfor %}
+      </tr>
+      {% endif %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  <p class="muted">
+    出處：〔EPS預估與估價〕AA:AD 欄與 X1:AC2。<b>活頁簿只給了公式和欄名，沒有
+    寫下文字說明</b>——上面這幾段是依那些公式寫的解讀，不是活頁簿的原話。
+    公式本身則是逐格對照過的。
+  </p>
+</details>
+{% endif %}
+
+{% if forecast_basis %}
+<details class="basis">
+  <summary>各欄的計算依據<span class="muted">　公式與活頁簿出處，逐欄對照</span></summary>
+  <div class="scroll"><table class="basis-t">
+    <thead><tr><th>欄位</th><th>公式</th><th>活頁簿出處</th></tr></thead>
+    <tbody>
+      {% for field, formula, source in forecast_basis %}
+      <tr><td class="f">{{ field }}</td><td class="q">{{ formula }}</td>
+          <td class="muted">{{ source }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  <ul class="warnings">
+    {% for note in forecast_basis_notes %}<li>{{ note }}</li>{% endfor %}
+  </ul>
+</details>
+{% endif %}
+
+{% if p.figures.pe_band %}{{ p.figures.pe_band|safe }}{% endif %}
+</section>
+
+{% if p.calc and p.calc.revenue and p.calc.shares %}
+<section class="way way2">
+<h4 class="way-h"><span class="n">估值方式二</span>自訂假設試算
+  <span class="sub">同一條公式，參數由你決定；改動不影響上面記錄的引擎結果</span></h4>
+<section class="calc" id="calc" data-code="{{ p.stock_id }}"
+         data-seed='{{ p.calc|tojson }}' data-price="{{ p.market_price or '' }}"
+         data-price-date="{{ p.price_date }}">
+  <h4>目標價試算盤<span class="muted">　改任何一格，下面的矩陣立刻重算</span></h4>
+
+  <p class="note" id="calc-basis"></p>
+
+  {% if p.calc.years %}
+  <div class="scroll"><table class="mini">
+    <thead><tr><th>項目</th>{% for y in p.calc.years %}<th class="num">{{ y.year }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for label, key, digits in (('股價高點','high',1),('股價低點','low',2),('EPS','eps',2),('本益比高','pe_high',1),('本益比低','pe_low',1)) %}
+      <tr><td>{{ label }}</td>
+        {% for y in p.calc.years %}
+        <td class="num">{{ ('%.' ~ digits ~ 'f')|format(y[key]) if y[key] is not none else '—' }}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+    <div class="calc-inputs">
+    <label><span class="lab"><span class="t">年營收（百萬元）</span></span>
+      <input type="number" id="c-rev" step="any"></label>
+    <label><span class="lab"><span class="t">股數（億股）</span></span>
+      <input type="number" id="c-sh" step="any"></label>
+    <label><span class="lab"><span class="t">預估營收成長率（%）</span>
+      <span class="hint">悲觀,中性,樂觀</span></span>
+      <input type="text" id="c-g" inputmode="decimal"></label>
+    <label><span class="lab"><span class="t">預估淨利率（%）</span>
+      <span class="hint">悲觀,中性,樂觀</span></span>
+      <input type="text" id="c-m" inputmode="decimal"></label>
+    <label><span class="lab"><span class="t">預估本益比 PE</span>
+      <span class="hint">一個 PE 一張矩陣</span></span>
+      <input type="text" id="c-pe" inputmode="decimal"></label>
+  </div>
+  <p class="calc-formula">
+    預估 EPS ＝ 年營收 × (1 ＋ 營收成長率) × 淨利率 ÷ 股數　│　
+    預估目標價 ＝ 預估 EPS × 預估本益比
+  </p>
+    <div class="calc-cost">
+    <label for="c-cost">進場成本價位（元）</label>
+    <input type="number" id="c-cost" step="any" min="0" inputmode="decimal"
+           placeholder="{{ '%.2f'|format(p.market_price) if p.market_price else '' }}">
+    <button type="button" class="linkish" id="c-cost-reset" hidden>回到現價</button>
+    <span class="muted" id="c-cost-note"></span>
+  </div>
+  <button type="button" class="btn-grab" id="c-run">重新計算</button>
+  <button type="button" class="linkish" id="c-reset">還原預設值</button>
+
+  <div id="calc-out"></div>
+</section>
+</section>
+{% endif %}
+
+{% if p.three_year %}
+<section class="way way3" id="y3" data-code="{{ p.stock_id }}" data-seed='{{ p.three_year|tojson }}'
+         data-price="{{ p.market_price or '' }}" data-price-date="{{ p.price_date }}">
+<h4 class="way-h"><span class="n">推估三年目標價</span>逐年累乘三年
+  <span class="sub">年營收基準採 {{ p.three_year.base_year }} 全年；成長率、淨利率預設為最近一季（{{ p.three_year.basis.quarter }}）的數字，三年相同——請務必自行調整</span></h4>
+    <div class="calc-inputs">
+    <label><span class="lab"><span class="t">年營收（百萬元）</span></span>
+      <input type="number" id="y3-rev" step="any"></label>
+    <label><span class="lab"><span class="t">股數（億股）</span></span>
+      <input type="number" id="y3-sh" step="any"></label>
+    <label title="今年, 明年, 後年"><span class="lab"><span class="t">營收成長率（%）</span>
+      <span class="hint">今年,明年,後年</span></span>
+      <input type="text" id="y3-g" inputmode="decimal"></label>
+    <label title="今年, 明年, 後年"><span class="lab"><span class="t">淨利率（歸母）（%）</span>
+      <span class="hint">今年,明年,後年</span></span>
+      <input type="text" id="y3-m" inputmode="decimal"></label>
+    <label title="每個 PE 一列目標價"><span class="lab"><span class="t">預估本益比 PE</span>
+      <span class="hint">一個 PE 一列</span></span>
+      <input type="text" id="y3-pe" inputmode="decimal"></label>
+  </div>
+  <button type="button" class="btn-grab" id="y3-run">📊 計算三年〔預估EPS〕與〔預估目標價〕</button>
+  <button type="button" class="linkish" id="y3-reset">還原預設值</button>
+  <p class="calc-formula">逐年累乘：今年營收 ＝ 年營收 ×（1＋今年成長率），明年 ＝ 今年 ×（1＋明年成長率），後年同理；
+    該年 EPS ＝ 該年營收 × 該年淨利率 ÷ 股數　│　目標價 ＝ 該年 EPS × 預估本益比</p>
+  <div id="y3-out"></div>
+</section>
+{% endif %}
+
+<div class="criteria">
+  <h4>報酬風險比判斷準則<span class="muted">　總大EPS、PER 動態調整推估法</span></h4>
+  <ol>
+    {% for range_text, label, why in reward_risk_rules %}
+    <li class="{{ 'hit' if p.pe and p.pe.verdict == label else '' }}">
+      <b>{{ range_text }}</b>　{{ why }}
+      {%- if p.pe and p.pe.verdict == label %}　<span class="tag">本檔 {{ p.pe.reward_risk }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  <ul class="warnings">
+    {% for note in reward_risk_notes %}<li>{{ note }}</li>{% endfor %}
+  </ul>
+</div>
+
+</section>
+
+<section class="panel" id="panel-health" role="tabpanel" aria-labelledby="tab-health" hidden>
+<div class="hl">
+  <div class="hl-head">
+    <b>{{ p.stock_id }} {{ p.name }}</b>
+    {% if p.health.quarter %}<span>財報:<b>{{ p.health.quarter }}</b></span>{% endif %}
+    {% if p.revenue_month %}<span>營收:<b>{{ p.revenue_month }}</b></span>{% endif %}
+    {% if p.health.rows %}
+    <span class="hl-badge hl-{{ p.health.level_class }}">{{ p.health.level }}　{{ p.health.hits }}/{{ p.health.total }} 項地雷</span>
+    {% endif %}
+  </div>
+  <div class="subtabs" role="tablist" aria-label="財務健診">
+    <button type="button" role="tab" class="subtab" data-sub="hl-mines" aria-selected="true">財務地雷</button>
+    <button type="button" role="tab" class="subtab" data-sub="hl-growth" aria-selected="false">成長力分析</button>
+  </div>
+  <div class="subpanel" id="hl-mines" role="tabpanel">
+  {% if p.health.rows %}
+    <div class="scroll"><table class="hl-t">
+      <thead><tr><th>財務地雷指標</th><th class="st">狀態</th><th>說明</th></tr></thead>
+      <tbody>
+      {% for r in p.health.rows %}
+        <tr><td>{{ r.label }}</td>
+          <td class="st">{% if r.hit is none %}<span class="hl-na">— 不適用</span>{% elif r.hit %}<span class="hl-hit">⚠️ 命中</span>{% else %}<span class="hl-ok">✅ 正常</span>{% endif %}</td>
+          <td>{{ r.text }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <p class="note-s">註：命中越多代表財務體質越需留意（0 項＝健康、1～2 項＝留意、3 項以上＝高風險）；
+      本健診僅為機械式指標篩檢，非投資建議。</p>
+  {% else %}
+    <p class="stale">這一檔還沒有季報資料，無法健診。</p>
+  {% endif %}
+  </div>
+  <div class="subpanel" id="hl-growth" role="tabpanel" hidden>
+  {% if p.growth_q.rows %}
+    <p class="hl-sub">最近一季 <b>{{ p.growth_q.quarter }}</b>　｜　QoQ＝對上一季 {{ p.growth_q.prev }}　｜　YoY＝對去年同季 {{ p.growth_q.ly }}</p>
+    <div class="scroll"><table class="hl-t hl-g">
+      <thead><tr><th>項目</th><th class="num">最近一季</th><th class="num">QoQ</th><th class="num">YoY</th></tr></thead>
+      <tbody>
+      {% for r in p.growth_q.rows %}
+        <tr><td>{{ r.label }}</td>
+          <td class="num">{% if r.value is none %}—{% elif r.fmt == 'money' %}{{ '{:,.0f}'.format(r.value) }}{% elif r.fmt == 'pct' %}{{ '%.2f'|format(r.value) }}%{% else %}{{ '%.2f'|format(r.value) }}{% endif %}</td>
+          {% for v in (r.qoq, r.yoy) %}
+          <td class="num">{% if v is none %}<span class="muted">—</span>{% else %}<span class="{{ 'up' if v > 0 else ('down' if v < 0 else 'flat') }}">{{ '▲' if v > 0 else ('▼' if v < 0 else '') }} {{ '%+.2f'|format(v) if r.unit == 'pp' else '%+.1f'|format(v) }}{{ ' pp' if r.unit == 'pp' else '%' }}</span>{% endif %}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <p class="note-s">利益率／淨利率以百分點（pp）變化表示，營收／EPS 以百分比變化表示；<span class="up">紅 ▲ 成長</span>、<span class="down">綠 ▼ 衰退</span>（台股慣例）。
+      EPS 為負時變化率的分母取絕對值（−0.45 → −0.08 是改善）。<br>
+      註：淨利率（歸母）＝ 歸屬母公司稅後淨利 ÷ 營收；營收成長率優先用三個月的月營收加總計算。</p>
+  {% else %}
+    <p class="stale">這一檔還沒有季報資料。</p>
+  {% endif %}
+  </div>
+</div>
+</section>
+
+<section class="panel" id="panel-pxhealth" role="tabpanel" aria-labelledby="tab-pxhealth" hidden>
+{% if p.history and p.history.c %}
+<div class="pxh" id="pxh">
+  <div class="pxh-form">
+    <label><span class="pxh-tag">條件一</span>股價在 <input type="number" id="pxh-m1" min="1" max="12" step="1" value="3"> 月內從高檔下跌幅度超過 <input type="number" id="pxh-p1" min="1" max="90" step="1" value="20"> %</label>
+    <label><span class="pxh-tag">條件二</span>股價在 <input type="number" id="pxh-m2" min="1" max="12" step="1" value="3"> 月內從低檔上漲幅度超過 <input type="number" id="pxh-p2" min="1" max="300" step="1" value="20"> %</label>
+    <label><span class="pxh-tag">條件三</span>股價跌破前 <input type="number" id="pxh-d3" min="5" max="240" step="1" value="60"> 個交易日低點</label>
+    <div class="pxh-btns">
+      <button type="button" class="btn-grab" id="pxh-run">重新健診</button>
+      <button type="button" class="btn-grab alt" id="pxh-short">短期預設值</button>
+      <button type="button" class="btn-grab alt" id="pxh-mid">中期預設值</button>
+      {% call tip() %}短期 ＝ 1 月內 10%／1 月內 10%／前 20 日低點；中期 ＝ 3 月內 20%／3 月內 20%／前 60 日低點。按下即帶入條件並重新健診。
+      一個月以 21 個交易日計。本頁股價皆使用「收盤價」計算（含高低點、回檔幅度與月線／季線／年線），<b>未還原除權息</b>。{% endcall %}
+    </div>
+  </div>
+  <div id="pxh-out"></div>
+  <h4 class="pxh-h">股價與月／季／年線</h4>
+  <div class="pxc" id="pxh-c1"></div>
+  <h4 class="pxh-h">股價健診總評分（每日各項檢查「正常」的數目，越高越健康）</h4>
+  <div class="pxc" id="pxh-c2"></div>
+  <div class="pxh-zoom">
+    <span>縮放區間：</span>
+    <button type="button" data-zoom="21">近1月</button><button type="button" data-zoom="63">近3月</button><button type="button" data-zoom="126">近半年</button><button type="button" data-zoom="252">近1年</button><button type="button" data-zoom="0" class="on">全部</button>
+  </div>
+  <div class="pxh-range"><input type="range" id="pxh-r0" min="0" value="0" aria-label="區間起點"><input type="range" id="pxh-r1" min="0" value="0" aria-label="區間終點"></div>
+  <p class="note-s" id="pxh-span"></p>
+</div>
+{% else %}
+<p class="stale">這一檔還沒有每日收盤資料，無法做股價健診。</p>
+{% endif %}
+</section>
+
+<section class="panel" id="panel-yield" role="tabpanel" aria-labelledby="tab-yield" hidden>
+<h3 id="yield">殖利率估價</h3>
+
+{% if p.gaps.yield %}
+<p class="stale">{{ p.gaps.yield }}——此區塊無法計算。</p>
+{% endif %}
+
+{% if p.dividend %}
+<div class="val">
+  <section>
+    <h4>預估股利</h4>
+    <dl>
+      <dt>預估股利</dt><dd class="big">{{ p.dividend.dividend }}</dd>
+      <dt>配發率</dt><dd>{{ p.dividend.payout_ratio }}</dd>
+      <dt>現價殖利率</dt><dd>{{ p.dividend.current_yield }}</dd>
+    </dl>
+  </section>
+  <section>
+    <h4>估價區間</h4>
+    <dl>
+      <dt>便宜價</dt><dd>{{ p.dividend.cheap }}</dd>
+      <dt>合理價</dt><dd>{{ p.dividend.fair }}</dd>
+      <dt>昂貴價</dt><dd>{{ p.dividend.expensive }}</dd>
+      <dt>判斷</dt><dd class="big">{{ p.dividend.verdict }}</dd>
+    </dl>
+  </section>
+</div>
+{% endif %}
+
+{% if p.figures.yield_band %}{{ p.figures.yield_band|safe }}{% endif %}
+
+{% if p.dividend_lag_rows %}
+<h4>歷年股價與股利</h4>
+<p class="muted">
+  「盈餘年」是股利所屬的獲利年度，「發放年」是實際配發的年度——同一筆金額
+  在兩欄之間差一年，這就是估價時股利遞延一年的依據。
+</p>
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>年度</th><th class="num">最高價</th><th class="num">最低價</th>
+          <th class="num">收盤平均價</th>
+          <th class="num">現金股利（盈餘年）</th><th class="num">現金股利（發放年）</th></tr>
+    </thead>
+    <tbody>
+      {% for row in p.dividend_lag_rows %}
+      <tr>
+        <th scope="row">{{ row.year }}</th>
+        <td class="num">{{ row.high }}</td>
+        <td class="num">{{ row.low }}</td>
+        <td class="num">{{ row.avg }}</td>
+        <td class="num">{{ row.cash_earned }}</td>
+        <td class="num">{{ row.cash_paid }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+</section>
+
+<section class="panel" id="panel-river" role="tabpanel" aria-labelledby="tab-river" hidden>
+<h3 id="river">河流圖（本益比）</h3>
+{% if p.river %}
+{% if p.river.figure %}
+{% set river_tip %}
+  本益比倍數取自<b>年度</b>資料——每年的收盤均價除以當年 EPS，2.5%～97.5%
+  信任區間切成六區。分區<b>會彎</b>，因為它們是那組固定倍數乘上<b>當時</b>的
+  近四季 EPS，而 EPS 每季會變；季報要等公布才算數（Q1 五月中、Q2 八月中、
+  Q3 十一月中、年報隔年三月底），所以邊界是階梯而不是平滑曲線。
+{% endset %}
+{% if p.river.alt %}{{ range_bar("river", p.river.alt.keys()|list + ["ALL"], "ALL") }}{% endif %}
+<div class="rng-fig" data-rng-fig="river">{{ p.river.figure }}</div>
+{% else %}
+<p class="stale">
+  活頁簿的河流圖用<b>週線</b>收盤價；這次沒抓到週線序列，
+  這裡只列出分區與目前位置。判斷「現在落在哪一區」不受影響，
+  平滑的曲線則畫不出來。
+</p>
+{% endif %}
+<div class="cards">
+  <div class="card"><b>{{ "%.2f"|format(p.river.current) if p.river.current else "—" }}</b>
+    <span>目前本益比</span></div>
+  <div class="card"><b>{{ p.river.zone_name }}</b><span>所在分區</span></div>
+    <div class="card"><b>{{ p.river.years }}</b><span>採計年數{% if river_tip is defined %}{% call tip() %}{{ river_tip }}{% endcall %}{% endif %}</span></div>
+  {% if p.river.weeks %}
+  <div class="card"><b>{{ p.river.weeks }}</b><span>週線點數</span></div>
+  {% endif %}
+</div>
+<div class="scroll">
+  <table>
+    <thead><tr><th>分區</th><th class="num">本益比區間</th><th></th></tr></thead>
+    <tbody>
+      {% for name, rng in p.river.ranges %}
+      <tr class="{{ 'here' if name == p.river.zone_name else '' }}">
+        <th scope="row">{{ name }}</th>
+        <td class="num">{{ rng }}</td>
+        <td>{% if name == p.river.zone_name %}<span class="pick">← 目前</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="stale">河流圖要 5 個年度的本益比才畫得出信任區間；這一檔目前不足 5 年
+  （上市未滿 5 年，或其中有虧損年度不計入）。年數夠了之後會自動補上。</p>
+{% endif %}
+
+</section>
+
+<section class="panel" id="panel-season" role="tabpanel" aria-labelledby="tab-season" hidden>
+<h3 id="season">營收季節性 / 獲利季節性</h3>
+
+{% if p.revenue_season %}
+{% if p.revenue_season.figure %}{{ p.revenue_season.figure|safe }}{% endif %}
+<div class="scroll">
+  <table>
+    <thead><tr><th>年度</th>
+      {% for c in p.revenue_season.columns %}<th class="num">{{ c }}</th>{% endfor %}
+      <th class="num">全年</th></tr></thead>
+    <tbody>
+      {% for row in p.revenue_season.rows %}
+      <tr>
+        <th scope="row">{{ row.year }}{% if not row.complete %}<span class="muted">*</span>{% endif %}</th>
+        {% for v in row["values"] %}<td class="num">{{ "{:,.0f}".format(v) if v is not none else "" }}</td>{% endfor %}
+        <td class="num">{{ "{:,.0f}".format(row.total) if row.total else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">單位仟元。標 * 的年度尚未完整，不列入比重平均。</p>
+{% else %}
+<p class="stale">沒有月營收資料。</p>
+{% endif %}
+
+{% if p.profit_season %}
+{% if p.profit_season.figure %}{{ p.profit_season.figure|safe }}{% endif %}
+<div class="scroll">
+  <table>
+    <thead><tr><th>年度</th>
+      {% for c in p.profit_season.columns %}<th class="num">Q{{ c }}</th>{% endfor %}
+      <th class="num">全年</th></tr></thead>
+    <tbody>
+      {% for row in p.profit_season.rows %}
+      <tr>
+        <th scope="row">{{ row.year }}{% if not row.complete %}<span class="muted">*</span>{% endif %}</th>
+        {% for v in row["values"] %}<td class="num">{{ "%.2f"|format(v) if v is not none else "" }}</td>{% endfor %}
+        <td class="num">{{ "%.2f"|format(row.total) if row.total else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">單季 EPS（元）。虧損年度不列入比重平均——占比在有負數時沒有意義。</p>
+{% endif %}
+
+</section>
+
+<section class="panel" id="panel-inst" role="tabpanel" aria-labelledby="tab-inst" hidden>
+<h3 id="inst">外資投信</h3>
+{% if p.institutional %}
+{% set i = p.institutional %}
+<div class="cards">
+  <div class="card"><b>{{ "{:,.0f}".format(i.totals["外資"]) if i.totals["外資"] is not none else "—" }}</b>
+    <span>近 20 日外資買賣超（張）</span></div>
+  <div class="card"><b>{{ "{:,.0f}".format(i.totals["投信"]) if i.totals["投信"] is not none else "—" }}</b>
+    <span>近 20 日投信買賣超（張）</span></div>
+{% set ls = i.latest_share %}
+  <div class="card"><b>{{ "%.2f"|format(ls.share["外資"] * 100) if ls and ls.share["外資"] is not none else "—" }}%</b>
+    <span>外資持股比重（{{ ls.date if ls else "—" }}）</span></div>
+  <div class="card"><b>{{ "%.2f"|format(ls.share["三大法人"] * 100) if ls and ls.share["三大法人"] is not none else "—" }}%</b>
+    <span>三大法人持股比重</span></div>
+</div>
+<p class="muted note-s">圖預設近 {{ i.chart_span }} 日（下方可縮放到約三年）・表近 {{ i.days|length }} 日・<a href="{{ rel }}radar.html#t1-{{ p.stock_id }}">看完整籌碼多圖 →</a></p>
+<div id="inst-static" data-src="{{ p.stock_id }}.i.json">
+{{ i.figures.foreign_net|safe }}
+{{ i.figures.foreign_share|safe }}
+</div>
+<div id="inst-live" hidden>
+  <h4 class="pxh-h">外資買賣超（張）與股價</h4>
+  <div class="pxc" id="inst-c1"></div>
+  <h4 class="pxh-h">外資持股比重（%）與股價</h4>
+  <div class="pxc" id="inst-c2"></div>
+  <div class="pxh-zoom" id="inst-zoom">
+    <span>縮放區間：</span>
+    <button type="button" data-zoom="21">近1月</button><button type="button" data-zoom="63">近3月</button><button type="button" data-zoom="120" class="on">近120日</button><button type="button" data-zoom="252">近1年</button><button type="button" data-zoom="0">全部</button>
+  </div>
+  <div class="pxh-range"><input type="range" id="inst-r0" min="0" value="0" aria-label="區間起點"><input type="range" id="inst-r1" min="0" value="0" aria-label="區間終點"></div>
+  <p class="note-s" id="inst-span"></p>
+</div>
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>日期</th><th class="num">外資</th><th class="num">投信</th>
+          <th class="num">自營商</th><th class="num">單日合計</th>
+          <th class="num">外資持股</th><th class="num">投信持股</th><th class="num">自營商持股</th>
+          <th class="num">外資比重</th><th class="num">三大法人比重</th></tr>
+    </thead>
+    <tbody>
+      {% for d in i.days %}
+      <tr>
+        <th scope="row">{{ d.date }}</th>
+        {% for k in ["外資", "投信", "自營商", "合計"] %}
+        <td class="num">{{ "{:,.0f}".format(d.net[k]) if d.net[k] is not none else "" }}</td>
+        {% endfor %}
+        {% for k in ["外資", "投信", "自營商"] %}
+        <td class="num">{{ "{:,.0f}".format(d.holding[k]) if d.holding[k] is not none else "" }}</td>
+        {% endfor %}
+        <td class="num">{{ "%.2f"|format(d.share["外資"] * 100) ~ "%" if d.share["外資"] is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(d.share["三大法人"] * 100) ~ "%" if d.share["三大法人"] is not none else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">
+  買賣超與持股單位為張。外資持股與比重是證交所／櫃買每天公告的；投信、自營商的庫存
+  交易所不公告，這裡和券商（MoneyDJ）用同一個算法：前一天的持股加上當天的買賣超，
+  逐日累計（對過帳：投信 99% 一張不差），每天收盤後自動更新。
+  三大法人比重＝三者持股合計 ÷ 發行張數。
+</p>
+{% else %}
+<p class="stale">尚未取得〔三大法人〕，請執行 <code>twsix fetch-stock {{ p.stock_id }}</code>。</p>
+{% endif %}
+
+</section>
+
+<section class="panel" id="panel-news" role="tabpanel" aria-labelledby="tab-news" hidden>
+<h3 id="news">個股新聞</h3>
+{% if p.news %}
+{% set n = p.news %}
+{% if n.items %}
+<p class="muted note-s">鉅亨網・近 {{ n.days }} 天 {{ n.items|length }} 則・最新 {{ n.latest }}
+  {%- if n.dropped %}（更早的 {{ n.dropped }} 則未列出）{% endif %}</p>
+<ol class="news">
+  {% for it in n.items %}
+  <li>
+    <div class="meta">
+      <time>{{ it.date }}{% if it.time %} {{ it.time }}{% endif %}</time>
+      <span class="src">{{ it.source }}</span>
+    </div>
+        {% if it.url %}<a class="head" href="{{ it.url }}" target="_blank" rel="noopener noreferrer">{{ it.title }}<span class="ext" aria-hidden="true">↗</span><span class="sr">（另開分頁）</span></a>
+    {% else %}<b class="head">{{ it.title }}</b>{% endif %}
+    {% if it.summary %}<p class="sum">{{ it.summary }}</p>{% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="note">鉅亨網，近 {{ n.days }} 天沒有談到這一檔公司的新聞。</p>
+{% endif %}
+{% else %}
+<p class="stale">尚未取得〔個股新聞〕，請執行 <code>twsix report {{ p.stock_id }}</code>。</p>
+{% endif %}
+
+</section>
+
+<section class="panel" id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" hidden
+         data-src="{{ rel }}ai/stock/{{ p.stock_id }}.json" data-ai-page="{{ rel }}ai.html">
+<h3 id="ai">AI 選股</h3>
+<div class="ai-stock" aria-live="polite"><p class="muted">讀取中……</p></div>
+<noscript><p class="stale">這一個分頁要開啟 JavaScript 才看得到。</p></noscript>
+</section>
+
+{% if p.holders %}
+{% set h = p.holders %}
+<section class="panel" id="panel-holders" role="tabpanel" aria-labelledby="tab-holders" hidden>
+<h3 id="holders">大戶持股</h3>
+<div class="cards">
+  <div class="card"><b>{{ "%.1f"|format(h.latest.big) if h.latest.big is not none else "—" }}%</b>
+    <span>大戶持股（＞400張，{{ h.latest.week }}）</span></div>
+  <div class="card"><b>{{ "%.1f"|format(h.latest.small) if h.latest.small is not none else "—" }}%</b>
+    <span>散戶持股（≦10張）</span></div>
+  <div class="card"><b>{{ "%.1f"|format(h.latest.share["＞1千張"]) if h.latest.share["＞1千張"] is not none else "—" }}%</b>
+    <span>＞1千張</span></div>
+  <div class="card"><b>{{ "%.3f"|format(h.latest.custody) if h.latest.custody is not none else "—" }}</b>
+    <span>集保庫存（萬張）</span></div>
+</div>
+<p class="muted note-s"><a href="{{ rel }}radar.html#t2-{{ p.stock_id }}">看完整大戶籌碼 →</a></p>
+{% if h.alt %}{{ range_bar("holders", ["1Y"] + h.alt.keys()|list, "1Y") }}{% endif %}
+<div class="rng-fig" data-rng-fig="holders" data-part="big">{{ h.figures.big|safe }}</div>
+<div class="rng-fig" data-rng-fig="holders" data-part="small">{{ h.figures.small|safe }}</div>
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>週別</th><th>統計日期</th><th class="num">收盤</th>
+          {% for t in h.tiers %}<th class="num">{{ t }}</th>{% endfor %}
+          <th class="num">大戶合計</th></tr>
+    </thead>
+    <tbody>
+      {% for w in h.weeks[:52] %}
+      <tr>
+        <th scope="row">{{ w.week }}</th>
+        <td>{{ w.date }}</td>
+        <td class="num">{{ "%.2f"|format(w.close) if w.close is not none else "" }}</td>
+        {% for t in h.tiers %}
+        <td class="num">{{ "%.2f"|format(w.share[t]) if w.share[t] is not none else "" }}</td>
+        {% endfor %}
+        <td class="num">{{ "%.2f"|format(w.big) if w.big is not none else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">
+  比例單位為 %，八個級距相加為 100（Goodinfo 四捨五入至小數一位）。
+  「大戶合計」是＞400張三個級距之和，與活頁簿同一個定義。
+  表列最近 52 週，圖為最近 {{ h.weeks[:156]|length }} 週；資料共 {{ h.weeks|length }} 週。
+  來源：集保結算所股權分散表，每週自動更新；較早的歷史來自 Goodinfo 匯入，兩邊已合併。
+</p>
+</section>
+{% endif %}
+
+{% if p.directors %}
+{% set dr = p.directors %}
+<section class="panel" id="panel-directors" role="tabpanel" aria-labelledby="tab-directors" hidden>
+<h3 id="directors">董監持股</h3>
+<div class="cards">
+  <div class="card"><b>{{ "%.1f"|format(dr.latest.pct) if dr.latest.pct is not none else "—" }}%</b>
+    <span>全體董監持股（{{ dr.latest.month }}）</span></div>
+  <div class="card"><b>{{ "%.1f"|format(dr.latest.pledged_pct) if dr.latest.pledged_pct is not none else "—" }}%</b>
+    <span>董監質押比例</span></div>
+  <div class="card"><b>{{ "{:,.0f}".format(dr.latest.held) if dr.latest.held is not none else "—" }}</b>
+    <span>董監持股張數</span></div>
+  <div class="card"><b>{{ "%.1f"|format(dr.latest.foreign) if dr.latest.foreign is not none else "—" }}%</b>
+    <span>外資持股</span></div>
+</div>
+{{ dr.figures.pct|safe }}
+{{ dr.figures.pledged|safe }}
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>月別</th><th class="num">當月收盤</th><th class="num">發行張數(萬張)</th>
+          <th class="num">董監持股張數</th><th class="num">持股(%)</th>
+          <th class="num">持股增減</th><th class="num">質押張數</th>
+          <th class="num">質押(%)</th><th class="num">獨立董監(%)</th>
+          <th class="num">外資(%)</th></tr>
+    </thead>
+    <tbody>
+      {% for m in dr.months[:36] %}
+      <tr>
+        <th scope="row">{{ m.month }}</th>
+        <td class="num">{{ "%.2f"|format(m.close) if m.close is not none else "" }}</td>
+        <td class="num">{{ "%.3f"|format(m.issued) if m.issued is not none else "" }}</td>
+        <td class="num">{{ "{:,.0f}".format(m.held) if m.held is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(m.pct) if m.pct is not none else "" }}</td>
+        <td class="num">{{ "{:,.0f}".format(m.change) if m.change is not none else "" }}</td>
+        <td class="num">{{ "{:,.0f}".format(m.pledged) if m.pledged is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(m.pledged_pct) if m.pledged_pct is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(m.independent) if m.independent is not none else "" }}</td>
+        <td class="num">{{ "%.2f"|format(m.foreign) if m.foreign is not none else "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">
+  空白代表該月尚未申報，不是 0——最新一個月在月報送出前整列都是空的，所以上方
+  卡片顯示的是最近一個<b>有數字</b>的月份。
+  表列最近 36 個月，圖為最近 {{ dr.months[:120]|length }} 個月；資料共 {{ dr.months|length }} 個月。
+  董監持股來源為公開資訊觀測站（每月）；「當月收盤」是該月最後一個交易日的收盤，
+  「外資(%)」是該月最後一個交易日證交所／櫃買公告的外資持股比率。
+</p>
+</section>
+{% endif %}
+
+{% if p.unbuilt %}
+<section class="panel" id="panel-unbuilt" role="tabpanel" aria-labelledby="tab-unbuilt" hidden>
+<h3 id="unbuilt">尚未建置的頁面</h3>
+<p class="muted">
+  缺的不是來源，是這一檔的快照。〔大戶持股〕〔董監持股〕的原始資料在集保結算所
+  與公開資訊觀測站，都是開放資料、一次給整個市場——
+  <code>twsix fetch-ownership</code> 三個請求就涵蓋 4,047 檔。官方只給最新一期，
+  所以歷史是每週跑一次累積出來的；排程已經在跑，這一頁會自己長出來。
+  想要更長的歷史，可以從 Goodinfo 另存那一頁再
+  <code>twsix fetch-page {{ p.stock_id }} --import 檔案</code>，兩邊會合併。
+</p>
+<div class="scroll">
+  <table>
+    <thead><tr><th>頁面</th><th>還缺什麼</th></tr></thead>
+    <tbody>
+      {% for u in p.unbuilt %}
+      <tr><th scope="row">{{ u.name }}</th><td class="reason">{{ u.why }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+</section>
+{% endif %}
+
+<script>
+
+(function(){
+
+  var tabs=[].slice.call(document.querySelectorAll('.tabs [role=tab]'));
+  if(!tabs.length) return;
+
+  var ident = document.querySelector('.ident.sticky');
+  function toTop(){
+    var y = 0;
+    var wrap = document.querySelector('.wrap');
+    if(wrap) y = wrap.offsetTop;
+    if(ident) y = Math.max(0, ident.offsetTop);
+    window.scrollTo({ top: y, behavior: 'auto' });
+  }
+  function show(id, push, scroll){
+    tabs.forEach(function(t){
+      var on = t.id === 'tab-'+id;
+      t.setAttribute('aria-selected', on ? 'true':'false');
+      t.tabIndex = on ? 0 : -1;
+      var panel = document.getElementById(t.getAttribute('aria-controls'));
+      if(panel) panel.hidden = !on;
+    });
+    if(push && history.replaceState) history.replaceState(null,'','#'+id);
+    if(scroll) toTop();
+  }
+  tabs.forEach(function(t){
+    t.addEventListener('click', function(){
+      show(t.id.slice(4), true, true);
+      t.focus();
+    });
+    t.addEventListener('keydown', function(e){
+      var i=tabs.indexOf(t), n=tabs.length, j=null;
+      if(e.key==='ArrowRight') j=(i+1)%n;
+      else if(e.key==='ArrowLeft') j=(i+n-1)%n;
+      else if(e.key==='Home') j=0;
+      else if(e.key==='End') j=n-1;
+      if(j===null) return;
+      e.preventDefault();
+      tabs[j].focus(); show(tabs[j].id.slice(4), true, true);
+    });
+  });
+  var want=(location.hash||'').slice(1);
+  if(want && document.getElementById('tab-'+want)) show(want, false, false);
+})();
+</script>
+{% endblock %}

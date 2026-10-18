@@ -1,0 +1,55 @@
+name: 心跳（有沒有哪一份資料悄悄停了）
+
+on:
+  schedule:
+    - cron: "53 11 * * 1-6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: heartbeat
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 問兩個上游最後一次產出是什麼時候
+        id: upstream
+        run: |
+          set -u
+          stamp () {   # $1 = repo, $2 = 分支
+            local dir; dir="$(mktemp -d)"
+            if git clone --depth 1 --branch "$2" --quiet \
+                 "https://github.com/metallicatw/$1.git" "$dir" 2>/dev/null; then
+              git -C "$dir" log -1 --format=%cI
+            else
+              echo ""
+            fi
+          }
+          mm="$(stamp market-monitor main)"
+          tf="$(stamp tw-trend-filter report)"
+          echo "market-monitor: ${mm:-（clone 失敗）}"
+          echo "tw-trend-filter: ${tf:-（clone 失敗）}"
+          {
+            echo "mm=$mm"
+            echo "tf=$tf"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 心跳
+        env:
+          MM: ${{ steps.upstream.outputs.mm }}
+          TF: ${{ steps.upstream.outputs.tf }}
+        run: |
+          python scripts/heartbeat.py \
+            --upstream "market-monitor=$MM" \
+            --upstream "tw-trend-filter=$TF"

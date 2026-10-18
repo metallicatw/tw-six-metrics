@@ -1,0 +1,33 @@
+
+data_dir = "data"
+periods  = 9          # 〔六大財務指標評等〕's nine snapshot blocks
+
+[forecast]
+revenue_growth_method = "1&6"
+
+margin_method = "4q_avg"
+
+pe_basis = "avg_5y"
+
+pe_source = "computed"
+
+payout_basis = "avg_5y"
+
+river_low_percentile  = 0.025
+river_high_percentile = 0.975
+
+[ingest]
+cache_dir            = ".cache/http"
+cache_ttl_hours      = 6.0
+min_interval_seconds = 1.2
+retries              = 4
+enable_moneydj_fallback = false
+moneydj_host            = "https://moneydj.emega.com.tw"
+
+[report]
+site_dir = "site"
+title    = "金股道"
+subtitle = "由公開資料自動產生"
+repo = "metallicatw/tw-six-metrics"
+max_list_rows = 2000
+show_value_picks_first = true

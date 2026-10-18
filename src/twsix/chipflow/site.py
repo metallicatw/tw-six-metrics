@@ -1,0 +1,568 @@
+
+from __future__ import annotations
+
+import csv
+import gzip
+import hashlib
+import json
+import tomllib
+from datetime import date
+from pathlib import Path
+
+from .fundamentals import load_income
+from .indicators import NAN, isnan, rank_desc
+from .radar import OUT_DIR, RADAR_FILE, VALIDATE_FILE, Engine, _dump, _r
+
+SITE_DIR = "chipflow"
+DAYS = 120
+LONG_DAYS = 750
+LONG_FIELDS = (
+    ("cl", 100), ("fa", 100), ("z", 10000), ("yr", 1), ("va", 100), ("vs", 1000),
+    ("vr", 1), ("vc", 1000), ("hp", 100), ("hc", 1), ("sh", 1), ("g20", 100),
+    ("g60", 100), ("tex", 100), ("fpw", 10), ("vpw", 10), ("wr", 1), ("xr", 1),
+    ("fa20", 100), ("ft", 100), ("hk", 1),
+)
+LONG_HEAD = "long.json"
+RANK_DAYS = 20
+RANK_TOP = 100
+QUARTERS = 20
+MONTHS = 24
+THRESHOLDS = (1, 5, 10, 15, 20, 30, 40, 50, 100, 200, 400, 800, 1000)
+
+BALANCE_COLS = {
+    "retained": ("保留盈餘（或累積虧損）", "保留盈餘"),
+    "apic": ("資本公積",),
+    "capital": ("股本",),
+    "assets": ("資產總計", "資產總額"),
+}
+
+
+def _num(text: str | None) -> float:
+    t = (text or "").strip().replace(",", "")
+    if not t:
+        return NAN
+    try:
+        return float(t)
+    except ValueError:
+        return NAN
+
+
+def _stamp_key(data_dir: Path) -> dict[str, str]:
+    prices = sorted((data_dir / "market" / "daily" / "prices").glob("*.csv.gz"))
+    radar = data_dir / OUT_DIR / RADAR_FILE
+    return {
+        "prices": prices[-1].name if prices else "",
+        "radar": hashlib.sha1(radar.read_bytes()).hexdigest() if radar.exists() else "",
+        "levels": str(len(list((data_dir / "ownership" / "levels").glob("*.csv.gz")))),
+        "version": "6",
+    }
+
+
+def _watchlist(root: Path) -> set[str]:
+    path = root / "config" / "universe.toml"
+    try:
+        doc = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {str(c) for c in doc.get("watchlist", [])}
+
+
+def load_balance(data_dir: Path) -> dict[str, dict[tuple[int, int], dict[str, float]]]:
+    out: dict[str, dict[tuple[int, int], dict[str, float]]] = {}
+    for prefix in ("twse", "tpex"):
+        for path in sorted((data_dir / "market" / f"{prefix}_balance").glob("*Q*.csv")):
+            try:
+                year, q = int(path.stem[:3]), int(path.stem[4])
+            except (ValueError, IndexError):
+                continue
+            with path.open(encoding="utf-8-sig") as fh:
+                for r in csv.DictReader(fh):
+                    code = (r.get("公司代號") or "").strip()
+                    if not code:
+                        continue
+                    slot = out.setdefault(code, {}).setdefault((year, q), {})
+                    for key, cols in BALANCE_COLS.items():
+                        for col in cols:
+                            v = _num(r.get(col))
+                            if not isnan(v):
+                                slot[key] = v
+                                break
+    return out
+
+
+def load_revenue_notes(data_dir: Path) -> dict[str, dict[str, str]]:
+    out: dict[str, dict[str, str]] = {}
+    for sub in ("twse_revenue", "tpex_revenue"):
+        for path in sorted((data_dir / "market" / sub).glob("*.csv")):
+            with path.open(encoding="utf-8-sig") as fh:
+                for r in csv.DictReader(fh):
+                    code = (r.get("公司代號") or "").strip()
+                    ym = (r.get("資料年月") or "").strip()
+                    note = (r.get("備註") or "").strip()
+                    if code and len(ym) == 5 and note and note != "-":
+                        label = f"{int(ym[:3]) + 1911}-{ym[3:]}"
+                        out.setdefault(code, {})[label] = note
+    return out
+
+
+
+
+def _quarter_seq(last: tuple[int, int], n: int) -> list[tuple[int, int]]:
+    y, q = last
+    idx = y * 4 + q - 1
+    return [((idx - k) // 4, (idx - k) % 4 + 1) for k in range(n - 1, -1, -1)]
+
+
+def _single(st: dict, yq: tuple[int, int], key: str) -> float:
+    cur = st.get(yq, {}).get(key, NAN)
+    if isnan(cur):
+        return NAN
+    if yq[1] == 1:
+        return cur
+    y, q = yq
+    before = st.get((y, q - 1), {}).get(key, NAN)
+    return NAN if isnan(before) else cur - before
+
+
+def sheet_series(quarters: dict[str, dict[str, float]], income: dict) -> dict:
+    labels = sorted(quarters)[-QUARTERS:]
+    if not labels:
+        return {}
+
+    def g(lb: str, key: str) -> float:
+        return quarters.get(lb, {}).get(key, NAN)
+
+    def prev(lb: str, k: int) -> str:
+        y, q = int(lb[:4]), int(lb[5])
+        idx = y * 4 + q - 1 - k
+        return f"{idx // 4}.{idx % 4 + 1}Q"
+
+    out: dict[str, list] = {k: [] for k in ("inv", "inv_turn", "inv_rev", "cl", "cl_rev",
+                                             "cl_cap", "capex", "cx_cap")}
+    for lb in labels:
+        roc = (int(lb[:4]) - 1911, int(lb[5]))
+        rev_q = _single(income, roc, "rev") / 1000
+        cost_q = _single(income, roc, "cost") / 1000
+        rev4 = [_single(income, ((int(prev(lb, k)[:4]) - 1911), int(prev(lb, k)[5])), "rev")
+                for k in range(4)]
+        rev4v = sum(rev4) / 1000 if not any(isnan(v) for v in rev4) else NAN
+        inv, inv1, cl, cap = g(lb, "inv"), g(prev(lb, 1), "inv"), g(lb, "cl"), g(lb, "capital")
+        cx4 = [g(prev(lb, k), "capex") for k in range(4)]
+        out["inv"].append(_r(inv, 0))
+        out["inv_turn"].append(_r(cost_q / ((inv + inv1) / 2), 3)
+                               if not isnan(cost_q) and not isnan(inv1) and inv + inv1 > 0
+                               else None)
+        out["inv_rev"].append(_r(inv / rev_q * 100, 1) if rev_q > 0 and not isnan(inv)
+                              else None)
+        out["cl"].append(_r(cl, 0))
+        cl4 = g(prev(lb, 4), "cl")
+        out["cl_rev"].append(_r((cl - cl4) / rev4v * 100, 2)
+                             if not isnan(cl4) and not isnan(rev4v) and rev4v > 0 else None)
+        out["cl_cap"].append(_r(cl / cap * 100, 1) if cap > 0 and not isnan(cl) else None)
+        out["capex"].append(_r(g(lb, "capex"), 0))
+        out["cx_cap"].append(_r(sum(cx4) / cap * 100, 1)
+                             if cap > 0 and not any(isnan(v) for v in cx4) else None)
+    return {"q": [f"{lb[:4]}Q{lb[5]}" for lb in labels], **out}
+
+
+LOOKBACK = 7
+
+
+def fundamentals_series(income: dict, balance: dict) -> dict:
+    quarters = sorted(yq for yq, v in income.items() if "rev" in v)
+    if not quarters:
+        return {}
+    seq = _quarter_seq(quarters[-1], QUARTERS + LOOKBACK)
+    rev = [_single(income, yq, "rev") for yq in seq]
+    op = [_single(income, yq, "op") for yq in seq]
+    ni = [_single(income, yq, "ni") for yq in seq]
+    eps = [_single(income, yq, "eps") for yq in seq]
+
+    def ttm(vals, k):
+        w = vals[k - 3:k + 1] if k >= 3 else []
+        return sum(w) if len(w) == 4 and not any(isnan(v) for v in w) else NAN
+
+    def yoy(vals, k):
+        if k < 4 or isnan(vals[k]) or isnan(vals[k - 4]) or vals[k - 4] <= 0:
+            return NAN
+        return (vals[k] / vals[k - 4] - 1) * 100
+
+    eps4 = [ttm(eps, k) for k in range(len(seq))]
+    ni4 = [ttm(ni, k) for k in range(len(seq))]
+    eps4y = [yoy(eps4, k) for k in range(len(seq))]
+    opy = [yoy(op, k) for k in range(len(seq))]
+
+    bal = [balance.get(yq, {}) for yq in seq]
+    re_r, ap_r, rap, roa = [], [], [], []
+    for k, b in enumerate(bal):
+        cap, re_, ap = b.get("capital", NAN), b.get("retained", NAN), b.get("apic", NAN)
+        ap0 = 0.0 if isnan(ap) else ap
+        base = cap + ap0 + re_ if not isnan(cap) and not isnan(re_) else NAN
+        ok = not isnan(base) and base > 0
+        re_r.append(re_ / base * 100 if ok else NAN)
+        ap_r.append(ap0 / base * 100 if ok else NAN)
+        rap.append((re_ + ap0) / base * 100 if ok else NAN)
+        a_now = b.get("assets", NAN)
+        a_old = bal[k - 4].get("assets", NAN) if k >= 4 else NAN
+        avg = (a_now + a_old) / 2 if not isnan(a_now) and not isnan(a_old) else NAN
+        roa.append(ni4[k] / avg * 100 if not isnan(ni4[k]) and avg > 0 else NAN)
+
+    keep = len(seq) - QUARTERS
+    first = next((k for k in range(keep, len(seq)) if not isnan(rev[k])), keep)
+    sl = slice(first, None)
+    seq, rev, op, ni, eps = seq[sl], rev[sl], op[sl], ni[sl], eps[sl]
+    eps4, eps4y, opy, bal = eps4[sl], eps4y[sl], opy[sl], bal[sl]
+    re_r, ap_r, rap, roa = re_r[sl], ap_r[sl], rap[sl], roa[sl]
+
+    return {
+        "q": [f"{y + 1911}Q{q}" for y, q in seq],
+        "eps": [_r(v, 2) for v in eps],
+        "eps4": [_r(v, 2) for v in eps4],
+        "eps4y": [_r(v, 1) for v in eps4y],
+        "op": [_r(v / 1000, 1) for v in op],
+        "opy": [_r(v, 1) for v in opy],
+        "opm": [_r(o / r * 100, 2) if not isnan(o) and not isnan(r) and r > 0 else None
+                for o, r in zip(op, rev, strict=True)],
+        "npm": [_r(x / r * 100, 2) if not isnan(x) and not isnan(r) and r > 0 else None
+                for x, r in zip(ni, rev, strict=True)],
+        "rap": [_r(v, 1) for v in rap],
+        "rer": [_r(v, 1) for v in re_r],
+        "apr": [_r(v, 1) for v in ap_r],
+        "retained": [_r(b.get("retained", NAN) / 1000, 0) for b in bal],
+        "apic": [_r(b.get("apic", NAN) / 1000, 0) for b in bal],
+        "capital": [_r(b.get("capital", NAN) / 1000, 0) for b in bal],
+        "roa": [_r(v, 2) for v in roa],
+    }
+
+
+def revenue_series(engine: Engine, code: str, series: dict[int, float],
+                   notes: dict[str, str]) -> dict:
+    if not series:
+        return {}
+    k_last = max(series)
+    keys = list(range(k_last - MONTHS + 1, k_last + 1))
+
+    def g(k):
+        return series.get(k, NAN)
+
+    def cum(k, n):
+        vals = [g(k - j) for j in range(n)]
+        return NAN if any(isnan(v) for v in vals) else sum(vals)
+
+    def growth(a, b):
+        return NAN if isnan(a) or isnan(b) or b <= 0 else (a / b - 1) * 100
+
+    labels = [f"{k // 12}-{k % 12 + 1:02d}" for k in keys]
+    price = []
+    for k in keys:
+        y, m = (k + 1) // 12, (k + 1) % 12 + 1
+        day = date(y, m, 10).isoformat()
+        i = engine.p.index(day)
+        if i >= 0 and engine.p.dates[i] < day:
+            i += 1
+        cl = engine.p.close.get(code)
+        price.append(_r(cl[i], 2) if cl is not None and 0 <= i < len(cl) else None)
+    return {
+        "m": labels,
+        "rev": [_r(g(k) / 1000, 1) for k in keys],
+        "yoy": [_r(growth(g(k), g(k - 12)), 1) for k in keys],
+        "yoy3": [_r(growth(cum(k, 3), cum(k - 12, 3)), 1) for k in keys],
+        "yoy12": [_r(growth(cum(k, 12), cum(k - 12, 12)), 1) for k in keys],
+        "price": price,
+        "notes": {lb: notes[lb] for lb in labels if lb in notes},
+    }
+
+
+def holders_series(engine: Engine, code: str) -> dict:
+    ws = engine.tiers.get(code, [])[-52:]
+    if not ws:
+        return {}
+    out: dict[str, object] = {"w": [w.date for w in ws],
+                              "sh": [None if isnan(w.holders) else int(w.holders) for w in ws],
+                              "tot": [int(w.total / 1000) for w in ws],
+                              "cp": [_r(engine.close_near(code, engine.p.index(w.date)), 2)
+                                     for w in ws]}
+    lots: dict[str, list] = {}
+    ppl: dict[str, list] = {}
+    for t in THRESHOLDS:
+        lots[str(t)], ppl[str(t)] = [], []
+        for w in ws:
+            if t not in w.lower:
+                lots[str(t)].append(None)
+                ppl[str(t)].append(None)
+                continue
+            k = w.lower.index(t)
+            s = sum(x for x in w.shares[k:] if not isnan(x))
+            lots[str(t)].append(int(s / 1000))
+            if w.people is not None:
+                ppl[str(t)].append(int(sum(x for x in w.people[k:] if not isnan(x))))
+            else:
+                ppl[str(t)].append(None)
+    out["lots"] = {k: v for k, v in lots.items() if any(x is not None for x in v)}
+    out["ppl"] = {k: v for k, v in ppl.items() if any(x is not None for x in v)}
+    return out
+
+
+def daily_series(engine: Engine, code: str, days: list[int], ranks: dict[int, dict]) -> dict:
+    p = engine.p
+    ws = engine.tiers.get(code, [])
+    out: dict[str, list] = {k: [] for k in (
+        "cl", "fa", "z", "yr", "va", "vs", "vr", "vc", "hp", "hc", "sh",
+        "g20", "g60", "tex", "fpw", "vpw", "wr", "xr", "fa20", "ft", "hk")}
+    for i in days:
+        cap = engine.capital_at(code, i)
+        st = engine.day_stats(i)
+        rk = ranks[i]
+        cl = p.close[code][i]
+        fi60, val20 = st["fi60"].get(code, NAN), st["val20"].get(code, NAN)
+        out["cl"].append(_r(cl, 2))
+        out["fa"].append(_r(fi60 / 1e8, 2))
+        out["z"].append(_r(fi60 / cap, 4) if cap > 0 else None)
+        out["yr"].append(rk["fi"].get(code))
+        out["va"].append(_r(val20 / 1e8, 2))
+        out["vs"].append(_r(val20 / rk["val_total"] * 100, 3) if rk["val_total"] else None)
+        out["vr"].append(rk["val"].get(code))
+        out["vc"].append(_r(val20 / cap, 3) if cap > 0 else None)
+        day = p.dates[i]
+        w = None
+        for tw in reversed(ws):
+            if tw.date <= day:
+                w = tw
+                break
+        ratio = count = NAN
+        if w is not None and not isnan(cl):
+            ratio, count, _ = engine.whale_week(code, w, cl)
+        out["hp"].append(_r(ratio * 100, 2))
+        out["hk"].append(None if w is None or isnan(ratio) else int(ratio * w.total / 1000))
+        out["hc"].append(None if isnan(count) else int(count))
+        out["sh"].append(None if w is None or isnan(w.holders) else int(w.holders))
+        out["g20"].append(_r(engine.buy[code].window(i, 20), 2))
+        out["g60"].append(_r(engine.buy[code].window(i, 60), 2))
+        mcap = cl * cap / 10 if not isnan(cl) and cap > 0 else NAN
+        float_cap = mcap * (1 - ratio) if not isnan(mcap) and not isnan(ratio) else NAN
+        out["tex"].append(_r(val20 / float_cap * 100, 2) if float_cap and float_cap > 0
+                          else None)
+        out["fpw"].append(_r(fi60 / count / 1000, 1) if not isnan(count) and count > 0
+                          else None)
+        out["vpw"].append(_r(val20 / count / 1000, 1) if not isnan(count) and count > 0
+                          else None)
+        out["wr"].append(rk["wr"].get(code))
+        out["xr"].append(rk["xr"].get(code))
+        fit20 = engine.fit[code].window(i, 20)
+        out["fa20"].append(_r(fit20 / 1e8, 2))
+        out["ft"].append(_r(fit20 / mcap * 100, 2) if not isnan(fit20) and mcap and mcap > 0
+                         else None)
+    return {k: v for k, v in out.items() if any(x is not None for x in v)}
+
+
+def encode_long(series: dict[str, list], n: int) -> bytes:
+    from .history import _q, encode_series  # noqa: PLC0415
+
+    body = bytearray()
+    for key, scale in LONG_FIELDS:
+        vals = series.get(key) or [None] * n
+        encode_series([None if v is None else _q(v, scale) for v in vals], body)
+    return gzip.compress(bytes(body), compresslevel=9, mtime=0)
+
+
+def _whale_counts(engine: Engine, i: int) -> dict[str, float]:
+    day = engine.p.dates[i]
+    out = {}
+    for c in engine.codes:
+        ws = engine.tiers.get(c)
+        if not ws or ws[-1].people is None:
+            continue
+        w = None
+        for tw in reversed(ws):
+            if tw.date <= day:
+                w = tw
+                break
+        if w is None or w.people is None:
+            continue
+        cl = engine.p.close[c][i]
+        if isnan(cl):
+            continue
+        n = engine.whale_week(c, w, cl)[1]
+        if not isnan(n) and n > 0:
+            out[c] = n
+    return out
+
+
+def pack_rows(doc: dict) -> dict:
+    rows = doc.get("rows")
+    if not isinstance(rows, list):
+        return doc
+    keys: list[str] = []
+    seen: set[str] = set()
+    for r in rows:
+        for k in r:
+            if k not in seen:
+                seen.add(k)
+                keys.append(k)
+    out = {k: v for k, v in doc.items() if k != "rows"}
+    out["cols"] = {k: [r.get(k) for r in rows] for k in keys}
+    out["nrows"] = len(rows)
+    return out
+
+
+def unpack_rows(doc: dict) -> dict:
+    if "cols" not in doc:
+        return doc
+    cols = doc["cols"]
+    rows = [{k: v[i] for k, v in cols.items() if v[i] is not None} for i in range(doc["nrows"])]
+    out = {k: v for k, v in doc.items() if k not in ("cols", "nrows")}
+    out["rows"] = rows
+    return out
+
+
+PAGE_FILE = "radar.html"
+VERSION_MARK = "@@CFV@@"
+
+
+def stamp_page(site_dir: Path) -> str:
+    page = site_dir / PAGE_FILE
+    stamp = site_dir / SITE_DIR / "stamp.json"
+    if not page.exists() or not stamp.exists() or not (site_dir / SITE_DIR / "radar.json").exists():
+        return ""
+    html = page.read_text(encoding="utf-8")
+    if VERSION_MARK not in html:
+        return ""
+    v = hashlib.sha1(stamp.read_bytes()).hexdigest()[:10]
+    page.write_text(html.replace(VERSION_MARK, v), encoding="utf-8")
+    return v
+
+
+def export(data_dir: Path, site_dir: Path, *, force: bool = False,
+           repo_root: Path | None = None) -> dict[str, object]:
+    out = site_dir / SITE_DIR
+    key = _stamp_key(data_dir)
+    stamp = out / "stamp.json"
+    if not force and stamp.exists():
+        try:
+            if json.loads(stamp.read_text(encoding="utf-8")) == key:
+                return {"略過": "資料沒有換"}
+        except ValueError:
+            pass
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "stock").mkdir(exist_ok=True)
+
+    radar_doc: dict = {}
+    radar = data_dir / OUT_DIR / RADAR_FILE
+    if radar.exists():
+        raw = gzip.decompress(radar.read_bytes())
+        radar_doc = json.loads(raw)
+        (out / "radar.json").write_bytes(_dump(pack_rows(radar_doc)))
+    val = data_dir / OUT_DIR / VALIDATE_FILE
+    if val.exists():
+        (out / "validate.json").write_bytes(val.read_bytes())
+
+    engine = Engine(data_dir)
+    p = engine.p
+    ia = p.asof_index
+    days = list(range(max(0, ia - DAYS + 1), ia + 1))
+    long_days = list(range(max(0, ia - LONG_DAYS + 1), ia + 1))
+    ranks: dict[int, dict] = {}
+    for i in long_days:
+        st = engine.day_stats(i)
+        vals = [v for v in st["val20"].values() if not isnan(v)]
+        wn = _whale_counts(engine, i)
+        per_fi = {c: st["fi60"].get(c, NAN) / n for c, n in wn.items()}
+        per_val = {c: st["val20"].get(c, NAN) / n for c, n in wn.items()}
+        ranks[i] = {"fi": rank_desc(st["fi60"]), "val": rank_desc(st["val20"]),
+                    "val_total": sum(vals), "val_n": len(vals), "wr": rank_desc(per_fi),
+                    "xr": rank_desc(per_val)}
+    avg_va = [_r(ranks[i]["val_total"] / ranks[i]["val_n"] / 1e8, 3) if ranks[i]["val_n"] else None
+              for i in days]
+
+    names = {r["c"]: r["n"] for r in radar_doc.get("rows", [])}
+    rank_days = days[-RANK_DAYS:][::-1]
+    top_val = {p.dates[i]: [c for c, _ in sorted(ranks[i]["val"].items(), key=lambda t: t[1])
+                            [:RANK_TOP]] for i in rank_days}
+    top_fi = {p.dates[i]: [c for c, _ in sorted(ranks[i]["fi"].items(), key=lambda t: t[1])
+                           [:RANK_TOP]] for i in rank_days}
+    listed = {c for v in top_val.values() for c in v} | {c for v in top_fi.values() for c in v}
+    (out / "ranks.json").write_bytes(_dump({
+        "dates": [p.dates[i] for i in rank_days], "val": top_val, "fi": top_fi,
+        "names": {c: names.get(c, c) for c in listed}}))
+
+    rows = {r["c"]: r for r in radar_doc.get("rows", [])}
+    rich = {c for c, r in rows.items() if r.get("liq") or r.get("l1") or r.get("pick")}
+    rich |= {j["code"] for j in radar_doc.get("journal", [])}
+    rich |= listed
+    rich |= _watchlist(repo_root or data_dir.parent)
+    rich &= set(engine.codes)
+    daily_codes = {c for c in engine.codes if not isnan(p.close[c][ia]) or c in rows}
+
+    ext_fa: list[float] = []
+    ext_va: list[float] = []
+    for i in days[-60:]:
+        st = engine.day_stats(i)
+        for c in rich:
+            fa, va = st["fi60"].get(c, NAN), st["val20"].get(c, NAN)
+            if not isnan(fa):
+                ext_fa.append(fa / 1e8)
+            if not isnan(va) and va > 0:
+                ext_va.append(va / 1e8)
+    (out / "market.json").write_bytes(_dump({
+        "asof": p.asof, "dates": [p.dates[i] for i in days], "avg_va": avg_va,
+        "universe": len(engine.codes), "flows": engine.has_flows,
+        "ext": {"fa": [_r(min(ext_fa), 2), _r(max(ext_fa), 2)] if ext_fa else None,
+                "va": [_r(min(ext_va), 3), _r(max(ext_va), 2)] if ext_va else None}}))
+
+    hist = _write_history(engine, out)
+    vendor = Path(__file__).with_name("vendor") / "chart.umd.min.js"
+    if vendor.exists():
+        (out / "chart.umd.min.js").write_bytes(vendor.read_bytes())
+
+    income = load_income(data_dir)
+    balance = load_balance(data_dir)
+    from ..aipick.revenue import load_revenue  # noqa: PLC0415
+
+    revenue = load_revenue(data_dir)
+    notes = load_revenue_notes(data_dir)
+    written = 0
+    for c in engine.codes:
+        if isnan(p.close[c][ia]) and c not in rows:
+            continue
+        doc: dict[str, object] = {"c": c, "n": rows.get(c, {}).get("n") or
+                                  engine.names.get(c, (c, ""))[0] or c,
+                                  "asof": p.asof}
+        if c in daily_codes:
+            full = daily_series(engine, c, long_days, ranks)
+            cut = len(long_days) - len(days)
+            recent = {k: v[cut:] for k, v in full.items()}
+            doc["d"] = {k: v for k, v in recent.items() if any(x is not None for x in v)}
+            (out / "stock" / f"{c}.L.bin").write_bytes(encode_long(full, len(long_days)))
+        doc["h"] = holders_series(engine, c)
+        doc["fq"] = fundamentals_series(income.get(c, {}), balance.get(c, {}))
+        doc["fs"] = sheet_series(engine.fund.sheets.get(c, {}), income.get(c, {}))
+        doc["fm"] = revenue_series(engine, c, revenue.get(c, {}), notes.get(c, {}))
+        (out / "stock" / f"{c}.json").write_bytes(_dump(doc))
+        written += 1
+    (out / LONG_HEAD).write_bytes(_dump({"dates": [p.dates[i] for i in long_days],
+                                         "fields": [[k, sc] for k, sc in LONG_FIELDS]}))
+    stamp.write_text(json.dumps(key), encoding="utf-8")
+    return {"資料日": p.asof, "個股檔": written, "含日序列": len(daily_codes), "逐日歷史": hist}
+
+
+def _write_history(engine: Engine, out: Path) -> str:
+    from . import history  # noqa: PLC0415
+
+    try:
+        header, older, recent = history.build(engine)
+    except Exception as exc:  # noqa: BLE001
+        print(f"::warning::籌碼雷達逐日歷史沒有產生（④⑥⑬ 的回測暫停）：{exc!r}")
+        for name in ("hist.json", "hist_a.bin", "hist_b.bin", "fund.bin"):
+            (out / name).unlink(missing_ok=True)
+        return "失敗"
+    try:
+        fund_header, fund = history.build_fund(engine)
+        (out / "fund.bin").write_bytes(fund)
+        header["fund"] = fund_header
+    except Exception as exc:  # noqa: BLE001
+        print(f"::warning::籌碼雷達基本面歷史沒有產生（⑤⑥ 的回測暫停）：{exc!r}")
+        (out / "fund.bin").unlink(missing_ok=True)
+    (out / "hist_a.bin").write_bytes(older)
+    (out / "hist_b.bin").write_bytes(recent)
+    (out / "hist.json").write_bytes(_dump(header))
+    return f"{len(header['dates'])} 天、{len(header['codes'])} 檔、{(len(older) + len(recent)) / 1e6:.1f} MB"

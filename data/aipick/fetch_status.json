@@ -1,0 +1,1 @@
+{"ran_at":"2026-10-17 01:46","news":{"added":0,"seen":130,"errors":[]},"talks_list":{"new":0,"errors":[]},"talks":{"processed":1,"pdf":1,"llm":0,"left":0,"stopped":"","errors":["665720261016M002.pdf：ValueError"]},"relations":{"labelled":1},"priority":31,"llm":{"enabled":true,"calls":1,"max_calls":40,"model":"gemini-flash-lite-latest","stopped":"","busy":0,"errors":[]}}

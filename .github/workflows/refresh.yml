@@ -1,0 +1,147 @@
+name: 評等補課（清單上過期的那些）
+
+on:
+  schedule:
+    - cron: "23 18,0,6,12 * 3,4,5,6,8,9,11,12 *"
+    - cron: "29 12 * 1,2,7,10 *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "這一批補幾檔"
+        required: false
+        default: "100"
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[report]"
+
+      - name: 有沒有要補的
+        id: gate
+        run: |
+          n="$(twsix refresh --pending --rotate-days 21 | tail -1)"
+          legacy="$(ls data/sheets/*/_stuck.json 2>/dev/null | wc -l)"
+          echo "待補 $n 檔；舊名字的記號 $legacy 個"
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "$n" = "0" ] && [ "$legacy" = "0" ]; then
+            echo "::notice::佇列是空的，這一班不必跑"
+            echo "skip=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 換掉舊名字的記號
+        if: steps.gate.outputs.skip != 'yes'
+        run: python -c "from pathlib import Path; from twsix.cli import migrate_stuck_marks; print('換掉', migrate_stuck_marks(Path('data')), '個舊記號')"
+
+      - name: 測試
+        if: steps.gate.outputs.skip != 'yes'
+        run: python scripts/run_tests.py
+
+      - name: 補課
+        if: steps.gate.outputs.skip != 'yes'
+        env:
+          IN_LIMIT: ${{ inputs.limit || 100 }}
+        run: |
+          case "$IN_LIMIT" in
+            ''|*[!0-9]*)
+              echo "::error::「這一批補幾檔」只能是正整數，收到的是：$IN_LIMIT"
+              exit 1 ;;
+          esac
+          twsix refresh --limit "$IN_LIMIT" --rotate-days 21
+
+      - name: Commit
+        if: steps.gate.outputs.skip != 'yes'
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ratings.csv data/sheets data/delisted.csv
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "::notice::這一批沒有任何一列改變"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=yes" >> "$GITHUB_OUTPUT"
+          count="$(git diff --cached --numstat -- data/ratings.csv | awk '{print $1}')"
+          git commit -q -m "data"
+          codes="$(git diff --name-only HEAD~1 HEAD -- data/sheets \
+                   | cut -d/ -f3 | sort -u | paste -sd, -)"
+          for attempt in 1 2 3; do
+            if ! git pull --rebase origin main; then
+              conflicted="$(git diff --name-only --diff-filter=U)"
+              if [ -z "$conflicted" ]; then
+                git rebase --abort || true
+                echo "::notice::pull 失敗但沒有衝突檔案，第 $attempt 次重試"
+                sleep 5
+                continue
+              fi
+              echo "::warning::和另一條 workflow 撞上了，這幾個檔案讓給對方（它比較新）："
+              printf '%s\n' "$conflicted" | sed 's/^/  /'
+              printf '%s\n' "$conflicted" | while read -r f; do
+                git checkout --ours -- "$f" 2>/dev/null || git rm -q -- "$f" || true
+              done
+              git add -A
+              case "$conflicted" in
+                *data/ratings.csv*)
+                  yielded="$(printf '%s\n' "$conflicted" \
+                             | sed -n 's#^data/sheets/\([^/]*\)/.*#\1#p' | sort -u)"
+                  keep="$(printf '%s\n' "${codes//,/$'\n'}" | grep -v '^$' \
+                          | { [ -n "$yielded" ] && grep -vxF "$yielded" || cat; } \
+                          | paste -sd, -)"
+                  [ -n "$keep" ] && twsix restate --codes "$keep" || true
+                  git add data/ratings.csv
+                  ;;
+              esac
+              GIT_EDITOR=true git rebase --continue || git rebase --skip
+            fi
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "::notice::推不上去（多半是剛剛又有人推了），第 $attempt 次重試"
+          done
+          echo "::error::試了三次都推不上去"
+          exit 1
+
+      - name: 建站
+        if: steps.gate.outputs.skip != 'yes' && steps.commit.outputs.changed == 'yes'
+        uses: ./.github/actions/build-site
+        env:
+          SITE_LOGIN_USER: ${{ secrets.SITE_LOGIN_USER }}
+          SITE_LOGIN_PASSWORD: ${{ secrets.SITE_LOGIN_PASSWORD }}
+          SITE_LOGIN_USERS: ${{ secrets.SITE_LOGIN_USERS }}
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+          SITE_OWNER: ${{ secrets.SITE_OWNER }}
+        with:
+          test: "false"
+          setup: "false"   # 上面已經 setup 過了
+          incremental: "true"
+
+      - name: 發布
+        id: deployment
+        if: steps.gate.outputs.skip != 'yes' && steps.commit.outputs.changed == 'yes'
+        uses: actions/deploy-pages@v4

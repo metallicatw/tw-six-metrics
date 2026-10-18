@@ -1,0 +1,61 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import tip %}
+{% block title %}趨勢×六大×報酬｜{{ site_title }}{% endblock %}
+{% block body %}
+<h2 class="sr">趨勢×六大×報酬</h2>
+<div class="muted note-s embed-cap">每個交易日台北 15:10 更新 {% call tip() %}
+  <b>技術面四關全過，再加兩個基本面的條件。</b>全市場約 1,900 檔先過這四關：
+  {% if rules_html %}
+  <span class="trend-rules" role="group" aria-label="預設篩選條件">
+    <b class="trh"><span aria-hidden="true">💡</span> 預設篩選條件</b>
+    {{ rules_html }}
+  </span>
+  {% else %}
+  <b>趨勢方向</b>（收盤 &gt; 60MA 且 20MA &gt; 60MA）
+  →　<b>動能啟動</b>（10 日內黃金交叉或布林壓縮 ≤ 12%）
+  →　<b>突破確認</b>（突破布林上軌或 20 日高點）
+  →　<b>量能背書</b>（量比 ≥ 1.2 倍）。停損取 3×ATR(14)。
+  <br><br>
+  {% endif %}
+  過了之後，每一檔卡片上還會帶著兩個基本面的數字：<b>六大財務指標最新綜合
+  評分</b>（滿分約 3.83）與 <b>報酬風險比</b>（〔EPS預估與估價〕算的）。
+  <br><br>
+  <b>這兩個數字預設「只顯示、不篩」</b>——上面那一列的〔六大評分〕〔報酬風險比〕
+  預設都是 <b>0</b>，也就是那一關不啟用。想把它們變成條件，把數字打上去就好，
+  畫面會當場重篩：常用的一組是<b>六大 &gt; 3</b>（大約是前 10%）與
+  <b>報酬風險比 &gt; 2</b>（「報酬風險 &gt; 2 才有買進的意義」）。
+  <br><br>
+  為什麼預設不啟用：那一組很嚴。實測 2026/09/18，25 檔趨勢入選裡只有 1 檔同時
+  過另外兩關；而四關本身在弱勢的日子就可能是零檔。兩個嚴格條件疊起來，打開這
+  一頁最常看到的是一張空名單——而空名單沒辦法讓人判斷「今天是沒有標的，還是
+  門檻太緊」。
+  <br><br>
+  <b>報酬風險比是用今天的收盤算的。</b>目標價與下檔價和股價無關（＝歷年本益比
+  × 預估EPS），由這個網站每天發布；報酬風險比的最後一步要股價，而那一步在
+  趨勢那支程式裡算——它手上就有今天的收盤。兩邊因此是同一天的同一個價格。
+  <br><br>
+  <b>無風險</b> 是股價已經低於下檔價：沒有下檔風險，比 3.0 還好，一定入選。
+  四關過了但<b>算不出</b>報酬風險比的（多半是歷年本益比不足——本益比區間取去年起往前
+  最多 5 年，至少要 3 個完整年度——算不出本益比區間）不會消失，它們列在名單下方並標示原因——
+  「消失」和「不合格」在畫面上長得一模一樣，而它們不是同一件事。
+  <br><br>
+
+  名單上每一檔都可以直接跳到<b>這個網站的個股頁</b>看它的六大財務指標評等
+  ——技術面挑出來之後，下一個問題是這家公司的體質。
+  <br><br>
+  由 <a href="https://github.com/metallicatw/tw-trend-filter" rel="noopener">tw-trend-filter</a>
+  每個交易日台北 15:10 產生，這裡嵌的是同一份。
+  <a href="{{ rel }}{{ report }}#cross" target="_blank" rel="noopener">單獨開啟這份報告 ↗</a>
+{% endcall %} <button type="button" class="wg-imp" data-wg-src="trend" data-wg-name="趨勢×六大×報酬"
+  title="把報告裡目前篩選出來的股票匯入觀察清單〔趨勢×六大×報酬〕">⇩ 匯入觀察清單</button></div>
+<script>
+(window.TWSIXImport = window.TWSIXImport || {})["trend"] = function(){
+  var f = document.getElementById("trend-frame"), w = f && f.contentWindow, d = w && w.document;
+  if (!d) return [];
+  try { var c = w.eval("typeof TF_HITS !== 'undefined' && typeof C !== 'undefined' ? TF_HITS.map(function(h){ return h[0][C.code]; }) : null"); if (c && c.length) return c; } catch (e) {}
+  return [].map.call(d.querySelectorAll("#sb-list .nb[data-code]"), function(n){ return n.getAttribute("data-code"); });
+};
+</script>
+<iframe id="trend-frame" class="embed tall" src="{{ rel }}{{ report }}#cross"
+        title="趨勢×六大×報酬：技術面四關全過，再篩六大評分與報酬風險比"></iframe>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% raw %}<div class="bgm bg8">
+<div class="wrap">
+  <header>
+    <h1>法人買超 × 成交佔比　多檔排名軌跡對照</h1>
+    <p id="m8-sub">讀取資料中…</p>
+  </header>
+  <div class="controls">
+    <div class="group"><label class="lb" for="m8-code">加入個股</label><input type="text" id="m8-code" list="m8-stocklist" placeholder="代號或名稱"><button id="m8-go">加入</button><span class="err" id="m8-err" role="status"></span></div>
+    <div class="group">
+      <label class="lb">刻度</label>
+      <div class="seg" role="group" aria-label="座標刻度">
+        <button id="m8-scLog" aria-pressed="true">對數（放大兩端）</button>
+        <button id="m8-scLin" aria-pressed="false">線性</button>
+      </div>
+    </div>
+    <div class="timeline">
+      <button id="m8-play" class="primary" aria-label="播放">▶ 播放</button>
+      <button id="m8-prev" aria-label="前一天">◀</button>
+      <input type="range" id="m8-day" min="0" max="59" value="59" aria-label="日期">
+      <button id="m8-next" aria-label="後一天">▶</button>
+      <span class="date" id="m8-dateLabel">—</span>
+      <select id="m8-speed" aria-label="播放速度"><option value="600">慢</option><option value="300" selected>中</option><option value="120">快</option></select>
+    </div>
+  </div>
+  <div class="main">
+    <div class="chart" id="m8-chartBox">
+      <svg id="m8-svg" viewBox="0 0 660 636" role="img" aria-label="排名點狀圖"></svg>
+      <div class="tip" id="m8-tip" hidden></div>
+      <div id="m8-notes"></div>
+    </div>
+    <aside class="side" id="m8-side"></aside>
+  </div>
+  <footer>
+    <p>免責聲明：本工具僅為公開財務及籌碼數據之資料整理與自訂條件篩選輔助工具，頁面所呈現之各項指標與計算結果皆取自公開資訊觀測站及市場公開資料，不構成任何形式之投資建議、推介、要約或招攬。使用者應獨立判斷、審慎評估，並自行承擔所有投資決策與風險。</p>
+    <p>X 軸為「外資投信買賣超金額60日累計排名」，第 1 名是 60 日累計買超金額最大者，最後一名是賣超金額最大者；Y 軸為「成交金額20日累計佔比排名」，第 1 名是 20 日累計成交金額佔全市場比重最高者。點越新顏色越深，連線依交易日先後串接。</p>
+    <p>預設的對照股只是為了示範排名變化幅度而挑選，不是推薦，也不是選股建議，可以自行增刪。</p>
+  </footer>
+</div>
+</div>{% endraw %}

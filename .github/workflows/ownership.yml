@@ -1,0 +1,82 @@
+name: 股權資料（大戶／董監）
+
+on:
+  schedule:
+    - cron: "37 1 * * 1"
+    - cron: "37 1 * * 4"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ownership
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[report]"
+
+      - name: 測試
+        run: python scripts/run_tests.py
+
+      - name: 抓取
+        run: twsix fetch-ownership
+
+      - name: 補齊歷史
+        run: twsix backfill-ownership --limit 40 || true
+
+      - name: Commit
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/ownership data/sheets
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "::notice::這一週沒有新的股權資料"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -q -m "data"
+
+      - name: 推送
+        if: steps.commit.outputs.changed != 'no'
+        uses: ./.github/actions/push-with-retry
+
+      - name: 建站
+        if: steps.commit.outputs.changed != 'no' || github.event_name == 'workflow_dispatch'
+        uses: ./.github/actions/build-site
+        env:
+          SITE_LOGIN_USER: ${{ secrets.SITE_LOGIN_USER }}
+          SITE_LOGIN_PASSWORD: ${{ secrets.SITE_LOGIN_PASSWORD }}
+          SITE_LOGIN_USERS: ${{ secrets.SITE_LOGIN_USERS }}
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+          SITE_OWNER: ${{ secrets.SITE_OWNER }}
+        with:
+          incremental: "true"
+          test: "false"
+          setup: "false"
+
+      - name: 發布
+        if: steps.commit.outputs.changed != 'no' || github.event_name == 'workflow_dispatch'
+        id: deployment
+        uses: actions/deploy-pages@v4

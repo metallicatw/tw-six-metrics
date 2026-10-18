@@ -1,0 +1,10 @@
+{
+  "bytes": 81456,
+  "expect": "已驗證：上櫃僑外資及陸資持股比例排行表，date=YYYY/MM/DD。tables[0].fields＋data，欄名帶公式（持股比率(E=C/A)），比對開頭；比率是「87.84%」字串。",
+  "fetched_at": "2026-10-03T13:40:56+00:00",
+  "form": {},
+  "group": "daily",
+  "head": "{\"tables\":[{\"title\":\"櫃檯買賣股票僑外資及陸資持股比例排行表\",\"date\":\"115/09/03\",\"totalCount\":891,\"fields\":[\"排行\",\"代號\",\"名稱\",\"發行股數(A)\",\"僑外資及陸資尚可投資股數B=A*F-C\",\"僑外資及陸資持有股數(C)\",\"僑外資及陸資尚可投資比率(D=B/A)\",\"",
+  "name": "tpex_qfii_dated",
+  "url": "https://www.tpex.org.tw/www/zh-tw/insti/qfii?date=2026%2F09%2F03&response=json"
+}

@@ -1,0 +1,147 @@
+name: 每日全市場（收盤行情／三大法人）
+
+on:
+  schedule:
+    - cron: "53 8 * * 1-5"
+    - cron: "17 11 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      yearly_limit:
+        description: "年度交易資訊：這一輪最多補幾檔（預設 40。要一次排乾就填 300）"
+        required: false
+        default: "40"
+      wait_upstream:
+        description: "先等 market-monitor 與 tw-trend-filter 這一次的報告發布（三個一起按就選 true；只按這一個選 false）"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[report,ai]"
+
+      - name: 測試
+        run: python scripts/run_tests.py
+
+      - name: 等上游
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.wait_upstream) ||
+          github.event.schedule == '53 8 * * 1-5'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python scripts/wait_upstream.py --manual --max-minutes 50
+          else
+            python scripts/wait_upstream.py --max-minutes 30
+          fi
+
+      - name: 抓取
+        run: twsix fetch-daily
+
+      - name: 歷史資料整併
+        timeout-minutes: 10
+        continue-on-error: true
+        run: twsix consolidate-data
+
+      - name: 補齊最近幾天
+        run: |
+          twsix backfill-prices --days 5 || true
+          twsix backfill-institutional --days 5 || true
+          twsix backfill-qfii --days 25 --minutes 8 || true
+
+      - name: 補齊年度交易資訊與季財報
+        env:
+          YEARLY_LIMIT: ${{ github.event.inputs.yearly_limit || '40' }}
+        run: |
+          twsix backfill-yearly --limit "$YEARLY_LIMIT" || true
+          twsix backfill-statements --quarters 28 || true
+
+      - name: 全市場估值
+        run: twsix value --all
+
+      - name: AI 選股：重大訊息、法說、LLM
+        timeout-minutes: 15
+        continue-on-error: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: twsix aipick-fetch || echo "::error::AI 選股的抓取失敗（行情照常存檔），看上面的 log"
+
+      - name: AI 選股
+        timeout-minutes: 15
+        continue-on-error: true
+        run: twsix aipick --sync-macro || echo "::error::AI 選股這一趟失敗（行情照常存檔），看上面的 log"
+
+      - name: 籌碼雷達
+        timeout-minutes: 10
+        continue-on-error: true
+        run: twsix chipflow || echo "::error::籌碼雷達這一趟失敗（行情照常存檔），看上面的 log"
+
+      - name: Commit
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- data/market data/sheets data/valuations.csv data/aipick data/ownership
+          if [ -d data/chipflow ]; then git add data/chipflow; fi
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "::notice::沒有新的一天要存"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=yes" >> "$GITHUB_OUTPUT"
+          days="$(git diff --cached --name-only -- data/market/daily \
+                  | sed 's#.*/##; s#\.csv\.gz$##' | sort -u | paste -sd' ' -)"
+          git commit -q -m "data"
+
+      - name: 推送
+        if: steps.commit.outputs.changed == 'yes'
+        uses: ./.github/actions/push-with-retry
+        with:
+          derived: data/aipick data/chipflow data/valuations.csv
+
+      - name: 建站
+        if: steps.commit.outputs.changed == 'yes' || github.event_name == 'workflow_dispatch'
+        uses: ./.github/actions/build-site
+        env:
+          SITE_LOGIN_USER: ${{ secrets.SITE_LOGIN_USER }}
+          SITE_LOGIN_PASSWORD: ${{ secrets.SITE_LOGIN_PASSWORD }}
+          SITE_LOGIN_USERS: ${{ secrets.SITE_LOGIN_USERS }}
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+          SITE_OWNER: ${{ secrets.SITE_OWNER }}
+        with:
+          test: "false"
+          setup: "false"   # 上面已經 setup 過了
+          incremental: "true"
+
+      - name: 發布
+        id: deployment
+        if: steps.commit.outputs.changed == 'yes' || github.event_name == 'workflow_dispatch'
+        uses: actions/deploy-pages@v4

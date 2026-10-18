@@ -1,0 +1,91 @@
+name: 籌碼雷達回補（成交金額、法人明細、集保 15 級）
+
+on:
+  workflow_dispatch:
+    inputs:
+      flows_days:
+        description: "成交金額與法人明細：往回補幾個交易日"
+        required: false
+        default: "800"
+        type: string
+      levels_minutes:
+        description: "集保 15 級：這一趟最多跑幾分鐘"
+        required: false
+        default: "180"
+        type: string
+      qfii_days:
+        description: "外資持股比率（每日）：往回補幾個交易日（排程 125；一次補齊三年填 760）"
+        required: false
+        default: "125"
+        type: string
+      qfii_minutes:
+        description: "外資持股比率：這一趟最多跑幾分鐘（補 760 天約要 45 分鐘，填 90）"
+        required: false
+        default: "20"
+        type: string
+  schedule:
+    - cron: "53 16 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: chipflow-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[report]"
+      - name: 測試
+        run: python scripts/run_tests.py
+      - name: 歷史資料整併（一次性、可重跑）
+        run: twsix consolidate-data
+      - name: 成交金額與法人明細
+        env:
+          IN_DAYS: ${{ inputs.flows_days || '800' }}
+          Q_DAYS: ${{ inputs.qfii_days || '125' }}
+          Q_MIN: ${{ inputs.qfii_minutes || '20' }}
+        run: |
+          case "$IN_DAYS" in ''|*[!0-9]*) IN_DAYS=800 ;; esac
+          case "$Q_DAYS" in ''|*[!0-9]*) Q_DAYS=125 ;; esac
+          case "$Q_MIN" in ''|*[!0-9]*) Q_MIN=20 ;; esac
+          twsix backfill-prices --days "$IN_DAYS" --pause 5 --minutes 30 || true
+          twsix backfill-institutional --days "$IN_DAYS" --minutes 60 || true
+          twsix backfill-qfii --days "$Q_DAYS" --minutes "$Q_MIN" || true
+          twsix backfill-qfii --month-ends 36 --minutes 6 || true
+      - name: 集保原始 15 級（逐檔）
+        env:
+          IN_MIN: ${{ inputs.levels_minutes || '180' }}
+        run: |
+          case "$IN_MIN" in ''|*[!0-9]*) IN_MIN=180 ;; esac
+          twsix backfill-levels --minutes "$IN_MIN"
+      - name: Commit
+        id: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- data/market/daily data/ownership
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "::notice::沒有新的資料，歷史已經是齊的"
+            echo "changed=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          flows=$(git diff --cached --name-only -- data/market/daily/institutional | wc -l)
+          levels=$(git diff --cached --name-only -- data/ownership/levels_stock | wc -l)
+          git commit -q -m "data"
+      - name: 推送
+        if: steps.commit.outputs.changed != 'no'
+        uses: ./.github/actions/push-with-retry

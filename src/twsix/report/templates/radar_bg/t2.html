@@ -1,0 +1,38 @@
+{% raw %}<div class="bgm bg2">
+<div class="wrap">
+  <header class="top">
+    <h1>大戶籌碼看板</h1>
+    <p class="sub">輸入股票代號或名稱，查看每日大戶比例／大戶人數，以及集保股權分散表的各級距持股與人數週趨勢。</p>
+    <div class="searchbar">
+      <input id="m2-stockInput" type="text" list="m2-stockList" placeholder="輸入股票代號或名稱，例如 2330 或 台積電" autocomplete="off" />
+      <datalist id="m2-stockList"></datalist>
+      <button id="m2-goBtn" type="button">查詢</button>
+    </div>
+    <p class="msg" id="m2-msg"></p>
+  </header>
+  <div class="stockhead">
+    <span class="code" id="m2-curCode">—</span>
+    <span class="name" id="m2-curName">請輸入股票代號</span>
+  </div>
+  <section class="group">
+    <p class="group-title">每日大戶籌碼指標</p>
+    <p class="group-caption" id="m2-dailyCaption">每日資料</p>
+    <div class="grid daily" id="m2-dailyGrid"></div>
+  </section>
+  <section class="group">
+    <p class="group-title">持股張數分級檢視（集保週報）</p>
+    <p class="group-caption" id="m2-stockCaption">週資料</p>
+    <div class="grid weekly" id="m2-stockGrid"></div>
+  </section>
+  <section class="group">
+    <p class="group-title">持股人數分級檢視（集保週報）</p>
+    <p class="group-caption" id="m2-peopleCaption">週資料</p>
+    <div class="grid weekly" id="m2-peopleGrid"></div>
+  </section>
+  <footer class="foot">
+    <p>免責聲明：本工具僅為公開財務及籌碼數據之資料整理與自訂條件篩選輔助工具，頁面所呈現之各項指標與計算結果皆取自公開資訊觀測站及市場公開資料，不構成任何形式之投資建議、推介、要約或招攬。使用者應獨立判斷、審慎評估，並自行承擔所有投資決策與風險。</p>
+    <p>資料來源：政府資料開放平臺（台灣證券交易所、證券櫃檯買賣中心、臺灣集中保管結算所、公開資訊觀測站），大戶比例／大戶人數為依收盤價動態對應市值 5000 萬元級距後的整理結果，非官方即時數據，僅供參考。</p>
+  </footer>
+</div>
+<div class="tooltip" id="m2-tooltip"></div>
+</div>{% endraw %}

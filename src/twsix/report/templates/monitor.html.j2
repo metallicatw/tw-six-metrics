@@ -1,0 +1,17 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import tip %}
+{% block title %}全球市場監控＋日股觀察｜{{ site_title }}{% endblock %}
+{% block body %}
+<h2 class="sr">全球市場監控＋日股觀察</h2>
+<div class="muted note-s embed-cap mon-stamp">
+  {%- if stamp %}<span>報告生成時間 {{ stamp[0] }}</span><span class="sep">｜</span><span>資料基準 {{ stamp[1] }}</span>
+  {%- else %}每天台北 06:30 更新{% endif %} {% call tip() %}
+  台股加權、VIX、日經 225、密大消費者信心、村田 B/B Ratio 與一組日本焦點個股。
+  <br><br>
+  由 <a href="https://github.com/metallicatw/market-monitor" rel="noopener">market-monitor</a>
+  每天台北 06:30 產生，這裡嵌的是同一份。
+  <a href="{{ rel }}{{ report }}" target="_blank" rel="noopener">單獨開啟這份報告 ↗</a>
+{% endcall %}</div>
+<iframe id="monitor-frame" class="embed fit" src="{{ rel }}{{ report }}"
+        title="每日全球市場與總經個股監控報告"></iframe>
+{% endblock %}

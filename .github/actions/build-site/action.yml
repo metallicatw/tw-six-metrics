@@ -1,0 +1,120 @@
+name: 建站
+description: 安裝、（可選）測試、對帳、建站、上傳 Pages artifact。
+
+inputs:
+  test:
+    description: 要不要跑測試。呼叫端剛剛跑過同一份程式碼就填 "false"。
+    default: "true"
+  setup:
+    description: 要不要裝 Python 與相依。呼叫端同一個 job 裡已經裝過就填 "false"。
+    default: "true"
+  save_cache:
+    description: >-
+      跑完之後要不要把 site/ 存回快取。互動那條路（「加一檔個股」）填 "false"：
+      存一份 66 MB 的快取要十幾秒，而那十幾秒是使用者盯著螢幕在等的；排程每天跑
+      六次，快取由它們保持新鮮就夠了。
+    default: "true"
+  incremental:
+    description: >-
+      只重畫內容真的變了的那幾檔（拿內容指紋跟上一次建站比對）。要搭配把 site/
+      從快取取回來——沒有上一次的成果可以沿用時會自動整站重建，不會畫錯。
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - if: inputs.setup == 'true'
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: pip
+
+    - if: inputs.setup == 'true'
+      run: pip install -e ".[report]"
+      shell: bash
+
+    - if: inputs.test == 'true'
+      run: python scripts/run_tests.py
+      shell: bash
+
+    - name: 對帳（守門）
+      run: twsix verify
+      shell: bash
+
+    - if: inputs.incremental == 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: site
+        key: site-${{ github.run_id }}
+        restore-keys: site-
+
+    - name: 帶進〔市場監控〕
+      run: |
+        mkdir -p site
+        got=""
+        rm -rf /tmp/market-monitor
+        if git clone --depth 1 --branch report --quiet \
+             https://github.com/metallicatw/market-monitor.git /tmp/market-monitor \
+           && [ -s /tmp/market-monitor/index.html ]; then
+          cp /tmp/market-monitor/index.html site/monitor-report.html
+          got="report"
+        fi
+        if [ -n "$got" ]; then
+          echo "〔市場監控〕取自 $got，$(wc -c < site/monitor-report.html) 位元組"
+        else
+          echo "::warning::market-monitor 取不到，這次沒有更新〔市場監控〕那一頁"
+        fi
+      shell: bash
+
+    - name: 帶進〔趨勢選股〕
+      run: |
+        mkdir -p site
+        got=""
+        for ref in report main; do
+          rm -rf /tmp/tw-trend-filter
+          if git clone --depth 1 --branch "$ref" --quiet \
+               https://github.com/metallicatw/tw-trend-filter.git /tmp/tw-trend-filter \
+             && [ -s /tmp/tw-trend-filter/index.html ]; then
+            cp /tmp/tw-trend-filter/index.html site/trend-report.html
+            got="$ref"
+            break
+          fi
+        done
+        if [ -n "$got" ]; then
+          echo "〔趨勢選股〕取自 $got 分支，$(wc -c < site/trend-report.html) 位元組"
+        else
+          echo "::warning::tw-trend-filter 取不到，這次沒有更新〔趨勢選股〕那一頁"
+        fi
+      shell: bash
+
+    - name: 建立網站
+      run: |
+        if [ "${{ inputs.incremental }}" = "true" ]; then
+          twsix build --incremental
+        else
+          twsix build
+        fi
+      shell: bash
+
+    - name: 籌碼雷達（網站資料）
+      run: twsix chipflow-site || echo "::warning::籌碼雷達的網站資料沒產生"
+      shell: bash
+
+    - name: 登入畫面
+      run: python scripts/site_gate.py site
+      shell: bash
+    - name: 收尾（去註解、noindex、容量檢查）
+      run: |
+        npm install --prefix /tmp/ts --no-save --silent typescript@5.6.3 >/dev/null 2>&1 || true
+        NODE_PATH=/tmp/ts/node_modules python scripts/site_finalize.py site --noindex --max-mb 990
+      shell: bash
+    - if: inputs.incremental == 'true' && inputs.save_cache == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: site
+        key: site-${{ github.run_id }}
+
+    - uses: actions/configure-pages@v5
+    - uses: actions/upload-pages-artifact@v3
+      with:
+        path: site

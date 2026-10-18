@@ -1,0 +1,12 @@
+
+[universe]
+include_listed = true       # 上市
+include_otc    = true       # 上櫃
+
+exclude_industries = ["金融保險業", "金融保險"]
+
+watchlist = ["5439", "2330", "2454"]
+
+[universe.screens]
+"電動車電池" = ["4721", "4739", "5227", "1723", "6509", "8215"]
+"MOSFET"     = ["8261", "6435", "5299", "3317", "6525"]

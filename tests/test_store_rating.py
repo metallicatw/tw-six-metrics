@@ -1,0 +1,151 @@
+
+from __future__ import annotations
+
+import tempfile
+from pathlib import Path
+from types import SimpleNamespace
+
+from twsix.cli import _store_rating, _vintage
+from twsix.store.snapshots import RATING_COLUMNS, Store
+
+
+def _tmp() -> Path:
+    return Path(tempfile.mkdtemp())
+
+
+class _Snap:
+    def __init__(self, quarter: str, month: str, composite: float | None):
+        self.fiscal_quarter = quarter
+        self.revenue_month = month
+        self.composite = composite
+        self.composite_display = "數據不足" if composite is None else f"{composite:g}"
+        self.indicators = {
+            k: SimpleNamespace(display="", letter="A", values=[], reason="")
+            for k in (
+                "revenue_yoy", "operating_margin", "net_income_yoy",
+                "eps", "inventory_turnover", "free_cash_flow",
+            )
+        }
+
+
+class _Rating:
+
+    def __init__(self, stock_id: str, quarter: str, month: str, name: str = ""):
+        self.stock_id = stock_id
+        self.name = name
+        self.market = ""
+        self.industry = ""
+        self.snapshots = [_Snap(quarter, month, 3.5), _Snap("2025.4Q", "114/12", 3.0)]
+
+    def value_picks(self):
+        return [True, False]
+
+
+def _seed(root: Path, **over: str) -> None:
+    base = {c: "" for c in RATING_COLUMNS}
+    rows = []
+    for code, name, industry in (("1101", "台泥", "水泥工業"), ("5439", "高技", "電子零組件業")):
+        row = dict(base)
+        row.update(
+            stock_id=code, name=name, market="上市", industry=industry,
+            period_index="1", fiscal_quarter="2025.2Q", revenue_month="114/08",
+            composite="1",
+        )
+        row.update(over if code == "5439" else {})
+        rows.append(row)
+    Store(root).write("ratings", rows, RATING_COLUMNS,
+                      sort_by=("stock_id", "period_index"))
+
+
+def test_a_fresh_fetch_replaces_that_stocks_rows_and_nobody_elses():
+    root = _tmp()
+    _seed(root)
+    _store_rating(root, _Rating("5439", "2026.2Q", "115/07", name="高技"))
+
+    rows = Store(root).read("ratings")
+    mine = [r for r in rows if r["stock_id"] == "5439"]
+    assert len(mine) == 2
+    assert mine[0]["fiscal_quarter"] == "2026.2Q"
+    others = [r for r in rows if r["stock_id"] == "1101"]
+    assert len(others) == 1 and others[0]["fiscal_quarter"] == "2025.2Q"
+
+
+def test_the_market_and_industry_survive_an_update():
+    root = _tmp()
+    _seed(root)
+    _store_rating(root, _Rating("5439", "2026.2Q", "115/07"))
+
+    row = next(r for r in Store(root).read("ratings")
+               if r["stock_id"] == "5439" and r["period_index"] == "1")
+    assert row["industry"] == "電子零組件業"
+    assert row["market"] == "上市"
+    assert row["name"] == "高技"
+
+
+def test_an_older_fetch_does_not_overwrite_a_newer_row():
+    root = _tmp()
+    _seed(root, fiscal_quarter="2026.2Q", revenue_month="115/07", composite="3.17")
+    _store_rating(root, _Rating("5439", "2025.4Q", "114/12"))
+
+    row = next(r for r in Store(root).read("ratings")
+               if r["stock_id"] == "5439" and r["period_index"] == "1")
+    assert row["fiscal_quarter"] == "2026.2Q"
+    assert row["composite"] == "3.17"
+
+
+def test_the_same_quarter_still_writes_because_the_month_may_have_moved():
+    root = _tmp()
+    _seed(root, fiscal_quarter="2026.2Q", revenue_month="115/06")
+    _store_rating(root, _Rating("5439", "2026.2Q", "115/07"))
+
+    row = next(r for r in Store(root).read("ratings")
+               if r["stock_id"] == "5439" and r["period_index"] == "1")
+    assert row["revenue_month"] == "115/07"
+
+
+def test_vintage_compares_quarter_first_then_month():
+    assert _vintage({"fiscal_quarter": "2026.2Q", "revenue_month": "115/01"}) > _vintage(
+        {"fiscal_quarter": "2025.4Q", "revenue_month": "115/12"}
+    )
+    assert _vintage({"fiscal_quarter": "", "revenue_month": ""}) == ("", "")
+
+
+def test_a_stock_that_is_not_on_the_list_does_not_get_added_to_it():
+    root = _tmp()
+    _seed(root)
+    _store_rating(root, _Rating("2882", "2026.2Q", "115/07", name="國泰金"))
+
+    codes = {r["stock_id"] for r in Store(root).read("ratings")}
+    assert codes == {"1101", "5439"}
+
+
+def test_no_table_at_all_means_nothing_to_update():
+    root = _tmp()
+    _store_rating(root, _Rating("5439", "2026.2Q", "115/07", name="高技"))
+    assert Store(root).read("ratings") == []
+
+
+def test_a_new_listing_gets_added_when_the_caller_brings_the_official_metadata():
+    root = _tmp()
+    _seed(root)
+    _store_rating(
+        root,
+        _Rating("6741", "2026.2Q", "115/07", name="91APP*-KY"),
+        meta={"name": "91APP*-KY", "market": "上市", "industry": "電子商務業"},
+    )
+
+    rows = [r for r in Store(root).read("ratings") if r["stock_id"] == "6741"]
+    assert rows, "帶著官方資料來的新上市應該進得了清單"
+    assert rows[0]["market"] == "上市" and rows[0]["industry"] == "電子商務業"
+
+
+def test_metadata_from_the_stored_row_still_wins_over_the_official_one():
+    root = _tmp()
+    _seed(root)
+    _store_rating(
+        root,
+        _Rating("1101", "2026.2Q", "115/07", name="台泥"),
+        meta={"name": "錯的", "market": "錯的", "industry": "錯的"},
+    )
+    row = next(r for r in Store(root).read("ratings") if r["stock_id"] == "1101")
+    assert row["industry"] != "錯的"

@@ -1,0 +1,195 @@
+name: 加一檔個股
+
+on:
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
+    inputs:
+      stock:
+        description: "股票代號（例如 2330）。一次一檔。"
+        required: true
+        type: string
+      force:
+        description: "就算今天已經抓過也重抓一次"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: add-stock
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+                github.event.issue.author_association))
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 讀出股號
+        id: pick
+        env:
+          TITLE: ${{ github.event.issue.title }}
+          INPUT: ${{ inputs.stock }}
+        run: |
+          raw="${INPUT:-$TITLE}"
+          code=$(printf '%s' "$raw" | tr -cd '0-9 ' | tr -s ' ' | awk '{print $1}')
+          if ! printf '%s' "$code" | grep -Eq '^[0-9]{4,6}$'; then
+            echo "::error::「$raw」裡找不到 4~6 位數字的股號"
+            exit 1
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -e ".[report]"
+
+      - name: 需要抓嗎
+        id: need
+        env:
+          IN_FORCE: ${{ inputs.force }}
+        run: |
+          code="${{ steps.pick.outputs.code }}"
+          if [ "$IN_FORCE" = "true" ]; then
+            echo "::notice::強制重抓 $code"
+            echo "stale=yes" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          out="$(twsix fresh "$code" || true)"
+          echo "$out"
+          case "$out" in
+            fresh*)
+              echo "::notice::$code 的資料已經是最新的，這次不抓（要強制重抓的話用 Actions 分頁的 Run workflow，勾 force）"
+              echo "stale=no" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "stale=yes" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: 測試並抓取
+        if: steps.need.outputs.stale == 'yes'
+        run: |
+          python -c "import twsix.cli"
+          python scripts/run_tests.py > /tmp/tests.log 2>&1 &
+          tests=$!
+          set +e
+          twsix report "${{ steps.pick.outputs.code }}"
+          fetch=$?
+          wait "$tests"
+          suite=$?
+          set -e
+          echo "----- 測試 -----"
+          tail -n 20 /tmp/tests.log
+          if [ "$suite" -ne 0 ]; then
+            echo "::error::測試沒過，不 commit 這次抓到的資料"
+            exit 1
+          fi
+          exit "$fetch"
+
+      - name: Commit
+        if: steps.need.outputs.stale == 'yes'
+        run: |
+          code="${{ steps.pick.outputs.code }}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- "data/sheets/$code" data/ownership data/ratings.csv || true
+          if ! git diff --quiet; then
+            echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
+            git diff --name-only | sed 's/^/  /'
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "::notice::$code 的資料沒有變化，不需要 commit"
+            exit 0
+          fi
+          git commit -q -m "data"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: 建站
+        if: steps.need.outputs.stale == 'yes'
+        uses: ./.github/actions/build-site
+        env:
+          SITE_LOGIN_USER: ${{ secrets.SITE_LOGIN_USER }}
+          SITE_LOGIN_PASSWORD: ${{ secrets.SITE_LOGIN_PASSWORD }}
+          SITE_LOGIN_USERS: ${{ secrets.SITE_LOGIN_USERS }}
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_CONFIG }}
+          SITE_OWNER: ${{ secrets.SITE_OWNER }}
+        with:
+          test: "false"
+          setup: "false"   # 上面已經 setup 過了
+          incremental: "true"
+          save_cache: "false"
+
+      - name: 發布
+        id: deployment
+        if: steps.need.outputs.stale == 'yes'
+        uses: actions/deploy-pages@v4
+
+      - name: 存回網站快取
+        if: steps.need.outputs.stale == 'yes'
+        uses: actions/cache/save@v4
+        with:
+          path: site
+          key: site-${{ github.run_id }}
+
+      - name: 說明
+        env:
+          CODE: ${{ steps.pick.outputs.code }}
+        run: |
+          url="https://metallicatw.github.io/tw-six-metrics/stock/$CODE.html"
+          {
+            echo "### $CODE 已加入觀察清單"
+            echo ""
+            echo "接下來 publish 工作會重建並發布網站，完成後在這裡："
+            echo ""
+            echo "<$url>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 回覆並關閉 issue
+        if: github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ steps.pick.outputs.code }}
+          NUM: ${{ github.event.issue.number }}
+        run: |
+          url="https://metallicatw.github.io/tw-six-metrics/stock/$CODE.html"
+          if [ "${{ steps.need.outputs.stale }}" = "no" ]; then
+            gh issue comment "$NUM" --body "$CODE 的資料已經是最新的，這次沒有重抓：$url
+
+            （收盤行情與三大法人下午才上站，所以界線抓在 17:00。真的要重抓的話，
+            在網頁上對同一檔再按一次「立即更新」。）"
+          else
+            gh issue comment "$NUM" --body "$CODE 抓好了，網站重建完成後在這裡：$url
+
+            （網頁上那一頁會自己跳過去，不用手動重新整理。）"
+          fi
+          gh issue close "$NUM"
+
+      - name: 失敗時也說一聲
+        if: failure() && github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUM: ${{ github.event.issue.number }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment "$NUM" --body "抓取失敗了，詳情在這次執行紀錄：$RUN
+
+          常見原因：股號不存在、或券商鏡像站當下拒絕連線。過幾分鐘重開一張就好。"

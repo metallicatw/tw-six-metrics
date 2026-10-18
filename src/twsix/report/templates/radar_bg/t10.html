@@ -1,0 +1,38 @@
+{% raw %}<div class="bgm bg10">
+<div class="wrap">
+  <header>
+    <h1>成交資金佔比排名 × 外資投信買賣超排名　多檔標示(最多可輸入8檔)</h1>
+    <p id="m10-sub">讀取資料中…</p>
+  </header>
+  <div class="bar">
+    <div class="group">
+      <label class="lb" for="m10-q">加入個股</label>
+      <input type="text" id="m10-q" list="m10-namelist" placeholder="輸入股票代號，多檔用空格隔開，例如 3443 2330">
+      <button id="m10-go" class="primary">加入</button>
+      <button id="m10-clear">全部清除</button>
+      <span class="err" id="m10-err" role="status"></span>
+    </div>
+    <div class="group">
+      <label class="lb">字級</label>
+      <div class="seg" role="group" aria-label="表格字級">
+        <button data-size="s" aria-pressed="true">小</button>
+        <button data-size="m" aria-pressed="false">中</button>
+        <button data-size="l" aria-pressed="false">大</button>
+      </div>
+    </div>
+    <label class="sync"><input type="checkbox" id="m10-sync" checked> 兩張表同步捲動（同一名次、同一天對齊）</label>
+  </div>
+  <div class="picked" id="m10-picked"></div>
+  <p class="notice"><b>示範個股聲明：</b>本頁預設標示之個股，僅用於示範本工具之操作方式與標示效果，係為呈現標示效果而選取，並非依任何投資分析或評價結果所選出，不代表對該等個股之推薦、評價或買賣建議，亦不構成任何投資建議、推介、要約或招攬。各項排名僅為過去期間市場交易資料之統計整理，不代表未來走勢。使用者可自行清除並輸入欲查詢之股票代號。</p>
+  <div class="pair" id="m10-pair" data-size="s">
+    <section class="pane"><h2>成交資金佔比排名</h2><div class="sheet" id="m10-sheet-turnover"></div></section>
+    <section class="pane"><h2>外資投信買賣超排名</h2><div class="sheet" id="m10-sheet-inst"></div></section>
+  </div>
+  <p class="hint">最多同時標示 8 檔，每檔一種顏色。兩張表的最左邊都是最新的交易日，往右越舊；每一列是名次（第 1 名在最上面），往下捲動可以看到全部名次。點表格裡的名稱可以直接加入；點已經標色的格子則會移除那一檔。</p>
+  <footer>
+    <p>免責聲明：本工具僅為公開財務及籌碼數據之資料整理與自訂條件篩選輔助工具，頁面所呈現之各項指標與計算結果皆取自公開資訊觀測站及市場公開資料，不構成任何形式之投資建議、推介、要約或招攬。使用者應獨立判斷、審慎評估，並自行承擔所有投資決策與風險。</p>
+    <p>「成交資金佔比排名」依每日成交金額 20 日累計佔全市場比重排序；「外資投信買賣超排名」依外資投信買賣超金額 60 日累計排序，第 1 名為累計買超金額最大者。列出每日全部個股之排名；表格顏色標示僅為方便檢視，無其他意義。</p>
+    <p>示範個股聲明：本頁預設標示之個股，僅用於示範本工具之操作方式與標示效果，係為呈現標示效果而選取，並非依任何投資分析或評價結果所選出，不代表對該等個股之推薦、評價或買賣建議，亦不構成任何投資建議、推介、要約或招攬。各項排名僅為過去期間市場交易資料之統計整理，不代表未來走勢。使用者可自行清除並輸入欲查詢之股票代號。</p>
+  </footer>
+</div>
+</div>{% endraw %}
