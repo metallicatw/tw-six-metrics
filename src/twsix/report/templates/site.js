@@ -1902,9 +1902,7 @@ var TWSIXChart = (function(){
     started = true;
     var H = typeof pxHistory === 'function' ? pxHistory() : null;
     if(!H) return;
-    fetch(stat.getAttribute('data-src'), {cache: 'no-cache'}).then(function(r){
-      if(!r.ok) throw new Error(r.status); return r.json();
-    }).then(function(j){
+    window.TWSIXgz(stat.getAttribute('data-src'), {cache: 'no-cache'}).then(function(j){
       if(!j || j.d0 !== H.d[0] || j.n !== H.d.length) return;
       var D = H.d, C = H.c, N = D.length, F = j.f, S = j.s;
       var r0 = $('inst-r0'), r1 = $('inst-r1'), view = [Math.max(0, N - 120), N - 1];
@@ -2451,10 +2449,7 @@ function reveal(bar, el){
   var cache = null;
   function load(){
     if(!cache){
-      cache = fetch(code + '.r.json', {cache: 'no-cache'}).then(function(r){
-        if(!r.ok) throw new Error(r.status);
-        return r.json();
-      });
+      cache = window.TWSIXgz(code + '.r.json', {cache: 'no-cache'});
       cache.catch(function(){ cache = null; });
     }
     return cache;

@@ -255,6 +255,7 @@ window.CF_V = "@@CFV@@";
 <div class="gl-cats" id="gl-cats" role="group" aria-label="分類"></div>
 <div id="gl-list"></div>
 <script type="application/json" id="gl-data">{% include "radar_gloss.json" %}</script>
+<script>{% include "gz.js" %}</script>
 </div>
 </section>
 </div>
@@ -324,7 +325,14 @@ function resolve(q){
   for (var c in ROWS){ if ((ROWS[c].n || "").indexOf(q) >= 0) return c; }
   return m ? m[0] : null;
 }
-function stock(code){ return getJSON("stock/" + code + ".json"); }
+function stock(code){
+  var name = "stock/" + code + ".json";
+  if (!cache[name]) {
+    cache[name] = window.TWSIXgz(window.CF_URL ? window.CF_URL(name) : BASE + name, window.CF_OPT || {cache: "no-cache"});
+    cache[name].catch(function(){ delete cache[name]; });
+  }
+  return cache[name];
+}
 function label(code){ var r = ROWS[code]; return code + " " + (r ? r.n : ""); }
 function yahooTA(code){
   var r = ROWS[code] || {};

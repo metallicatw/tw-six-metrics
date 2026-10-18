@@ -131,7 +131,10 @@ ASSET_FILES = ("site.css", "site.js")
 
 @functools.lru_cache(maxsize=4)
 def asset_text(name: str) -> str:
-    return (TEMPLATE_DIR / name).read_text(encoding="utf-8")
+    text = (TEMPLATE_DIR / name).read_text(encoding="utf-8")
+    if name == "site.js":
+        text = (TEMPLATE_DIR / "gz.js").read_text(encoding="utf-8") + "\n" + text
+    return text
 
 
 @functools.lru_cache(maxsize=1)
@@ -1446,6 +1449,11 @@ def range_figures(page: Any) -> dict[str, Any]:
     return out
 
 
+def _drop(path: Path) -> None:
+    path.unlink(missing_ok=True)
+    path.with_name(path.name + ".gz").unlink(missing_ok=True)
+
+
 def write_inst_series(out_dir: Path, data_dir: Path,
                       long_hist: dict[str, tuple[list[str], list[float]]],
                       codes: set[str]) -> int:
@@ -1458,13 +1466,13 @@ def write_inst_series(out_dir: Path, data_dir: Path,
         m = fd.get(code)
         path = out_dir / "stock" / f"{code}.i.json"
         if not hist or not m:
-            path.unlink(missing_ok=True)
+            _drop(path)
             continue
         dates = hist[0]
         f = [m.get(d, (None, None))[0] for d in dates]
         sh = [m.get(d, (None, None))[1] for d in dates]
         if not any(v is not None for v in f):
-            path.unlink(missing_ok=True)
+            _drop(path)
             continue
         doc = {"d0": dates[0], "n": len(dates),
                "f": [None if v is None else int(v) for v in f],
@@ -1478,7 +1486,7 @@ def write_range_figures(page: Any, out_file: Path) -> Path | None:
     path = out_file.with_name(out_file.stem + ".r.json")
     data = range_figures(page)
     if not data:
-        path.unlink(missing_ok=True)
+        _drop(path)
         return None
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     return path
