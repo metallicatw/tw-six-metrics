@@ -107,7 +107,7 @@ runs:
       run: |
         npm install --prefix /tmp/ts --no-save --silent typescript@5.6.3 >/dev/null 2>&1 || true
         NODE_PATH=/tmp/ts/node_modules python scripts/site_finalize.py site --noindex
-        python scripts/site_slim.py site --max-mb 990 --live https://metallicatw.github.io/tw-six-metrics/
+        python scripts/site_slim.py site --max-mb 990 --lazy --live https://metallicatw.github.io/tw-six-metrics/
       shell: bash
     - if: inputs.incremental == 'true' && inputs.save_cache == 'true'
       uses: actions/cache/save@v4

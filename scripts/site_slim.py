@@ -44,6 +44,12 @@ PANEL_OPEN = re.compile(r'<section class="panel" id="(panel-[\w-]+)"[^>]*>')
 SEC = re.compile(r"<section\b|</section\s*>", re.I)
 
 
+def _write(path: Path, data: bytes) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_bytes(data)
+    tmp.replace(path)
+
+
 def _gz(data: bytes) -> bytes:
     return gzip.compress(data, compresslevel=9, mtime=0)
 
@@ -53,7 +59,7 @@ def gzip_files(paths: list[Path], keep: bool = False) -> tuple[int, int]:
     for f in paths:
         raw = f.read_bytes()
         out = f.with_name(f.name + ".gz")
-        out.write_bytes(_gz(raw))
+        _write(out, _gz(raw))
         if not keep:
             f.unlink()
             saved += len(raw)
@@ -150,9 +156,9 @@ def slim_page(path: Path) -> int:
            f'<link rel="preload" href="{tag.group(1)}" as="script">')
     at = new.find(loader)
     new = new[:at] + pre + new[at:]
-    (path.parent / (name + ".gz")).write_bytes(
-        _gz(json.dumps(parts, ensure_ascii=False, separators=(",", ":")).encode("utf-8")))
-    path.write_text(new, "utf-8")
+    _write(path.parent / (name + ".gz"),
+           _gz(json.dumps(parts, ensure_ascii=False, separators=(",", ":")).encode("utf-8")))
+    _write(path, new.encode("utf-8"))
     return len(html.encode()) - len(new.encode())
 
 
@@ -182,7 +188,7 @@ def main(argv: list[str]) -> int:
     if "--lazy" in argv and stock.is_dir():
         assets = site / "assets"
         assets.mkdir(exist_ok=True)
-        (assets / "lazy.js").write_text(GZ_JS.read_text("utf-8") + LOADER, "utf-8")
+        _write(assets / "lazy.js", (GZ_JS.read_text("utf-8") + LOADER).encode("utf-8"))
         pages = saved = 0
         for f in sorted(stock.glob("*.html")):
             d = slim_page(f)
