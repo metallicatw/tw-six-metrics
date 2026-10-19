@@ -145,3 +145,12 @@
 {"a":"3504","b":"3008","asked":"2026-10-16","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.95,"note":"大立光為揚明光之母公司（持股約三成），雙方同屬光學鏡頭產業並具集團關聯。"}
 {"a":"3504","b":"3362","asked":"2026-10-16","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"揚明光與先進光皆為台股主要的光學鏡頭廠，產品線重疊，常被歸類於光學鏡頭同業競爭族群。"}
 {"a":"8040","b":"6208","asked":"2026-10-17","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"九暘為網通IC設計，日揚為半導體設備，兩者皆屬半導體與IC相關類股，常因盤面資金輪動而具備同一題材連動性。"}
+{"a":"1709","b":"2221","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"和益為石油化學製造業，大甲為汽車零組件製造業，兩者產業性質與業務完全不同。"}
+{"a":"1709","b":"2030","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"和益為化學工業類股，彰源則為鋼鐵工業類股，基本面無直接上下游關係，多為台股資金輪動時的題材連動。"}
+{"a":"1709","b":"6957","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"和益為化學品製造商，裕慶-KY為商用展示架與機構件廠，業務屬不同產業。"}
+{"a":"2221","b":"3094","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"兩者業務性質不同（大甲為汽車零件，聯傑為網通IC），基本面無直接供應鏈關係，股價同步可能僅因大盤或題材聯動。"}
+{"a":"2221","b":"1709","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"大甲為汽車零組件廠，和益為石化產品製造商，兩者業務性質與產業鏈完全不同。"}
+{"a":"2221","b":"3055","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"大甲為汽車零組件廠，蔚華科為半導體設備代理商，業務性質差異大，無直接供應鏈或集團關係。"}
+{"a":"3105","b":"4927","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆屬台股電子零組件與半導體相關類股，常因大盤資金輪動或電子股情緒而同步變動。"}
+{"a":"3105","b":"8086","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"穩懋與宏捷科皆為台灣砷化鎵晶圓代工廠，主要業務高度重疊，屬直接競爭對手。"}
+{"a":"3105","b":"2455","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"穩懋與全新皆為台灣砷化鎵晶圓代工廠，主要應用於PA功率放大器，為直接競爭對手。"}
