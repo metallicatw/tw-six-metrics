@@ -917,3 +917,6 @@
 {"code":"4566","name":"時碩工業","date":"2026-10-16","file":"456620261016M001.pdf","processed":"2026-10-16","source":"pdf","rules":{"pos":34,"neg":1,"tone":0.825,"chars":3417},"llm":null,"model":""}
 {"code":"6414","name":"樺漢","date":"2026-10-16","file":"641420261016M001.pdf","processed":"2026-10-16","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":35},"llm":null,"model":""}
 {"code":"6657","name":"華安","date":"2026-10-16","file":"665720261016M002.pdf","processed":"2026-10-17","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":34},"llm":null,"model":""}
+{"code":"2474","name":"可成","date":"2026-10-19","file":"247420261016M001.pdf","processed":"2026-10-19","source":"pdf","rules":{"pos":13,"neg":3,"tone":0.4762,"chars":9021},"llm":null,"model":""}
+{"code":"2889","name":"國票金","date":"2026-10-19","file":"288920261019M003.pdf","processed":"2026-10-19","source":"pdf","rules":{"pos":27,"neg":8,"tone":0.475,"chars":9035},"llm":null,"model":""}
+{"code":"3540","name":"曜越","date":"2026-10-19","file":"354020261019M001.pdf","processed":"2026-10-19","source":"pdf","rules":{"pos":11,"neg":0,"tone":0.6875,"chars":9022},"llm":null,"model":""}
