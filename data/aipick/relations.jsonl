@@ -154,3 +154,6 @@
 {"a":"3105","b":"4927","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆屬台股電子零組件與半導體相關類股，常因大盤資金輪動或電子股情緒而同步變動。"}
 {"a":"3105","b":"8086","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"穩懋與宏捷科皆為台灣砷化鎵晶圓代工廠，主要業務高度重疊，屬直接競爭對手。"}
 {"a":"3105","b":"2455","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"穩懋與全新皆為台灣砷化鎵晶圓代工廠，主要應用於PA功率放大器，為直接競爭對手。"}
+{"a":"3138","b":"2367","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.5,"note":"兩者皆屬電子零組件相關企業，常因題材或產業趨勢同步變動，非直接上下游。"}
+{"a":"3138","b":"2313","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬低軌衛星與5G網通概念股，常因相同題材在股市中同步變動。"}
+{"a":"3138","b":"3491","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"耀登與昇達科皆為台股網通及高頻天線相關廠商，同屬低軌衛星與 5G 射頻題材供應鏈。"}
