@@ -931,3 +931,6 @@
 {"code":"6515","name":"穎崴","date":"2026-10-19","file":"651520261015M001.pdf","processed":"2026-10-20","source":"pdf","rules":{"pos":9,"neg":1,"tone":0.5333,"chars":5205},"llm":null,"model":""}
 {"code":"3325","name":"旭品","date":"2026-10-20","file":"332520261020M001.pdf","processed":"2026-10-20","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":33},"llm":null,"model":""}
 {"code":"6467","name":"泰合","date":"2026-09-16","file":"646720260916M001.pdf","processed":"2026-10-20","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":152},"llm":null,"model":""}
+{"code":"3052","name":"夆典","date":"2026-10-21","file":"305220261020M001.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":10,"neg":7,"tone":0.1364,"chars":6484},"llm":null,"model":""}
+{"code":"4102","name":"永日","date":"2026-10-21","file":"410220261019M001.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":13,"neg":0,"tone":0.7222,"chars":4959},"llm":null,"model":""}
+{"code":"5905","name":"南仁湖","date":"2026-10-21","file":"590520261021M004.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":13,"neg":0,"tone":0.7222,"chars":6430},"llm":null,"model":""}
