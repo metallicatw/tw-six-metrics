@@ -934,3 +934,8 @@
 {"code":"3052","name":"夆典","date":"2026-10-21","file":"305220261020M001.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":10,"neg":7,"tone":0.1364,"chars":6484},"llm":null,"model":""}
 {"code":"4102","name":"永日","date":"2026-10-21","file":"410220261019M001.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":13,"neg":0,"tone":0.7222,"chars":4959},"llm":null,"model":""}
 {"code":"5905","name":"南仁湖","date":"2026-10-21","file":"590520261021M004.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":13,"neg":0,"tone":0.7222,"chars":6430},"llm":null,"model":""}
+{"code":"8182","name":"加高","date":"2026-10-21","file":"818220261021M001.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":7,"neg":2,"tone":0.3571,"chars":5554},"llm":null,"model":""}
+{"code":"1731","name":"美吾華","date":"2026-10-21","file":"173120261021M002.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":17,"neg":1,"tone":0.6957,"chars":4230},"llm":null,"model":""}
+{"code":"4108","name":"懷特","date":"2026-10-21","file":"410820261021M001.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":2,"neg":2,"tone":0.0,"chars":2539},"llm":null,"model":""}
+{"code":"4188","name":"安克","date":"2026-10-21","file":"418820261021M001.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":2,"neg":2,"tone":0.0,"chars":9030},"llm":null,"model":""}
+{"code":"6770","name":"力積電","date":"2026-10-21","file":"677020261021M001.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":12,"neg":2,"tone":0.5263,"chars":4228},"llm":null,"model":""}

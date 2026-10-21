@@ -157,3 +157,9 @@
 {"a":"3138","b":"2367","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.5,"note":"兩者皆屬電子零組件相關企業，常因題材或產業趨勢同步變動，非直接上下游。"}
 {"a":"3138","b":"2313","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬低軌衛星與5G網通概念股，常因相同題材在股市中同步變動。"}
 {"a":"3138","b":"3491","asked":"2026-10-20","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"耀登與昇達科皆為台股網通及高頻天線相關廠商，同屬低軌衛星與 5G 射頻題材供應鏈。"}
+{"a":"3311","b":"5013","asked":"2026-10-21","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"兩者皆屬台股上市櫃公司，股價連動可能來自大盤或資金輪動等同一題材，無直接業務往來。"}
+{"a":"3311","b":"3114","asked":"2026-10-21","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"閎暉為機構件與按鍵廠，好德為電子零件通路商，業務性質與應用領域不同，無直接供應鏈或集團關係。"}
+{"a":"3311","b":"2020","asked":"2026-10-21","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"閎暉為機構件與按鍵廠，美亞為鋼管製造廠，兩者業務與產業鏈不同，無直接上下游或同業關係。"}
+{"a":"6168","b":"3031","asked":"2026-10-21","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"宏齊與佰鴻皆為台灣知名的LED（發光二極體）封裝廠，業務高度重疊，屬於同業競爭關係。"}
+{"a":"6533","b":"5013","asked":"2026-10-21","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"晶心科為矽智財廠，強新為線材製造，本業無直接供應或客戶關係，股價同步多因台股資金輪動或大盤題材影響。"}
+{"a":"6533","b":"4919","asked":"2026-10-21","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"兩者皆為台灣主要的矽智財(IP)與微控制器(MCU)相關IC設計公司，同屬半導體族群。"}
