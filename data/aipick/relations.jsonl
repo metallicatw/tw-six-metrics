@@ -163,3 +163,5 @@
 {"a":"6168","b":"3031","asked":"2026-10-21","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"宏齊與佰鴻皆為台灣知名的LED（發光二極體）封裝廠，業務高度重疊，屬於同業競爭關係。"}
 {"a":"6533","b":"5013","asked":"2026-10-21","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"晶心科為矽智財廠，強新為線材製造，本業無直接供應或客戶關係，股價同步多因台股資金輪動或大盤題材影響。"}
 {"a":"6533","b":"4919","asked":"2026-10-21","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"兩者皆為台灣主要的矽智財(IP)與微控制器(MCU)相關IC設計公司，同屬半導體族群。"}
+{"a":"6168","b":"3437","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"宏齊與榮創皆為台灣知名的LED（發光二極體）封裝廠，業務高度重疊。"}
+{"a":"6533","b":"6708","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"晶心科與天擎皆為台灣的IC設計公司，主要發展RISC-V及相關微控制器晶片，屬同業競爭關係。"}
