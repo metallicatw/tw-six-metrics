@@ -165,3 +165,4 @@
 {"a":"6533","b":"4919","asked":"2026-10-21","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"兩者皆為台灣主要的矽智財(IP)與微控制器(MCU)相關IC設計公司，同屬半導體族群。"}
 {"a":"6168","b":"3437","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"宏齊與榮創皆為台灣知名的LED（發光二極體）封裝廠，業務高度重疊。"}
 {"a":"6533","b":"6708","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"晶心科與天擎皆為台灣的IC設計公司，主要發展RISC-V及相關微控制器晶片，屬同業競爭關係。"}
+{"a":"6168","b":"4956","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"宏齊與光鋐皆為台灣LED封裝廠，業務重疊，常因產業題材同步漲跌。"}

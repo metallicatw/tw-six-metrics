@@ -940,3 +940,7 @@
 {"code":"4188","name":"安克","date":"2026-10-21","file":"418820261021M001.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":2,"neg":2,"tone":0.0,"chars":9030},"llm":null,"model":""}
 {"code":"6770","name":"力積電","date":"2026-10-21","file":"677020261021M001.pdf","processed":"2026-10-21","source":"pdf","rules":{"pos":12,"neg":2,"tone":0.5263,"chars":4228},"llm":null,"model":""}
 {"code":"5521","name":"工信","date":"2026-10-22","file":"552120261021M001.pdf","processed":"2026-10-22","source":"pdf","rules":{"pos":7,"neg":7,"tone":0.0,"chars":4976},"llm":null,"model":""}
+{"code":"1533","name":"車王電","date":"2026-10-22","file":"153320261022M001.pdf","processed":"2026-10-22","source":"pdf","rules":{"pos":0,"neg":0,"tone":0.0,"chars":4311},"llm":null,"model":""}
+{"code":"2514","name":"龍邦","date":"2026-10-22","file":"251420261022M001.pdf","processed":"2026-10-22","source":"pdf","rules":{"pos":3,"neg":1,"tone":0.2222,"chars":8190},"llm":null,"model":""}
+{"code":"6625","name":"必應","date":"2026-10-22","file":"662520261022M001.pdf","processed":"2026-10-22","source":"pdf","rules":{"pos":12,"neg":0,"tone":0.7059,"chars":6046},"llm":null,"model":""}
+{"code":"4188","name":"安克","date":"2026-10-21","file":"418820261022M001.pdf","processed":"2026-10-22","source":"pdf","rules":{"pos":2,"neg":2,"tone":0.0,"chars":9030},"llm":null,"model":""}
