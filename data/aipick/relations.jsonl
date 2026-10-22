@@ -166,3 +166,12 @@
 {"a":"6168","b":"3437","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"宏齊與榮創皆為台灣知名的LED（發光二極體）封裝廠，業務高度重疊。"}
 {"a":"6533","b":"6708","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"晶心科與天擎皆為台灣的IC設計公司，主要發展RISC-V及相關微控制器晶片，屬同業競爭關係。"}
 {"a":"6168","b":"4956","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"宏齊與光鋐皆為台灣LED封裝廠，業務重疊，常因產業題材同步漲跌。"}
+{"a":"1721","b":"3354","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.3,"note":"兩者皆為台灣上市櫃化學工業類股，可能受相同總經或原物料題材影響而連動。"}
+{"a":"1721","b":"4720","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"兩者皆為台灣知名之特用化學品與合成樹脂製造廠，產品領域重疊性高。"}
+{"a":"1721","b":"8092","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"兩者皆為台股小型傳統產業股，偶爾因資金輪動或同屬低價轉機題材而出現股價連動，無直接業務往來。"}
+{"a":"3094","b":"3016","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"聯傑與嘉晶皆屬台灣上市櫃電子股，雖無直接上下游關係，但在股市中常因同屬小型電子或特定半導體題材而被市場資金連動。"}
+{"a":"3094","b":"2221","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"聯傑為網通IC設計公司，大甲為農機與汽車零件製造商，業務性質完全不同，長期股價同步可能僅受台股大盤或題材連動影響。"}
+{"a":"3094","b":"2340","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"兩者皆為台股電子股，常因市場資金或集團題材連動，非直接上下游關係。"}
+{"a":"5243","b":"5434","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆為台股知名概念股，常因盤面資金流向或集團題材同步波動，無直接業務從屬關係。"}
+{"a":"5243","b":"4958","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.5,"note":"兩者皆為鴻海集團旗下的KY控股公司，業務皆涉及電子零組件製造與組裝領域。"}
+{"a":"5243","b":"5016","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.3,"note":"兩者皆屬台股上市櫃公司，主營業務不同，但可能因台股大盤或特定電子/傳產資金流向而產生同題材連動。"}
