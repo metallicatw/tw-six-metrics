@@ -955,3 +955,5 @@
 {"code":"6907","name":"雅特力-KY","date":"2026-10-23","file":"690720261023M001.pdf","processed":"2026-10-23","source":"pdf","rules":{"pos":0,"neg":0,"tone":0.0,"chars":1331},"llm":null,"model":""}
 {"code":"4541","name":"晟田","date":"2026-10-22","file":"454120261021M001.pdf","processed":"2026-10-23","source":"pdf","rules":{"pos":11,"neg":0,"tone":0.6875,"chars":9033},"llm":null,"model":""}
 {"code":"6938","name":"藍新資訊","date":"2026-10-01","file":"693820261001M001.pdf","processed":"2026-10-23","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":99},"llm":null,"model":""}
+{"code":"6898","name":"程曦資訊","date":"2026-09-30","file":"689820260930M002.pdf","processed":"2026-10-23","source":"pdf","rules":{"pos":17,"neg":1,"tone":0.6957,"chars":9038},"llm":null,"model":""}
+{"code":"2249","name":"湧盛","date":"2026-09-29","file":"224920260924M001.pdf","processed":"2026-10-23","source":"pdf","rules":{"pos":12,"neg":3,"tone":0.45,"chars":4868},"llm":null,"model":""}
