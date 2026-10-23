@@ -951,3 +951,7 @@
 {"code":"2008","name":"高興昌","date":"2026-10-23","file":"200820261022M001.pdf","processed":"2026-10-23","source":"pdf","rules":{"pos":15,"neg":7,"tone":0.2963,"chars":7371},"llm":null,"model":""}
 {"code":"2008","name":"高興昌","date":"2026-10-23","file":"200820261022M003.pdf","processed":"2026-10-23","source":"pdf","rules":{"pos":15,"neg":7,"tone":0.2963,"chars":7371},"llm":null,"model":""}
 {"code":"7715","name":"裕山","date":"2026-10-23","file":"771520261022M001.pdf","processed":"2026-10-23","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":22},"llm":null,"model":""}
+{"code":"3693","name":"營邦","date":"2026-10-23","file":"369320261023M001.pdf","processed":"2026-10-23","source":"pdf","rules":{"pos":8,"neg":0,"tone":0.6154,"chars":1630},"llm":null,"model":""}
+{"code":"6907","name":"雅特力-KY","date":"2026-10-23","file":"690720261023M001.pdf","processed":"2026-10-23","source":"pdf","rules":{"pos":0,"neg":0,"tone":0.0,"chars":1331},"llm":null,"model":""}
+{"code":"4541","name":"晟田","date":"2026-10-22","file":"454120261021M001.pdf","processed":"2026-10-23","source":"pdf","rules":{"pos":11,"neg":0,"tone":0.6875,"chars":9033},"llm":null,"model":""}
+{"code":"6938","name":"藍新資訊","date":"2026-10-01","file":"693820261001M001.pdf","processed":"2026-10-23","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":99},"llm":null,"model":""}
