@@ -175,3 +175,9 @@
 {"a":"5243","b":"5434","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆為台股知名概念股，常因盤面資金流向或集團題材同步波動，無直接業務從屬關係。"}
 {"a":"5243","b":"4958","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.5,"note":"兩者皆為鴻海集團旗下的KY控股公司，業務皆涉及電子零組件製造與組裝領域。"}
 {"a":"5243","b":"5016","asked":"2026-10-22","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.3,"note":"兩者皆屬台股上市櫃公司，主營業務不同，但可能因台股大盤或特定電子/傳產資金流向而產生同題材連動。"}
+{"a":"3324","b":"3017","asked":"2026-10-27","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"雙鴻與奇鋐皆為台灣主要的散熱模組廠，同屬AI伺服器與筆電散熱題材，業務高度重疊。"}
+{"a":"3324","b":"6805","asked":"2026-10-27","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"雙鴻與富世達皆為台股散熱模組廠，且同屬AI伺服器液冷題材，股價常同步變動。"}
+{"a":"3324","b":"6933","asked":"2026-10-27","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.9,"note":"兩者皆為 AI 伺服器與水冷散熱概念股，市場資金常將其連動操作。"}
+{"a":"3605","b":"1569","asked":"2026-10-27","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.6,"note":"兩者皆為台灣電子零組件廠，同屬機構件與連接器相關領域，常在筆電與網通題材中被市場歸類為同一族群。"}
+{"a":"3605","b":"2449","asked":"2026-10-27","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆受惠於網通、AI與高速運算等題材，在台股中常被歸類為電子零組件與半導體測試相關族群。"}
+{"a":"3605","b":"4951","asked":"2026-10-27","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"宏致與精拓科皆屬台股電子零組件相關類股，常受市場資金與相同產業題材影響而同步波動。"}
