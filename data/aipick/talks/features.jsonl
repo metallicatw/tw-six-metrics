@@ -969,3 +969,6 @@
 {"code":"6530","name":"創威","date":"2026-10-27","file":"653020261027M001.pdf","processed":"2026-10-27","source":"pdf","rules":{"pos":4,"neg":0,"tone":0.4444,"chars":3210},"llm":null,"model":""}
 {"code":"2337","name":"旺宏","date":"2026-10-27","file":"233720261027M001.pdf","processed":"2026-10-27","source":"pdf","rules":{"pos":8,"neg":2,"tone":0.4,"chars":6178},"llm":null,"model":""}
 {"code":"4169","name":"泰宗","date":"2026-10-27","file":"416920261027M002.pdf","processed":"2026-10-27","source":"pdf","rules":{"pos":5,"neg":0,"tone":0.5,"chars":4138},"llm":null,"model":""}
+{"code":"3264","name":"欣銓","date":"2026-10-23","file":"326420261027M001.pdf","processed":"2026-10-28","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":184},"llm":null,"model":""}
+{"code":"7710","name":"東擎科技","date":"2026-09-23","file":"771020260923M001.pdf","processed":"2026-10-28","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":125},"llm":null,"model":""}
+{"code":"7710","name":"東擎科技","date":"2026-09-01","file":"771020260901M002.pdf","processed":"2026-10-28","source":"summary","rules":{"pos":0,"neg":0,"tone":0.0,"chars":54},"llm":null,"model":""}
