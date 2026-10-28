@@ -603,7 +603,7 @@ def test_集保15級回補_新上市股查不到舊週_不算被擋():
     assert codes.count("2330") == 5
 
 
-def test_籌碼雷達十三項工具_預設台積電():
+def test_籌碼雷達十四項工具_預設台積電():
     import re as _re
 
     tpl = Path(__file__).resolve().parents[1] / "src" / "twsix" / "report" / "templates"
@@ -614,10 +614,10 @@ def test_籌碼雷達十三項工具_預設台積電():
     api = (bg / "api.js").read_text("utf-8")
     tabs = src.split('id="cf-tabs"', 1)[1].split("</div>", 1)[0]
     order = _re.findall(r'data-t="(t\d+)" role="tab">', tabs)
-    assert order == [f"t{n}" for n in range(1, 14)], order
-    assert 'data-t="t1" role="tab">① 個股籌碼多圖' in tabs and 'data-t="t13" role="tab">⑬ 籌碼回測' in tabs
+    assert order == [f"t{n}" for n in range(1, 15)], order
+    assert 'data-t="t1" role="tab">① 個股籌碼多圖' in tabs and 'data-t="t14" role="tab">⑭ 產業氣泡圖' in tabs
     htmls = []
-    for n in range(1, 14):
+    for n in range(1, 15):
         assert f'{{% include "radar_bg/t{n}.html" %}}' in src
         html = (bg / f"t{n}.html").read_text("utf-8")
         htmls.append(html)
@@ -626,7 +626,8 @@ def test_籌碼雷達十三項工具_預設台積電():
         for i in set(_re.findall(rf"#(m{n}-[\w-]+)", css)):
             assert f'id="{i}"' in html, i
         assert f"#cf .bg{n} " in css, "各頁樣式都收在 #cf .bgN 底下"
-    for t in [src, mods, css, api] + htmls:
+    ins = (bg / "insight.js").read_text("utf-8")
+    for t in [src, mods, css, api, ins] + htmls:
         assert ("ben" + "go") not in t.lower() and ("笨" + "狗") not in t
         assert "BG財報" not in t and "BG 的" not in t
         assert "試用版的資料日期" not in t
@@ -714,7 +715,7 @@ def test_籌碼雷達頁面的模板編譯得過():
     for name in ("radar.html.j2", "radar_guide.html.j2"):
         bad = [m.start() for m in _re.finditer(r"\{#(?![ \n-])", (root / name).read_text("utf-8"))]
         assert not bad, f"{name} 裡有黏在一起的「{{#」（會被當成 Jinja 註解）：位置 {bad}"
-    for name in ("style.css", "mods.js", "api.js"):
+    for name in ("style.css", "mods.js", "api.js", "insight.js"):
         src = (root / "radar_bg" / name).read_text("utf-8").rstrip()
         assert src.startswith("{% raw %}") and src.endswith("{% endraw %}"), name
         assert src.count("{% endraw %}") == 1, name
@@ -729,7 +730,7 @@ def test_籌碼雷達使用手冊_每個工具一節_連結都對得到():
     assert 'data-t="guide" role="tab">📖 使用手冊' in src
     assert '<section class="cf-panel" id="cf-guide">{% include "radar_guide.html.j2" %}</section>' in src
     ids = set(_re.findall(r'id="(g-[\w-]+)"', guide))
-    for k in [f"t{n}" for n in range(1, 14)] + ["picks", "val"]:
+    for k in [f"t{n}" for n in range(1, 15)] + ["picks", "val"]:
         assert f"g-{k}" in ids, k
         assert f'data-guide="g-{k}"' in src, f"{k} 分頁上要有〔怎麼用〕連到手冊"
         assert f'data-go="{k}"' in guide, f"手冊的 {k} 那一節要有按鈕打開工具"
@@ -753,7 +754,7 @@ def test_指標查詢_每一條都有算法白話與出處():
         seen.add(g["name"])
         assert g["calc"].strip() and g["plain"].strip() and g["t"], g["name"]
         for t in g["t"]:
-            assert t in ("p", "v") or (isinstance(t, int) and 1 <= t <= 13), (g["name"], t)
+            assert t in ("p", "v") or (isinstance(t, int) and 1 <= t <= 14), (g["name"], t)
     src = (tpl / "radar.html.j2").read_text("utf-8")
     for t in ('id="gl-q"', 'id="gl-tool"', 'id="gl-cats"', 'id="gl-list"', "function setupGuide()", "setupGuide();"):
         assert t in src, t

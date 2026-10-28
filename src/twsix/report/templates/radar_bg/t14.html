@@ -1,0 +1,29 @@
+{% raw %}<div class="bgm bg14">
+<div class="wrap">
+  <header>
+    <h1>產業氣泡圖　外資投信 60 日買賣超 × 20 日成交金額</h1>
+    <p id="m14-sub">讀取資料中…</p>
+  </header>
+  <div class="controls">
+    <div class="group"><label class="lb" for="m14-scheme">分類</label><select id="m14-scheme" title="產業鏈細項、產業鏈：櫃買中心產業價值鏈，同一家公司可以同時屬於好幾組；官方產業別：證交所／櫃買中心的產業別，一家公司只屬於一組"><option value="seg" selected>產業鏈細項</option><option value="chain">產業鏈</option><option value="ind">官方產業別</option></select></div>
+    <div class="group"><label class="lb" for="m14-show">顯示</label><select id="m14-show"><option value="v" selected>成交金額前 10 名</option><option value="v5">成交金額前 5 名</option><option value="b">買賣超金額最高前 10 名</option><option value="b5">買賣超金額最高前 5 名</option><option value="s">買賣超金額最低前 10 名</option><option value="all">全部</option><option value="custom">自訂（手動加入）</option></select></div>
+    <div class="group"><label class="lb" for="m14-sc">刻度</label><select id="m14-sc" title="對數：以倍數等距，小金額也看得清楚；線性：座標等距，如實反映金額大小"><option value="log" selected>對數</option><option value="lin">線性</option></select></div>
+    <div class="group"><label class="lb" for="m14-szm">氣泡大小</label><select id="m14-szm"><option value="k" selected>涵蓋家數</option><option value="y">成交金額占比</option><option value="f">固定大小</option></select></div>
+    <div class="group"><label class="lb" for="m14-q">加入</label><input type="text" id="m14-q" list="m14-list" placeholder="產業名稱或股票代號"><button id="m14-add" type="button">加入</button><button id="m14-clr" type="button">全部清除</button><span class="err" id="m14-err" role="status"></span></div>
+    <div class="timeline"><button id="m14-play" class="primary" type="button">▶ 播放</button><button id="m14-prev" type="button" aria-label="前一天">◀</button><input type="range" id="m14-day" min="0" max="59" value="59" aria-label="日期"><button id="m14-next" type="button" aria-label="後一天">▶</button><span class="date" id="m14-dateLabel">—</span><select id="m14-speed" aria-label="播放速度"><option value="600">慢</option><option value="300" selected>中</option><option value="120">快</option></select></div>
+  </div>
+  <datalist id="m14-list"></datalist>
+  <div class="focus" id="m14-focus" hidden></div>
+  <div class="main">
+    <div class="chart" id="m14-chartBox"><svg id="m14-svg" viewBox="0 0 1000 560" role="img" aria-label="產業氣泡圖"></svg><div class="tip" id="m14-tip" hidden></div></div>
+    <aside class="side" id="m14-side"></aside>
+  </div>
+  <section class="info" id="m14-info"></section>
+  <footer>
+    <p><b>怎麼讀｜</b>每個氣泡是一組產業。X 軸＝這組公司「外資＋投信買賣超金額」60 日累計的合計（億元，買賣超股數 × 當日均價），右邊是買超、左邊是賣超；Y 軸＝這組公司「成交金額」20 日累計的合計（億元），越上面成交越大。虛線是 X＝0，以及目前畫面各組成交金額的平均。播放時留下每組走過的軌跡，越舊越淡；畫面超過 30 組時不畫全部軌跡。點氣泡或右側表格的一列會「聚焦」：其他組淡化，只留這一組（金色）的逐日軌跡，下方列出逐日數值與成分股。</p>
+    <p><b>分類｜</b>〔產業鏈細項〕〔產業鏈〕取自櫃買中心「產業價值鏈資訊平台」（每 30 天更新一次），同一家公司可能同時屬於好幾組，所以各組金額不能相加；只列上市櫃、成分股至少 3 檔的組。〔官方產業別〕是證交所／櫃買中心的產業別，一家公司只屬於一組。</p>
+    <p><b>刻度｜</b>對數：Y 軸 1、10、100、1,000 每格差 10 倍，X 軸 0 附近放大、兩端壓縮（對稱對數），金額差距大時小組也看得清楚。線性：座標等距，如實反映金額大小。<b>氣泡大小｜</b>涵蓋家數：家數越多越大；成交金額占比：這組 20 日成交金額占畫面上各組合計的比例；固定大小：只看位置。</p>
+    <p>免責聲明：本頁為公開市場數據之統計整理與視覺化，僅呈現產業層級的數字，不構成任何投資建議、推介、要約或招攬；過去的統計數字不代表未來表現，使用者應自行判斷並承擔投資風險。資料來源：政府資料開放平臺（證交所、櫃買中心）、櫃買中心產業價值鏈資訊平台。</p>
+  </footer>
+</div>
+</div>{% endraw %}

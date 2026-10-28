@@ -10,7 +10,9 @@ CFX.names = function(){
 
 function bgAttr(v){ return String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
 function bgCode(c){ return '<a class="bg-lk" href="stock/' + encodeURIComponent(c) + '.html" title="個股資訊頁">' + c + '</a>'; }
-function bgName(c, n){ return '<a class="bg-t1" href="#t1-' + bgAttr(c) + '-gf" title="① 貪婪／恐懼指標圖">' + (n || c) + '</a>'; }
+function bgName(c, n){ return '<a class="bg-t1" href="#t1-' + bgAttr(c) + '-gf" title="① 貪婪／恐懼指標圖">' + (n || c) + '</a>' + bgIns(c); }
+var BG_INS_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><rect x="2.5" y="1.5" width="11" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 5h6M5 8h6M5 11h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+function bgIns(c){ return '<button type="button" class="bg-ins" data-ins="' + bgAttr(c) + '" title="基本面與籌碼概況" aria-label="' + bgAttr(c) + ' 基本面與籌碼概況">' + BG_INS_ICON + '</button>'; }
 function bgYf(c){ return '<a class="yf bg-lk" href="' + bgAttr(yahooTA(c)) + '" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="' + bgAttr(c) + ' Yahoo 技術分析"></a>'; }
 
 function bgDecorate(code, codeEl, nameEl, after){
@@ -23,7 +25,8 @@ function bgDecorate(code, codeEl, nameEl, after){
   var host = after.parentNode;
   host.querySelectorAll(".bg-deco").forEach(function(x){ x.remove(); });
   var html = (r.ind && after !== nameEl ? "" : (r.ind ? '<span class="bg-ind bg-deco">' + bgAttr(r.ind) + '</span>' : "")) +
-    '<button type="button" class="star bg-star bg-deco" data-star="' + bgAttr(code) + '" aria-pressed="false" title="加入觀察清單">☆</button>';
+    '<button type="button" class="star bg-star bg-deco" data-star="' + bgAttr(code) + '" aria-pressed="false" title="加入觀察清單">☆</button>' +
+    '<button type="button" class="bg-ins bg-ins-l bg-deco" data-ins="' + bgAttr(code) + '" title="開啟基本面與籌碼概況面板">' + BG_INS_ICON + ' 概況</button>';
   after.insertAdjacentHTML("afterend", html);
   var star = host.querySelector("button.bg-star");
   if (star && typeof TWSIXWatch !== "undefined") TWSIXWatch.paint(star);
@@ -431,7 +434,8 @@ function t13Fetch(path){
 var CFX_API = {
   t1: {fetch: t1Fetch, stock: t1Stock, long: t1Long}, t2: {fetch: t2Fetch, entry: t2Entry, long: t2Long}, t3: {fetch: t3Fetch, rec: t3Rec},
   t4: {fetch: t4Fetch}, t5: {fetch: t5Fetch}, t6: {fetch: t6Fetch}, t7: {fetch: t7Fetch}, t8: {fetch: t7Fetch},
-  t9: {fetch: t9Fetch}, t10: {fetch: t9Fetch}, t11: {fetch: t11Fetch}, t12: {fetch: t11Fetch}, t13: {fetch: t13Fetch}
+  t9: {fetch: t9Fetch}, t10: {fetch: t9Fetch}, t11: {fetch: t11Fetch}, t12: {fetch: t11Fetch}, t13: {fetch: t13Fetch},
+  t14: {fetch: bgMissing, data: function(){ return getJSON("sector.json"); }}
 };
 var CFX_BOOTED = {};
 

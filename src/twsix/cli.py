@@ -1723,11 +1723,28 @@ def cmd_aipick(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _refresh_ic_chain(root: Path, settings: Settings, *, force: bool = False) -> None:
+    from .ingest import ic_chain  # noqa: PLC0415
+    from .ingest.base import HttpClient  # noqa: PLC0415
+
+    try:
+        if not force and not ic_chain.is_stale(root):
+            return
+        http = HttpClient(cache_dir=None, cache_ttl=0,
+                          min_interval=max(1.0, settings.ingest.min_interval_seconds),
+                          retries=settings.ingest.retries, timeout=60.0)
+        print("籌碼雷達產業分類（櫃買中心產業價值鏈）：" + ic_chain.refresh(root, http, force=True))
+    except Exception as exc:  # noqa: BLE001 - 分類抓不到沿用舊的，不影響籌碼雷達
+        print(f"::warning::產業價值鏈分類沒有更新（⑭ 沿用上一份）：{exc}")
+
+
 def cmd_chipflow(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .chipflow.radar import run  # noqa: PLC0415
 
     root = Path(args.data or settings.data_dir)
+    if not args.no_chain:
+        _refresh_ic_chain(root, settings, force=args.chain)
     summary = run(root)
     print("籌碼雷達：" + "、".join(f"{k} {v}" for k, v in summary.items()))
     return EXIT_OK
@@ -3256,6 +3273,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="籌碼雷達：法人×5,000 萬大戶×成交資金×買賣盤力道×基本面（寫進 data/chipflow）",
     )
     cf.add_argument("--data", help="資料目錄")
+    cf.add_argument("--chain", action="store_true", help="強制重抓產業價值鏈分類（平常每 30 天自動更新一次）")
+    cf.add_argument("--no-chain", action="store_true", help="這一次不檢查產業價值鏈分類")
     cf.set_defaults(func=cmd_chipflow)
 
     ff = sub.add_parser(

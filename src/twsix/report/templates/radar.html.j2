@@ -27,7 +27,7 @@ window.CF_V = "@@CFV@@";
   ('t4','#1864ab','#6fb0f5'),('t5','#0b7285','#3bc9db'),('t6','#6741d9','#b39cff'),
   ('t7','#b25a00','#ffa94d'),('t8','#a61e4d','#faa2c1'),('t9','#5c7c00','#a9e34b'),
   ('t10','#087f5b','#38d9a9'),('t11','#862e9c','#e599f7'),('t12','#364fc7','#91a7ff'),
-  ('t13','#9c6500','#ffc94d'),('picks','#c92a2a','#ff8787'),('val','#7a5230','#e0b084'),('guide','#2f4b7c','#8fb0e8'),('about','#495057','#adb5bd')] %}
+  ('t13','#9c6500','#ffc94d'),('t14','#5f3dc4','#d0bfff'),('picks','#c92a2a','#ff8787'),('val','#7a5230','#e0b084'),('guide','#2f4b7c','#8fb0e8'),('about','#495057','#adb5bd')] %}
 {% for k, c, d in cf_colors %}.cf-tab[data-t={{ k }}],#cf-{{ k }}{--tc:{{ c }}}
 {% endfor %}@media (prefers-color-scheme:dark){
 {% for k, c, d in cf_colors %}  :root:not([data-theme=light]) .cf-tab[data-t={{ k }}],:root:not([data-theme=light]) #cf-{{ k }}{--tc:{{ d }}}
@@ -183,11 +183,100 @@ window.CF_V = "@@CFV@@";
 .gl-empty{color:var(--muted);font-size:13.5px;padding:10px 2px}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]) .gd-no,:root:not([data-theme=light]) .gl-cats button[aria-pressed=true]{color:var(--ground)}}
 :root[data-theme=dark] .gd-no,:root[data-theme=dark] .gl-cats button[aria-pressed=true]{color:var(--ground)}
+
+/* 基本面與籌碼概況：② 卡片＋④⑤⑥⑬ 側邊面板 */
+#cf .bgm button.bg-ins{appearance:none;display:inline-flex;align-items:center;gap:3px;margin-left:5px;padding:2px 4px;border:1px solid transparent;border-radius:6px;
+  background:none;color:var(--muted,#8a929b);cursor:pointer;vertical-align:middle;line-height:1;font:inherit;font-size:12px}
+#cf .bgm button.bg-ins:hover,#cf .bgm tr.cfi-cur button.bg-ins{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+#cf .bgm button.bg-ins.bg-ins-l{padding:3px 8px;border-color:var(--rule);font-weight:600}
+#cf .bgm tr.cfi-cur,#cf .bgm tr.cfi-cur:hover{background:color-mix(in srgb,var(--accent) 14%,transparent);box-shadow:inset 3px 0 0 var(--accent)}
+#cf-t4 .bgm tbody tr,#cf-t5 .bgm tbody tr,#cf-t6 .bgm tbody tr{cursor:pointer}
+#cf .cfi{--cfi-fs:15px;--cfi-c:var(--accent);font-size:var(--cfi-fs);line-height:1.7;color:var(--ink);text-align:left}
+#cf .cfi .cfi-up{color:var(--up)}
+#cf .cfi .cfi-dn{color:var(--down)}
+#cf .cfi b{font-weight:700}
+#cf .cfi .cfi-soft{color:var(--muted)}
+#cf .cfi .cfi-flags{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 12px}
+#cf .cfi .cfi-tag{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.84em;font-weight:600;border:1px solid var(--rule);background:var(--surface-2);color:var(--ink-2)}
+#cf .cfi .cfi-tag.up{border-color:color-mix(in srgb,var(--up) 45%,transparent);color:var(--up);background:color-mix(in srgb,var(--up) 9%,transparent)}
+#cf .cfi .cfi-tag.dn{border-color:color-mix(in srgb,var(--down) 45%,transparent);color:var(--down);background:color-mix(in srgb,var(--down) 9%,transparent)}
+#cf .cfi .cfi-cols{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+#cf .cfi .cfi-col{min-width:0}
+#cf .cfi.cfi-card .cfi-cols{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+@media (max-width:860px){ #cf .cfi.cfi-card .cfi-cols{grid-template-columns:1fr}}
+#cf .cfi .cfi-col h4{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:0 0 8px;padding-left:10px;border-left:4px solid var(--accent-2);font-size:1.02em;font-weight:800}
+#cf .cfi .cfi-col.c h4{border-left-color:#e8590c}
+#cf .cfi .cfi-col h4 span{font-size:.78em;font-weight:500;color:var(--muted)}
+#cf .cfi .cfi-sec{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:10px 14px 8px;margin:0 0 10px}
+#cf .cfi .cfi-sec header{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+#cf .cfi .cfi-sec h5{margin:0;font-size:.86em;font-weight:700;color:var(--muted);letter-spacing:.02em}
+#cf .cfi .cfi-when{font-size:.78em;color:var(--muted);font-variant-numeric:tabular-nums}
+#cf .cfi .cfi-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 4px;flex-wrap:wrap}
+#cf .cfi .cfi-val{font-variant-numeric:tabular-nums}
+#cf .cfi .cfi-big{font-size:1.45em;font-weight:800;letter-spacing:-.01em}
+#cf .cfi .cfi-spk{flex:0 0 auto;color:var(--cfi-c);line-height:0}
+#cf .cfi svg.cfi-sp{display:block;overflow:visible}
+#cf .cfi svg.cfi-sp path{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+#cf .cfi svg.cfi-sp circle{fill:currentColor}
+#cf .cfi svg.cfi-sp rect{fill:currentColor;opacity:.42}
+#cf .cfi svg.cfi-sp rect.last{opacity:1}
+#cf .cfi svg.cfi-sp rect.neg{fill:var(--down)}
+#cf .cfi svg.cfi-sp line.zero{stroke:var(--muted);stroke-width:.8;stroke-dasharray:2 3}
+#cf .cfi ul{list-style:none;margin:4px 0 2px;padding:0}
+#cf .cfi li{position:relative;margin:0;padding:2px 0 2px 14px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+#cf .cfi li::before{content:"";position:absolute;left:3px;top:.8em;width:4px;height:4px;border-radius:50%;background:var(--muted)}
+#cf .cfi .cfi-flag{display:inline-block;padding:0 8px;border-radius:999px;font-size:.88em;font-weight:700;border:1px solid var(--rule);background:var(--surface-2);color:var(--accent-2)}
+#cf .cfi details.cfi-more{margin:4px 0 4px}
+#cf .cfi details.cfi-more summary{cursor:pointer;color:var(--accent-2);font-size:.88em;font-weight:600}
+#cf .cfi table.cfi-tbl{width:100%;border-collapse:collapse;margin:6px 0 2px;font-size:.9em;font-variant-numeric:tabular-nums}
+#cf .cfi table.cfi-tbl th,#cf .cfi table.cfi-tbl td{padding:3px 6px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:middle;white-space:nowrap}
+#cf .cfi table.cfi-tbl th{font-size:.84em;font-weight:600;color:var(--muted);background:none;position:static}
+#cf .cfi table.cfi-tbl td.n{text-align:right;position:relative}
+#cf .cfi .cfi-bar{position:absolute;right:6px;top:3px;bottom:3px;width:calc(var(--w) * .7);border-radius:3px;background:var(--accent-2);opacity:.16;pointer-events:none}
+#cf .cfi .cfi-bar.b{background:#e8590c}
+#cf .cfi .cfi-note{margin:6px 0 0;font-size:.82em;color:var(--muted);line-height:1.6}
+#cf .cfi .cfi-fs{display:inline-flex;gap:2px}
+#cf .cfi .cfi-fs button,#cf .cfi .cfi-x,#cf .cfi .cfi-nav button,#cf .cfi .cfi-go button{appearance:none;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);border-radius:7px;padding:3px 8px;font:inherit;font-size:13px;line-height:1.3;cursor:pointer}
+#cf .cfi .cfi-fs button:hover,#cf .cfi .cfi-x:hover,#cf .cfi .cfi-nav button:hover:not(:disabled),#cf .cfi .cfi-go button:hover{border-color:var(--accent);color:var(--accent)}
+#cf .cfi .cfi-nav button:disabled{opacity:.4;cursor:default}
+#cf .cfi.cfi-card{background:var(--surface-2);border:1px solid var(--rule);border-radius:14px;padding:12px 16px 14px;margin:14px 0 18px}
+#cf .cfi.cfi-card .cfi-bar-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#cf .cfi.cfi-card .cfi-tgl{appearance:none;border:none;background:none;padding:0;color:var(--ink);font:inherit;font-size:1.08em;font-weight:800;cursor:pointer}
+#cf .cfi.cfi-card .cfi-who{color:var(--muted);font-size:.9em}
+#cf .cfi.cfi-card .cfi-fs{margin-left:auto}
+#cf .cfi.cfi-card .cfi-body{margin-top:10px}
+#cf .cfi.cfi-card[hidden],#cf .cfi .cfi-body[hidden],#cf .cfi-drawer[hidden],#cf .cfi .cfi-nav[hidden]{display:none}
+#cf .cfi-drawer{position:fixed;z-index:70;top:0;right:0;bottom:0;width:min(500px,100vw);display:flex;flex-direction:column;background:var(--ground);
+  border-left:1px solid var(--rule);box-shadow:-12px 0 32px -18px rgba(0,0,0,.45)}
+#cf .cfi-drawer .cfi-dh{flex:0 0 auto;padding:12px 16px 10px;border-bottom:1px solid var(--rule);background:var(--surface)}
+#cf .cfi-drawer .cfi-who{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-right:4px}
+#cf .cfi-drawer .cfi-who a{color:var(--ink);text-decoration:none}
+#cf .cfi-drawer .cfi-who a:hover .n{text-decoration:underline}
+#cf .cfi-drawer .cfi-who .c{font-family:"IBM Plex Mono",monospace;color:var(--muted);font-weight:600}
+#cf .cfi-drawer .cfi-who .n{font-size:1.25em;font-weight:900}
+#cf .cfi-drawer .cfi-ind{padding:1px 8px;border-radius:999px;border:1px solid var(--rule);font-size:12px;color:var(--muted)}
+#cf .cfi-drawer .cfi-px{font-weight:700;font-variant-numeric:tabular-nums}
+#cf .cfi-drawer .cfi-px small{margin-left:6px;font-weight:400;font-size:11px;color:var(--muted)}
+#cf .cfi-drawer button.bg-star{appearance:none;border:none;background:none;cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;color:var(--muted)}
+#cf .cfi-drawer button.bg-star.on{color:#f5b301}
+#cf .cfi-drawer .cfi-go{display:inline-flex;gap:3px;margin-left:auto}
+#cf .cfi-drawer .cfi-tools{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+#cf .cfi-drawer .cfi-hv{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--muted);cursor:pointer}
+#cf .cfi-drawer .cfi-x{margin-left:auto;font-size:14px;padding:3px 10px}
+#cf .cfi-drawer .cfi-nav{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--muted)}
+#cf .cfi-drawer .cfi-pos{font-variant-numeric:tabular-nums;min-width:4.5em;text-align:center}
+#cf .cfi-drawer .cfi-keys{margin-left:auto;font-size:12px}
+#cf .cfi-drawer .cfi-db{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:12px 16px 72px}
+@media (min-width:1180px){html.cfi-on #cf .cf-panel.on{margin-right:min(500px,100vw)}}
+@media (max-width:760px){
+  #cf .cfi-drawer{top:auto;left:0;width:auto;height:88vh;border-left:none;border-top:1px solid var(--rule);border-radius:16px 16px 0 0;box-shadow:0 -12px 32px -16px rgba(0,0,0,.5)}
+  #cf .cfi-drawer .cfi-keys,#cf .cfi-drawer .cfi-hv{display:none}
+}
 </style>
 
 <div class="cf" id="cf">
 <h2 class="sr">籌碼雷達</h2>
-<p class="cf-note"><span id="cf-asof"></span> {% call tip() %}<b>法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面。</b>十三項工具以常見的籌碼分析方法整理而成，數字全部由本站用政府資料開放平臺（證交所、櫃買中心、集保結算所、公開資訊觀測站）自行計算。每個工具怎麼操作看〔📖 使用手冊〕，指標怎麼算看〔說明・指標查詢〕。<br><br>不構成任何投資建議；清單由公開資料自動產生，不代表推薦。{% endcall %}</p>
+<p class="cf-note"><span id="cf-asof"></span> {% call tip() %}<b>法人 × 5,000 萬大戶 × 成交資金 × 買賣盤力道 × 基本面。</b>十四項工具以常見的籌碼分析方法整理而成，數字全部由本站用政府資料開放平臺（證交所、櫃買中心、集保結算所、公開資訊觀測站）自行計算。每個工具怎麼操作看〔📖 使用手冊〕，指標怎麼算看〔說明・指標查詢〕。<br><br>不構成任何投資建議；清單由公開資料自動產生，不代表推薦。{% endcall %}</p>
 <p class="cf-note" id="cf-msg">載入中…</p>
 
 <div class="cf-tabs" role="tablist" id="cf-tabs">
@@ -204,6 +293,7 @@ window.CF_V = "@@CFV@@";
   <button class="cf-tab" data-t="t11" role="tab">⑪ 金額軌跡</button>
   <button class="cf-tab" data-t="t12" role="tab">⑫ 多檔金額軌跡</button>
   <button class="cf-tab cf-sep" data-t="t13" role="tab">⑬ 籌碼回測</button>
+  <button class="cf-tab cf-sep" data-t="t14" role="tab">⑭ 產業氣泡圖</button>
   <button class="cf-tab cf-sep" data-t="picks" role="tab">精選漏斗</button>
   <button class="cf-tab" data-t="val" role="tab">指標驗證</button>
   <button class="cf-tab cf-sep" data-t="guide" role="tab">📖 使用手冊</button>
@@ -224,12 +314,13 @@ window.CF_V = "@@CFV@@";
 <section class="cf-panel" id="cf-t11"><p class="cf-howto"><button type="button" data-guide="g-t11">📖 這個工具怎麼用</button></p>{% include "radar_bg/t11.html" %}</section>
 <section class="cf-panel" id="cf-t12"><p class="cf-howto"><button type="button" data-guide="g-t12">📖 這個工具怎麼用</button></p>{% include "radar_bg/t12.html" %}</section>
 <section class="cf-panel" id="cf-t13"><p class="cf-howto"><button type="button" data-guide="g-t13">📖 這個工具怎麼用</button></p>{% include "radar_bg/t13.html" %}</section>
+<section class="cf-panel" id="cf-t14"><p class="cf-howto"><button type="button" data-guide="g-t14">📖 這個工具怎麼用</button></p>{% include "radar_bg/t14.html" %}</section>
 <section class="cf-panel" id="cf-picks"><p class="cf-howto"><button type="button" data-guide="g-picks">📖 怎麼看精選漏斗</button></p><div id="cf-opicks"></div></section>
 <section class="cf-panel" id="cf-val"><p class="cf-howto"><button type="button" data-guide="g-val">📖 怎麼看指標驗證</button></p><div id="cf-oval"></div></section>
 <section class="cf-panel" id="cf-guide">{% include "radar_guide.html.j2" %}</section>
 <section class="cf-panel" id="cf-about">
 <div class="cf-card"><dl>
-<dt>怎麼用</dt><dd>十三項工具的數字全部由本站自己算。每個工具「做什麼、怎麼操作、舉例」都在〔📖 使用手冊〕<button type="button" class="gd-link" data-go="guide">打開使用手冊 →</button>；各工具左上角的〔📖 這個工具怎麼用〕會直接跳到那一節。下面是資料來源、口徑與限制，再往下是可以搜尋的〔指標查詢〕。</dd>
+<dt>怎麼用</dt><dd>十四項工具的數字全部由本站自己算。每個工具「做什麼、怎麼操作、舉例」都在〔📖 使用手冊〕<button type="button" class="gd-link" data-go="guide">打開使用手冊 →</button>；各工具左上角的〔📖 這個工具怎麼用〕會直接跳到那一節。下面是資料來源、口徑與限制，再往下是可以搜尋的〔指標查詢〕。</dd>
 <dt>資料來源與口徑</dt><dd>
 ・<b>成交金額、法人買進／賣出</b>：證交所 MI_INDEX、T86，櫃買中心每日收盤與三大法人明細（官方成交金額；法人金額 ＝ 股數 × 當日均價，均價 ＝ 成交金額 ÷ 成交股數）。法人預估成交額 ＝（外資＋投信的買進＋賣出）÷ 2 × 均價。<br>
 ・<b>5,000 萬大戶</b>：集保原始 15 級（含人數）。每週全市場一份，另逐檔回補近 51 週；回補依流動性排序、每晚接著補，還沒補到的個股先用八級持股比例（級距較粗，頁面上會標示）。<br>
@@ -249,7 +340,7 @@ window.CF_V = "@@CFV@@";
     <option value="4">④ 籌碼篩選</option><option value="5">⑤ 基本面篩選</option><option value="6">⑥ 籌碼×基本面</option>
     <option value="7">⑦ 排名軌跡</option><option value="8">⑧ 多檔排名軌跡</option><option value="9">⑨ 排名榜（單檔）</option>
     <option value="10">⑩ 排名榜（多檔）</option><option value="11">⑪ 金額軌跡</option><option value="12">⑫ 多檔金額軌跡</option>
-    <option value="13">⑬ 籌碼回測</option><option value="p">精選漏斗</option><option value="v">指標驗證</option></select>
+    <option value="13">⑬ 籌碼回測</option><option value="14">⑭ 產業氣泡圖</option><option value="p">精選漏斗</option><option value="v">指標驗證</option></select>
   <span class="gl-n" id="gl-n"></span>
 </div>
 <div class="gl-cats" id="gl-cats" role="group" aria-label="分類"></div>
@@ -264,6 +355,7 @@ window.CF_V = "@@CFV@@";
 (function(){
 "use strict";
 {% include "radar_bg/api.js" %}
+{% include "radar_bg/insight.js" %}
 var BASE = "chipflow/";
 var R = null, M = null, RK = null, V = null, ROWS = {}, BYNAME = {};
 var cache = {};
@@ -709,6 +801,7 @@ function bgShow(tab, code, focus){
 }
 
 function init(){
+  CFI.wire();
   $("cf").addEventListener("click", function(e){
     var a = e.target.closest && e.target.closest(".bgm a.bg-t1, .bgm a.bg-lk");
     if (!a) return;
@@ -762,7 +855,7 @@ function setupGuide(){
   if (!box || !dataEl) return;
   var G = [];
   try { G = JSON.parse(dataEl.textContent); } catch (err) { return; }
-  var NAMES = {"p": "精選漏斗", "v": "指標驗證"}, CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬";
+  var NAMES = {"p": "精選漏斗", "v": "指標驗證"}, CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭";
   function tname(t){ return NAMES[t] || CIRC.charAt(t - 1); }
   var cats = [];
   G.forEach(function(g){ if (cats.indexOf(g.cat) < 0) cats.push(g.cat); });

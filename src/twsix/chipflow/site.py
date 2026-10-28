@@ -54,8 +54,15 @@ def _stamp_key(data_dir: Path) -> dict[str, str]:
         "prices": prices[-1].name if prices else "",
         "radar": hashlib.sha1(radar.read_bytes()).hexdigest() if radar.exists() else "",
         "levels": str(len(list((data_dir / "ownership" / "levels").glob("*.csv.gz")))),
-        "version": "6",
+        "chain": str(ic_chain_fetched(data_dir)),
+        "version": "7",
     }
+
+
+def ic_chain_fetched(data_dir: Path) -> str:
+    from ..ingest.ic_chain import load  # noqa: PLC0415
+
+    return load(data_dir).get("fetched", "")
 
 
 def _watchlist(root: Path) -> set[str]:
@@ -510,6 +517,7 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
                 "va": [_r(min(ext_va), 3), _r(max(ext_va), 2)] if ext_va else None}}))
 
     hist = _write_history(engine, out)
+    sector = _write_sector(engine, data_dir, out, rows)
     vendor = Path(__file__).with_name("vendor") / "chart.umd.min.js"
     if vendor.exists():
         (out / "chart.umd.min.js").write_bytes(vendor.read_bytes())
@@ -542,7 +550,21 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
     (out / LONG_HEAD).write_bytes(_dump({"dates": [p.dates[i] for i in long_days],
                                          "fields": [[k, sc] for k, sc in LONG_FIELDS]}))
     stamp.write_text(json.dumps(key), encoding="utf-8")
-    return {"資料日": p.asof, "個股檔": written, "含日序列": len(daily_codes), "逐日歷史": hist}
+    return {"資料日": p.asof, "個股檔": written, "含日序列": len(daily_codes), "逐日歷史": hist,
+            "產業氣泡圖": sector}
+
+
+def _write_sector(engine: Engine, data_dir: Path, out: Path, rows: dict[str, dict]) -> str:
+    from .sector import build  # noqa: PLC0415
+
+    try:
+        doc = build(engine, data_dir, rows)
+    except Exception as exc:  # noqa: BLE001
+        print(f"::warning::籌碼雷達產業氣泡圖資料沒有產生（⑭ 暫停）：{exc!r}")
+        (out / "sector.json").unlink(missing_ok=True)
+        return "失敗"
+    (out / "sector.json").write_bytes(_dump(doc))
+    return f"{len(doc['ind'])} 組、{len(doc['dates'])} 天"
 
 
 def _write_history(engine: Engine, out: Path) -> str:

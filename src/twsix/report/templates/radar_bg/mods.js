@@ -826,6 +826,7 @@ var __fetch = API.fetch;
     __id('curName').textContent = state.meta[code] || '';
     __id('stockInput').value = code + ' ' + (state.meta[code] || '');
     bgDecorate(code, __id('curCode'), __id('curName'));
+    if (typeof CFI !== 'undefined') CFI.card(__id('insight'), code);
 
     state.entry = entry;
     state.full = { dates: state.dailyDates, c: sliceArr(entry.c, state.dailyIdx), hr: sliceArr(entry.hr, state.dailyIdx), hc: sliceArr(entry.hc, state.dailyIdx), sh: sliceArr(entry.sh, state.dailyIdx) };
@@ -5146,6 +5147,265 @@ var __fetch = API.fetch;
   }).catch(function(err){
     $('windowText').textContent = '資料載入失敗';
     $('emptyState').innerHTML = '<h3>資料載入失敗</h3><p>'+esc(err.message||err)+'。請重新整理頁面再試一次。</p>';
+  });
+})();
+
+};
+CF_MODS["t14"] = function(ROOT, API){
+var PFX = "m14-";
+function __id(id){ return document.getElementById(PFX + id); }
+
+(function(){
+  var NS = "http://www.w3.org/2000/svg", VW = 1000, VH = 560, PL = 70, PR = 24, PT = 18, PB = 52, PW = VW - PL - PR, PH = VH - PT - PB, XC = 10, YFLOOR = 0.01, LBL_MAX = 24, TRAIL_MAX = 30;
+  var D = null, BY = {}, L = [], scheme = "seg", show = "v", scale = "log", szm = "k", idx = 0, sel = null, timer = null;
+  var extra = {}, hidden = {}, topSet = {}, vlist = [], dom = {}, AV = [];
+  var STOCK_GROUPS = null;
+
+  function nn(v){ return typeof v === "number" && isFinite(v); }
+  function esc(t){ return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){ return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]; }); }
+  function fd(s){ return String(s).replace(/-/g, "/"); }
+  function fX(v){ if (!nn(v)) return "—"; var a = Math.abs(v); return a >= 100 ? Math.round(v).toLocaleString() : v.toFixed(a >= 10 ? 1 : 2); }
+  function sv(t, a, p){ var e = document.createElementNS(NS, t); for (var k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
+  function hue(g){ var h = 0; for (var i = 0; i < g.length; i++) h = (h * 31 + g.charCodeAt(i)) % 360; return h; }
+  function colorOf(s){ return "hsl(" + hue(s.g) + " 58% 50%)"; }
+  function short(t){ return t.length > 11 ? t.slice(0, 10) + "…" : t; }
+  function dn(s){ return s.dn || s.n; }
+  function ash(v){ return Math.asinh(v / XC); }
+  function ylog(v){ return Math.log10(Math.max(v, YFLOOR)); }
+  function fx(v){ return scale === "lin" ? v : ash(v); }
+  function fy(v){ return scale === "lin" ? v : ylog(v); }
+  function px(v){ return PL + (fx(v) - fx(dom.x0)) / (fx(dom.x1) - fx(dom.x0)) * PW; }
+  function py(v){ return PT + (1 - (fy(v) - fy(dom.y0)) / (fy(dom.y1) - fy(dom.y0))) * PH; }
+  function vis(s){ return ((show === "all" || topSet[s.c] || extra[s.c]) && !hidden[s.c]) || s.c === sel; }
+  function bg(){ return !!sel || (show === "custom" && L.some(vis)); }
+  function hl(s){ return sel ? s.c === sel : vis(s); }
+  function RL(){ return bg() ? L : vlist; }
+
+  function ranks(){
+    L.forEach(function(s){ s.xr = []; s.yr = []; });
+    D.dates.forEach(function(_, i){
+      ["x", "y"].forEach(function(k){
+        L.filter(function(s){ return nn(s[k][i]); }).sort(function(a, b){ return b[k][i] - a[k][i]; })
+          .forEach(function(s, r){ s[k + "r"][i] = r + 1; });
+      });
+    });
+  }
+  function calcTop(){
+    topSet = {};
+    if (show === "all" || show === "custom") return;
+    var last = D.dates.length - 1, key = show.charAt(0) === "v" ? "y" : "x", n = show.slice(-1) === "5" ? 5 : 10;
+    var list = L.filter(function(s){ return nn(s[key][last]); });
+    list.sort(show === "s" ? function(a, b){ return a.x[last] - b.x[last]; } : function(a, b){ return b[key][last] - a[key][last]; });
+    list.slice(0, n).forEach(function(s){ topSet[s.c] = 1; });
+  }
+  function calcAV(){
+    var src = L.filter(function(s){ return bg() || vis(s); });
+    AV = D.dates.map(function(_, i){ var t = 0, n = 0; src.forEach(function(s){ if (nn(s.y[i])){ t += s.y[i]; n++; } }); return n ? t / n : 0; });
+  }
+  function computeDomain(){
+    vlist = L.filter(vis);
+    var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    RL().forEach(function(s){
+      s.x.forEach(function(v){ if (nn(v)){ x0 = Math.min(x0, v); x1 = Math.max(x1, v); } });
+      s.y.forEach(function(v){ if (nn(v)){ y0 = Math.min(y0, v); y1 = Math.max(y1, v); } });
+    });
+    if (!isFinite(x0)){ x0 = -10; x1 = 10; y0 = 0.01; y1 = 1; }
+    x0 = Math.min(x0, 0); x1 = Math.max(x1, 0);
+    var av = AV.filter(function(v){ return v > 0; });
+    if (av.length){ y0 = Math.min(y0, Math.min.apply(null, av)); y1 = Math.max(y1, Math.max.apply(null, av)); }
+    if (scale === "lin"){
+      var a = (x1 - x0) * 0.06 || 1, b = (y1 - y0) * 0.08 || 0.01;
+      dom = {x0: x0 - a, x1: x1 + a, y0: Math.max(0, y0 - b), y1: y1 + b};
+    } else {
+      var a0 = ash(x0), a1 = ash(x1), pad = (a1 - a0) * 0.06 || 0.5, l0 = ylog(Math.max(y0, YFLOOR)), l1 = ylog(y1), pY = Math.max((l1 - l0) * 0.08, 0.08);
+      dom = {x0: XC * Math.sinh(a0 - pad), x1: XC * Math.sinh(a1 + pad), y0: Math.pow(10, l0 - pY), y1: Math.pow(10, l1 + pY)};
+    }
+  }
+  function niceStep(sp, n){ var r = sp / n, p = Math.pow(10, Math.floor(Math.log10(r))), m = r / p; return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p; }
+  function linTicks(a, b, n){ var st = niceStep(b - a, n), o = []; for (var v = Math.ceil(a / st) * st; v <= b + st * 1e-9; v += st) o.push(+v.toPrecision(12)); return o; }
+  function thin(t, pos, gap){ var keep = []; t.slice().sort(function(p, q){ return (q === 0) - (p === 0); }).forEach(function(v){ if (keep.every(function(k){ return Math.abs(pos(k) - pos(v)) >= gap; })) keep.push(v); }); return keep; }
+  function xTicks(){
+    if (scale === "lin") return linTicks(dom.x0, dom.x1, 9);
+    var b = [0]; [1, 2, 5].forEach(function(m){ [1, 10, 100, 1000, 10000].forEach(function(p){ b.push(m * p, -m * p); }); });
+    return thin(b.filter(function(v){ return v >= dom.x0 && v <= dom.x1; }), px, 48);
+  }
+  function yTicks(){
+    if (scale === "lin") return linTicks(dom.y0, dom.y1, 8);
+    var b = []; [1, 2, 5].forEach(function(m){ [0.01, 0.1, 1, 10, 100, 1000, 10000, 100000].forEach(function(p){ b.push(+(m * p).toPrecision(6)); }); });
+    return thin(b.filter(function(v){ return v >= dom.y0 && v <= dom.y1; }), py, 26);
+  }
+  function rad(s, i){
+    if (szm === "f") return 8;
+    if (szm === "k") return 3 + Math.sqrt(s.k) * 1.9;
+    var t = 0; RL().forEach(function(o){ if (nn(o.y[i])) t += o.y[i]; });
+    return Math.max(3, Math.sqrt(s.y[i] / (t || 1)) * 110);
+  }
+
+  function render(){
+    var svg = __id("svg"); svg.innerHTML = "";
+    var g = sv("g", {}, svg);
+    sv("rect", {x: PL, y: PT, width: PW, height: PH, fill: "none", stroke: "var(--line)"}, g);
+    xTicks().forEach(function(t){ var x = px(t); sv("line", {x1: x, x2: x, y1: PT, y2: PT + PH, stroke: "var(--grid)"}, g); sv("text", {x: x, y: PT + PH + 16, "text-anchor": "middle", "class": "tick"}, g).textContent = t.toLocaleString(); });
+    yTicks().forEach(function(t){ var y = py(t); sv("line", {x1: PL, x2: PL + PW, y1: y, y2: y, stroke: "var(--grid)"}, g); sv("text", {x: PL - 8, y: y + 4, "text-anchor": "end", "class": "tick"}, g).textContent = t.toLocaleString(); });
+    sv("line", {x1: px(0), x2: px(0), y1: PT, y2: PT + PH, stroke: "var(--muted)", "stroke-dasharray": "3 4"}, g);
+    var A = AV[idx];
+    if (A > 0 && A >= dom.y0 && A <= dom.y1){ var ya = py(A); sv("line", {x1: PL, x2: PL + PW, y1: ya, y2: ya, stroke: "var(--muted)", "stroke-dasharray": "3 4", "stroke-opacity": 0.6}, g); sv("text", {x: PL + 6, y: ya - 5, "class": "corner"}, g).textContent = "畫面平均 " + fX(A) + " 億"; }
+    sv("text", {x: PL + PW / 2, y: VH - 14, "text-anchor": "middle", "class": "axt"}, g).textContent = "外資＋投信買賣超金額 60 日累計（億元）；右邊買超、左邊賣超";
+    sv("text", {transform: "translate(16 " + (PT + PH / 2) + ") rotate(-90)", "text-anchor": "middle", "class": "axt"}, g).textContent = "成交金額 20 日累計（億元）↑";
+    [[PL + PW - 6, PT + 14, "end", "↗ 買超・成交大"], [PL + 6, PT + 14, "start", "↖ 賣超・成交大"], [PL + PW - 6, PT + PH - 8, "end", "買超・成交小"], [PL + 6, PT + PH - 8, "start", "賣超・成交小"]].forEach(function(c){ sv("text", {x: c[0], y: c[1], "text-anchor": c[2], "class": "corner"}, g).textContent = c[3]; });
+
+    var tg = sv("g", {}, svg);
+    if (!sel && vlist.length <= TRAIL_MAX) vlist.forEach(function(s){
+      var pv = null;
+      for (var i = 0; i <= idx; i++){
+        var xv = s.x[i], yv = s.y[i];
+        if (!nn(xv) || !nn(yv)){ pv = null; continue; }
+        var X = px(xv), Y = py(yv), a = idx === 0 ? 0.5 : 0.08 + 0.55 * (i / idx);
+        if (pv) sv("line", {x1: pv[0], y1: pv[1], x2: X, y2: Y, stroke: colorOf(s), "stroke-width": 1.6, "stroke-opacity": a}, tg);
+        if (i < idx) sv("circle", {cx: X, cy: Y, r: 2, fill: colorOf(s), "fill-opacity": a, "pointer-events": "none"}, tg);
+        pv = [X, Y];
+      }
+    });
+    var layer = sv("g", {}, svg), pts = [];
+    RL().filter(function(s){ return nn(s.x[idx]) && nn(s.y[idx]); }).sort(function(a, b){ return rad(b, idx) - rad(a, idx); }).forEach(function(s){
+      var x = px(s.x[idx]), y = py(s.y[idx]), r = rad(s, idx), on = sel === s.c, h = !bg() || hl(s);
+      sv("circle", {cx: x, cy: y, r: r, fill: colorOf(s), "fill-opacity": bg() && !h ? 0.08 : 0.55, stroke: on ? "var(--sel)" : colorOf(s), "stroke-width": on ? 3 : 1, "stroke-opacity": bg() && !h ? 0.25 : 1, "data-c": s.c, tabindex: h ? 0 : -1, role: "button", "aria-label": dn(s), style: "cursor:pointer"}, layer);
+      pts.push({s: s, x: x, y: y, r: r, hl: h});
+    });
+    if (sel && BY[sel]){
+      var s0 = BY[sel], tl = sv("g", {}, svg), prev = null;
+      for (var i = 0; i <= idx; i++){
+        if (!nn(s0.x[i]) || !nn(s0.y[i])){ prev = null; continue; }
+        var X = px(s0.x[i]), Y = py(s0.y[i]), a = 0.2 + 0.8 * (i + 1) / (idx + 1);
+        if (prev) sv("line", {x1: prev[0], y1: prev[1], x2: X, y2: Y, stroke: "var(--sel)", "stroke-width": 1.8, "stroke-opacity": a}, tl);
+        sv("circle", {cx: X, cy: Y, r: i === idx ? 4.5 : 2.4, fill: "var(--sel)", "fill-opacity": a, "pointer-events": "none"}, tl);
+        prev = [X, Y];
+      }
+    }
+    var boxes = [];
+    function place(p, force){
+      var t = short(dn(p.s)) + "·" + p.s.k + "家", w = t.length * 12 + 8, h = 16;
+      var cand = [[p.x + p.r + 4, p.y - h / 2], [p.x - p.r - 4 - w, p.y - h / 2], [p.x - w / 2, p.y - p.r - h - 2], [p.x - w / 2, p.y + p.r + 2]];
+      for (var j = 0; j < cand.length; j++){
+        var bx = cand[j][0], by = cand[j][1];
+        if (bx < PL || bx + w > PL + PW || by < PT || by + h > PT + PH) continue;
+        if (!force && boxes.some(function(b){ return bx < b[0] + b[2] && bx + w > b[0] && by < b[1] + b[3] && by + h > b[1]; })) continue;
+        boxes.push([bx, by, w, h]);
+        var tx = sv("text", {x: bx + 4, y: by + 12, "class": "lbl", "pointer-events": "none"}, svg); tx.textContent = t;
+        if (force) tx.style.fill = "var(--sel)";
+        return;
+      }
+    }
+    if (sel){ var ps = pts.filter(function(q){ return q.s.c === sel; })[0]; if (ps) place(ps, true); }
+    pts.filter(function(p){ return p.hl && p.s.c !== sel; }).sort(function(a, b){ return b.s.y[idx] - a.s.y[idx]; }).slice(0, LBL_MAX).forEach(function(p){ place(p, false); });
+
+    __id("day").value = idx; __id("dateLabel").textContent = fd(D.dates[idx]);
+    var fb = __id("focus"), fs = sel || (show === "custom" && vlist.length === 1 ? vlist[0].c : null);
+    if (fs && BY[fs]){
+      var f = BY[fs];
+      fb.hidden = false;
+      fb.innerHTML = "<b>聚焦：" + esc(dn(f)) + "（" + f.k + " 家）</b><span>買賣超 60 日 " + fX(f.x[idx]) + " 億（第 " + (f.xr[idx] || "—") + " 名）</span><span>成交 20 日 " + fX(f.y[idx]) + " 億（第 " + (f.yr[idx] || "—") + " 名）</span><button type=\"button\" data-unfocus>取消聚焦</button>";
+    } else fb.hidden = true;
+    var SN = {v: "成交金額前 10 名", v5: "成交金額前 5 名", b: "買賣超金額最高前 10 名", b5: "買賣超金額最高前 5 名", s: "買賣超金額最低前 10 名", all: "全部", custom: "自訂"};
+    __id("sub").textContent = schemeName() + "・" + vlist.length + " 組（" + SN[show] + "）・" + D.dates.length + " 個交易日・畫面日期 " + fd(D.dates[idx]) + "・顏色＝" + (scheme === "seg" ? "所屬產業鏈" : "各組");
+    renderSide(); renderInfo();
+  }
+  function schemeName(){ var m = (D.schemes || []).filter(function(x){ return x.id === scheme; })[0]; return m ? m.name : scheme; }
+  function dX(a, b){ if (!nn(a) || !nn(b)) return '<span class="dn">—</span>'; var d = b - a; if (Math.abs(d) < 0.005) return '<span class="dn">0</span>'; return d > 0 ? '<span class="up">+' + fX(d) + "</span>" : '<span class="dn">' + fX(d) + "</span>"; }
+  function renderSide(){
+    var d0 = fd(D.dates[0]).slice(5), key = show.charAt(0) === "b" || show === "s" ? "x" : "y";
+    var list = vlist.filter(function(s){ return nn(s.x[idx]) && nn(s.y[idx]); }).sort(show === "s" ? function(a, b){ return a.x[idx] - b.x[idx]; } : function(a, b){ return b[key][idx] - a[key][idx]; });
+    var rows = list.map(function(s){
+      return '<tr data-c="' + esc(s.c) + '" class="' + (s.c === sel ? "cur" : "") + '"><td title="' + esc(s.full || dn(s)) + '"><span class="chip" style="background:' + colorOf(s) + '"></span>' + esc(dn(s)) + '<span class="dn"> ' + s.k + "家</span></td><td>" + fX(s.x[idx]) + "</td><td>" + dX(s.x[0], s.x[idx]) + "</td><td>" + fX(s.y[idx]) + "</td><td>" + dX(s.y[0], s.y[idx]) + '</td><td><button type="button" class="x" data-rm="' + esc(s.c) + '" aria-label="移除">×</button></td></tr>';
+    }).join("");
+    __id("side").innerHTML = "<h2>" + fd(D.dates[idx]) + ' 數值</h2><div class="tbl-wrap"><table><thead><tr><th>產業</th><th>X 買賣超<br>60 日（億）</th><th>較 ' + d0 + "</th><th>Y 成交<br>20 日（億）</th><th>較 " + d0 + "</th><th></th></tr></thead><tbody>" + rows + '</tbody></table></div><p class="hint">名次是在 ' + L.length + " 組（" + esc(schemeName()) + "）裡的金額名次。點一列看軌跡與成分股，按 × 移除；重選「顯示」可以恢復。</p>";
+  }
+  function renderInfo(){
+    var box = __id("info");
+    if (!sel || !BY[sel]){ box.innerHTML = '<p class="hint">點任一氣泡或右側表格的一列，可以看那一組的逐日數值與成分股；上方輸入產業名稱按〔加入〕，或輸入股票代號，加入它所屬的各組。</p>'; return; }
+    var s = BY[sel], rows = "";
+    for (var i = D.dates.length - 1; i >= Math.max(0, D.dates.length - 20); i--) rows += "<tr" + (i === idx ? ' class="cur"' : "") + "><td>" + fd(D.dates[i]).slice(5) + "</td><td>" + fX(s.x[i]) + "</td><td>" + (s.xr[i] || "—") + "</td><td>" + fX(s.y[i]) + "</td><td>" + (s.yr[i] || "—") + "</td></tr>";
+    var mem = (s.m || []).map(function(c){ var r = ROWS[c] || {}; return {c: c, n: r.n || c, fa: r.fa, va: r.va}; })
+      .sort(function(a, b){ return (nn(b.va) ? b.va : -1) - (nn(a.va) ? a.va : -1); });
+    var mrows = mem.map(function(m){ return "<tr><td>" + bgCode(m.c) + "</td><td>" + bgName(m.c, esc(m.n)) + "</td><td>" + fX(m.fa) + "</td><td>" + fX(m.va) + "</td></tr>"; }).join("");
+    box.innerHTML = "<h2>" + esc(dn(s)) + "　涵蓋 " + s.k + " 家" + (s.full && s.full !== s.n ? '<span class="hint">（' + esc(s.full) + "）</span>" : "") + (s.g && s.g !== dn(s) && scheme === "seg" ? '<span class="hint">　產業鏈：' + esc(s.g) + "</span>" : "") + "</h2>" +
+      '<div class="two"><div><h3>近 20 個交易日</h3><div class="tbl-wrap"><table><thead><tr><th>日期</th><th>買賣超 60 日（億）</th><th>名次</th><th>成交 20 日（億）</th><th>名次</th></tr></thead><tbody>' + rows + "</tbody></table></div></div>" +
+      "<div><h3>成分股（" + mem.length + " 檔，依 20 日成交金額排序；數字是資料日 " + esc(R.asof) + '）</h3><div class="tbl-wrap"><table class="mem"><thead><tr><th>代號</th><th>名稱</th><th>法人 60 日（億）</th><th>成交 20 日（億）</th></tr></thead><tbody>' + mrows + "</tbody></table></div></div></div>";
+  }
+  function refresh(){ calcTop(); calcAV(); computeDomain(); render(); }
+  function stop(){ if (timer){ clearInterval(timer); timer = null; } __id("play").textContent = "▶ 播放"; }
+  function play(){
+    if (timer){ stop(); return; }
+    if (idx >= D.dates.length - 1) idx = 0;
+    __id("play").textContent = "❚❚ 暫停"; render();
+    timer = setInterval(function(){ if (idx >= D.dates.length - 1){ stop(); return; } idx++; render(); }, +__id("speed").value);
+  }
+  function setScheme(id){
+    scheme = id; sel = null; extra = {}; hidden = {};
+    L = D.ind.filter(function(s){ return s.s === scheme; });
+    BY = {}; L.forEach(function(s){ BY[s.c] = s; });
+    ranks();
+    var dl = __id("list"); dl.innerHTML = L.map(function(s){ return '<option value="' + esc(dn(s)) + '">' + s.k + "家</option>"; }).join("");
+    refresh();
+  }
+  function lookup(q){
+    q = (q || "").trim(); if (!q) return [];
+    var code = q.split(/\s+/)[0];
+    if (/^\d{4,6}[A-Z]?$/.test(code)) return L.filter(function(s){ return (s.m || []).indexOf(code) >= 0; }).map(function(s){ return s.c; });
+    var hit = L.filter(function(s){ return dn(s) === q || s.n === q; });
+    if (!hit.length) hit = L.filter(function(s){ return dn(s).indexOf(q) >= 0 || (s.full || "").indexOf(q) >= 0; }).sort(function(a, b){ return b.k - a.k; }).slice(0, 1);
+    return hit.map(function(s){ return s.c; });
+  }
+
+  function init(d){
+    D = d; idx = D.dates.length - 1; __id("day").max = idx;
+    __id("scheme").onchange = function(e){ stop(); setScheme(e.target.value); };
+    __id("show").onchange = function(e){ show = e.target.value; hidden = {}; extra = {}; refresh(); };
+    __id("sc").onchange = function(e){ scale = e.target.value; refresh(); };
+    __id("szm").onchange = function(e){ szm = e.target.value; render(); };
+    __id("day").oninput = function(e){ stop(); idx = +e.target.value; render(); };
+    __id("prev").onclick = function(){ stop(); if (idx > 0){ idx--; render(); } };
+    __id("next").onclick = function(){ stop(); if (idx < D.dates.length - 1){ idx++; render(); } };
+    __id("play").onclick = play;
+    __id("speed").onchange = function(){ if (timer){ stop(); play(); } };
+    var add = function(){
+      var cs = lookup(__id("q").value);
+      if (!cs.length){ __id("err").textContent = "找不到符合的產業或股票（換一種分類試試）。"; return; }
+      var n = cs.filter(function(c){ return !vlist.some(function(o){ return o.c === c; }); });
+      if (!n.length){ __id("err").textContent = "已經在圖上了。"; return; }
+      __id("err").textContent = cs.length > 1 ? "這檔股票屬於 " + cs.length + " 組，都加進來了。" : "";
+      n.forEach(function(c){ delete hidden[c]; extra[c] = 1; });
+      __id("q").value = ""; refresh();
+    };
+    __id("add").onclick = add;
+    __id("q").addEventListener("keydown", function(e){ if (e.key === "Enter") add(); });
+    __id("clr").onclick = function(){ show = "custom"; __id("show").value = "custom"; extra = {}; hidden = {}; sel = null; __id("err").textContent = ""; refresh(); };
+    __id("focus").addEventListener("click", function(e){ if (e.target.closest("[data-unfocus]")){ sel = null; if (show === "custom") extra = {}; refresh(); } });
+    __id("side").addEventListener("click", function(e){
+      var rm = e.target.closest("[data-rm]");
+      if (rm){ var c = rm.getAttribute("data-rm"); hidden[c] = 1; if (sel === c) sel = null; refresh(); return; }
+      var tr = e.target.closest("tr[data-c]"); if (tr){ var c2 = tr.getAttribute("data-c"); sel = sel === c2 ? null : c2; refresh(); }
+    });
+    var tip = __id("tip"), box = __id("chartBox"), svg = __id("svg");
+    var pick = function(e){ var c = e.target.closest("circle[data-c]"); if (c){ var k = c.getAttribute("data-c"); sel = sel === k ? null : k; refresh(); } };
+    svg.addEventListener("click", pick);
+    svg.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); pick(e); } });
+    svg.addEventListener("pointerover", function(e){
+      var c = e.target.closest("circle[data-c]"); if (!c) return;
+      var s = BY[c.getAttribute("data-c")]; if (!s) return;
+      tip.innerHTML = "<b>" + esc(dn(s)) + "</b>（" + s.k + " 家）<br>買賣超 60 日 " + fX(s.x[idx]) + " 億（第 " + (s.xr[idx] || "—") + " 名）<br>成交 20 日 " + fX(s.y[idx]) + " 億（第 " + (s.yr[idx] || "—") + " 名）";
+      var r = c.getBoundingClientRect(), b = box.getBoundingClientRect();
+      tip.hidden = false;
+      var h = tip.offsetWidth / 2;
+      tip.style.left = Math.min(Math.max(r.left + r.width / 2 - b.left, h + 4), b.width - h - 4) + "px";
+      tip.style.top = (r.top - b.top) + "px";
+    });
+    svg.addEventListener("pointerout", function(e){ if (e.target.closest("circle[data-c]")) tip.hidden = true; });
+    setScheme(scheme);
+  }
+
+  API.data().then(init).catch(function(err){
+    __id("sub").textContent = "資料讀取失敗：" + (err && err.message || err) + "（產業氣泡圖的資料由每天建站時產生，下一次建站後會出現）";
   });
 })();
 
