@@ -118,6 +118,7 @@ window.CF_V = "@@CFV@@";
 #cf .bgm .bg-mr button.on{background:#4fb3c8;color:#0b1016;font-weight:600}
 #cf .bgm .bg-mr button:disabled{opacity:.35;cursor:default}
 #cf .bgm .bg-mr .sl{position:relative;flex:1;min-width:60px;height:16px}
+@media (max-width:520px){ #cf .bgm .pnow.pnow,#cf .bgm .clatest.clatest{flex-wrap:wrap}#cf .bgm .pctl.pctl,#cf .bgm .cctl.cctl{flex:1 1 100%;min-width:0;margin-left:0}#cf .bgm .bg-mr .sl.sl{min-width:40px}}
 #cf .bgm .bg-mr .sl input{position:absolute;left:0;right:0;top:0;width:100%;margin:0;height:16px;background:none;pointer-events:none;-webkit-appearance:none;appearance:none}
 #cf .bgm .bg-mr .sl input::-webkit-slider-thumb{pointer-events:auto;-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:#fff;border:2px solid #4fb3c8;cursor:pointer;margin-top:-4px}
 #cf .bgm .bg-mr .sl input::-moz-range-thumb{pointer-events:auto;width:8px;height:8px;border-radius:50%;background:#fff;border:2px solid #4fb3c8;cursor:pointer}
@@ -228,8 +229,10 @@ window.CF_V = "@@CFV@@";
 #cf .cfi .cfi-flag{display:inline-block;padding:0 8px;border-radius:999px;font-size:.88em;font-weight:700;border:1px solid var(--rule);background:var(--surface-2);color:var(--accent-2)}
 #cf .cfi details.cfi-more{margin:4px 0 4px}
 #cf .cfi details.cfi-more summary{cursor:pointer;color:var(--accent-2);font-size:.88em;font-weight:600}
-#cf .cfi table.cfi-tbl{width:100%;border-collapse:collapse;margin:6px 0 2px;font-size:.9em;font-variant-numeric:tabular-nums}
-#cf .cfi table.cfi-tbl th,#cf .cfi table.cfi-tbl td{padding:3px 6px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:middle;white-space:nowrap}
+#cf .cfi table.cfi-tbl{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;margin:6px 0 2px;font-size:.9em;font-variant-numeric:tabular-nums}
+#cf .cfi table.cfi-tbl th:first-child{width:38%}
+#cf .cfi table.cfi-tbl th,#cf .cfi table.cfi-tbl td{padding:3px 6px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:middle;overflow-wrap:anywhere}
+#cf .cfi table.cfi-tbl th:not(:first-child){text-align:right}
 #cf .cfi table.cfi-tbl th{font-size:.84em;font-weight:600;color:var(--muted);background:none;position:static}
 #cf .cfi table.cfi-tbl td.n{text-align:right;position:relative}
 #cf .cfi .cfi-bar{position:absolute;right:6px;top:3px;bottom:3px;width:calc(var(--w) * .7);border-radius:3px;background:var(--accent-2);opacity:.16;pointer-events:none}

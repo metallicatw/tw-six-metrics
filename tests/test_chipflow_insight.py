@@ -206,3 +206,20 @@ def test_概況面板接到各工具():
     assert "@media (max-width:760px)" in src and "html.cfi-on #cf .cf-panel.on{margin-right" in src
     t14 = mods[mods.index('CF_MODS["t14"]'):]
     assert "API.data()" in t14 and 'getJSON("sector.json")' in api
+
+
+def test_手機版_概況表格不撐寬_點狀圖窄螢幕改版面_時間軸換行():
+    src = (TPL / "radar.html.j2").read_text("utf-8")
+    css = (TPL / "radar_bg" / "style.css").read_text("utf-8")
+    mods = (TPL / "radar_bg" / "mods.js").read_text("utf-8")
+    assert "table.cfi-tbl{width:100%;min-width:0;table-layout:fixed" in src, "site.css 的 table{min-width:560px} 會把面板撐破"
+    assert not re.findall(r"\{#(?![ \n-])", src)
+    for n in (7, 8, 11, 12, 14):
+        assert f"#cf .bg{n} .timeline{{flex-wrap:wrap" in css and f"#cf .bg{n} .main{{grid-template-columns:1fr}}" not in css
+    for m in ("t7", "t8", "t11", "t12"):
+        seg = mods[mods.index(f'CF_MODS["{m}"]'):]
+        seg = seg[:seg.index("CF_MODS[", 10)]
+        assert "function fitBox(svg)" in seg and "fitBox(svg);" in seg and "const VW" not in seg, m
+    t14 = mods[mods.index('CF_MODS["t14"]'):]
+    assert "function fit(svg)" in t14 and 'window.addEventListener("resize"' in t14
+    assert "#cf .bg2 .panel .pnow{flex-wrap:wrap}" in css

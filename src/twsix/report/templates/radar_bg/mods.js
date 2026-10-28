@@ -3217,8 +3217,13 @@ var __fetch = API.fetch;
 
 const CFG = {"mode": "single", "codes": ["3037"], "top50": true};
 const NS = 'http://www.w3.org/2000/svg';
-const VW = 660, VH = 636, PL = 70, PR = 22, PT = 38, PB = 70;
-const PW = VW - PL - PR, PH = VH - PT - PB;
+let VW = 660, VH = 636, PL = 70, PR = 22, PT = 38, PB = 70, MOB = false;
+let PW = VW - PL - PR, PH = VH - PT - PB;
+function fitBox(svg){
+  const w = $('chartBox').clientWidth; MOB = !!w && w < 560;
+  VW = MOB ? 440 : 660; VH = MOB ? 540 : 636; PL = MOB ? 70 : 70; PR = MOB ? 12 : 22; PT = MOB ? 30 : 38; PB = MOB ? 58 : 70;
+  PW = VW - PL - PR; PH = VH - PT - PB; svg.setAttribute('viewBox', `0 0 ${VW} ${VH}`);
+}
 const $ = id => __id(id);
 let D, M, byCode = {}, idx = 59, scale = 'log', timer = null;
 let codes = CFG.codes.slice();
@@ -3256,9 +3261,12 @@ function drawAxes(svg){
   const yt = scale === 'lin' ? lin : [1,3,10,30,100,300,1000,M];
   const g = el('g', {}, svg);
   el('rect', {x:PL, y:PT, width:PW, height:PH, fill:'none', stroke:'var(--line)'}, g);
+  let lastX = -1e9;
   xt.forEach(t => {
     const x = px(t);
     el('line', {x1:x, x2:x, y1:PT, y2:PT+PH, stroke:'var(--grid)'}, g);
+    if (Math.abs(x - lastX) < (MOB ? 40 : 0)) return;
+    lastX = x;
     el('text', {x, y:PT+PH+16, 'text-anchor':'middle', class:'tick'}, g).textContent = t;
   });
   yt.forEach(t => {
@@ -3269,16 +3277,16 @@ function drawAxes(svg){
   const mid = Math.ceil(M / 2);
   el('line', {x1:px(mid), x2:px(mid), y1:PT, y2:PT+PH, stroke:'var(--muted)', 'stroke-dasharray':'3 4', 'stroke-opacity':.45}, g);
   el('line', {x1:PL, x2:PL+PW, y1:py(mid), y2:py(mid), stroke:'var(--muted)', 'stroke-dasharray':'3 4', 'stroke-opacity':.45}, g);
-  el('text', {x:PL+PW/2, y:VH-26, 'text-anchor':'middle', class:'axt'}, g).textContent = '外資投信買賣超金額60日累計排名 → 越右名次越前（最右＝第1名）';
-  const yl = el('text', {x:0, y:0, 'text-anchor':'middle', class:'axt', transform:`translate(20 ${PT+PH/2}) rotate(-90)`}, g);
-  yl.textContent = '成交金額20日累計佔比排名 ↑ 越上名次越前（最上＝第1名）';
+  el('text', {x:PL+PW/2, y:VH-26, 'text-anchor':'middle', class:'axt'}, g).textContent = MOB ? '外資投信60日買超排名 → 越右越前' : '外資投信買賣超金額60日累計排名 → 越右名次越前（最右＝第1名）';
+  const yl = el('text', {x:0, y:0, 'text-anchor':'middle', class:'axt', transform:`translate(${MOB ? 13 : 20} ${PT+PH/2}) rotate(-90)`}, g);
+  yl.textContent = MOB ? '20日成交佔比排名 ↑ 越上越前' : '成交金額20日累計佔比排名 ↑ 越上名次越前（最上＝第1名）';
   const c = [[PL+PW, PT-10, 'end', '↗ 買超前段・成交佔比前段'], [PL, PT-10, 'start', '↖ 賣超前段・成交佔比前段'],
              [PL+PW-8, PT+PH-8, 'end', '買超前段・成交佔比後段'], [PL+8, PT+PH-8, 'start', '賣超前段・成交佔比後段']];
   c.forEach(([x,y,a,t]) => { el('text', {x, y, 'text-anchor':a, class:'corner'}, g).textContent = t; });
 }
 
 function render(){
-  const svg = $('svg'); svg.innerHTML = '';
+  const svg = $('svg'); svg.innerHTML = ''; fitBox(svg);
   drawAxes(svg);
   const labels = [];
   codes.forEach((code, si) => {
@@ -3471,8 +3479,13 @@ var __fetch = API.fetch;
 
 const CFG = {"mode": "compare", "codes": ["2330", "3037", "3017", "2454", "2327", "2317"]};
 const NS = 'http://www.w3.org/2000/svg';
-const VW = 660, VH = 636, PL = 70, PR = 22, PT = 38, PB = 70;
-const PW = VW - PL - PR, PH = VH - PT - PB;
+let VW = 660, VH = 636, PL = 70, PR = 22, PT = 38, PB = 70, MOB = false;
+let PW = VW - PL - PR, PH = VH - PT - PB;
+function fitBox(svg){
+  const w = $('chartBox').clientWidth; MOB = !!w && w < 560;
+  VW = MOB ? 440 : 660; VH = MOB ? 540 : 636; PL = MOB ? 70 : 70; PR = MOB ? 12 : 22; PT = MOB ? 30 : 38; PB = MOB ? 58 : 70;
+  PW = VW - PL - PR; PH = VH - PT - PB; svg.setAttribute('viewBox', `0 0 ${VW} ${VH}`);
+}
 const $ = id => __id(id);
 let D, M, byCode = {}, idx = 59, scale = 'log', timer = null;
 let codes = CFG.codes.slice();
@@ -3510,9 +3523,12 @@ function drawAxes(svg){
   const yt = scale === 'lin' ? lin : [1,3,10,30,100,300,1000,M];
   const g = el('g', {}, svg);
   el('rect', {x:PL, y:PT, width:PW, height:PH, fill:'none', stroke:'var(--line)'}, g);
+  let lastX = -1e9;
   xt.forEach(t => {
     const x = px(t);
     el('line', {x1:x, x2:x, y1:PT, y2:PT+PH, stroke:'var(--grid)'}, g);
+    if (Math.abs(x - lastX) < (MOB ? 40 : 0)) return;
+    lastX = x;
     el('text', {x, y:PT+PH+16, 'text-anchor':'middle', class:'tick'}, g).textContent = t;
   });
   yt.forEach(t => {
@@ -3523,16 +3539,16 @@ function drawAxes(svg){
   const mid = Math.ceil(M / 2);
   el('line', {x1:px(mid), x2:px(mid), y1:PT, y2:PT+PH, stroke:'var(--muted)', 'stroke-dasharray':'3 4', 'stroke-opacity':.45}, g);
   el('line', {x1:PL, x2:PL+PW, y1:py(mid), y2:py(mid), stroke:'var(--muted)', 'stroke-dasharray':'3 4', 'stroke-opacity':.45}, g);
-  el('text', {x:PL+PW/2, y:VH-26, 'text-anchor':'middle', class:'axt'}, g).textContent = '外資投信買賣超金額60日累計排名 → 越右名次越前（最右＝第1名）';
-  const yl = el('text', {x:0, y:0, 'text-anchor':'middle', class:'axt', transform:`translate(20 ${PT+PH/2}) rotate(-90)`}, g);
-  yl.textContent = '成交金額20日累計佔比排名 ↑ 越上名次越前（最上＝第1名）';
+  el('text', {x:PL+PW/2, y:VH-26, 'text-anchor':'middle', class:'axt'}, g).textContent = MOB ? '外資投信60日買超排名 → 越右越前' : '外資投信買賣超金額60日累計排名 → 越右名次越前（最右＝第1名）';
+  const yl = el('text', {x:0, y:0, 'text-anchor':'middle', class:'axt', transform:`translate(${MOB ? 13 : 20} ${PT+PH/2}) rotate(-90)`}, g);
+  yl.textContent = MOB ? '20日成交佔比排名 ↑ 越上越前' : '成交金額20日累計佔比排名 ↑ 越上名次越前（最上＝第1名）';
   const c = [[PL+PW, PT-10, 'end', '↗ 買超前段・成交佔比前段'], [PL, PT-10, 'start', '↖ 賣超前段・成交佔比前段'],
              [PL+PW-8, PT+PH-8, 'end', '買超前段・成交佔比後段'], [PL+8, PT+PH-8, 'start', '賣超前段・成交佔比後段']];
   c.forEach(([x,y,a,t]) => { el('text', {x, y, 'text-anchor':a, class:'corner'}, g).textContent = t; });
 }
 
 function render(){
-  const svg = $('svg'); svg.innerHTML = '';
+  const svg = $('svg'); svg.innerHTML = ''; fitBox(svg);
   drawAxes(svg);
   const labels = [];
   codes.forEach((code, si) => {
@@ -4215,8 +4231,13 @@ var __fetch = API.fetch;
 
 const CFG = {"mode": "single", "codes": ["2330"]};
 const NS = 'http://www.w3.org/2000/svg';
-const VW = 660, VH = 636, PL = 70, PR = 22, PT = 38, PB = 70;
-const PW = VW - PL - PR, PH = VH - PT - PB;
+let VW = 660, VH = 636, PL = 70, PR = 22, PT = 38, PB = 70, MOB = false;
+let PW = VW - PL - PR, PH = VH - PT - PB;
+function fitBox(svg){
+  const w = $('chartBox').clientWidth; MOB = !!w && w < 560;
+  VW = MOB ? 440 : 660; VH = MOB ? 540 : 636; PL = MOB ? 70 : 70; PR = MOB ? 12 : 22; PT = MOB ? 30 : 38; PB = MOB ? 58 : 70;
+  PW = VW - PL - PR; PH = VH - PT - PB; svg.setAttribute('viewBox', `0 0 ${VW} ${VH}`);
+}
 const XC = 10;
 const YFLOOR = 0.01;
 const $ = id => __id(id);
@@ -4275,12 +4296,12 @@ function thin(ticks, pos, gap){
 function xTicks(){
   if (scale === 'lin') return linTicks(dom.x0, dom.x1, 7);
   const base = [0]; [1,2,5].forEach(m => [1,10,100,1000,10000].forEach(p => { base.push(m * p, -m * p); }));
-  return thin(base.filter(v => v >= dom.x0 && v <= dom.x1), px, 42);
+  return thin(base.filter(v => v >= dom.x0 && v <= dom.x1), px, MOB ? 50 : 42);
 }
 function yTicks(){
   if (scale === 'lin') return linTicks(dom.y0, dom.y1, 7);
   const base = []; [1,2,5].forEach(m => [0.01,0.1,1,10,100,1000,10000].forEach(p => base.push(+(m * p).toPrecision(6))));
-  return thin(base.filter(v => v >= dom.y0 && v <= dom.y1), py, 26);
+  return thin(base.filter(v => v >= dom.y0 && v <= dom.y1), py, MOB ? 30 : 26);
 }
 
 function drawAxes(svg){
@@ -4303,16 +4324,16 @@ function drawAxes(svg){
     el('line', {x1:PL, x2:PL+PW, y1:ya, y2:ya, stroke:'var(--muted)', 'stroke-dasharray':'3 4', 'stroke-opacity':.45}, g);
     el('text', {x:PL+6, y:ya-5, class:'corner'}, g).textContent = `全市場平均每檔 ${fY(AVG)} 億`;
   }
-  el('text', {x:PL+PW/2, y:VH-26, 'text-anchor':'middle', class:'axt'}, g).textContent = '外資投信買賣超金額60日累計（億元）→ 越右買超越多';
-  const yl = el('text', {x:0, y:0, 'text-anchor':'middle', class:'axt', transform:`translate(18 ${PT+PH/2}) rotate(-90)`}, g);
-  yl.textContent = '成交金額20日累計（億元）↑ 越上成交越大';
+  el('text', {x:PL+PW/2, y:VH-26, 'text-anchor':'middle', class:'axt'}, g).textContent = MOB ? '外資投信60日買賣超（億）→ 右買超' : '外資投信買賣超金額60日累計（億元）→ 越右買超越多';
+  const yl = el('text', {x:0, y:0, 'text-anchor':'middle', class:'axt', transform:`translate(${MOB ? 13 : 18} ${PT+PH/2}) rotate(-90)`}, g);
+  yl.textContent = MOB ? '20日成交金額（億）↑' : '成交金額20日累計（億元）↑ 越上成交越大';
   const c = [[PL+PW, PT-10, 'end', '↗ 買超・成交金額大'], [PL, PT-10, 'start', '↖ 賣超・成交金額大'],
              [PL+PW-8, PT+PH-8, 'end', '買超・成交金額小'], [PL+8, PT+PH-8, 'start', '賣超・成交金額小']];
   c.forEach(([x,y,a,t]) => { el('text', {x, y, 'text-anchor':a, class:'corner'}, g).textContent = t; });
 }
 
 function render(){
-  const svg = $('svg'); svg.innerHTML = '';
+  const svg = $('svg'); svg.innerHTML = ''; fitBox(svg);
   drawAxes(svg);
   const clip = el('clipPath', {id:'plot'}, el('defs', {}, svg));
   el('rect', {x:PL-8, y:PT-8, width:PW+16, height:PH+16}, clip);
@@ -4497,8 +4518,13 @@ var __fetch = API.fetch;
 
 const CFG = {"mode": "compare", "codes": ["2330", "3037", "3017", "2454", "2327", "2317"]};
 const NS = 'http://www.w3.org/2000/svg';
-const VW = 660, VH = 636, PL = 70, PR = 22, PT = 38, PB = 70;
-const PW = VW - PL - PR, PH = VH - PT - PB;
+let VW = 660, VH = 636, PL = 70, PR = 22, PT = 38, PB = 70, MOB = false;
+let PW = VW - PL - PR, PH = VH - PT - PB;
+function fitBox(svg){
+  const w = $('chartBox').clientWidth; MOB = !!w && w < 560;
+  VW = MOB ? 440 : 660; VH = MOB ? 540 : 636; PL = MOB ? 70 : 70; PR = MOB ? 12 : 22; PT = MOB ? 30 : 38; PB = MOB ? 58 : 70;
+  PW = VW - PL - PR; PH = VH - PT - PB; svg.setAttribute('viewBox', `0 0 ${VW} ${VH}`);
+}
 const XC = 10;
 const YFLOOR = 0.01;
 const $ = id => __id(id);
@@ -4557,12 +4583,12 @@ function thin(ticks, pos, gap){
 function xTicks(){
   if (scale === 'lin') return linTicks(dom.x0, dom.x1, 7);
   const base = [0]; [1,2,5].forEach(m => [1,10,100,1000,10000].forEach(p => { base.push(m * p, -m * p); }));
-  return thin(base.filter(v => v >= dom.x0 && v <= dom.x1), px, 42);
+  return thin(base.filter(v => v >= dom.x0 && v <= dom.x1), px, MOB ? 50 : 42);
 }
 function yTicks(){
   if (scale === 'lin') return linTicks(dom.y0, dom.y1, 7);
   const base = []; [1,2,5].forEach(m => [0.01,0.1,1,10,100,1000,10000].forEach(p => base.push(+(m * p).toPrecision(6))));
-  return thin(base.filter(v => v >= dom.y0 && v <= dom.y1), py, 26);
+  return thin(base.filter(v => v >= dom.y0 && v <= dom.y1), py, MOB ? 30 : 26);
 }
 
 function drawAxes(svg){
@@ -4585,16 +4611,16 @@ function drawAxes(svg){
     el('line', {x1:PL, x2:PL+PW, y1:ya, y2:ya, stroke:'var(--muted)', 'stroke-dasharray':'3 4', 'stroke-opacity':.45}, g);
     el('text', {x:PL+6, y:ya-5, class:'corner'}, g).textContent = `全市場平均每檔 ${fY(AVG)} 億`;
   }
-  el('text', {x:PL+PW/2, y:VH-26, 'text-anchor':'middle', class:'axt'}, g).textContent = '外資投信買賣超金額60日累計（億元）→ 越右買超越多';
-  const yl = el('text', {x:0, y:0, 'text-anchor':'middle', class:'axt', transform:`translate(18 ${PT+PH/2}) rotate(-90)`}, g);
-  yl.textContent = '成交金額20日累計（億元）↑ 越上成交越大';
+  el('text', {x:PL+PW/2, y:VH-26, 'text-anchor':'middle', class:'axt'}, g).textContent = MOB ? '外資投信60日買賣超（億）→ 右買超' : '外資投信買賣超金額60日累計（億元）→ 越右買超越多';
+  const yl = el('text', {x:0, y:0, 'text-anchor':'middle', class:'axt', transform:`translate(${MOB ? 13 : 18} ${PT+PH/2}) rotate(-90)`}, g);
+  yl.textContent = MOB ? '20日成交金額（億）↑' : '成交金額20日累計（億元）↑ 越上成交越大';
   const c = [[PL+PW, PT-10, 'end', '↗ 買超・成交金額大'], [PL, PT-10, 'start', '↖ 賣超・成交金額大'],
              [PL+PW-8, PT+PH-8, 'end', '買超・成交金額小'], [PL+8, PT+PH-8, 'start', '賣超・成交金額小']];
   c.forEach(([x,y,a,t]) => { el('text', {x, y, 'text-anchor':a, class:'corner'}, g).textContent = t; });
 }
 
 function render(){
-  const svg = $('svg'); svg.innerHTML = '';
+  const svg = $('svg'); svg.innerHTML = ''; fitBox(svg);
   drawAxes(svg);
   const clip = el('clipPath', {id:'plot'}, el('defs', {}, svg));
   el('rect', {x:PL-8, y:PT-8, width:PW+16, height:PH+16}, clip);
@@ -5156,7 +5182,7 @@ var PFX = "m14-";
 function __id(id){ return document.getElementById(PFX + id); }
 
 (function(){
-  var NS = "http://www.w3.org/2000/svg", VW = 1000, VH = 560, PL = 70, PR = 24, PT = 18, PB = 52, PW = VW - PL - PR, PH = VH - PT - PB, XC = 10, YFLOOR = 0.01, LBL_MAX = 24, TRAIL_MAX = 30;
+  var NS = "http://www.w3.org/2000/svg", VW = 1000, VH = 560, PL = 70, MOB = false, LW = 12, PR = 24, PT = 18, PB = 52, PW = VW - PL - PR, PH = VH - PT - PB, XC = 10, YFLOOR = 0.01, LBL_MAX = 24, TRAIL_MAX = 30;
   var D = null, BY = {}, L = [], scheme = "seg", show = "v", scale = "log", szm = "k", idx = 0, sel = null, timer = null;
   var extra = {}, hidden = {}, topSet = {}, vlist = [], dom = {}, AV = [];
   var STOCK_GROUPS = null;
@@ -5227,31 +5253,38 @@ function __id(id){ return document.getElementById(PFX + id); }
   function xTicks(){
     if (scale === "lin") return linTicks(dom.x0, dom.x1, 9);
     var b = [0]; [1, 2, 5].forEach(function(m){ [1, 10, 100, 1000, 10000].forEach(function(p){ b.push(m * p, -m * p); }); });
-    return thin(b.filter(function(v){ return v >= dom.x0 && v <= dom.x1; }), px, 48);
+    return thin(b.filter(function(v){ return v >= dom.x0 && v <= dom.x1; }), px, MOB ? 70 : 48);
   }
   function yTicks(){
     if (scale === "lin") return linTicks(dom.y0, dom.y1, 8);
     var b = []; [1, 2, 5].forEach(function(m){ [0.01, 0.1, 1, 10, 100, 1000, 10000, 100000].forEach(function(p){ b.push(+(m * p).toPrecision(6)); }); });
-    return thin(b.filter(function(v){ return v >= dom.y0 && v <= dom.y1; }), py, 26);
+    return thin(b.filter(function(v){ return v >= dom.y0 && v <= dom.y1; }), py, MOB ? 36 : 26);
   }
   function rad(s, i){
     if (szm === "f") return 8;
-    if (szm === "k") return 3 + Math.sqrt(s.k) * 1.9;
+    if (szm === "k") return (3 + Math.sqrt(s.k) * 1.9) * (MOB ? 1.25 : 1);
     var t = 0; RL().forEach(function(o){ if (nn(o.y[i])) t += o.y[i]; });
     return Math.max(3, Math.sqrt(s.y[i] / (t || 1)) * 110);
   }
 
+  function fit(svg){
+    var w = __id("chartBox").clientWidth;
+    MOB = !!w && w < 640;
+    VW = MOB ? 640 : 1000; VH = MOB ? 720 : 560; PL = MOB ? 104 : 70; PB = MOB ? 70 : 52; LW = MOB ? 19 : 12;
+    PW = VW - PL - PR; PH = VH - PT - PB;
+    svg.setAttribute("viewBox", "0 0 " + VW + " " + VH);
+  }
   function render(){
-    var svg = __id("svg"); svg.innerHTML = "";
+    var svg = __id("svg"); svg.innerHTML = ""; fit(svg);
     var g = sv("g", {}, svg);
     sv("rect", {x: PL, y: PT, width: PW, height: PH, fill: "none", stroke: "var(--line)"}, g);
-    xTicks().forEach(function(t){ var x = px(t); sv("line", {x1: x, x2: x, y1: PT, y2: PT + PH, stroke: "var(--grid)"}, g); sv("text", {x: x, y: PT + PH + 16, "text-anchor": "middle", "class": "tick"}, g).textContent = t.toLocaleString(); });
-    yTicks().forEach(function(t){ var y = py(t); sv("line", {x1: PL, x2: PL + PW, y1: y, y2: y, stroke: "var(--grid)"}, g); sv("text", {x: PL - 8, y: y + 4, "text-anchor": "end", "class": "tick"}, g).textContent = t.toLocaleString(); });
+    xTicks().forEach(function(t){ var x = px(t); sv("line", {x1: x, x2: x, y1: PT, y2: PT + PH, stroke: "var(--grid)"}, g); sv("text", {x: x, y: PT + PH + (MOB ? 24 : 16), "text-anchor": "middle", "class": "tick"}, g).textContent = t.toLocaleString(); });
+    yTicks().forEach(function(t){ var y = py(t); sv("line", {x1: PL, x2: PL + PW, y1: y, y2: y, stroke: "var(--grid)"}, g); sv("text", {x: PL - 8, y: y + (MOB ? 6 : 4), "text-anchor": "end", "class": "tick"}, g).textContent = t.toLocaleString(); });
     sv("line", {x1: px(0), x2: px(0), y1: PT, y2: PT + PH, stroke: "var(--muted)", "stroke-dasharray": "3 4"}, g);
     var A = AV[idx];
     if (A > 0 && A >= dom.y0 && A <= dom.y1){ var ya = py(A); sv("line", {x1: PL, x2: PL + PW, y1: ya, y2: ya, stroke: "var(--muted)", "stroke-dasharray": "3 4", "stroke-opacity": 0.6}, g); sv("text", {x: PL + 6, y: ya - 5, "class": "corner"}, g).textContent = "畫面平均 " + fX(A) + " 億"; }
-    sv("text", {x: PL + PW / 2, y: VH - 14, "text-anchor": "middle", "class": "axt"}, g).textContent = "外資＋投信買賣超金額 60 日累計（億元）；右邊買超、左邊賣超";
-    sv("text", {transform: "translate(16 " + (PT + PH / 2) + ") rotate(-90)", "text-anchor": "middle", "class": "axt"}, g).textContent = "成交金額 20 日累計（億元）↑";
+    sv("text", {x: PL + PW / 2, y: VH - 14, "text-anchor": "middle", "class": "axt"}, g).textContent = MOB ? "外資＋投信 60 日買賣超（億）→ 右買超" : "外資＋投信買賣超金額 60 日累計（億元）；右邊買超、左邊賣超";
+    sv("text", {transform: "translate(" + (MOB ? 18 : 16) + " " + (PT + PH / 2) + ") rotate(-90)", "text-anchor": "middle", "class": "axt"}, g).textContent = "成交金額 20 日累計（億元）↑";
     [[PL + PW - 6, PT + 14, "end", "↗ 買超・成交大"], [PL + 6, PT + 14, "start", "↖ 賣超・成交大"], [PL + PW - 6, PT + PH - 8, "end", "買超・成交小"], [PL + 6, PT + PH - 8, "start", "賣超・成交小"]].forEach(function(c){ sv("text", {x: c[0], y: c[1], "text-anchor": c[2], "class": "corner"}, g).textContent = c[3]; });
 
     var tg = sv("g", {}, svg);
@@ -5284,20 +5317,20 @@ function __id(id){ return document.getElementById(PFX + id); }
     }
     var boxes = [];
     function place(p, force){
-      var t = short(dn(p.s)) + "·" + p.s.k + "家", w = t.length * 12 + 8, h = 16;
+      var t = short(dn(p.s)) + "·" + p.s.k + "家", w = t.length * LW + 8, h = MOB ? 24 : 16;
       var cand = [[p.x + p.r + 4, p.y - h / 2], [p.x - p.r - 4 - w, p.y - h / 2], [p.x - w / 2, p.y - p.r - h - 2], [p.x - w / 2, p.y + p.r + 2]];
       for (var j = 0; j < cand.length; j++){
         var bx = cand[j][0], by = cand[j][1];
         if (bx < PL || bx + w > PL + PW || by < PT || by + h > PT + PH) continue;
         if (!force && boxes.some(function(b){ return bx < b[0] + b[2] && bx + w > b[0] && by < b[1] + b[3] && by + h > b[1]; })) continue;
         boxes.push([bx, by, w, h]);
-        var tx = sv("text", {x: bx + 4, y: by + 12, "class": "lbl", "pointer-events": "none"}, svg); tx.textContent = t;
+        var tx = sv("text", {x: bx + 4, y: by + (MOB ? 19 : 12), "class": "lbl", "pointer-events": "none"}, svg); tx.textContent = t;
         if (force) tx.style.fill = "var(--sel)";
         return;
       }
     }
     if (sel){ var ps = pts.filter(function(q){ return q.s.c === sel; })[0]; if (ps) place(ps, true); }
-    pts.filter(function(p){ return p.hl && p.s.c !== sel; }).sort(function(a, b){ return b.s.y[idx] - a.s.y[idx]; }).slice(0, LBL_MAX).forEach(function(p){ place(p, false); });
+    pts.filter(function(p){ return p.hl && p.s.c !== sel; }).sort(function(a, b){ return b.s.y[idx] - a.s.y[idx]; }).slice(0, MOB ? 10 : LBL_MAX).forEach(function(p){ place(p, false); });
 
     __id("day").value = idx; __id("dateLabel").textContent = fd(D.dates[idx]);
     var fb = __id("focus"), fs = sel || (show === "custom" && vlist.length === 1 ? vlist[0].c : null);
@@ -5401,7 +5434,8 @@ function __id(id){ return document.getElementById(PFX + id); }
       tip.style.top = (r.top - b.top) + "px";
     });
     svg.addEventListener("pointerout", function(e){ if (e.target.closest("circle[data-c]")) tip.hidden = true; });
-    var again = function(){ if (D) render(); };
+    var again = function(){ if (D) render(); }, rz = null;
+    window.addEventListener("resize", function(){ clearTimeout(rz); rz = setTimeout(function(){ if (D && ROOT.offsetParent) render(); }, 200); });
     try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", again); } catch (e) {}
     if (window.MutationObserver) new MutationObserver(again).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
     setScheme(scheme);
