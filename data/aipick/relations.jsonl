@@ -181,3 +181,6 @@
 {"a":"3605","b":"1569","asked":"2026-10-27","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.6,"note":"兩者皆為台灣電子零組件廠，同屬機構件與連接器相關領域，常在筆電與網通題材中被市場歸類為同一族群。"}
 {"a":"3605","b":"2449","asked":"2026-10-27","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"兩者皆受惠於網通、AI與高速運算等題材，在台股中常被歸類為電子零組件與半導體測試相關族群。"}
 {"a":"3605","b":"4951","asked":"2026-10-27","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.5,"note":"宏致與精拓科皆屬台股電子零組件相關類股，常受市場資金與相同產業題材影響而同步波動。"}
+{"a":"1312","b":"1310","asked":"2026-10-28","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"國喬與台苯皆為台灣主要的苯乙烯（SM）製造大廠，屬於同業競爭關係。"}
+{"a":"1312","b":"1303","asked":"2026-10-28","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"國喬與南亞同屬石化產業，主要產品包含塑膠原料等，屬於同業競爭關係。"}
+{"a":"1312","b":"1710","asked":"2026-10-28","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"國喬與東聯皆為台灣主要的石化廠，主要產品包含苯乙烯及乙二醇等，屬於同業競爭關係。"}
