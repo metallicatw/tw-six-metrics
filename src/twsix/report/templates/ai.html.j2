@@ -180,15 +180,16 @@
   <p class="muted ai-llm">讀法：{% if ai.llm.enabled %}<b>LLM（Google Gemini{% if ai.llm.model %}，{{ ai.llm.model }}{% endif %}）</b>，
     上一趟呼叫 {{ ai.llm.calls }} / {{ ai.llm.max_calls }} 次{% if ai.llm.stopped %}（{{ ai.llm.stopped }}）{% endif %}；沒輪到的用規則讀。
     {% else %}<b>規則</b>（數簡報裡的正面詞與負面詞）。設定 repo secret <code>GEMINI_API_KEY</code> 之後改由 LLM 讀持股與候選的簡報。{% endif %}
-    {% if ai.fetch.ran_at %}上一趟抓取：{{ ai.fetch.ran_at }}。{% endif %}</p>
+    {% if ai.fetch.ran_at %}上一趟抓取：{{ ai.fetch.ran_at }}。{% endif %}
+    {% if ai.fetch.talks and ai.fetch.talks.stopped and '簡報網站' in ai.fetch.talks.stopped %}<br><b>這一趟下載不到法說簡報</b>（公開資訊觀測站擋下這台主機的連線）：沒有簡報的法說只能用公司公告文字以規則讀，摘要欄顯示公司公告；之後下載得到時會自動重讀（120 天內）。{% endif %}</p>
   {% if ai.turns %}
   <div class="scroll"><table class="ai-t">
     <thead><tr><th>代號</th><th>名稱</th><th>法說日</th><th>轉折</th><th class="num">分數</th><th>讀法</th><th>摘要</th></tr></thead>
     <tbody>{% for x in ai.turns[:30] %}
       <tr><td>{{ sl(x.code, x.code) }}</td><td>{{ sl(x.code, x.name) }}</td><td>{{ x.date }}</td>
         <td class="{{ 'down' if x.kind == '負轉折' else ('up' if x.kind == '正轉折' else 'muted') }}">{{ x.kind }}{% if not x.prev_date %}<span class="muted">（第一次，沒有可比）</span>{% endif %}</td>
-        <td class="num">{{ '%+.1f'|format(x.score) }}</td><td class="muted">{{ 'LLM' if x.method == 'llm' else '規則' }}</td>
-        <td class="ai-reasons">{{ x.summary or ('；'.join(x.highlights) if x.highlights else '—') }}</td></tr>
+        <td class="num">{{ '%+.1f'|format(x.score) }}</td><td class="muted">{{ 'LLM' if x.method == 'llm' else ('規則（無簡報）' if x.src == 'summary' else '規則') }}</td>
+        <td class="ai-reasons">{% if x.summary %}{{ x.summary }}{% elif x.highlights %}{{ '；'.join(x.highlights) }}{% elif x.note %}<span class="muted">公司公告：</span>{{ x.note|truncate(90, True, '…') }}{% else %}—{% endif %}</td></tr>
     {% endfor %}</tbody></table></div>
   {% else %}
   <p class="muted">還沒有資料：法說會簡報從 <code>twsix aipick-fetch</code> 第一次跑的那天開始累積。</p>

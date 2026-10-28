@@ -1587,17 +1587,18 @@ var __fetch = API.fetch;
     var count = Math.min(12, notesLabels.length - 12);
     for(var i=0;i<count;i++){
       var curDate = notesLabels[i], lyDate = notesLabels[i+12];
-      var curText = d.notes[String(i)] || "-";
-      var lyText = d.notes[String(i+12)] || "-";
+      var curText = d.notes[String(i)] || "未說明";
+      var lyText = d.notes[String(i+12)] || "未說明";
       rows += '<div class="notes-row">' +
-        '<div class="notes-cell"><span class="nd">'+curDate+'</span><span class="nt'+(curText==="-"?" dim":"")+'">'+escapeHtml(curText)+'</span></div>' +
-        '<div class="notes-cell"><span class="nd">'+lyDate+'</span><span class="nt'+(lyText==="-"?" dim":"")+'">'+escapeHtml(lyText)+'</span></div>' +
+        '<div class="notes-cell"><span class="nd">'+curDate+'</span><span class="nt'+(curText==="未說明"?" dim":"")+'">'+escapeHtml(curText)+'</span></div>' +
+        '<div class="notes-cell"><span class="nd">'+lyDate+'</span><span class="nt'+(lyText==="未說明"?" dim":"")+'">'+escapeHtml(lyText)+'</span></div>' +
       '</div>';
     }
 
     var rowList = rows.split('<div class="notes-row">').slice(1).map(function(x){ return '<div class="notes-row">' + x; });
     var more = rowList.slice(3);
-    notesCard.innerHTML = '<div class="notes-head"><span style="padding-left:14px">當期公告說明</span><span style="padding-left:14px">去年同期公告說明</span></div>' +
+    notesCard.innerHTML = '<p class="card-note" style="margin:10px 14px 4px">公司每月申報營收時填寫的「備註」。依規定只有單月營收和去年同月相比增減達 50% 以上才必須說明原因，其他月份多半沒有填（有些公司會主動說明），所以「未說明」是正常的。</p>' +
+      '<div class="notes-head"><span style="padding-left:14px">當期公告說明</span><span style="padding-left:14px">去年同期公告說明</span></div>' +
       rowList.slice(0, 3).join("") +
       (more.length ? '<details class="notes-more"><summary>顯示更早的 ' + more.length + ' 個月</summary>' + more.join("") + '</details>' : '');
     g7.querySelector(".grid").replaceWith(notesCard);

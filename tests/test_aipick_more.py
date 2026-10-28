@@ -854,3 +854,45 @@ def test_管理群組有全部隱藏與全部顯示():
     body = js.split("function hideAll(on){", 1)[1].split("\n  }\n", 1)[0]
     assert "if(on) doc.cur = ALL;" in body and "save(); changed();" in body
     assert "TWSIXWatch.hideAll(true)" in js and "TWSIXWatch.hideAll(false)" in js
+
+
+def test_法說簡報被擋_改用公告摘要_之後重讀_摘要欄有公司公告():
+    import tempfile
+    from datetime import date
+    from pathlib import Path
+
+    from twsix.aipick import talks as TK
+
+    root = Path(tempfile.mkdtemp())
+    d = TK.talks_dir(root)
+    d.mkdir(parents=True)
+    with (d / "index.csv").open("w", encoding="utf-8", newline="") as fh:
+        import csv
+        w = csv.DictWriter(fh, fieldnames=TK.INDEX_FIELDS)
+        w.writeheader()
+        for k in range(5):
+            w.writerow({"code": f"11{k:02d}", "name": "測試", "date": f"2026-10-2{k}", "time": "",
+                        "summary": f"報告營運成果與未來展望 {k}", "file": f"11{k:02d}20261020M001.pdf",
+                        "file_en": "", "first_seen": "2026-10-20"})
+    calls = []
+    block = "<html><body>因為安全性考量，您所執行的頁面無法呈現。</body></html>".encode()
+
+    def blocked(url):
+        calls.append(url)
+        return block
+
+    st = TK.process(root, None, priority=[], today=date(2026, 10, 28), get=blocked)
+    assert len(calls) == TK.BLOCK_LIMIT, "連續被擋就不要再一直下載"
+    assert st["processed"] == 5 and "簡報網站" in st["stopped"]
+    feats = TK.read_features(root)
+    assert all(r["source"] == "summary" and r["note"].startswith("報告營運成果") for r in feats.values())
+    book = TK.TalkBook(feats)
+    t = book.latest("1100", "2026-10-28")
+    assert t.note.startswith("報告營運成果") and t.src == "summary"
+
+    st = TK.process(root, None, priority=[], today=date(2026, 10, 28), get=blocked)
+    assert st["processed"] == 0, "同一天不重讀"
+    calls.clear()
+    st = TK.process(root, None, priority=[], today=date(2026, 10, 29), get=lambda u: b"%PDF-1.4 not really")
+    assert st["processed"] == 0 and st["pdf"] == 5, "隔天重新下載；PDF 讀不出字就維持原樣"
+    assert TK.is_block_page(block) and not TK.is_block_page(b"%PDF-1.5")

@@ -223,3 +223,14 @@ def test_手機版_概況表格不撐寬_點狀圖窄螢幕改版面_時間軸�
     t14 = mods[mods.index('CF_MODS["t14"]'):]
     assert "function fit(svg)" in t14 and 'window.addEventListener("resize"' in t14
     assert "#cf .bg2 .panel .pnow{flex-wrap:wrap}" in css
+
+
+def test_月營收說明_歷史檔與官方月檔合併_官方優先():
+    from twsix.chipflow.site import NOTES_HISTORY, load_revenue_notes
+
+    root = Path(tempfile.mkdtemp())
+    (root / "market" / "twse_revenue").mkdir(parents=True)
+    (root / NOTES_HISTORY).write_text("公司代號,資料年月,備註\n2330,11506,舊說明\n2330,11507,歷史\n1101,11310,-\n", encoding="utf-8")
+    (root / "market" / "twse_revenue" / "11507.csv").write_text("公司代號,資料年月,備註\n2330,11507,官方\n", encoding="utf-8")
+    n = load_revenue_notes(root)
+    assert n["2330"] == {"2026-06": "舊說明", "2026-07": "官方"} and "1101" not in n

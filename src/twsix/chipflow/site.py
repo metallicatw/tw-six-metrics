@@ -55,7 +55,8 @@ def _stamp_key(data_dir: Path) -> dict[str, str]:
         "radar": hashlib.sha1(radar.read_bytes()).hexdigest() if radar.exists() else "",
         "levels": str(len(list((data_dir / "ownership" / "levels").glob("*.csv.gz")))),
         "chain": str(ic_chain_fetched(data_dir)),
-        "version": "7",
+        "notes": str((data_dir / NOTES_HISTORY).stat().st_size) if (data_dir / NOTES_HISTORY).exists() else "",
+        "version": "8",
     }
 
 
@@ -97,8 +98,18 @@ def load_balance(data_dir: Path) -> dict[str, dict[tuple[int, int], dict[str, fl
     return out
 
 
+NOTES_HISTORY = Path("market") / "revenue_notes.csv"
+
+
 def load_revenue_notes(data_dir: Path) -> dict[str, dict[str, str]]:
     out: dict[str, dict[str, str]] = {}
+    hist = data_dir / NOTES_HISTORY
+    if hist.exists():
+        with hist.open(encoding="utf-8-sig") as fh:
+            for r in csv.DictReader(fh):
+                code, ym, note = (r.get("公司代號") or "").strip(), (r.get("資料年月") or "").strip(), (r.get("備註") or "").strip()
+                if code and len(ym) == 5 and note and note != "-":
+                    out.setdefault(code, {})[f"{int(ym[:3]) + 1911}-{ym[3:]}"] = note
     for sub in ("twse_revenue", "tpex_revenue"):
         for path in sorted((data_dir / "market" / sub).glob("*.csv")):
             with path.open(encoding="utf-8-sig") as fh:

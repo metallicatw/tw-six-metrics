@@ -93,7 +93,8 @@ class Context:
         self.tech = Tech(self.panel, self.meta)
         self.revenue = RV.load_revenue(data_dir)
         self._sue: dict | None = None
-        self.talks = TK.TalkBook(TK.read_features(data_dir))
+        self.talks = TK.TalkBook(TK.read_features(data_dir),
+                                 {r["file"]: r.get("summary", "") for r in TK.read_index(data_dir) if r.get("file")})
         self.relations = RL.load(data_dir)
         self._models: dict[str, object] = {}
 
@@ -145,7 +146,8 @@ def _turn_json(t: TK.Turn | None) -> dict | None:
         return None
     return {"date": t.date, "prev_date": t.prev_date, "method": t.method, "score": t.score,
             "kind": t.kind, "level": t.level, "summary": t.summary,
-            "highlights": t.highlights, "risks": t.risks, "file": t.file}
+            "highlights": t.highlights, "risks": t.risks, "file": t.file,
+            "note": t.note, "src": t.src}
 
 
 def _neighbors_json(ctx: Context, code: str, nb) -> list[dict]:

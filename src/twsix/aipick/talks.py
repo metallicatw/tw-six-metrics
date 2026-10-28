@@ -25,6 +25,9 @@ LLM_CHARS = 9000
 NEG_TURN = -2.0
 POS_TURN = 2.0
 NEG_DAYS = 120
+RETRY_DAYS = 120
+LLM_DAYS = 120
+BLOCK_LIMIT = 3
 
 POS_WORDS = ("成長", "增加", "提升", "回升", "回溫", "強勁", "創新高", "新高", "擴產", "滿載",
              "樂觀", "看好", "優於預期", "動能", "供不應求", "漲價", "改善", "受惠", "加速",
@@ -133,6 +136,15 @@ def _get_bytes(url: str, timeout: float = 60.0) -> bytes:
     if len(data) > MAX_PDF_BYTES:
         raise ValueError("檔案太大")
     return data
+
+
+class Blocked(RuntimeError):
+    pass
+
+
+def is_block_page(data: bytes) -> bool:
+    head = data[:4000]
+    return not head.startswith(b"%PDF") and ("安全性考量".encode() in head or b"SECURITY REASONS" in head)
 
 
 def pdf_pages(data: bytes) -> list[str]:
@@ -270,30 +282,49 @@ def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: i
     t0 = clock()
     new, fetched, llm_done, errors = [], 0, 0, []
     stopped = ""
+    blocked = 0
+    retry_cut = (today - timedelta(days=RETRY_DAYS)).isoformat()
+    llm_cut = (today - timedelta(days=LLM_DAYS)).isoformat()
     for r in todo:
         have = feats.get(r["file"])
-        need_rules = have is None
-        need_llm = (llm is not None and llm.enabled and r["code"] in rank
+        retry = (have is not None and have.get("source") == "summary" and r["date"] >= retry_cut
+                 and have.get("processed", "") < today.isoformat())
+        need_rules = have is None or retry
+        need_llm = (llm is not None and llm.enabled
+                    and (r["code"] in rank or r["date"] >= llm_cut)
                     and (have is None or not have.get("llm")))
         if not need_rules and not need_llm:
             continue
-        if fetched >= max_pdf:
+        can_pdf = blocked < BLOCK_LIMIT
+        if not can_pdf and have is not None:
+            continue
+        if can_pdf and fetched >= max_pdf:
             stopped = f"這一趟最多讀 {max_pdf} 份"
             break
         if clock() - t0 > budget:
             stopped = f"超過 {budget:.0f} 秒，剩下的下一趟再讀"
             break
-        try:
-            pages = pdf_pages(get(PDF_URL.format(file=r["file"])))
-            fetched += 1
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"{r['file']}：{type(exc).__name__}")
-            pages = []
+        pages: list[str] = []
+        if can_pdf:
+            try:
+                data = get(PDF_URL.format(file=r["file"]))
+                if is_block_page(data):
+                    raise Blocked("簡報網站擋下這台機器的連線")
+                pages = pdf_pages(data)
+                fetched += 1
+                blocked = 0
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{r['file']}：{type(exc).__name__}")
+                blocked += 1
+                if blocked >= BLOCK_LIMIT:
+                    stopped = "簡報網站連續擋下或連不上，這一趟改用公告摘要"
+        if retry and not pages:
+            continue
         text = focus_text(pages) or r.get("summary", "")
         rec = {"code": r["code"], "name": r["name"], "date": r["date"], "file": r["file"],
                "processed": today.isoformat(), "source": "pdf" if pages else "summary",
                "rules": rule_features(text), "llm": (have or {}).get("llm"),
-               "model": (have or {}).get("model", "")}
+               "model": (have or {}).get("model", ""), "note": (r.get("summary") or "")[:200]}
         if need_llm and pages:
             try:
                 got = clean_llm(llm.ask_json(PROMPT.format(name=r["name"], code=r["code"],
@@ -326,6 +357,8 @@ class Turn:
     highlights: list
     risks: list
     file: str
+    note: str = ""
+    src: str = ""
 
     @property
     def kind(self) -> str:
@@ -345,7 +378,8 @@ def _level(rec: dict, method: str) -> float:
 
 class TalkBook:
 
-    def __init__(self, features: dict[str, dict]):
+    def __init__(self, features: dict[str, dict], notes: dict[str, str] | None = None):
+        self.notes = notes or {}
         self.by_code: dict[str, list[dict]] = {}
         for rec in features.values():
             self.by_code.setdefault(rec["code"], []).append(rec)
@@ -368,7 +402,8 @@ class TalkBook:
             x = cur.get("llm") or {}
             out.append(Turn(code, cur["date"], prev["date"] if prev else "", method,
                             round(score, 2), round(lvl, 3), x.get("summary", ""),
-                            x.get("highlights", []), x.get("risks", []), cur["file"]))
+                            x.get("highlights", []), x.get("risks", []), cur["file"],
+                            cur.get("note") or self.notes.get(cur["file"], ""), cur.get("source", "")))
         return out
 
     def latest(self, code: str, day: str) -> Turn | None:
