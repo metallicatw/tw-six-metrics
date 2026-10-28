@@ -1082,7 +1082,7 @@
 #cf .bg14 svg .tick{font-family:var(--mono);font-size:11px;fill:var(--muted)}
 #cf .bg14 svg .axt{font-size:12.5px;fill:var(--ink);font-weight:500}
 #cf .bg14 svg .corner{font-size:11px;fill:var(--muted)}
-#cf .bg14 svg .lbl{font-size:12px;font-weight:700;paint-order:stroke;stroke:var(--panel);stroke-width:4px;stroke-linejoin:round}
+#cf .bg14 svg .lbl{font-size:12.5px;font-weight:600;fill:var(--ink);paint-order:stroke;stroke:var(--panel);stroke-width:4px;stroke-linejoin:round;stroke-opacity:.92}
 #cf .bg14 .top50{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
 #cf .bg14 .focus{background:var(--panel);border:1px solid var(--sel);border-radius:10px;padding:8px 14px;font-size:.92rem;display:flex;gap:6px 14px;align-items:center;flex-wrap:wrap}
 #cf .bg14 .focus b{color:var(--sel)}

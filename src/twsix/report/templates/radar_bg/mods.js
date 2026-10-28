@@ -5167,7 +5167,7 @@ function __id(id){ return document.getElementById(PFX + id); }
   function fX(v){ if (!nn(v)) return "—"; var a = Math.abs(v); return a >= 100 ? Math.round(v).toLocaleString() : v.toFixed(a >= 10 ? 1 : 2); }
   function sv(t, a, p){ var e = document.createElementNS(NS, t); for (var k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
   function hue(g){ var h = 0; for (var i = 0; i < g.length; i++) h = (h * 31 + g.charCodeAt(i)) % 360; return h; }
-  function colorOf(s){ return "hsl(" + hue(s.g) + " 58% 50%)"; }
+  function colorOf(s){ return "hsl(" + hue(s.g) + (bgDark() ? " 62% 62%)" : " 58% 44%)"); }
   function short(t){ return t.length > 11 ? t.slice(0, 10) + "…" : t; }
   function dn(s){ return s.dn || s.n; }
   function ash(v){ return Math.asinh(v / XC); }
@@ -5401,6 +5401,9 @@ function __id(id){ return document.getElementById(PFX + id); }
       tip.style.top = (r.top - b.top) + "px";
     });
     svg.addEventListener("pointerout", function(e){ if (e.target.closest("circle[data-c]")) tip.hidden = true; });
+    var again = function(){ if (D) render(); };
+    try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", again); } catch (e) {}
+    if (window.MutationObserver) new MutationObserver(again).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
     setScheme(scheme);
   }
 
