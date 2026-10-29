@@ -2398,7 +2398,8 @@ function reveal(bar, el){
         var k = t.kind === '負轉折' ? 'down' : (t.kind === '正轉折' ? 'up' : 'muted');
         return '<li><b>' + esc(t.date) + '</b> <span class="' + k + '">' + esc(t.kind) + '（' + (t.score > 0 ? '+' : '') + t.score.toFixed(1) + '）</span>' +
           ' <span class="muted">' + (t.method === 'llm' ? 'LLM' : '規則') + (t.prev_date ? '，對比 ' + esc(t.prev_date) : '，第一次，沒有可比') + '</span>' +
-          (t.summary ? '<br>' + esc(t.summary) : '') +
+          (t.why ? '<br><span class="ai-turnwhy ' + k + '">' + esc(t.why) + '</span>' : '') +
+          (t.summary ? '<br>' + esc(t.summary) : (!t.why && t.note ? '<br><span class="muted">公司公告：</span>' + esc(t.note) : '')) +
           (t.highlights && t.highlights.length ? '<br><span class="muted">重點：</span>' + t.highlights.map(esc).join('；') : '') +
           (t.risks && t.risks.length ? '<br><span class="muted">風險：</span>' + t.risks.map(esc).join('；') : '') + '</li>';
       }).join('') + '</ul>' : '<p class="muted">還沒有讀過這一檔的法說簡報（從上線那天起累積，持股與候選優先）。</p>'));

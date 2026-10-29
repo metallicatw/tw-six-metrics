@@ -181,11 +181,17 @@ def focus_text(pages: list[str], limit: int = LLM_CHARS) -> str:
     return "\n".join(out)
 
 
+def _top(text: str, words: tuple[str, ...], n: int = 5) -> dict[str, int]:
+    got = {w: text.count(w) for w in words}
+    got = {w: c for w, c in got.items() if c}
+    return dict(sorted(got.items(), key=lambda kv: (-kv[1], words.index(kv[0])))[:n])
+
+
 def rule_features(text: str) -> dict:
     pos = sum(text.count(w) for w in POS_WORDS)
     neg = sum(text.count(w) for w in NEG_WORDS)
     return {"pos": pos, "neg": neg, "tone": round((pos - neg) / (pos + neg + 5), 4),
-            "chars": len(text)}
+            "chars": len(text), "pw": _top(text, POS_WORDS), "nw": _top(text, NEG_WORDS)}
 
 
 PROMPT = """你是嚴謹的台股法說會分析員。以下是 {name}（{code}）{date} 法說會簡報的文字（表格被攤平、可能不完整）。
@@ -359,6 +365,7 @@ class Turn:
     file: str
     note: str = ""
     src: str = ""
+    why: str = ""
 
     @property
     def kind(self) -> str:
@@ -374,6 +381,53 @@ def _level(rec: dict, method: str) -> float:
         x = rec["llm"]
         return x["revenue_outlook"] + x["margin_outlook"] + x["tone"]
     return rec["rules"]["tone"]
+
+
+REV_WORD = {-2: "大幅衰退", -1: "衰退", 0: "持平", 1: "成長", 2: "大幅成長"}
+MARGIN_WORD = {-2: "大幅下滑", -1: "下滑", 0: "持平", 1: "上升", 2: "大幅上升"}
+TONE_WORD = {-2: "很保守", -1: "保守", 0: "中性", 1: "正面", 2: "很樂觀"}
+CAPEX_WORD = {-1: "下修", 0: "維持", 1: "上修"}
+LLM_DIMS = (("revenue_outlook", "營收展望", REV_WORD), ("margin_outlook", "毛利率展望", MARGIN_WORD),
+            ("tone", "整體口氣", TONE_WORD))
+
+
+def _words(d: dict | None) -> str:
+    return "、".join(f"{w}×{c}" for w, c in (d or {}).items())
+
+
+def explain(cur: dict, prev: dict | None, method: str, score: float) -> str:
+    """一句話說明這一次轉折是怎麼來的（只描述比較的項目，不加推測）。"""
+    if method == "llm":
+        x = cur["llm"]
+        if prev is None:
+            return "第一次，沒有上一次可比；" + "、".join(
+                f"{label}{words[x[k]]}" for k, label, words in LLM_DIMS)
+        y = prev["llm"]
+        parts = [f"{label} {words[y[k]]}→{words[x[k]]}（{x[k] - y[k]:+d}）"
+                 for k, label, words in LLM_DIMS if x[k] != y[k]]
+        if not parts:
+            parts = ["營收展望、毛利率展望、整體口氣三項都和上一次相同"]
+        extra = []
+        if x.get("capex") != y.get("capex"):
+            extra.append(f"資本支出 {CAPEX_WORD.get(y.get('capex'), '維持')}→{CAPEX_WORD.get(x.get('capex'), '維持')}")
+        if x.get("new_business") and not y.get("new_business"):
+            extra.append("這一次提到新產品／新客戶／新市場")
+        lead = (x.get("risks") or [""])[0] if score < 0 else (x.get("highlights") or [""])[0]
+        out = "；".join(parts + extra)
+        return out + (f"。{'主要風險' if score < 0 else '主要亮點'}：{lead}" if lead else "")
+    r = cur.get("rules") or {}
+    only = "（只讀到公司公告文字）" if cur.get("source") == "summary" else ""
+    found = "；".join(t for t in (f"正面詞 {_words(r.get('pw'))}" if r.get("pw") else "",
+                                   f"負面詞 {_words(r.get('nw'))}" if r.get("nw") else "") if t)
+    if prev is None:
+        return (f"沒有上一次{'也只有公告' if only else '讀到簡報'}的法說可比；正面詞 {r.get('pos', 0)} 次、負面詞 {r.get('neg', 0)} 次"
+                + (f"（{found}）" if found else "") + only)
+    q = prev.get("rules") or {}
+    out = (f"正面詞 {q.get('pos', 0)}→{r.get('pos', 0)} 次、負面詞 {q.get('neg', 0)}→{r.get('neg', 0)} 次，"
+           f"語氣 {q.get('tone', 0):+.2f}→{r.get('tone', 0):+.2f}")
+    if found:
+        out += f"；這一次：{found}"
+    return out + only
 
 
 class TalkBook:
@@ -392,8 +446,11 @@ class TalkBook:
         for k in range(len(recs)):
             cur = recs[k]
             method = "llm" if cur.get("llm") else "rules"
+            same = (cur.get("source") == "summary")
+            # 規則讀法只跟「讀到同一種內容」的上一次比：簡報 vs 只有公告的字數差太多，比了只會假轉折
             prev = next((r for r in reversed(recs[:k])
-                         if (method == "llm" and r.get("llm")) or method == "rules"), None)
+                         if (method == "llm" and r.get("llm"))
+                         or (method == "rules" and (r.get("source") == "summary") == same)), None)
             lvl = _level(cur, method)
             if prev is None:
                 score = 0.0
@@ -403,7 +460,8 @@ class TalkBook:
             out.append(Turn(code, cur["date"], prev["date"] if prev else "", method,
                             round(score, 2), round(lvl, 3), x.get("summary", ""),
                             x.get("highlights", []), x.get("risks", []), cur["file"],
-                            cur.get("note") or self.notes.get(cur["file"], ""), cur.get("source", "")))
+                            cur.get("note") or self.notes.get(cur["file"], ""), cur.get("source", ""),
+                            explain(cur, prev, method, score)))
         return out
 
     def latest(self, code: str, day: str) -> Turn | None:

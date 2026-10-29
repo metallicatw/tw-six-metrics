@@ -1024,6 +1024,9 @@ table.hl-t{min-width:0}
 .ai-t th,.ai-t td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top;white-space:nowrap}
 .ai-t thead th{font-size:12px;color:var(--muted);font-weight:600;background:var(--surface-2)}
 .ai-t .num{text-align:right;font-variant-numeric:tabular-nums}
+.ai-turnwhy{display:block;margin:0 0 3px;font-weight:600;line-height:1.5}
+.ai-turnwhy.up{color:var(--up)}.ai-turnwhy.down{color:var(--down)}
+.ai-turnwhy-s{font-size:11.5px;font-weight:400;color:var(--ink-2);white-space:normal;min-width:140px;line-height:1.4;margin-top:2px}
 .ai-t td.ai-reasons{white-space:normal;min-width:240px;color:var(--ink-2);font-size:12.5px}
 .ai-stats tbody th{font-weight:600}
 .ai-stats tr.ai-d th{color:#6d3fd1}.ai-stats tr.ai-dp th{color:#9b84e0}

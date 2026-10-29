@@ -95,6 +95,7 @@ def _cand_view(c: dict, flag_text: dict) -> dict:
     if t:
         c["turn_txt"] = f"{t['kind']}（{t['score']:+.1f}）"
         c["turn_tone"] = "down" if t["kind"] == "負轉折" else ("up" if t["kind"] == "正轉折" else "")
+        c["turn_why"] = t.get("why") or ""
     return c
 
 

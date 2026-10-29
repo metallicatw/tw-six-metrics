@@ -142,7 +142,7 @@
         <td class="num"><b>{{ '%+.1f'|format(c.extra.sue) }}</b></td>
         <td class="num {{ 'up' if c.extra.yoy > 0 else 'down' }}">{{ '%+.0f'|format(c.extra.yoy * 100) }}%</td>
         <td class="num">{{ c.close }}<a class="yf" href="{{ yahoo_ta(c.code, c.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ c.code }} Yahoo 技術分析"></a></td><td class="num">{{ c.six_txt }}</td>
-        <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td>
+        <td class="{{ c.turn_tone }}"{% if c.turn_why %} title="{{ c.turn_why }}"{% endif %}>{{ c.turn_txt or '—' }}{% if c.turn_why %}<div class="ai-turnwhy-s">{{ c.turn_why|truncate(60, True, '…') }}</div>{% endif %}</td>
         <td class="ai-reasons ai-hide-m">{{ c.reasons|join('；') }}</td></tr>
     {% endfor %}</tbody></table></div>
   {% else %}<p class="stale">最近一次沒有符合全部條件的股票。</p>{% endif %}
@@ -166,7 +166,7 @@
         <td class="num {{ 'up' if c.extra.own > 0 else 'down' }}">{{ '%+.1f'|format(c.extra.own * 100) }}%</td>
         <td class="num"><b>{{ '%.1f'|format(c.extra.gap * 100) }}%</b></td>
         <td class="ai-reasons">{% for n in (c.neighbors or [])[:4] %}{{ sl(n.code, n.name) }}<span class="muted">（{{ '%.2f'|format(n.corr) if n.corr is not none else '—' }}{% if n.relation %}｜{{ n.relation }}{% endif %}）</span>{% if not loop.last %}、{% endif %}{% endfor %}</td>
-        <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td></tr>
+        <td class="{{ c.turn_tone }}"{% if c.turn_why %} title="{{ c.turn_why }}"{% endif %}>{{ c.turn_txt or '—' }}{% if c.turn_why %}<div class="ai-turnwhy-s">{{ c.turn_why|truncate(60, True, '…') }}</div>{% endif %}</td></tr>
     {% endfor %}</tbody></table></div>
   {% else %}<p class="stale">最近一次沒有符合全部條件的股票。</p>{% endif %}
 
@@ -184,12 +184,12 @@
     {% if ai.fetch.talks and ai.fetch.talks.stopped and '簡報網站' in ai.fetch.talks.stopped %}<br><b>這一趟下載不到法說簡報</b>（公開資訊觀測站擋下這台主機的連線）：沒有簡報的法說只能用公司公告文字以規則讀，摘要欄顯示公司公告；之後下載得到時會自動重讀（120 天內）。{% endif %}</p>
   {% if ai.turns %}
   <div class="scroll"><table class="ai-t">
-    <thead><tr><th>代號</th><th>名稱</th><th>法說日</th><th>轉折</th><th class="num">分數</th><th>讀法</th><th>摘要</th></tr></thead>
+    <thead><tr><th>代號</th><th>名稱</th><th>法說日</th><th>轉折</th><th class="num">分數</th><th>讀法</th><th>為什麼是這個轉折／摘要</th></tr></thead>
     <tbody>{% for x in ai.turns[:30] %}
       <tr><td>{{ sl(x.code, x.code) }}</td><td>{{ sl(x.code, x.name) }}</td><td>{{ x.date }}</td>
         <td class="{{ 'down' if x.kind == '負轉折' else ('up' if x.kind == '正轉折' else 'muted') }}">{{ x.kind }}{% if not x.prev_date %}<span class="muted">（第一次，沒有可比）</span>{% endif %}</td>
         <td class="num">{{ '%+.1f'|format(x.score) }}</td><td class="muted">{{ 'LLM' if x.method == 'llm' else ('規則（無簡報）' if x.src == 'summary' else '規則') }}</td>
-        <td class="ai-reasons">{% if x.summary %}{{ x.summary }}{% elif x.highlights %}{{ '；'.join(x.highlights) }}{% elif x.note %}<span class="muted">公司公告：</span>{{ x.note|truncate(90, True, '…') }}{% else %}—{% endif %}</td></tr>
+        <td class="ai-reasons">{% if x.why %}<div class="ai-turnwhy {{ 'down' if x.kind == '負轉折' else ('up' if x.kind == '正轉折' else '') }}">{{ x.why }}</div>{% endif %}{% if x.summary %}<div>{{ x.summary }}</div>{% elif x.highlights %}<div>{{ '；'.join(x.highlights) }}</div>{% elif x.note %}<div><span class="muted">公司公告：</span>{{ x.note|truncate(90, True, '…') }}</div>{% elif not x.why %}—{% endif %}</td></tr>
     {% endfor %}</tbody></table></div>
   {% else %}
   <p class="muted">還沒有資料：法說會簡報從 <code>twsix aipick-fetch</code> 第一次跑的那天開始累積。</p>
@@ -213,7 +213,7 @@
         <td class="muted">{{ c.industry }}</td><td class="num"><b>{{ c.score_txt }}</b></td>
         <td class="num">{{ c.close }}<a class="yf" href="{{ yahoo_ta(c.code, c.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ c.code }} Yahoo 技術分析"></a></td><td class="num {{ c.ret20_tone }}">{{ c.ret20_txt }}</td>
         <td class="num muted">{{ c.ind_txt }}</td><td class="num">{{ c.six_txt }}</td>
-        <td class="{{ c.turn_tone }}">{{ c.turn_txt or '—' }}</td>
+        <td class="{{ c.turn_tone }}"{% if c.turn_why %} title="{{ c.turn_why }}"{% endif %}>{{ c.turn_txt or '—' }}{% if c.turn_why %}<div class="ai-turnwhy-s">{{ c.turn_why|truncate(60, True, '…') }}</div>{% endif %}</td>
         <td class="ai-reasons">{{ c.reasons|join('；') }}</td></tr>
     {% endfor %}</tbody></table></div>
   {% else %}<p class="stale">這一週沒有同時符合全部條件的股票。</p>{% endif %}
@@ -304,7 +304,7 @@
         <td><span class="ai-s ai-s-{{ p.strategy or 'D' }}">{{ p.label }}</span></td><td>{{ p.entry_date }}</td>
         <td class="num">{{ p.entry_price }}</td><td class="num">{{ p.price }}<a class="yf" href="{{ yahoo_ta(p.code, p.market or '') }}" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="{{ p.code }} Yahoo 技術分析"></a></td>
         <td class="num {{ p.ret_tone }}">{{ p.ret_txt }}</td><td class="num">{{ '%.2f'|format(p.stop) }}</td>
-        <td>{% if p.turn %}{{ p.turn.kind }}（{{ '%+.1f'|format(p.turn.score) }}）{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td{% if p.turn and p.turn.why %} title="{{ p.turn.why }}"{% endif %}>{% if p.turn %}{{ p.turn.kind }}（{{ '%+.1f'|format(p.turn.score) }}）{% if p.turn.why %}<div class="ai-turnwhy-s">{{ p.turn.why|truncate(60, True, '…') }}</div>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
         <td class="ai-reasons">{{ p.reason }}</td></tr>
     {% endfor %}</tbody></table></div>
   {% else %}

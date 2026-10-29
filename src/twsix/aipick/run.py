@@ -147,7 +147,7 @@ def _turn_json(t: TK.Turn | None) -> dict | None:
     return {"date": t.date, "prev_date": t.prev_date, "method": t.method, "score": t.score,
             "kind": t.kind, "level": t.level, "summary": t.summary,
             "highlights": t.highlights, "risks": t.risks, "file": t.file,
-            "note": t.note, "src": t.src}
+            "note": t.note, "src": t.src, "why": t.why}
 
 
 def _neighbors_json(ctx: Context, code: str, nb) -> list[dict]:

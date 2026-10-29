@@ -896,3 +896,33 @@ def test_法說簡報被擋_改用公告摘要_之後重讀_摘要欄有公司�
     st = TK.process(root, None, priority=[], today=date(2026, 10, 29), get=lambda u: b"%PDF-1.4 not really")
     assert st["processed"] == 0 and st["pdf"] == 5, "隔天重新下載；PDF 讀不出字就維持原樣"
     assert TK.is_block_page(block) and not TK.is_block_page(b"%PDF-1.5")
+
+
+def test_法說轉折說得出原因():
+    from twsix.aipick import talks as TK
+    base = {"code": "1101", "name": "x", "file": "a.pdf", "source": "pdf", "processed": "2026-01-01"}
+    llm0 = {"revenue_outlook": 0, "margin_outlook": 0, "capex": 0, "utilization": None, "new_business": False,
+            "tone": 0, "hedging": 0.2, "highlights": ["舊亮點"], "risks": [], "summary": ""}
+    llm1 = dict(llm0, revenue_outlook=-2, tone=-1, capex=-1, risks=["客戶砍單"], highlights=["新廠"])
+    a = dict(base, date="2026-01-01", llm=llm0, rules=TK.rule_features("成長"))
+    b = dict(base, date="2026-04-01", file="b.pdf", llm=llm1, rules=TK.rule_features("衰退"))
+    t = TK.TalkBook({"a": a, "b": b}).latest("1101", "2026-12-31")
+    assert t.kind == "負轉折"
+    assert "營收展望 持平→大幅衰退（-2）" in t.why and "整體口氣 中性→保守（-1）" in t.why
+    assert "資本支出 維持→下修" in t.why and "主要風險：客戶砍單" in t.why
+    assert "毛利率" not in t.why, "沒變的項目不用寫"
+    r0 = dict(base, date="2026-01-01", rules=TK.rule_features("成長 成長 新高 衰退"))
+    r1 = dict(base, date="2026-04-01", file="b.pdf",
+              rules=TK.rule_features("衰退 衰退 下滑 保守 成長"))
+    t2 = TK.TalkBook({"a": r0, "b": r1}).latest("1101", "2026-12-31")
+    assert t2.method == "rules" and t2.kind == "負轉折", t2
+    assert "正面詞 3→1 次、負面詞 1→4 次" in t2.why and "負面詞 衰退×2、下滑×1、保守×1" in t2.why
+    s1 = dict(base, date="2026-07-01", file="c.pdf", source="summary", rules=TK.rule_features(""))
+    s2 = dict(base, date="2026-08-01", file="d.pdf", rules=TK.rule_features("成長 " * 60))
+    t3 = TK.TalkBook({"a": s1, "b": s2}).latest("1101", "2026-12-31")
+    assert t3.kind == "持平" and t3.score == 0, "只有公告 vs 讀到簡報：字數差太多，不能拿來算轉折"
+    assert t3.why.startswith("沒有上一次讀到簡報的法說可比")
+    t4 = TK.TalkBook({"a": s1}).latest("1101", "2026-12-31")
+    assert "只讀到公司公告文字" in t4.why and "也只有公告" in t4.why
+    first = TK.TalkBook({"a": a}).latest("1101", "2026-12-31")
+    assert first.why.startswith("第一次") and "營收展望持平" in first.why
