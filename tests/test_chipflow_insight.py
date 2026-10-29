@@ -172,7 +172,7 @@ def test_基本面與籌碼概況_文字與重點標籤():
     assert "大戶比例近半年高點" in flags and "外資投信 60 日買超" in flags, flags
     assert "總股東人數半年減少 6%" in flags, flags
     keys = [x["k"] for x in out["fund"]] + [x["k"] for x in out["chip"]]
-    assert keys == ["月營收", "EPS", "營業利益率與營業利益", "資本支出與合約負債", "大戶比例", "總股東人數",
+    assert keys == ["月營收", "EPS", "營業利益率與營業利益", "資本支出與近 5 年合約負債", "大戶比例", "總股東人數",
                     "外資＋投信買賣超 ÷ 資本額（60 日累計）", "成交金額占全市場（20 日累計）", "買盤比例 − 賣盤比例（60 日）"]
     sheet = out["fund"][3]
     assert "近四季資本支出" in sheet["head"] and '<b class="cfi-big">8</b>' in sheet["head"], "近四季 200×4 百萬 = 8 億"
@@ -183,6 +183,9 @@ def test_基本面與籌碼概況_文字與重點標籤():
     assert "高於半年平均" in text, "1.5 倍 ÷ 平均約 1.004 倍 ≥ 1.2"
     assert 'class="cfi-col f"' in out["html"] and 'class="cfi-col c"' in out["html"]
     assert "不含任何分析意見" in out["html"]
+    assert "近 8 季單季 EPS（舊→新，元）" in text and "近 8 季營業利益率（舊→新）" in text
+    assert 'class="cfi-seq"' in text and '<i aria-hidden="true">→</i><b class="cfi-up">' in text
+    assert "最近 5 個「四季」期間（共 20 季）" in text and "紅色代表數值上升" in out["html"]
     s = re.search(r"近 6 個月月均營收較前 6 個月 <b class=\"cfi-up\">\+([\d.]+)%</b>", text)
     rev = _stock_doc()["fm"]["rev"]
     want = (sum(rev[-6:]) / sum(rev[-12:-6]) - 1) * 100

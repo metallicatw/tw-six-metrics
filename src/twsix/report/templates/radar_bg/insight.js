@@ -20,6 +20,15 @@ var CFI = (function(){
   function pct(a, b){ return nn(a) && nn(b) && b > 0 ? (a - b) / b * 100 : null; }
   function mlab(s){ return String(s).replace("-", "/"); }
   function rev(a){ return (a || []).slice().reverse(); }
+  // 一串數字（舊→新）：每個數字跟前一個比，上升紅、下降綠（不代表好壞）
+  function seq(vals, fmt, n){
+    var v = []; for (var i = Math.min(n - 1, vals.length - 1); i >= 0; i--) if (nn(vals[i])) v.push(vals[i]);
+    if (v.length < 4) return "";
+    return '<span class="cfi-seq">' + v.map(function(x, i){
+      var k = i === 0 ? "" : x > v[i - 1] ? "cfi-up" : x < v[i - 1] ? "cfi-dn" : "";
+      return (i ? '<i aria-hidden="true">→</i>' : "") + '<b' + (k ? ' class="' + k + '"' : "") + ">" + fmt(x) + "</b>";
+    }).join("") + "</span>";
+  }
 
   function pos(lo, hi, v){
     var p = hi === lo ? 0.5 : (v - lo) / (hi - lo);
@@ -101,7 +110,7 @@ var CFI = (function(){
     if (!nn(rm[0])) return null;
     var L = [], head = '<b class="cfi-big">' + yi(rm[0]) + "</b> 億元" + (nn(ry[0]) ? "　年增 " + chip(ry[0], 1, "%") : "");
     var prev = [];
-    for (var i = 1; i <= 3; i++) if (nn(ry[i])) prev.push(ml[i] + " " + sgn(ry[i], 1, "%"));
+    for (var i = 1; i <= 3; i++) if (nn(ry[i])) prev.push(ml[i] + " " + chip(ry[i], 1, "%"));
     if (prev.length) L.push("前三個月年增率：" + prev.join("、"));
     var run = 0; while (run < ry.length && nn(ry[run]) && ry[run] > 0) run++;
     if (run >= 2){ L.push("單月年增率連續 <b>" + run + "</b> 個月為正"); out.flags.push({t: "營收連 " + run + " 月年增", k: "up"}); }
@@ -125,7 +134,7 @@ var CFI = (function(){
       var t = "近 12 個月（" + ml[11] + "～" + ml[0] + "）有 <b>" + pos_ + "</b>／" + ok.length + " 個月年增為正";
       if (ok.length){
         var iMax = yv.indexOf(Math.max.apply(null, ok)), iMin = yv.indexOf(Math.min.apply(null, ok));
-        t += "；年增率最高 " + sgn(yv[iMax], 1, "%") + "（" + ml[iMax] + "）、最低 " + sgn(yv[iMin], 1, "%") + "（" + ml[iMin] + "）";
+        t += "；年增率最高 " + chip(yv[iMax], 1, "%") + "（" + ml[iMax] + "）、最低 " + chip(yv[iMin], 1, "%") + "（" + ml[iMin] + "）";
       }
       L.push(t);
       var p12 = rm.slice(12, 24);
@@ -161,13 +170,17 @@ var CFI = (function(){
       if (h){ L.push(h.text); out.flags.push({t: h.flag.replace("近四季累計 EPS ", "累計 EPS "), k: "up"}); }
     }
     var yy = [];
-    for (var q = 0; q < 4; q++){ var yq = pct(e4[q], e4[q + 4]); if (yq !== null) yy.push(ql[q] + " " + sgn(yq, 1, "%")); }
+    for (var q = 0; q < 4; q++){ var yq = pct(e4[q], e4[q + 4]); if (yq !== null) yy.push(ql[q] + " " + chip(yq, 1, "%")); }
     if (yy.length){
       var y0 = pct(e4[0], e4[4]), y3 = pct(e4[3], e4[7]);
       L.push("累計 EPS 年增率逐季（新→舊）：" + yy.join("、") + (y0 !== null && y3 !== null ? (y0 - y3 > 3 ? "；比三季前高" : y0 - y3 < -3 ? "；比三季前低" : "；與三季前相近") : ""));
     }
     var run = 0; while (run < 8 && nn(eq[run]) && nn(eq[run + 4]) && eq[run] > eq[run + 4]) run++;
     if (run >= 2){ L.push("單季 EPS 連續 <b>" + run + "</b> 季高於去年同季"); out.flags.push({t: "EPS 連 " + run + " 季年增", k: "up"}); }
+    var sq = seq(eq, function(v){ return fx(v, 2); }, 8);
+    if (sq) L.push("近 " + Math.min(8, clean(eq.slice(0, 8)).length) + " 季單季 EPS（舊→新，元）：" + sq);
+    var s4 = seq(e4, function(v){ return fx(v, 2); }, 8);
+    if (s4) L.push("近 " + Math.min(8, clean(e4.slice(0, 8)).length) + " 季四季累計 EPS（舊→新，元）：" + s4);
     return {k: "EPS", sub: ql[0], head: head, spark: spark(rev(eq.slice(0, 8)), {bar: true}), lines: L, note: "圖：近 8 季單季 EPS"};
   }
 
@@ -178,13 +191,13 @@ var CFI = (function(){
     if (nn(op[0])){
       head = '<b class="cfi-big">' + fx(op[0], 1) + "%</b>";
       var parts = [];
-      if (nn(op[1])) parts.push("較上一季 " + chip(op[0] - op[1], 1, " 個百分點"));
-      if (nn(op[4])) parts.push("較去年同季 " + chip(op[0] - op[4], 1, " 個百分點"));
+      if (nn(op[1])) parts.push("上一季 " + fx(op[1], 1) + "%（" + chip(op[0] - op[1], 1, " 個百分點") + "）");
+      if (nn(op[4])) parts.push("去年同季 " + fx(op[4], 1) + "%（" + chip(op[0] - op[4], 1, " 個百分點") + "）");
       if (parts.length) L.push(parts.join("，"));
       var a = clean(op.slice(0, 4)), b = clean(op.slice(4, 8));
       if (a.length === 4 && b.length === 4){
         var dd = avg(a) - avg(b);
-        L.push("近四季平均 " + fx(avg(a), 1) + "%，前四季平均 " + fx(avg(b), 1) + "%（" + (dd > 0.3 ? "高於前四季" : dd < -0.3 ? "低於前四季" : "大致持平") + "）");
+        L.push("近四季平均 " + fx(avg(a), 1) + "%，前四季平均 " + fx(avg(b), 1) + "%，相差 " + chip(dd, 1, " 個百分點") + "（" + (dd > 0.3 ? "高於前四季" : dd < -0.3 ? "低於前四季" : "大致持平") + "）");
       }
       var h = hiFlag(op, ql, "營業利益率", function(v){ return fx(v, 1) + "%"; }, 8, "季");
       if (h){ L.push(h.text); out.flags.push({t: h.flag.replace("營業利益率", "營益率"), k: "up"}); }
@@ -193,7 +206,7 @@ var CFI = (function(){
       var y0 = nn(oy[0]) ? oy[0] : pct(oi[0], oi[4]);
       L.push("營業利益 <b>" + yi(oi[0]) + "</b> 億元" + (nn(y0) ? "，年增 " + chip(y0, 1, "%") : ""));
       var ys = [];
-      for (var q = 1; q < 4; q++){ var yq = nn(oy[q]) ? oy[q] : pct(oi[q], oi[q + 4]); if (nn(yq)) ys.push(ql[q] + " " + sgn(yq, 1, "%")); }
+      for (var q = 1; q < 4; q++){ var yq = nn(oy[q]) ? oy[q] : pct(oi[q], oi[q + 4]); if (nn(yq)) ys.push(ql[q] + " " + chip(yq, 1, "%")); }
       if (ys.length) L.push("前三季營業利益年增率：" + ys.join("、"));
       var c4 = oi.slice(0, 4), p4 = oi.slice(4, 8);
       if (c4.length === 4 && p4.length === 4 && c4.every(nn) && p4.every(nn) && sum(p4) > 0){
@@ -204,6 +217,10 @@ var CFI = (function(){
         if (h2) L.push(h2.text);
       }
     }
+    var so = seq(op, function(v){ return fx(v, 1) + "%"; }, 8);
+    if (so) L.push("近 " + Math.min(8, clean(op.slice(0, 8)).length) + " 季營業利益率（舊→新）：" + so);
+    var si = seq(oi, function(v){ return yi(v); }, 8);
+    if (si) L.push("近 " + Math.min(8, clean(oi.slice(0, 8)).length) + " 季營業利益（舊→新，億元）：" + si);
     return {k: "營業利益率與營業利益", sub: ql[0], head: head || '<b class="cfi-big">' + yi(oi[0]) + "</b> 億元", spark: spark(rev(op.slice(0, 8))), lines: L, note: "圖：近 8 季營業利益率"};
   }
 
@@ -216,23 +233,23 @@ var CFI = (function(){
       rows.push({label: i === 0 ? "近四季" : i === 1 ? "前四季" : "前第 " + i + " 個四季", span: ql[st + 3] + "～" + ql[st],
         cx: w.length === 4 && w.every(nn) ? sum(w) : null, cl: nn(cl[st]) ? cl[st] : null});
     }
-    while (rows.length && rows[rows.length - 1].cx === null && rows[rows.length - 1].cl === null) rows.pop();
-    if (!rows.length) return {k: "資本支出與合約負債", sub: "", head: '<span class="cfi-soft">尚無個股季報資料</span>', lines: ["本站的個股季報（存貨、合約負債、資本支出）從開始存檔的季別起逐季累積，最多保留 20 季。"]};
-    var L = [], first = rows[0], second = rows[1];
+    if (!rows.length || rows.every(function(x){ return x.cx === null && x.cl === null; })) return {k: "資本支出與近 5 年合約負債", sub: "", head: '<span class="cfi-soft">尚無個股季報資料</span>', lines: ["本站的個股季報（存貨、合約負債、資本支出）從開始存檔的季別起逐季累積，最多保留 20 季。"]};
+    var L = ["最近 5 個「四季」期間（共 20 季）：每期的資本支出四季合計，以及期間末的合約負債餘額"], first = rows[0], second = rows[1];
     var head = first.cx !== null ? '<b class="cfi-big">' + yi(first.cx) + "</b> 億元<span class=\"cfi-soft\">（近四季資本支出）</span>" : '<span class="cfi-soft">資本支出資料不足四季</span>';
     if (first.cx !== null && second && second.cx !== null) L.push("近四季資本支出較前四季 " + chip(pct(first.cx, second.cx), 0, "%"));
-    var last = rows[rows.length - 1];
-    if (rows.length >= 3 && last.cx) L.push("約為 " + last.label + "（" + last.span + "）的 " + fx(first.cx / last.cx, 1) + " 倍");
+    var withCx = rows.filter(function(x){ return x.cx !== null; }), last = withCx[withCx.length - 1];
+    if (withCx.length >= 3 && last.cx) L.push("約為 " + last.label + "（" + last.span + "）的 " + fx(first.cx / last.cx, 1) + " 倍");
     var cls = rows.map(function(x){ return x.cl; }), okCl = clean(cls), anyCl = okCl.some(function(v){ return v; });
     if (!okCl.length) L.push("合約負債：資料未取得");
     else if (!anyCl) L.push("合約負債：取得的期別都是 0（來源資料無法分辨實際為零或公司未揭露此科目）");
     else if (first.cl !== null){
       var t = "合約負債最新期末餘額 <b>" + yi(first.cl) + "</b> 億元";
       if (second && second.cl !== null && second.cl > 0) t += "，較一年前 " + chip(pct(first.cl, second.cl), 0, "%");
-      if (okCl.length >= 3 && first.cl >= Math.max.apply(null, okCl)) t += '，<span class="cfi-flag">為取得期別中最高</span>';
+      if (okCl.length >= 3 && first.cl >= Math.max.apply(null, okCl)) t += '，<span class="cfi-flag">為' + (okCl.length >= 5 ? "近五年" : "取得期別中") + '期末餘額最高</span>';
       L.push(t);
     }
-    if (F.sheetQ < 20) L.push('<span class="cfi-soft">本站個股季報目前累積 ' + F.sheetQ + " 季（逐季增加，最多 20 季），較早的期別以「–」表示。</span>");
+    var miss = rows.filter(function(x){ return x.cl === null; }).length;
+    if (miss && okCl.length) L.push('<span class="cfi-soft">合約負債有 ' + miss + " 個期間資料未取得（以「–」表示）：本站個股季報目前累積 " + F.sheetQ + " 季，逐季增加到 20 季。</span>");
     var mxC = Math.max.apply(null, rows.map(function(x){ return x.cx || 0; })) || 1, mxL = Math.max.apply(null, rows.map(function(x){ return x.cl || 0; })) || 1;
     var tb = '<table class="cfi-tbl"><thead><tr><th>期間</th><th>資本支出<br>（四季合計，億）</th><th>合約負債<br>（期末，億）</th></tr></thead><tbody>';
     rows.forEach(function(x){
@@ -241,7 +258,7 @@ var CFI = (function(){
         '<td class="n">' + (x.cl === null ? "–" : '<span class="cfi-bar b" style="--w:' + Math.max(3, x.cl / mxL * 100).toFixed(0) + '%"></span>' + yi(x.cl)) + "</td></tr>";
     });
     tb += "</tbody></table>";
-    return {k: "資本支出與合約負債", sub: "四季為一期", head: head, lines: L, table: tb, tlabel: "看各期數字", openTable: true};
+    return {k: "資本支出與近 5 年合約負債", sub: "四季為一期", head: head, lines: L, table: tb, tlabel: "看各期數字", openTable: true};
   }
 
   function span(C){ var d = C.dates; return d.length ? mlab(d[0].slice(5)) + "～" + mlab(d[d.length - 1].slice(5)) : ""; }
@@ -273,7 +290,7 @@ var CFI = (function(){
     var a = C.z, i1 = lastIdx(a);
     if (i1 < 0) return null;
     var ok = clean(a), lo = Math.min.apply(null, ok), hi = Math.max.apply(null, ok), v = a[i1], p = pos(lo, hi, v);
-    var L = ["近 60 日合計為" + (v > 0 ? "<b>買超</b>" : v < 0 ? "<b>賣超</b>" : "持平") + "；半年區間 " + sgn(lo, 2, "%") + " ～ " + sgn(hi, 2, "%") + "，" + p.t];
+    var L = ["近 60 日合計為" + (v > 0 ? '<b class="cfi-up">買超</b>' : v < 0 ? '<b class="cfi-dn">賣超</b>' : "持平") + "；半年區間 " + chip(lo, 2, "%") + " ～ " + chip(hi, 2, "%") + "，" + p.t];
     out.flags.push({t: "外資投信 60 日" + (v > 0 ? "買超" : v < 0 ? "賣超" : "持平"), k: tone(v)});
     if (i1 >= 20 && nn(a[i1 - 20])){
       var c = v - a[i1 - 20];
@@ -304,8 +321,8 @@ var CFI = (function(){
     if (j < 0) return null;
     var g2 = g[j], f2 = 60 - g2, df = 2 * g2 - 60, ok = clean(C.diff), mean = avg(ok);
     var posPct = ok.length ? ok.filter(function(v){ return v > 0; }).length / ok.length * 100 : null;
-    var L = ["買盤比例合計 <b>" + fx(g2, 1) + "</b>、賣盤比例合計 <b>" + fx(f2, 1) + "</b>（" + (Math.abs(df) < 1 ? "兩者接近" : df > 0 ? "買盤較多" : "賣盤較多") + "）"];
-    if (mean !== null) L.push("半年內差值平均 " + sgn(mean, 2) + "，" + fx(posPct, 0) + "% 的交易日為正");
+    var L = ['買盤比例合計 <b class="cfi-up">' + fx(g2, 1) + '</b>、賣盤比例合計 <b class="cfi-dn">' + fx(f2, 1) + "</b>（" + (Math.abs(df) < 1 ? "兩者接近" : df > 0 ? "買盤較多" : "賣盤較多") + "）"];
+    if (mean !== null) L.push("半年內差值平均 " + chip(mean, 2) + "，" + fx(posPct, 0) + "% 的交易日為正（買盤較多）");
     var k = lastIdx(C.g20);
     if (k >= 0) L.push("近 20 日買盤減賣盤 " + chip(2 * C.g20[k] - 20, 2));
     if (Math.abs(df) >= 1) out.flags.push({t: "60 日" + (df > 0 ? "買盤" : "賣盤") + "比例較高", k: df > 0 ? "up" : "dn"});
@@ -327,7 +344,7 @@ var CFI = (function(){
     return h + "</section>";
   }
 
-  var NOTE = "以上文字由程式依公開資料自動整理，只描述特定期間的數值與變化，不含任何分析意見、預測或買賣建議；財報數字以公開資訊觀測站公告為準。金額單位：新台幣億元。";
+  var NOTE = "紅色代表數值上升（或為正）、綠色代表數值下降（或為負），不代表好壞。以上文字由程式依公開資料自動整理，只描述特定期間的數值與變化，不含任何分析意見、預測或買賣建議；財報數字以公開資訊觀測站公告為準。金額單位：新台幣億元。";
   function bodyHtml(B, wide){
     var flags = B.flags.length ? '<div class="cfi-flags" aria-label="重點">' + B.flags.map(function(f){ return '<span class="cfi-tag ' + f.k + '">' + esc(f.t) + "</span>"; }).join("") + "</div>" : "";
     var f = B.fund.length ? B.fund.map(function(x){ return secHtml(x, wide); }).join("") : '<p class="cfi-soft">查無這一檔的財報與月營收資料（金融股、新上市櫃或 KY 股可能缺）。</p>';
