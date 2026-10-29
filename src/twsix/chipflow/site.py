@@ -56,6 +56,8 @@ def _stamp_key(data_dir: Path) -> dict[str, str]:
         "levels": str(len(list((data_dir / "ownership" / "levels").glob("*.csv.gz")))),
         "chain": str(ic_chain_fetched(data_dir)),
         "notes": str((data_dir / NOTES_HISTORY).stat().st_size) if (data_dir / NOTES_HISTORY).exists() else "",
+        "clh": str((data_dir / "market" / "contract_liab.csv").stat().st_size)
+        if (data_dir / "market" / "contract_liab.csv").exists() else "",
         "version": "8",
     }
 

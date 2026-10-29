@@ -277,6 +277,11 @@ def load_sheet_quarters(data_dir: Path, codes: set[str]) -> dict[str, dict[str, 
     out: dict[str, dict[str, dict[str, float]]] = {}
     if not root.is_dir():
         return out
+    from ..ingest.cl_history import (  # noqa: PLC0415 - 較早季別的合約負債（一次性回補）
+        FILE,
+        read,
+    )
+    hist = read(data_dir / FILE)
     for code in codes:
         bs = _sheet_rows(_sheet(root / code / "BSQ.json.gz"), {
             "inv": ("存貨",),
@@ -291,6 +296,10 @@ def load_sheet_quarters(data_dir: Path, codes: set[str]) -> dict[str, dict[str, 
             d = {**bs.get(lb, {}), **cf.get(lb, {})}
             if d:
                 merged[lb] = d
+        for q, v in hist.get(code, {}).items():
+            lb = f"{q[:4]}.{q[-1]}Q"
+            if "cl" not in merged.get(lb, {}):
+                merged.setdefault(lb, {})["cl"] = v
         if merged:
             out[code] = merged
     return out

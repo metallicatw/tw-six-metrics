@@ -2106,6 +2106,26 @@ def cmd_fetch_revenue_early(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_backfill_cl(args: argparse.Namespace) -> int:
+    settings = Settings.load(args.config)
+    from .ingest import cl_history as CH  # noqa: PLC0415
+
+    data = Path(args.data or settings.data_dir)
+    out = Path(args.out) if args.out else data / CH.FILE
+    codes = [c.strip() for c in args.codes.split(",") if c.strip()] if args.codes else CH.candidates(data)
+    if not codes:
+        print("合約負債回補：找不到要補的個股（data/sheets 底下沒有資產負債表）")
+        return EXIT_OK
+    r = CH.backfill(out, codes, today=datetime.now(_TAIPEI).date(), minutes=args.minutes,
+                    pause=args.pause)
+    print(f"合約負債回補：{r['stocks']} 檔、這一趟查 {r['asked']} 次、新增 {r['added']} 個期別；"
+          f"進度 {r['done']}／{r['total']}" + ("，全部補完" if r["left"] <= 0 else f"，還剩 {r['left']} 次"))
+    if r["stopped"]:
+        print(("::warning::" if "擋" in r["stopped"] else "") + r["stopped"])
+    print(f"  寫入 {out}")
+    return EXIT_OK
+
+
 def cmd_backfill_qfii(args: argparse.Namespace) -> int:
     from datetime import timedelta  # noqa: PLC0415
 
@@ -3364,6 +3384,17 @@ def build_parser() -> argparse.ArgumentParser:
     br.add_argument("--force", action="store_true", help="官方月報已經有了也照抓")
     br.add_argument("--out", help="資料目錄")
     br.set_defaults(func=cmd_fetch_revenue_early)
+
+    bcl = sub.add_parser(
+        "backfill-cl",
+        help="回補較早季別的合約負債（公開資訊觀測站；要在家裡的網路跑，可中斷續跑）",
+    )
+    bcl.add_argument("--data", help="資料目錄（讀 sheets/ 找要補的個股）")
+    bcl.add_argument("--out", help="寫到哪個 CSV（預設 data/market/contract_liab.csv）")
+    bcl.add_argument("--codes", help="只補這幾檔（逗號分隔）")
+    bcl.add_argument("--minutes", type=float, default=40.0, help="這一趟最多跑幾分鐘（預設 40）")
+    bcl.add_argument("--pause", type=float, default=2.5, help="每次查詢之間至少停幾秒（預設 2.5）")
+    bcl.set_defaults(func=cmd_backfill_cl)
 
     bq = sub.add_parser(
         "backfill-qfii",
