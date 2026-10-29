@@ -234,3 +234,14 @@ def test_月營收說明_歷史檔與官方月檔合併_官方優先():
     (root / "market" / "twse_revenue" / "11507.csv").write_text("公司代號,資料年月,備註\n2330,11507,官方\n", encoding="utf-8")
     n = load_revenue_notes(root)
     assert n["2330"] == {"2026-06": "舊說明", "2026-07": "官方"} and "1101" not in n
+
+
+def test_個股三個工具可以互相切換():
+    base = Path(__file__).resolve().parents[1] / "src/twsix/report/templates"
+    for n in (1, 2, 3):
+        html = (base / f"radar_bg/t{n}.html").read_text(encoding="utf-8")
+        assert f'id="m{n}-jumps"' in html, f"t{n} 沒有切換按鈕的位置"
+    api = (base / "radar_bg/api.js").read_text(encoding="utf-8")
+    assert "function bgJumps(" in api and "bgJumps(code, panel.id.slice(3))" in api
+    page = (base / "radar.html.j2").read_text(encoding="utf-8")
+    assert 'closest(".bgm button.bg-jump")' in page and ".bg-jump[data-jump={{ k }}]" in page

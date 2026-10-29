@@ -28,9 +28,9 @@ window.CF_V = "@@CFV@@";
   ('t7','#b25a00','#ffa94d'),('t8','#a61e4d','#faa2c1'),('t9','#5c7c00','#a9e34b'),
   ('t10','#087f5b','#38d9a9'),('t11','#862e9c','#e599f7'),('t12','#364fc7','#91a7ff'),
   ('t13','#9c6500','#ffc94d'),('t14','#5f3dc4','#d0bfff'),('picks','#c92a2a','#ff8787'),('val','#7a5230','#e0b084'),('guide','#2f4b7c','#8fb0e8'),('about','#495057','#adb5bd')] %}
-{% for k, c, d in cf_colors %}.cf-tab[data-t={{ k }}],#cf-{{ k }}{--tc:{{ c }}}
+{% for k, c, d in cf_colors %}.cf-tab[data-t={{ k }}],#cf-{{ k }},#cf .bg-jump[data-jump={{ k }}]{--tc:{{ c }}}
 {% endfor %}@media (prefers-color-scheme:dark){
-{% for k, c, d in cf_colors %}  :root:not([data-theme=light]) .cf-tab[data-t={{ k }}],:root:not([data-theme=light]) #cf-{{ k }}{--tc:{{ d }}}
+{% for k, c, d in cf_colors %}  :root:not([data-theme=light]) .cf-tab[data-t={{ k }}],:root:not([data-theme=light]) #cf-{{ k }},:root:not([data-theme=light]) #cf .bg-jump[data-jump={{ k }}]{--tc:{{ d }}}
 {% endfor %}  :root:not([data-theme=light]) .cf-tab[aria-selected=true]{color:var(--ground)}
 }
 {% for k, c, d in cf_colors %}:root[data-theme=dark] .cf-tab[data-t={{ k }}],:root[data-theme=dark] #cf-{{ k }}{--tc:{{ d }}}
@@ -811,6 +811,15 @@ function init(){
     e.stopPropagation();
     if (a.classList.contains("bg-t1")){ e.preventDefault(); var p = a.getAttribute("href").slice(4).split("-"); toT1(p[0], p[1] || null); }
   }, true);
+  $("cf").addEventListener("click", function(e){
+    var j = e.target.closest && e.target.closest(".bgm button.bg-jump");
+    if (!j) return;
+    var code = j.getAttribute("data-code"), tab = j.getAttribute("data-jump");
+    if (!code || !ROWS[code]) return;
+    open(tab, code);
+    var top = $("cf-tabs").getBoundingClientRect().top + window.pageYOffset - 10;
+    if (window.pageYOffset > top) window.scrollTo(0, Math.max(0, top));
+  });
   document.querySelectorAll(".cf-tab").forEach(function(b){ b.addEventListener("click", function(){ open(b.getAttribute("data-t")); }); });
   var h = (location.hash || "").replace("#", "").split("-");
   var tab = h[0] && document.querySelector('.cf-tab[data-t="' + h[0] + '"]') ? h[0] : "picks";

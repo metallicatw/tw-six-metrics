@@ -28,8 +28,20 @@ function bgDecorate(code, codeEl, nameEl, after){
     '<button type="button" class="star bg-star bg-deco" data-star="' + bgAttr(code) + '" aria-pressed="false" title="加入觀察清單">☆</button>' +
     '<button type="button" class="bg-ins bg-ins-l bg-deco" data-ins="' + bgAttr(code) + '" title="開啟基本面與籌碼概況面板">' + BG_INS_ICON + ' 概況</button>';
   after.insertAdjacentHTML("afterend", html);
+  var panel = host.closest && host.closest(".cf-panel");
+  if (panel) bgJumps(code, panel.id.slice(3));
   var star = host.querySelector("button.bg-star");
   if (star && typeof TWSIXWatch !== "undefined") TWSIXWatch.paint(star);
+}
+var BG_JUMPS = [["t1", "① 籌碼多圖", "個股籌碼多圖：股價、法人、大戶、貪婪恐懼"], ["t2", "② 大戶籌碼", "大戶籌碼：大戶比例、集保各級距"], ["t3", "③ 基本面", "基本面：月營收、損益、資本支出"]];
+function bgJumps(code, from){
+  var host = document.getElementById("m" + from.slice(1) + "-jumps");
+  if (!host || !code) return;
+  var name = (ROWS[code] || {}).n || "";
+  host.innerHTML = '<span class="bg-jump-l">切換</span>' + BG_JUMPS.filter(function(t){ return t[0] !== from; }).map(function(t){
+    return '<button type="button" class="bg-jump" data-jump="' + t[0] + '" data-code="' + bgAttr(code) + '" title="' + bgAttr(code + " " + name + " → " + t[2]) + '">' + t[1] + '</button>';
+  }).join("");
+  host.hidden = false;
 }
 CFX.ind = function(c){ var r = ROWS[c]; return r && r.ind ? r.ind : "#N/A"; };
 
