@@ -184,3 +184,9 @@
 {"a":"1312","b":"1310","asked":"2026-10-28","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"國喬與台苯皆為台灣主要的苯乙烯（SM）製造大廠，屬於同業競爭關係。"}
 {"a":"1312","b":"1303","asked":"2026-10-28","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"國喬與南亞同屬石化產業，主要產品包含塑膠原料等，屬於同業競爭關係。"}
 {"a":"1312","b":"1710","asked":"2026-10-28","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"國喬與東聯皆為台灣主要的石化廠，主要產品包含苯乙烯及乙二醇等，屬於同業競爭關係。"}
+{"a":"3518","b":"2340","asked":"2026-10-30","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"柏騰主要從事真空濺鍍表面處理，台亞則為LED及感測元件製造，兩者業務領域不同，無直接供應鏈或集團關係。"}
+{"a":"3518","b":"6423","asked":"2026-10-30","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.2,"note":"柏騰主要從事 PVD 表面處理，億而得為嵌入式矽智財公司，業務無直接上下游關聯。"}
+{"a":"3518","b":"5013","asked":"2026-10-30","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.2,"note":"柏騰主要從事物理氣相沈積(PVD)表面處理，強新則為線材加工廠，二者業務性質不同，無直接上下游或集團關係。"}
+{"a":"2883","b":"2882","asked":"2026-10-30","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"凱基金（2883）與國泰金（2882）皆為台灣上市櫃之金控公司，屬於金融保險業的同業競爭關係。"}
+{"a":"2883","b":"8454","asked":"2026-10-30","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.9,"note":"凱基金與富邦媒皆為台灣知名大型企業集團之核心公司，常被歸類於大型權值股或特定金融/集團題材。"}
+{"a":"2883","b":"5426","asked":"2026-10-30","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.95,"note":"凱基金為金控公司，振發為機殼廠，兩者業務性質不同，無直接業務往來或集團關係。"}
