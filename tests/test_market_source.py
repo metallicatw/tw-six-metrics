@@ -246,6 +246,10 @@ def test_剛下市的不在母體裡_新上市算不出來的換季前不再排(
     tmp = Path(tempfile.mkdtemp())
     for name in ("ratings.csv", "twse_companies.csv", "tpex_companies.csv"):
         shutil.copy(root / name, tmp / name)
+    # 3718 之後真的算出評等了（資料每天在變）：測試裡把它拿掉，模擬「新上市、還沒有評等」
+    rated = (tmp / "ratings.csv").read_text(encoding="utf-8").splitlines(keepends=True)
+    (tmp / "ratings.csv").write_text("".join(ln for ln in rated if not ln.startswith("3718,")),
+                                     encoding="utf-8")
     shutil.copytree(root / "market", tmp / "market")
     md2 = MarketData.load(tmp)
     assert "3718" in cli.new_listings(tmp, md2)
