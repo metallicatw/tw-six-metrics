@@ -166,3 +166,23 @@ def test_財報PDF附註解析_台積電格式_非流動加總_單位與核對()
     assert P.pick(["202402_2330_AI1.pdf", "202402_2330_AIA.pdf"], "2024Q2") == "202402_2330_AI1.pdf"
     assert P.pick(["202404_9999_AI3.pdf"], "2024Q4") == "202404_9999_AI3.pdf"
     assert P.pick(["202401_2330_AI1.pdf"], "2024Q2") is None
+
+
+def test_從另一台機器併進來的期別不再查觀測站_未揭露遇到數字會換成數字():
+    tmp = Path(tempfile.mkdtemp())
+    out = tmp / "cl.csv"
+    CH.write(out, {"2330": {"2024Q2": None, "2023Q4": 52736.4, "2023Q2": 43731.1}})
+    asked = []
+
+    def get(form):
+        asked.append((form["year"], form["season"]))
+        return PAGE
+    CH.backfill(out, ["2330"], today=date(2026, 10, 29), minutes=0, get=get,
+                sleep=lambda s: None, log=lambda m: None, pdf=False)
+    assert ("113", "02") not in asked, "2024Q2 那一季帶回的三個期別都有了，不必再查"
+    assert asked, "其他季別照查"
+    other = tmp / "o.csv"
+    CH.write(other, {"2330": {"2024Q2": 67450.0, "2023Q4": 1.0}})
+    assert CH.merge(out, other) == 1
+    got = CH.read(out)["2330"]
+    assert got["2024Q2"] == 67450.0 and got["2023Q4"] == 52736.4

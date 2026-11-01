@@ -289,9 +289,9 @@ def st_cl(c: Ctx) -> tuple[str, str]:
     before = len(CL.read(out).get(c.code, {}))
     res = _quiet(CL.backfill, out, [c.code], today=c.now().date(), minutes=4.0, pause=2.5,
                  data_dir=c.root)
+    CL.repair_zeros(data_file, c.root)
     if out != data_file:
         CL.merge(data_file, out)
-    CL.repair_zeros(data_file, c.root)
     mine = CL.read(out).get(c.code, {})
     after = len(mine)
     na = sum(1 for v in mine.values() if v is None)

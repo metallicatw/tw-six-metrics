@@ -253,13 +253,15 @@ def repair_zeros(path: Path, data_dir: Path) -> int:
 
 
 def merge(dst: Path, src: Path) -> int:
-    """把 src 的期別併進 dst（dst 已有的不動）。回傳新增筆數。"""
+    """把 src 的期別併進 dst（dst 已有數字的不動）。回傳新增或補上數字的筆數。"""
     a, b = read(dst), read(src)
     n = 0
     for code, qs in b.items():
         for q, v in qs.items():
-            if q not in a.setdefault(code, {}):
-                a[code][q] = v
+            mine = a.setdefault(code, {})
+            # 沒有的補上；「未揭露」（None）遇到另一邊讀到的數字也換成數字
+            if q not in mine or (mine[q] is None and v is not None):
+                mine[q] = v
                 n += 1
     if n:
         write(dst, a)
@@ -364,7 +366,21 @@ def backfill(out: Path, codes: list[str], *, today: date, minutes: float = 40.0,
             log(f"  舊紀錄裡 {fixed} 筆「表上沒有合約負債科目」被記成 0，已改成「未單獨揭露」")
     data = read(out)
     steps = plan(_latest_quarter(today))
-    todo = [(c, q) for q in steps for c in codes if f"{c},{q}" not in done]
+    # 這一季查詢會帶回的期別（當季、去年同季、上一年底）都已經有了（例如從另一台機器併進來），就不必再查
+    known = {c: set(data.get(c, {})) for c in codes}
+    todo, have = [], []
+    for q in steps:
+        for c in codes:
+            if f"{c},{q}" in done:
+                continue
+            if {q, f"{int(q[:4]) - 1}Q{q[-1]}", f"{int(q[:4]) - 1}Q4"} <= known[c]:
+                have.append(f"{c},{q}")
+            else:
+                todo.append((c, q))
+    if have:
+        with open(done_path, "a", encoding="utf-8") as dfh:
+            dfh.write("".join(f"{k}\n" for k in have))
+        done |= set(have)
     total = len(codes) * len(steps)
     t0, asked, got, blocked, stopped = clock(), 0, 0, 0, ""
     with open(done_path, "a", encoding="utf-8") as dfh:
