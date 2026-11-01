@@ -82,7 +82,7 @@ var CFI = (function(){
     (fs.q || []).forEach(function(q, i){ pq[q] = i; });
     var onQ = function(arr){ return ql.map(function(q){ var i = pq[q]; return i == null || !arr ? null : (nn(arr[i]) ? arr[i] : null); }); };
     var F = {ml: rev(fm.m), rm: rev(fm.rev), ry: rev(fm.yoy), ql: ql, eq: rev(fq.eps), e4: rev(fq.eps4),
-      op: rev(fq.opm), oi: rev(fq.op), oy: rev(fq.opy), cx: onQ(fs.capex), cl: onQ(fs.cl), sheetQ: (fs.q || []).length};
+      op: rev(fq.opm), oi: rev(fq.op), oy: rev(fq.opy), cx: onQ(fs.capex), cl: onQ(fs.cl), clna: onQ(fs.cl_na), sheetQ: (fs.q || []).length};
     var n = 0;
     for (var k in d) n = Math.max(n, d[k].length);
     var cut = function(a){ a = a || []; return a.slice(Math.max(0, a.length - DAYS)); };
@@ -231,7 +231,8 @@ var CFI = (function(){
       if (!ql[st + 3]) continue;
       var w = cx.slice(st, st + 4);
       rows.push({label: i === 0 ? "近四季" : i === 1 ? "前四季" : "前第 " + i + " 個四季", span: ql[st + 3] + "～" + ql[st],
-        cx: w.length === 4 && w.every(nn) ? sum(w) : null, cl: nn(cl[st]) ? cl[st] : null});
+        cx: w.length === 4 && w.every(nn) ? sum(w) : null, cl: nn(cl[st]) ? cl[st] : null,
+        na: !nn(cl[st]) && (F.clna || [])[st] === 1});
     }
     if (!rows.length || rows.every(function(x){ return x.cx === null && x.cl === null; })) return {k: "資本支出與近 5 年合約負債", sub: "", head: '<span class="cfi-soft">尚無個股季報資料</span>', lines: ["本站的個股季報（存貨、合約負債、資本支出）從開始存檔的季別起逐季累積，最多保留 20 季。"]};
     var L = ["最近 5 個「四季」期間（共 20 季）：每期的資本支出四季合計，以及期間末的合約負債餘額"], first = rows[0], second = rows[1];
@@ -248,14 +249,16 @@ var CFI = (function(){
       if (okCl.length >= 3 && first.cl >= Math.max.apply(null, okCl)) t += '，<span class="cfi-flag">為' + (okCl.length >= 5 ? "近五年" : "取得期別中") + '期末餘額最高</span>';
       L.push(t);
     }
-    var miss = rows.filter(function(x){ return x.cl === null; }).length;
+    var nas = rows.filter(function(x){ return x.na; }).length;
+    if (nas) L.push('<span class="cfi-soft">合約負債有 ' + nas + " 個期間標「未揭露」：公開資訊觀測站那幾季的資產負債表沒有把合約負債單獨列出（併在「其他流動負債」等科目），查不到單獨的數字，不是 0。本站的券商季報從存檔起逐季累積，之後的期別會補上。</span>");
+    var miss = rows.filter(function(x){ return x.cl === null && !x.na; }).length;
     if (miss && okCl.length) L.push('<span class="cfi-soft">合約負債有 ' + miss + " 個期間資料未取得（以「–」表示）：本站個股季報目前累積 " + F.sheetQ + " 季，逐季增加到 20 季。</span>");
     var mxC = Math.max.apply(null, rows.map(function(x){ return x.cx || 0; })) || 1, mxL = Math.max.apply(null, rows.map(function(x){ return x.cl || 0; })) || 1;
     var tb = '<table class="cfi-tbl"><thead><tr><th>期間</th><th>資本支出<br>（四季合計，億）</th><th>合約負債<br>（期末，億）</th></tr></thead><tbody>';
     rows.forEach(function(x){
       tb += "<tr><td>" + x.label + '<br><span class="cfi-soft">' + x.span + "</span></td>" +
         '<td class="n">' + (x.cx === null ? "–" : '<span class="cfi-bar" style="--w:' + Math.max(3, x.cx / mxC * 100).toFixed(0) + '%"></span>' + yi(x.cx)) + "</td>" +
-        '<td class="n">' + (x.cl === null ? "–" : '<span class="cfi-bar b" style="--w:' + Math.max(3, x.cl / mxL * 100).toFixed(0) + '%"></span>' + yi(x.cl)) + "</td></tr>";
+        '<td class="n">' + (x.cl === null ? (x.na ? '<span class="cfi-soft" title="觀測站的表沒有單獨列出合約負債">未揭露</span>' : "–") : '<span class="cfi-bar b" style="--w:' + Math.max(3, x.cl / mxL * 100).toFixed(0) + '%"></span>' + yi(x.cl)) + "</td></tr>";
     });
     tb += "</tbody></table>";
     return {k: "資本支出與近 5 年合約負債", sub: "四季為一期", head: head, lines: L, table: tb, tlabel: "看各期數字", openTable: true};

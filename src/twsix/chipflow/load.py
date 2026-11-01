@@ -296,9 +296,15 @@ def load_sheet_quarters(data_dir: Path, codes: set[str]) -> dict[str, dict[str, 
             d = {**bs.get(lb, {}), **cf.get(lb, {})}
             if d:
                 merged[lb] = d
+        # 券商頁有非 0 合約負債的公司，觀測站舊紀錄裡的 0 多半是「表上沒單獨列出」（舊版誤記），當成未揭露
+        bs_has_cl = any(d.get("cl") for d in bs.values())
         for q, v in hist.get(code, {}).items():
             lb = f"{q[:4]}.{q[-1]}Q"
-            if "cl" not in merged.get(lb, {}):
+            if "cl" in merged.get(lb, {}):
+                continue
+            if v is None or (v == 0 and bs_has_cl):
+                merged.setdefault(lb, {})["cl_na"] = 1.0
+            else:
                 merged.setdefault(lb, {})["cl"] = v
         if merged:
             out[code] = merged

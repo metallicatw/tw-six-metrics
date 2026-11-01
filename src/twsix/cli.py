@@ -2146,7 +2146,7 @@ def cmd_backfill_cl(args: argparse.Namespace) -> int:
         print("合約負債回補：找不到要補的個股（data/sheets 底下沒有資產負債表）")
         return EXIT_OK
     r = CH.backfill(out, codes, today=datetime.now(_TAIPEI).date(), minutes=args.minutes,
-                    pause=args.pause)
+                    pause=args.pause, data_dir=data)
     print(f"合約負債回補：{r['stocks']} 檔、這一趟查 {r['asked']} 次、新增 {r['added']} 個期別；"
           f"進度 {r['done']}／{r['total']}" + ("，全部補完" if r["left"] <= 0 else f"，還剩 {r['left']} 次"))
     if r["stopped"]:

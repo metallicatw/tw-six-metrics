@@ -3,6 +3,7 @@
 券商財報頁只給最近 8 季的資產負債表；〈基本面與籌碼概況〉的「近 5 年合約負債」要 20 季。
 較早的季別向公開資訊觀測站的個股資產負債表（t164sb03）逐檔逐季查，一次查詢會帶回
 三個期末（當季、上一年底、去年同季），所以每檔約 7 次查詢就能補滿。
+沒有把合約負債單獨列出的公司（併在其他負債科目），那幾季記 NA（未單獨揭露），不是 0。
 
 公開資訊觀測站會擋雲端機房的連線，這一步要在家裡的網路跑（本機版或 NAS）；
 結果寫成一個小 CSV（公司代號、季別、合約負債〔百萬元〕），放進 data/market/ 後
@@ -87,23 +88,33 @@ def _num(text: str) -> float | None:
     return -v if neg else v
 
 
-def parse(page: str) -> dict[str, float] | None:
-    """回傳 {季別: 合約負債（百萬元）}；查無資料回傳 None；有表但沒有合約負債科目的季別記 0。"""
+def _label(text: str) -> str:
+    return text.replace("-", "－").replace("—", "－").replace(" ", "")
+
+
+def parse(page: str) -> dict[str, float | None] | None:
+    """回傳 {季別: 合約負債（百萬元）}；查無資料回傳 None。
+
+    觀測站的資產負債表是「公司自己選的科目」：不少公司（例如台積電）沒有把合約負債
+    單獨列出，而是併在「其他流動負債」裡。這種表**不能記成 0**——那一季的值記 None，
+    寫進檔案是 NA，畫面上顯示「未單獨揭露」。
+    """
     p = _Rows()
     p.feed(page)
     head = next((r for r in p.rows if r and r[0] == "會計項目"), None)
     if not head:
         return None
     quarters = [_quarter(c) for c in head[1:]]
-    out: dict[str, float] = {q: 0.0 for q in quarters if q}
+    names = {_label(n) for n in CL_NAMES}
+    out: dict[str, float | None] = {q: None for q in quarters if q}
     for row in p.rows:
-        if row and row[0] in CL_NAMES:
+        if row and _label(row[0]) in names:
             amounts = row[1::2]  # 金額、% 交錯
             for q, cell in zip(quarters, amounts, strict=False):
                 v = _num(cell)
                 if q and v is not None:
-                    out[q] = out.get(q, 0.0) + v / 1000
-    return {q: round(v, 1) for q, v in out.items()}
+                    out[q] = (out.get(q) or 0.0) + v / 1000
+    return {q: (None if v is None else round(v, 1)) for q, v in out.items()}
 
 
 def is_block(page: str) -> bool:
@@ -194,13 +205,18 @@ def has_cl(data_dir: Path, code: str) -> bool:
                for row in (grid if isinstance(grid, list) else []))
 
 
-def read(path: Path) -> dict[str, dict[str, float]]:
-    out: dict[str, dict[str, float]] = {}
+NA = "NA"  # 查過了，但觀測站的表沒有單獨列出合約負債
+
+
+def read(path: Path) -> dict[str, dict[str, float | None]]:
+    """{代號: {季別: 百萬元}}；值是 None 代表「查過，但沒有單獨揭露」。"""
+    out: dict[str, dict[str, float | None]] = {}
     try:
         with open(path, encoding="utf-8", newline="") as fh:
             for r in csv.DictReader(fh):
                 try:
-                    out.setdefault(r["公司代號"], {})[r["季別"]] = float(r["合約負債"])
+                    raw = (r["合約負債"] or "").strip()
+                    out.setdefault(r["公司代號"], {})[r["季別"]] = None if raw == NA else float(raw)
                 except (KeyError, ValueError):
                     continue
     except OSError:
@@ -208,7 +224,7 @@ def read(path: Path) -> dict[str, dict[str, float]]:
     return out
 
 
-def write(path: Path, data: dict[str, dict[str, float]]) -> None:
+def write(path: Path, data: dict[str, dict[str, float | None]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     with open(tmp, "w", encoding="utf-8", newline="") as fh:
@@ -216,8 +232,24 @@ def write(path: Path, data: dict[str, dict[str, float]]) -> None:
         w.writerow(FIELDS)
         for code in sorted(data):
             for q in sorted(data[code]):
-                w.writerow([code, q, f"{data[code][q]:g}"])
+                v = data[code][q]
+                w.writerow([code, q, NA if v is None else f"{v:g}"])
     tmp.replace(path)
+
+
+def repair_zeros(path: Path, data_dir: Path) -> int:
+    """舊版把「表上沒有合約負債科目」記成 0。券商頁明明有非 0 合約負債的公司，那些 0 改成 NA。"""
+    data = read(path)
+    n = 0
+    for code, qs in data.items():
+        zeros = [q for q, v in qs.items() if v == 0]
+        if zeros and has_cl(data_dir, code):
+            for q in zeros:
+                qs[q] = None
+            n += len(zeros)
+    if n:
+        write(path, data)
+    return n
 
 
 def merge(dst: Path, src: Path) -> int:
@@ -237,7 +269,7 @@ def merge(dst: Path, src: Path) -> int:
 def backfill(out: Path, codes: list[str], *, today: date, minutes: float = 40.0,
              pause: float = 2.5, get: Callable[[dict], str] | None = None,
              sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-             log: Callable[[str], None] = print) -> dict:
+             log: Callable[[str], None] = print, data_dir: Path | None = None) -> dict:
     """照「每一輪每檔查一季（最新的先）」的順序補，中斷了下次接著補。"""
     get = get or post
     done_path = out.with_name(out.name + ".done")
@@ -245,6 +277,10 @@ def backfill(out: Path, codes: list[str], *, today: date, minutes: float = 40.0,
         done = set(done_path.read_text(encoding="utf-8").split())
     except OSError:
         done = set()
+    if data_dir is not None:
+        fixed = repair_zeros(out, data_dir)
+        if fixed:
+            log(f"  舊紀錄裡 {fixed} 筆「表上沒有合約負債科目」被記成 0，已改成「未單獨揭露」")
     data = read(out)
     steps = plan(_latest_quarter(today))
     todo = [(c, q) for q in steps for c in codes if f"{c},{q}" not in done]

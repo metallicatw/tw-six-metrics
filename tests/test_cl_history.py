@@ -26,9 +26,13 @@ def test_讀得出三個期末的合約負債_仟元換成百萬():
     assert got == {"2021Q3": 22396.8, "2020Q4": 16728.0, "2020Q3": 17511.6}
 
 
-def test_有表但沒有合約負債科目記0_沒有表是查無資料():
-    p = _page(["會計項目", "112年12月31日", "111年12月31日"], [["短期借款", "1", "0", "2", "0"]])
-    assert CH.parse(p) == {"2023Q4": 0.0, "2022Q4": 0.0}
+def test_表上沒有單獨列出合約負債不是0而是未揭露_沒有表是查無資料():
+    # 台積電 113Q2 的觀測站資產負債表：合約負債併在「其他流動負債」，表上沒有這個科目
+    p = _page(["會計項目", "113年06月30日", "112年12月31日", "112年06月30日"],
+              [["其他流動負債", "434,197,987", "7.26", "305,961,197", "5.53", "284,453,930", "5.52"]])
+    assert CH.parse(p) == {"2024Q2": None, "2023Q4": None, "2023Q2": None}
+    half = _page(["會計項目", "112年12月31日"], [["合約負債-流動", "0", "0"]])
+    assert CH.parse(half) == {"2023Q4": 0.0}, "科目在、金額 0 才是真的 0（半形連字號也認得）"
     assert CH.parse("<html>9999 之公司不存在！</html>") is None
     assert CH.is_block("<html>因為安全性考量，您的連線已被拒絕</html>")
     assert not CH.is_block(PAGE)
@@ -84,3 +88,37 @@ def test_合併進個股季報_券商頁的數字優先():
     CH.write(other, {"2308": {"2022Q2": 7650.0, "2023Q2": 1.0}, "6488": {"2022Q2": 3.0}})
     assert CH.merge(tmp / CH.FILE, other) == 2
     assert CH.read(tmp / CH.FILE)["2308"]["2023Q2"] == 9430.0
+
+
+def test_未揭露存成_NA_讀回來是_None_而且不再查():
+    tmp = Path(tempfile.mkdtemp())
+    out = tmp / "cl.csv"
+    page = _page(["會計項目", "113年06月30日", "112年12月31日", "112年06月30日"], [["其他流動負債", "1", "0", "1", "0", "1", "0"]])
+    r = CH.backfill(out, ["2330"], today=date(2026, 10, 29), minutes=0, get=lambda f: page,
+                    sleep=lambda s: None, log=lambda m: None)
+    got = CH.read(out)["2330"]
+    assert got["2024Q2"] is None and "NA" in out.read_text(encoding="utf-8")
+    again = CH.backfill(out, ["2330"], today=date(2026, 10, 29), minutes=0, get=lambda f: page,
+                        sleep=lambda s: None, log=lambda m: None)
+    assert r["asked"] > 0 and again["asked"] == 0
+
+
+def test_舊版誤記的0_券商頁有合約負債的公司改成未揭露_畫面不再顯示0():
+    from twsix.chipflow.site import sheet_series
+
+    tmp = Path(tempfile.mkdtemp())
+    for code, cl in (("2330", "55,852"), ("9999", "0")):
+        d = tmp / "sheets" / code
+        d.mkdir(parents=True)
+        grid = [["期別", "2026.2Q", "2025.2Q"], ["合約負債－流動", cl, cl], ["股本", "259,325", "259,325"]]
+        (d / "BSQ.json.gz").write_bytes(gzip.compress(json.dumps(grid).encode()))
+    CH.write(tmp / CH.FILE, {"2330": {"2024Q2": 0.0, "2023Q2": 0.0}, "9999": {"2024Q2": 0.0}})
+    q = load_sheet_quarters(tmp, {"2330", "9999"})
+    assert "cl" not in q["2330"]["2024.2Q"] and q["2330"]["2024.2Q"]["cl_na"] == 1.0
+    assert q["9999"]["2024.2Q"]["cl"] == 0.0, "券商頁本來就沒有合約負債的公司，0 照舊"
+    s = sheet_series(q["2330"], {})
+    i = s["q"].index("2024Q2")
+    assert s["cl"][i] is None and s["cl_na"][i] == 1
+    assert CH.repair_zeros(tmp / CH.FILE, tmp) == 2
+    assert CH.read(tmp / CH.FILE)["2330"] == {"2024Q2": None, "2023Q2": None}
+    assert CH.read(tmp / CH.FILE)["9999"]["2024Q2"] == 0.0

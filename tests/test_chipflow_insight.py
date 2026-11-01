@@ -192,6 +192,27 @@ def test_基本面與籌碼概況_文字與重點標籤():
     assert s and math.isclose(float(s.group(1)), round(want, 1))
 
 
+def test_合約負債未單獨揭露的期別顯示未揭露不是0():
+    node = shutil.which("node")
+    if not node:
+        from twsix.report.build import MissingOptional
+        raise MissingOptional("這一條需要 node")
+    js = (TPL / "radar_bg" / "insight.js").read_text("utf-8")
+    js = js.replace("{% raw %}", "").replace("{% endraw %}", "")
+    doc = _stock_doc()
+    qs = doc["fq"]["q"]
+    doc["fs"] = {"q": qs, "capex": [100.0] * 20, "cl": [None] * 12 + [500.0] * 8,
+                 "cl_na": [1] * 12 + [0] * 8}
+    dates = [f"D{i:03d}" for i in range(120)]
+    prog = ("var ROWS = {}, R = {asof: 'x'};\n" + js +
+            f"\nvar B = CFI.build({json.dumps(doc)}, {json.dumps(dates)});"
+            "\nprocess.stdout.write(JSON.stringify(B.fund[3]));")
+    sec = json.loads(subprocess.run([node, "-e", prog], capture_output=True, text=True, check=True).stdout)
+    assert sec["table"].count("未揭露") == 3 and ">0<" not in sec["table"]
+    text = " ".join(sec["lines"])
+    assert "3 個期間標「未揭露」" in text and "不是 0" in text
+
+
 def test_概況面板接到各工具():
     api = (TPL / "radar_bg" / "api.js").read_text("utf-8")
     mods = (TPL / "radar_bg" / "mods.js").read_text("utf-8")

@@ -58,7 +58,7 @@ def _stamp_key(data_dir: Path) -> dict[str, str]:
         "notes": str((data_dir / NOTES_HISTORY).stat().st_size) if (data_dir / NOTES_HISTORY).exists() else "",
         "clh": str((data_dir / "market" / "contract_liab.csv").stat().st_size)
         if (data_dir / "market" / "contract_liab.csv").exists() else "",
-        "version": "8",
+        "version": "9",
     }
 
 
@@ -158,7 +158,7 @@ def sheet_series(quarters: dict[str, dict[str, float]], income: dict) -> dict:
         return f"{idx // 4}.{idx % 4 + 1}Q"
 
     out: dict[str, list] = {k: [] for k in ("inv", "inv_turn", "inv_rev", "cl", "cl_rev",
-                                             "cl_cap", "capex", "cx_cap")}
+                                             "cl_cap", "capex", "cx_cap", "cl_na")}
     for lb in labels:
         roc = (int(lb[:4]) - 1911, int(lb[5]))
         rev_q = _single(income, roc, "rev") / 1000
@@ -175,6 +175,7 @@ def sheet_series(quarters: dict[str, dict[str, float]], income: dict) -> dict:
         out["inv_rev"].append(_r(inv / rev_q * 100, 1) if rev_q > 0 and not isnan(inv)
                               else None)
         out["cl"].append(_r(cl, 0))
+        out["cl_na"].append(1 if isnan(cl) and not isnan(g(lb, "cl_na")) else 0)
         cl4 = g(prev(lb, 4), "cl")
         out["cl_rev"].append(_r((cl - cl4) / rev4v * 100, 2)
                              if not isnan(cl4) and not isnan(rev4v) and rev4v > 0 else None)
