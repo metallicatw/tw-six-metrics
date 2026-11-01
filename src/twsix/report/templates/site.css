@@ -349,6 +349,8 @@ td.pv .v{display:block;font-variant-numeric:tabular-nums;
 .ident.sticky{position:sticky;top:var(--head-h,0px);z-index:30;background:var(--ground);
   margin:0 calc(-1 * var(--pad)) 16px;padding:12px var(--pad) 0;
   box-shadow:0 1px 0 var(--rule),0 6px 14px -12px rgba(0,0,0,.4)}
+/* 個股標題列上方補一塊同底色的遮罩：瀏覽器縮放等原因讓它和網站標題列之間差幾 px 時，捲上去的字不會從縫裡露出來 */
+.ident.sticky::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:48px;background:var(--ground);pointer-events:none}
 .ident.sticky h2{margin:0;font-size:19px;border:none;padding:0;letter-spacing:-.01em}
 .chip{display:inline-block;vertical-align:middle;margin-left:7px;
   padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600;

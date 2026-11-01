@@ -381,11 +381,35 @@ def _int(v, lo, hi):
 LLM_V = 2  # 第 2 版：重點 6 則（含數字）＋公司指引；個股頁〈法說會〉專區用
 
 
+_REPR = re.compile(r"""^\{\s*['"]\w+['"]\s*:\s*['"](.*)['"]\s*\}$""", re.S)
+TEXT_KEYS = ("text", "guidance", "point", "highlight", "risk", "summary", "content", "q", "a")
+
+
+def as_text(v) -> str:
+    """Gemini 偶爾把每一則包成物件（{"guidance": "…"}）：只取裡面的文字。舊資料存成 "{'guidance': '…'}" 的也修好。"""
+    if isinstance(v, dict):
+        for k in TEXT_KEYS:
+            if isinstance(v.get(k), str) and v[k].strip():
+                return v[k].strip()
+        return next((str(x).strip() for x in v.values() if isinstance(x, str) and x.strip()), "")
+    t = str(v if v is not None else "").strip()
+    m = _REPR.match(t)
+    return m.group(1).strip() if m else t
+
+
+def fix_lists(x: dict | None, keys=("highlights", "guidance", "risks", "points")) -> dict | None:
+    if isinstance(x, dict):
+        for k in keys:
+            if isinstance(x.get(k), list):
+                x[k] = [t for t in (as_text(i) for i in x[k]) if t]
+    return x
+
+
 def clean_llm(obj) -> dict | None:
     if not isinstance(obj, dict):
         return None
     def strs(v, n=3, w=40):
-        return [str(s).strip()[:w] for s in v if str(s).strip()][:n] if isinstance(v, list) else []
+        return [t[:w] for t in (as_text(s) for s in v) if t][:n] if isinstance(v, list) else []
     try:
         util = obj.get("utilization")
         util = None if util in (None, "") else max(0.0, min(150.0, float(util)))
@@ -420,6 +444,7 @@ def read_features(data_dir: Path) -> dict[str, dict]:
         except ValueError:
             continue
         if isinstance(rec, dict) and rec.get("file") and not str(rec["file"]).startswith("qa:"):
+            fix_lists(rec.get("llm"))
             out[rec["file"]] = rec   # "qa:" 開頭是法說 Q&A（talk_qa.read_qa 讀）
     return out
 

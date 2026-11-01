@@ -274,3 +274,17 @@ def test_個股頁畫得出QA區塊():
     js = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.js").read_text("utf-8")
     assert "法人 Q&amp;A（" in js and "qaBlock(a, q, idx === 0)" in js
     assert r"blog\.fugle\.tw|finance\.biggo\.com\.tw" in js
+
+
+def test_Gemini把每一則包成物件時只取文字_舊資料讀出來也修好():
+    assert TK.as_text({"guidance": "預期 4Q 營收季增 15%"}) == "預期 4Q 營收季增 15%"
+    assert TK.as_text("{'point': '2026Q3 營運創新高'}") == "2026Q3 營運創新高"
+    assert TK.as_text("一般文字 {不要動}") == "一般文字 {不要動}"
+    got = TQ.clean({"qa": [{"q": {"text": "問"}, "a": "答"}], "guidance": [{"guidance": "甲"}, "乙"],
+                    "points": [{"point": "丙"}]})
+    assert got["guidance"] == ["甲", "乙"] and got["points"] == ["丙"] and got["qa"] == [{"q": "問", "a": "答"}]
+    root = _tmp()
+    rec = _qa_rec("2026-10-29", "b.pdf", guidance=["{'guidance': '甲'}"], points=["{'point': '乙'}"])
+    TK._append_features(root, [rec])
+    x = TQ.read_qa(root)[rec["file"]]["llm"]
+    assert x["guidance"] == ["甲"] and x["points"] == ["乙"]

@@ -244,12 +244,12 @@ def clean(obj) -> dict | None:
         return None
 
     def strs(v, n, w):
-        return [str(s).strip()[:w] for s in v if str(s).strip()][:n] if isinstance(v, list) else []
+        return [t[:w] for t in (TK.as_text(s) for s in v) if t][:n] if isinstance(v, list) else []
 
     qa = []
     for x in obj.get("qa") or []:
-        if isinstance(x, dict) and str(x.get("q") or "").strip() and str(x.get("a") or "").strip():
-            qa.append({"q": str(x["q"]).strip()[:50], "a": str(x["a"]).strip()[:120]})
+        if isinstance(x, dict) and TK.as_text(x.get("q")) and TK.as_text(x.get("a")):
+            qa.append({"q": TK.as_text(x["q"])[:50], "a": TK.as_text(x["a"])[:120]})
     out = {"qa": qa[:8], "guidance": strs(obj.get("guidance"), 5, 90), "points": strs(obj.get("points"), 4, 90),
            "revenue_outlook": TK._int(obj.get("revenue_outlook"), -2, 2),
            "margin_outlook": TK._int(obj.get("margin_outlook"), -2, 2),
@@ -290,6 +290,8 @@ def read_qa(data_dir: Path) -> dict[str, dict]:
         except ValueError:
             continue
         if isinstance(rec, dict) and str(rec.get("file", "")).startswith(PREFIX):
+            TK.fix_lists(rec.get("llm"))
+            TK.fix_lists(rec.get("rules"), ("guidance",))
             out[rec["file"]] = rec
     return out
 

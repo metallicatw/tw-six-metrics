@@ -29,6 +29,9 @@ try { window.CX_EARLY = fetch("cl/all.json" + (window.CX_V ? "?v=" + window.CX_V
 .cx input:disabled{opacity:.55}
 .cx-chk{display:flex;align-items:center;gap:6px;font-size:13px;height:32px;color:var(--ink-2)}
 .cx-tiers{display:flex;flex-wrap:wrap;gap:6px}
+.cx-tf{grid-column:span 3}
+@media (min-width:641px){.cx-tiers{flex-wrap:nowrap}.cx-tb{white-space:nowrap}}
+@media (max-width:640px){.cx-tf{grid-column:1 / -1}}
 .cx-tb{appearance:none;font:inherit;font-size:12.5px;font-weight:700;border-radius:999px;padding:4px 11px;cursor:pointer;
   border:1.5px solid var(--tc);color:var(--tc);background:transparent}
 .cx-tb[aria-pressed=true]{background:var(--tc);color:#fff}
@@ -113,7 +116,7 @@ try { window.CX_EARLY = fetch("cl/all.json" + (window.CX_V ? "?v=" + window.CX_V
     <div class="cx-f"><label for="cx-sec">產業分流</label><select id="cx-sec"></select></div>
     <div class="cx-f"><label for="cx-mk">市場別</label><select id="cx-mk"><option value="">全部</option><option>上市</option><option>上櫃</option></select></div>
     <div class="cx-f"><label for="cx-q">找代號／名稱</label><input type="search" id="cx-q" placeholder="例如 2404"></div>
-    <div class="cx-f" style="grid-column:span 2"><label>顯示層級</label><div class="cx-tiers" id="cx-tiers"></div></div>
+    <div class="cx-f cx-tf"><label>顯示層級</label><div class="cx-tiers" id="cx-tiers"></div></div>
   </div>
   <div id="cx-params"></div>
   <div class="cx-btns">
@@ -235,7 +238,7 @@ var CLX = (function(){
 
 (function(){
   var $ = function(id){ return document.getElementById(id); };
-  var KEY = "twsix-cl-params-v1", D = null, PARAMS = {}, STAGE = 0, TIERS = {A: true, B: true, C: true, W: false};
+  var KEY = "twsix-cl-params-v1", D = null, PARAMS = {}, STAGE = 0, TIERS = {A: true, B: true, C: true, W: false}, TCOUNT = {};
   var sortKey = "score", sortDir = -1, open = {};
   var FIELDS = [
     ["min_cl", "合約負債下限", "百萬元"], ["ratio", "含金量下限", "%"], ["yoy", "年增率下限", "%"], ["qoq", "季增率下限", "%"],
@@ -273,6 +276,7 @@ var CLX = (function(){
 
   function evalAll(){
     var sec = $("cx-sec").value, mk = $("cx-mk").value, q = ($("cx-q").value || "").trim(), out = [], n = [0, 0, 0, 0];
+    TCOUNT = {A: 0, B: 0, C: 0, W: 0};
     D.rows.forEach(function(r){
       var m = r.m;
       if (m.sec === "fin") return;
@@ -281,8 +285,9 @@ var CLX = (function(){
       var e = CLX.evaluate(m, PARAMS[m.sec] || PARAMS.general);
       for (var i = 0; i < 4; i++) if (e.s[i]) n[i]++;
       if (q && r.c.indexOf(q) !== 0 && (r.n || "").indexOf(q) < 0) return;
-      if (STAGE && !e.s[STAGE - 1]) return;
-      if (!e.tier || !TIERS[e.tier]) { if (!(q && e.tier === "")) return; }
+      if (e.tier) TCOUNT[e.tier]++;
+      if (STAGE) { if (!e.s[STAGE - 1]) return; }          // 點了漏斗的某一段：列出通過那一段的全部（含 W），數字跟漏斗一致
+      else if (!e.tier || !TIERS[e.tier]) { if (!(q && e.tier === "")) return; }
       out.push({r: r, e: e});
     });
     for (var i = 0; i < 4; i++) $("cx-n" + (i + 1)).textContent = n[i];
@@ -358,6 +363,11 @@ var CLX = (function(){
     if (!list.length) h += '<tr><td class="l" colspan="' + COLS.length + '"><span class="cx-na">沒有符合的股票。可以放寬門檻，或在上方勾選更多層級。</span></td></tr>';
     $("cx-tbl").innerHTML = h + "</tbody>";
     $("cx-count").textContent = "共 " + list.length + " 檔";
+    var parts = ["A", "B", "C", "W"].map(function(t){ return t + " " + (TCOUNT[t] || 0); }).join("、");
+    var hidden = ["A", "B", "C", "W"].filter(function(t){ return !TIERS[t]; });
+    $("cx-asof").textContent = STAGE
+      ? "列出通過「" + ["① 含金量＋成長", "② 交叉排雷", "③ 認列點火", "④ 籌碼確認"][STAGE - 1] + "」的全部股票（不分層級，含 W 警示）；再點一次漏斗取消。"
+      : "各層級：" + parts + (hidden.length ? "；目前沒顯示 " + hidden.join("、") + "（在上方「顯示層級」勾選）" : "") + "。① 的檔數＝A＋B＋C＋W。";
     $("cx-tbl").querySelectorAll("th").forEach(function(th){
       th.onclick = function(){ var k = th.getAttribute("data-k"); if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = (k === "c" || k === "n" || k === "sec") ? 1 : -1; } render(list); };
     });
