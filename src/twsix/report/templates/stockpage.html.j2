@@ -42,6 +42,7 @@
   <button type="button" role="tab" id="tab-directors" class="tab" aria-controls="panel-directors" aria-selected="false" tabindex="-1">董監持股</button>
   {% endif %}
     <button type="button" role="tab" id="tab-news" class="tab" aria-controls="panel-news" aria-selected="false" tabindex="-1">個股新聞</button>
+    <button type="button" role="tab" id="tab-talks" class="tab" aria-controls="panel-talks" aria-selected="false" tabindex="-1">法說會</button>
     <button type="button" role="tab" id="tab-ai" class="tab" aria-controls="panel-ai" aria-selected="false" tabindex="-1">AI 選股</button>
   {% if p.unbuilt %}
   <button type="button" role="tab" id="tab-unbuilt" class="tab" aria-controls="panel-unbuilt" aria-selected="false" tabindex="-1">尚未建置</button>
@@ -863,6 +864,13 @@
 <p class="stale">尚未取得〔個股新聞〕，請執行 <code>twsix report {{ p.stock_id }}</code>。</p>
 {% endif %}
 
+</section>
+
+<section class="panel" id="panel-talks" role="tabpanel" aria-labelledby="tab-talks" hidden
+         data-src="{{ rel }}talks/{{ p.stock_id }}.json">
+<h3 id="talks">法說會</h3>
+<div class="tk-stock" aria-live="polite"><p class="muted">讀取中……</p></div>
+<noscript><p class="stale">這一個分頁要開啟 JavaScript 才看得到。</p></noscript>
 </section>
 
 <section class="panel" id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" hidden

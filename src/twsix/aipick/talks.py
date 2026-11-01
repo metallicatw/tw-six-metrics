@@ -93,6 +93,148 @@ def read_index(data_dir: Path) -> list[dict]:
         return list(csv.DictReader(fh))
 
 
+def _append_index(data_dir: Path, new: list[dict]) -> None:
+    if not new:
+        return
+    path = talks_dir(data_dir) / "index.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    first = not path.exists()
+    new.sort(key=lambda r: (r["date"], r["code"]))
+    with path.open("a", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=INDEX_FIELDS)
+        if first:
+            w.writeheader()
+        w.writerows(new)
+
+
+def fetch_company_list(data_dir: Path, code: str, today: date, years: int = 3, post=None) -> dict:
+    """一檔個股近幾年的法說會清單（觀測站可以用代號＋年度查，一年一次查詢）。個股頁〈法說會〉近 8 季用。"""
+    post = post or _post_form
+    have = {(r["code"], r["date"], r["file"]) for r in read_index(data_dir)}
+    new, errors, typeks = [], [], ["sii", "otc"]
+    for y in range(today.year, today.year - years, -1):
+        got_any = False
+        for typek in list(typeks):
+            form = {"encodeURIComponent": "1", "step": "1", "firstin": "1", "off": "1",
+                    "TYPEK": typek, "year": str(y - 1911), "month": "", "co_id": code}
+            try:
+                rows = [r for r in parse_list(post(LIST_URL, form)) if r["code"] == code]
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{typek} {y}：{type(exc).__name__}")
+                continue
+            if rows:
+                got_any = True
+                typeks = [typek]  # 找到是上市還是上櫃，之後的年度只查這一邊
+                for r in rows:
+                    key = (r["code"], r["date"], r["file"])
+                    if key not in have and r["date"] <= today.isoformat():
+                        have.add(key)
+                        new.append({**r, "first_seen": today.isoformat()})
+                break
+        if not got_any and errors and len(errors) >= 4:
+            break
+    _append_index(data_dir, new)
+    return {"new": len(new), "errors": errors}
+
+
+def fetch_months(data_dir: Path, today: date, months: int = 24, post=None, sleep=time.sleep) -> dict:
+    """全市場近 N 個月的法說會清單（每個月上市、上櫃各一次查詢；查過的月份記在 index.months，不再查）。"""
+    post = post or _post_form
+    done_path = talks_dir(data_dir) / "index.months"
+    try:
+        done = set(done_path.read_text(encoding="utf-8").split())
+    except OSError:
+        done = set()
+    have = {(r["code"], r["date"], r["file"]) for r in read_index(data_dir)}
+    new, errors, asked = [], [], 0
+    y, m = today.year, today.month
+    keep_open = {(today.year, today.month)}
+    prev = today.replace(day=1) - timedelta(days=1)
+    keep_open.add((prev.year, prev.month))
+    finished: list[str] = []
+    for _ in range(months):
+        for typek in ("sii", "otc"):
+            key = f"{typek},{y}-{m:02d}"
+            if key in done:
+                continue
+            form = {"encodeURIComponent": "1", "step": "1", "firstin": "1", "off": "1",
+                    "TYPEK": typek, "year": str(y - 1911), "month": f"{m:02d}", "co_id": ""}
+            asked += 1
+            try:
+                rows = parse_list(post(LIST_URL, form))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{key}：{type(exc).__name__}")
+                if len(errors) >= BLOCK_LIMIT:
+                    break
+                continue
+            for r in rows:
+                k = (r["code"], r["date"], r["file"])
+                if k not in have and r["date"] <= today.isoformat():
+                    have.add(k)
+                    new.append({**r, "first_seen": today.isoformat()})
+            if (y, m) not in keep_open:
+                finished.append(key)  # 這個月已經結束，之後不會再變
+            sleep(1.5)
+        if len(errors) >= BLOCK_LIMIT:
+            break
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    _append_index(data_dir, new)
+    if finished:
+        done_path.parent.mkdir(parents=True, exist_ok=True)
+        with done_path.open("a", encoding="utf-8") as fh:
+            fh.write("".join(f"{k}\n" for k in finished))
+    return {"new": len(new), "asked": asked, "errors": errors}
+
+
+def backfill(data_dir: Path, llm, *, today: date, priority: list[str], months: int = 24,
+             max_pdf: int = 60, budget: float = 1800.0, post=None, get=None) -> dict:
+    """近 8 季法說會：先補全市場清單，再依優先順序把每檔每季代表的那一場簡報讀進來（中斷了下次接著讀）。"""
+    lst = fetch_months(data_dir, today, months, post=post)
+    rows = read_index(data_dir)
+    by_code: dict[str, list[dict]] = {}
+    for r in rows:
+        by_code.setdefault(r["code"], []).append(r)
+    order = [c for c in priority if c in by_code]
+    order += sorted((c for c in by_code if c not in set(order)),
+                    key=lambda c: max(r["date"] for r in by_code[c]), reverse=True)
+    files: set[str] = set()
+    for c in order:
+        files |= {r["file"] for r in pick_quarters(by_code[c], 8) if r.get("file")}
+    res = process(data_dir, llm, priority=order, today=today, max_pdf=max_pdf, get=get,
+                  since_days=900, budget=budget, only_files=files)
+    feats = read_features(data_dir)
+    return {"list": lst, **res, "quarters_total": len(files),
+            "quarters_done": sum(1 for f in files if f in feats)}
+
+
+KEY_WORDS = ("財務報告", "財務業務", "業績", "營運成果", "營運狀況", "營運概況", "財務", "營運")
+
+
+def quarter_of(day: str) -> str:
+    return f"{day[:4]}Q{(int(day[5:7]) - 1) // 3 + 1}"
+
+
+def pick_quarters(rows: list[dict], n: int = 8) -> list[dict]:
+    """每一季挑一場代表的法說會（有簡報優先、談財報與營運的優先、同等就挑最早公布的那一場），最近 n 季。"""
+    by_q: dict[str, list[dict]] = {}
+    for r in rows:
+        by_q.setdefault(quarter_of(r["date"]), []).append(r)
+
+    def score(r: dict) -> tuple:
+        s = r.get("summary") or ""
+        return (bool(r.get("file")), sum(w in s for w in KEY_WORDS), "受邀" not in s,
+                -int(r["date"].replace("-", "")))
+
+    out = []
+    for q in sorted(by_q, reverse=True)[:n]:
+        group = by_q[q]
+        best = max(group, key=score)
+        out.append({**best, "quarter": q, "others": len(group) - 1})
+    return out
+
+
 def fetch_list(data_dir: Path, today: date, post=None) -> dict:
     post = post or _post_form
     months = [(today.year, today.month)]
@@ -114,16 +256,7 @@ def fetch_list(data_dir: Path, today: date, post=None) -> dict:
                 if key not in have and r["date"] <= today.isoformat():
                     have.add(key)
                     new.append({**r, "first_seen": today.isoformat()})
-    if new:
-        path = talks_dir(data_dir) / "index.csv"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        first = not path.exists()
-        new.sort(key=lambda r: (r["date"], r["code"]))
-        with path.open("a", encoding="utf-8", newline="") as fh:
-            w = csv.DictWriter(fh, fieldnames=INDEX_FIELDS)
-            if first:
-                w.writeheader()
-            w.writerows(new)
+    _append_index(data_dir, new)
     return {"new": len(new), "errors": errors}
 
 
@@ -181,6 +314,31 @@ def focus_text(pages: list[str], limit: int = LLM_CHARS) -> str:
     return "\n".join(out)
 
 
+LINE_WORDS = ("營收", "營業收入", "毛利", "營益", "營業利益", "淨利", "EPS", "每股盈餘", "季增", "年增", "QoQ",
+              "YoY", "出貨", "產能", "利用率", "資本支出", "比重", "訂單", "展望", "預估", "指引", "成長", "衰退")
+_SENT = re.compile(r"[^。；;\n]{8,120}")
+
+
+def rule_lines(text: str, n: int = 6) -> list[str]:
+    """沒有 Gemini 解讀時的備案：從簡報文字挑出「有數字、又談到營運重點」的句子，給個股頁〈法說會〉用。"""
+    out: list[str] = []
+    seen: set[str] = set()
+    for m in _SENT.finditer(text or ""):
+        t = " ".join(m.group(0).split())
+        if not re.search(r"\d", t) or not any(w in t for w in LINE_WORDS):
+            continue
+        if sum(ch.isdigit() for ch in t) > len(t) * 0.45:  # 純數字表格列跳過
+            continue
+        key = re.sub(r"\s", "", t)[:30]
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(t[:110])
+        if len(out) >= n:
+            break
+    return out
+
+
 def _top(text: str, words: tuple[str, ...], n: int = 5) -> dict[str, int]:
     got = {w: text.count(w) for w in words}
     got = {w: c for w, c in got.items() if c}
@@ -203,9 +361,10 @@ PROMPT = """你是嚴謹的台股法說會分析員。以下是 {name}（{code}�
  "new_business": true 或 false（有沒有具體的新產品、新客戶、新市場）,
  "tone": -2 到 2 的整數（整體對未來的口氣）,
  "hedging": 0 到 1 的小數（談到未來時避開具體數字的程度）,
- "highlights": 最多 3 則重點，每則 30 字內,
- "risks": 最多 3 則風險，每則 30 字內,
- "summary": 60 字內的摘要}}
+ "highlights": 最多 6 則會議重點，每則 60 字內，盡量寫出簡報裡的具體數字（營收、毛利率、營益率、EPS、季增／年增、產能、出貨、資本支出、產品比重）,
+ "guidance": 最多 4 則公司對下一季或全年給的指引或展望，每則 60 字內，有數字就寫數字；沒有就給空陣列,
+ "risks": 最多 3 則風險，每則 40 字內,
+ "summary": 80 字內的摘要}}
 
 簡報文字：
 {text}"""
@@ -219,11 +378,14 @@ def _int(v, lo, hi):
     return max(lo, min(hi, x))
 
 
+LLM_V = 2  # 第 2 版：重點 6 則（含數字）＋公司指引；個股頁〈法說會〉專區用
+
+
 def clean_llm(obj) -> dict | None:
     if not isinstance(obj, dict):
         return None
-    def strs(v):
-        return [str(s)[:40] for s in v][:3] if isinstance(v, list) else []
+    def strs(v, n=3, w=40):
+        return [str(s).strip()[:w] for s in v if str(s).strip()][:n] if isinstance(v, list) else []
     try:
         util = obj.get("utilization")
         util = None if util in (None, "") else max(0.0, min(150.0, float(util)))
@@ -240,9 +402,11 @@ def clean_llm(obj) -> dict | None:
             "new_business": bool(obj.get("new_business")),
             "tone": _int(obj.get("tone"), -2, 2),
             "hedging": round(hedging, 2),
-            "highlights": strs(obj.get("highlights")),
-            "risks": strs(obj.get("risks")),
-            "summary": str(obj.get("summary") or "")[:100]}
+            "highlights": strs(obj.get("highlights"), 6, 90),
+            "guidance": strs(obj.get("guidance"), 4, 90),
+            "risks": strs(obj.get("risks"), 3, 60),
+            "summary": str(obj.get("summary") or "")[:140],
+            "v": LLM_V}
 
 
 def read_features(data_dir: Path) -> dict[str, dict]:
@@ -272,7 +436,8 @@ def _append_features(data_dir: Path, recs: list[dict]) -> None:
 
 def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: int = 25,
             get=None, since_days: int = 400, budget: float = TIME_BUDGET, clock=None,
-            codes: list[str] | None = None) -> dict:
+            codes: list[str] | None = None, only_files: set[str] | None = None,
+            upgrade: bool = False) -> dict:
     from .llm import QuotaExhausted  # noqa: PLC0415
 
     get = get or _get_bytes
@@ -280,7 +445,8 @@ def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: i
     rank = {c: k for k, c in enumerate(priority)}
     cutoff = (today - timedelta(days=since_days)).isoformat()
     rows = [r for r in read_index(data_dir) if r.get("file") and r["date"] >= cutoff
-            and (codes is None or r["code"] in codes)]
+            and (codes is None or r["code"] in codes)
+            and (only_files is None or r["file"] in only_files)]
     uniq: dict[str, dict] = {}
     for r in rows:
         uniq.setdefault(r["file"], r)
@@ -300,7 +466,9 @@ def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: i
         need_rules = have is None or retry
         need_llm = (llm is not None and llm.enabled
                     and (r["code"] in rank or r["date"] >= llm_cut)
-                    and (have is None or not have.get("llm")))
+                    and (have is None or not have.get("llm")
+                         # 個股一鍵更新：舊版解讀（重點 3 則、沒有指引）重讀一次，給個股頁〈法說會〉用
+                         or (upgrade and (have["llm"].get("v") or 1) < LLM_V)))
         if not need_rules and not need_llm:
             continue
         can_pdf = blocked < BLOCK_LIMIT
@@ -332,6 +500,7 @@ def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: i
         rec = {"code": r["code"], "name": r["name"], "date": r["date"], "file": r["file"],
                "processed": today.isoformat(), "source": "pdf" if pages else "summary",
                "rules": rule_features(text), "llm": (have or {}).get("llm"),
+               "lines": rule_lines(text) if pages else (have or {}).get("lines", []),
                "model": (have or {}).get("model", ""), "note": (r.get("summary") or "")[:200]}
         if need_llm and pages:
             try:
@@ -416,7 +585,9 @@ def explain(cur: dict, prev: dict | None, method: str, score: float) -> str:
             extra.append("這一次提到新產品／新客戶／新市場")
         lead = (x.get("risks") or [""])[0] if score < 0 else (x.get("highlights") or [""])[0]
         out = "；".join(parts + extra)
-        return out + (f"。{'主要風險' if score < 0 else '主要亮點'}：{lead}" if lead else "")
+        out += f"。{'主要風險' if score < 0 else '主要亮點'}：{lead}" if lead else ""
+        guide = (x.get("guidance") or [""])[0]
+        return out + (f"；公司指引：{guide}" if guide else "")
     r = cur.get("rules") or {}
     only = "（只讀到公司公告文字）" if cur.get("source") == "summary" else ""
     found = "；".join(t for t in (f"正面詞 {_words(r.get('pw'))}" if r.get("pw") else "",

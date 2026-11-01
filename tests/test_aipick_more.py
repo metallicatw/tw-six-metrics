@@ -299,7 +299,8 @@ def test_LLM回的欄位被夾在合理範圍():
                       "tone": "abc", "hedging": 7, "highlights": ["a" * 99, "b", "c", "d"]})
     assert x["revenue_outlook"] == 2 and x["margin_outlook"] == -2 and x["capex"] == 1
     assert x["utilization"] == 150 and x["tone"] == 0 and x["hedging"] == 1
-    assert len(x["highlights"]) == 3 and len(x["highlights"][0]) == 40
+    assert len(x["highlights"]) == 4 and len(x["highlights"][0]) == 90
+    assert x["guidance"] == [] and x["v"] == TK.LLM_V
     assert TK.clean_llm("不是物件") is None
 
 
@@ -926,3 +927,110 @@ def test_法說轉折說得出原因():
     assert "只讀到公司公告文字" in t4.why and "也只有公告" in t4.why
     first = TK.TalkBook({"a": a}).latest("1101", "2026-12-31")
     assert first.why.startswith("第一次") and "營收展望持平" in first.why
+
+
+
+def test_個股近幾年法說清單_用代號加年度查_找到上市或上櫃之後只查那一邊():
+    root = _tmp()
+    asked = []
+
+    def post(url, form):
+        asked.append((form["TYPEK"], form["year"], form["co_id"]))
+        return LIST_HTML if form["TYPEK"] == "otc" else "<table></table>"
+    r = TK.fetch_company_list(root, "1101", date(2026, 9, 24), years=3, post=post)
+    assert r["new"] == 1 and [x["code"] for x in TK.read_index(root)] == ["1101"]
+    assert asked[:2] == [("sii", "115", "1101"), ("otc", "115", "1101")]
+    assert all(t == "otc" for t, _, _ in asked[2:]) and len(asked) == 4
+
+
+def test_每季挑一場代表的法說會_有簡報與談財報的優先():
+    rows = [
+        {"code": "2330", "date": "2025-10-16", "file": "a.pdf", "summary": "公布2025年第3季財務報告及業績展望"},
+        {"code": "2330", "date": "2025-11-20", "file": "b.pdf", "summary": "受邀參加某證券論壇"},
+        {"code": "2330", "date": "2025-12-01", "file": "", "summary": "說明營運狀況"},
+        {"code": "2330", "date": "2025-07-17", "file": "c.pdf", "summary": "公布2025年第2季財務報告"},
+    ]
+    got = TK.pick_quarters(rows, 8)
+    assert [(g["quarter"], g["file"], g["others"]) for g in got] == [("2025Q4", "a.pdf", 2), ("2025Q3", "c.pdf", 0)]
+    assert len(TK.pick_quarters(rows * 1, 1)) == 1
+
+
+def test_沒有Gemini時從簡報挑出有數字的重點句():
+    text = ("免責聲明。2026年第三季營收34.92億元，季增10.8%、年增22.5%。毛利率32.1%，較上季提升1.2個百分點。"
+            "1 2 3 4 5 6 7 8 9 10 11 12。本公司重視永續經營與員工福利。")
+    lines = TK.rule_lines(text)
+    assert lines[0].startswith("2026年第三季營收34.92億元") and any("毛利率32.1%" in x for x in lines)
+    assert not any("永續" in x for x in lines) and not any(x.startswith("1 2 3") for x in lines)
+
+
+def test_全市場清單往回補幾個月_結束的月份不再查():
+    root = _tmp()
+    asked = []
+
+    def post(url, form):
+        asked.append((form["TYPEK"], form["year"], form["month"]))
+        return LIST_HTML if (form["TYPEK"], form["month"]) == ("sii", "08") else "<table></table>"
+    r = TK.fetch_months(root, date(2026, 10, 5), months=4, post=post, sleep=lambda s: None)
+    assert r["asked"] == 8 and r["new"] == 2
+    asked.clear()
+    TK.fetch_months(root, date(2026, 10, 5), months=4, post=post, sleep=lambda s: None)
+    assert sorted(asked) == sorted([("sii", "115", "10"), ("otc", "115", "10"), ("sii", "115", "09"), ("otc", "115", "09")]), \
+        "本月與上個月還會有新場次，每次都查；更早的月份查過就不再查"
+
+
+def test_個股頁法說會資料_近8季_附解讀與轉折():
+    from twsix.report.talks_page import stock_doc, write_talks_json
+
+    root = _tmp()
+    rows = [{"code": "2330", "name": "台積電", "date": d, "time": "14:00", "summary": "公布財務報告", "file": f,
+             "file_en": "", "first_seen": d} for d, f in (("2026-07-17", "q2.pdf"), ("2026-10-16", "q3.pdf"))]
+    TK._append_index(root, [dict(r) for r in rows])
+    llm = {"revenue_outlook": 1, "margin_outlook": 1, "capex": 0, "utilization": None, "new_business": False,
+           "tone": 1, "hedging": 0, "highlights": ["營收季增10%"], "guidance": ["第四季營收260億美元"],
+           "risks": ["匯率"], "summary": "成長", "v": 2}
+    TK._append_features(root, [
+        {"code": "2330", "name": "台積電", "date": "2026-07-17", "file": "q2.pdf", "processed": "2026-07-18",
+         "source": "pdf", "rules": {"pos": 1, "neg": 0, "tone": 0.1}, "llm": {**llm, "tone": -1, "revenue_outlook": -1}},
+        {"code": "2330", "name": "台積電", "date": "2026-10-16", "file": "q3.pdf", "processed": "2026-10-17",
+         "source": "pdf", "rules": {"pos": 2, "neg": 0, "tone": 0.2}, "llm": llm, "lines": ["x"]}])
+    out = _tmp()
+    assert write_talks_json(root, out, today=date(2026, 11, 1)) == 1
+    doc = json.loads((out / "talks" / "2330.json").read_text(encoding="utf-8"))
+    q = doc["quarters"]
+    assert [x["q"] for x in q] == ["2026Q4", "2026Q3"] and q[0]["llm"]["guidance"] == ["第四季營收260億美元"]
+    assert q[0]["turn"]["kind"] == "正轉折" and "公司指引" in q[0]["turn"]["why"]
+    assert q[0]["url"].endswith("q3.pdf")
+    assert stock_doc("9999", [], {}, {}) is None
+
+
+def test_一鍵更新只重讀舊版解讀_而且只讀挑出來的那幾場():
+    root = _tmp()
+    rows = [{"code": "2330", "name": "台積電", "date": "2026-10-16", "time": "", "summary": "s", "file": "new.pdf",
+             "file_en": "", "first_seen": "x"},
+            {"code": "2330", "name": "台積電", "date": "2026-10-10", "time": "", "summary": "s", "file": "skip.pdf",
+             "file_en": "", "first_seen": "x"}]
+    TK._append_index(root, rows)
+    TK._append_features(root, [{"code": "2330", "name": "台積電", "date": "2026-10-16", "file": "new.pdf",
+                                "processed": "2026-10-17", "source": "pdf", "rules": {"tone": 0},
+                                "llm": {"tone": 0, "revenue_outlook": 0, "margin_outlook": 0, "highlights": []}}])
+    got = []
+
+    class LLM:
+        enabled, model_used = True, "m"
+
+        def ask_json(self, prompt):
+            got.append(prompt)
+            return {"highlights": ["營收季增10%"], "guidance": ["持平"], "tone": 1}
+    old_pages = TK.pdf_pages
+    TK.pdf_pages = lambda data: ["2026年第三季營收季增10%，毛利率提升"]
+    try:
+        r = TK.process(root, LLM(), priority=["2330"], today=date(2026, 11, 1), codes=["2330"],
+                       only_files={"new.pdf"}, upgrade=True, get=lambda url: b"%PDF-1.4",
+                       since_days=900)
+    finally:
+        TK.pdf_pages = old_pages
+    assert r["llm"] == 1 and len(got) == 1
+    feats = TK.read_features(root)
+    assert "skip.pdf" not in feats
+    assert feats["new.pdf"]["llm"]["v"] == TK.LLM_V and feats["new.pdf"]["llm"]["guidance"] == ["持平"]
+    assert feats["new.pdf"]["lines"], "有簡報文字就順便留重點句"

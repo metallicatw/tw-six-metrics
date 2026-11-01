@@ -3092,3 +3092,94 @@ var TWSIXRefresh = (function(){
     try{ return localStorage.getItem('twsix.fresh.' + code) || ''; }catch(e){ return ''; }
   }};
 })();
+
+/* ── 個股頁〈法說會〉：近 8 季，每季一場代表的法說會 ─────────────────────── */
+(function(){
+  var panel = document.getElementById('panel-talks');
+  if(!panel) return;
+  var box = panel.querySelector('.tk-stock'), loaded = false;
+  function esc(s){
+    return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  var UP = /(增|成長|上升|提升|回升|創新高|新高|擴大|上修|增加|改善|高於|優於|走揚|上揚|\+)/;
+  /* 數字加強：金額、百分比、季增／年增等。數字前面幾個字談的是增加就紅、減少就綠（台股慣例），其他用藍色粗體 */
+  function hl(t){
+    var s = esc(t).replace(/&#39;/g, '&apos;');   // 實體裡的數字不能被當成數據加色
+    return s.replace(/([+\-−]?\d[\d,]*(?:\.\d+)?\s*(?:%|％|個百分點|百分點|pp|bps|億元|億|萬元|萬|千元|元|倍|奈米|nm|萬片|片|吋|天|週|季|年)?)/g,
+      function(m, num, off){
+        if(!/\d/.test(num)) return m;
+        if(/^(19|20)\d{2}\s*(年)?$/.test(num.trim())) return m;   // 年份不加色
+        if(/[A-Za-z&#]$/.test(s.slice(Math.max(0, off - 1), off))) return m;  // Q3、N3 這類代號不加色
+        var before = s.slice(Math.max(0, off - 6), off);
+        var cls = /[+]/.test(num) || UP.test(before) ? 'up' : (/^[\-−]/.test(num) || /(減|衰退|下滑|下降|下修|降低|減少|虧損)/.test(before) ? 'dn' : '');
+        return '<b class="tk-n' + (cls ? ' ' + cls : '') + '">' + num + '</b>';
+      });
+  }
+  var TONE = {'-2':['很保守','dn'], '-1':['保守','dn'], '0':['中性',''], '1':['正面','up'], '2':['很樂觀','up']};
+  var DIR = {'-2':['大幅衰退','dn'], '-1':['衰退','dn'], '0':['持平',''], '1':['成長','up'], '2':['大幅成長','up']};
+  var MDIR = {'-2':['大幅下滑','dn'], '-1':['下滑','dn'], '0':['持平',''], '1':['上升','up'], '2':['大幅上升','up']};
+  function chip(label, v, cls){ return '<span class="tk-chip' + (cls ? ' ' + cls : '') + '">' + esc(label) + (v ? '：' + esc(v) : '') + '</span>'; }
+  function list(items, cls){
+    return '<ul class="tk-list' + (cls ? ' ' + cls : '') + '">' + items.map(function(x){ return '<li>' + hl(x) + '</li>'; }).join('') + '</ul>';
+  }
+  function card(q){
+    var x = q.llm, h = '<div class="tk-q">';
+    var src = x ? 'Gemini 解讀' + (q.source === 'pdf' ? '（簡報）' : '') : (q.source === 'pdf' ? '簡報重點句（未經 AI 解讀）' : (q.source === 'summary' ? '只有公告摘要' : '還沒有讀取'));
+    h += '<h4><span class="tk-qn">' + esc(q.q) + '</span><span class="tk-date">' + esc(q.date) + (q.time ? ' ' + esc(q.time) : '') +
+         (q.others ? '　另有 ' + q.others + ' 場' : '') + '</span><span class="tk-src muted">' + esc(src) + '</span></h4>';
+    if(q.title) h += '<p class="tk-title">' + esc(q.title) + '</p>';
+    var chips = [];
+    if(q.turn && q.turn.kind !== '持平') chips.push(chip('法說轉折', q.turn.kind, q.turn.kind === '正轉折' ? 'turn-up' : 'turn-dn'));
+    if(x){
+      var t = TONE[String(x.tone)], r = DIR[String(x.revenue_outlook)], m = MDIR[String(x.margin_outlook)];
+      if(r) chips.push(chip('營收展望', r[0], r[1]));
+      if(m) chips.push(chip('毛利率展望', m[0], m[1]));
+      if(t) chips.push(chip('整體口氣', t[0], t[1]));
+      if(x.capex) chips.push(chip('資本支出', x.capex > 0 ? '上修' : '下修', x.capex > 0 ? 'up' : 'dn'));
+      if(x.utilization !== null && x.utilization !== undefined) chips.push(chip('產能利用率', x.utilization + '%'));
+      if(x.new_business) chips.push(chip('新產品／新客戶／新市場', '', 'up'));
+    }
+    if(chips.length) h += '<div class="tk-chips">' + chips.join('') + '</div>';
+    if(x && x.summary) h += '<p class="tk-sum">' + hl(x.summary) + '</p>';
+    if(x && x.highlights && x.highlights.length) h += '<p class="tk-sec">會議重點</p>' + list(x.highlights);
+    else if(q.lines && q.lines.length) h += '<p class="tk-sec">簡報重點句</p>' + list(q.lines);
+    if(x && x.guidance && x.guidance.length) h += '<p class="tk-sec g">公司指引／展望</p>' + list(x.guidance, 'guide');
+    if(x && x.risks && x.risks.length) h += '<p class="tk-sec r">風險</p>' + list(x.risks, 'risk');
+    if(!x && !(q.lines && q.lines.length) && q.rules && (q.rules.pos || q.rules.neg))
+      h += '<p class="tk-foot">簡報用詞：正面 ' + (q.rules.pos || 0) + ' 次、負面 ' + (q.rules.neg || 0) + ' 次</p>';
+    if(q.turn && q.turn.why) h += '<p class="tk-why"><b>' + esc(q.turn.kind) + '</b>：' + hl(q.turn.why) + '</p>';
+    if(q.url) h += '<p class="tk-foot"><a href="' + esc(q.url) + '" target="_blank" rel="noopener noreferrer">法說會簡報 PDF（公開資訊觀測站）↗</a></p>';
+    return h + '</div>';
+  }
+  function render(d){
+    var qs = d.quarters || [];
+    if(!qs.length){ box.innerHTML = '<p class="muted">近兩年沒有這一檔的法說會紀錄。</p>'; return; }
+    var read = qs.filter(function(q){ return q.llm; }).length;
+    var out = ['<div class="tk-head"><b>近 ' + qs.length + ' 季法說會</b><span class="muted">每季挑一場代表（有簡報、談財報與營運的優先）；共 ' +
+      (d.events || qs.length) + ' 場，' + read + ' 場有 Gemini 解讀。數字：<b class="tk-n up">紅</b>＝增加、<b class="tk-n dn">綠</b>＝減少、<b class="tk-n">藍</b>＝其他數據。</span></div>'];
+    qs.forEach(function(q){ out.push(card(q)); });
+    out.push('<p class="muted note-s">簡報讀取與解讀在家裡的 NAS／本機版進行（雲端會被公開資訊觀測站擋下）；按個股頁的〔↻ 一鍵更新〕可補齊這一檔的近 8 季。內容由程式依公開資訊整理，不構成投資建議。</p>');
+    box.innerHTML = out.join('');
+  }
+  function load(){
+    if(loaded) return;
+    loaded = true;
+    if(!window.fetch){ box.innerHTML = '<p class="stale">這個瀏覽器不支援讀取法說會資料。</p>'; return; }
+    fetch(panel.getAttribute('data-src'), {cache: 'no-cache'}).then(function(r){
+      if(!r.ok) throw new Error(r.status);
+      return r.json();
+    }).then(function(d){
+      try{ render(d); }catch(err){ box.innerHTML = '<p class="stale">法說會資料的格式看不懂，這一個分頁暫時無法顯示。</p>'; }
+    }).catch(function(){
+      box.innerHTML = '<p class="muted">還沒有這一檔的法說會資料（近兩年沒有召開，或清單還沒補到；按〔↻ 一鍵更新〕可以補）。</p>';
+    });
+  }
+  if(window.MutationObserver){
+    new MutationObserver(function(){ if(!panel.hidden) load(); }).observe(panel, {attributes: true, attributeFilter: ['hidden']});
+  }
+  var tab = document.getElementById('tab-talks');
+  if(tab) tab.addEventListener('click', load);
+  if(!panel.hidden) load();
+})();

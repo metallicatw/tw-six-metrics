@@ -339,26 +339,41 @@ def st_talks(c: Ctx) -> tuple[str, str]:
             c.state["talks_blocked"] = True
         else:
             note = f"清單新增 {lst.get('new', 0)} 場；"
+    if not c.recent(f"talks_hist:{c.code}", 7 * 86400):
+        hist = TK.fetch_company_list(c.root, c.code, today, years=3)
+        if not (hist.get("errors") and len(hist["errors"]) >= 4):
+            c.touch(f"talks_hist:{c.code}")
+        if hist.get("new"):
+            note += f"歷史清單補 {hist['new']} 場；"
+    # 個股頁〈法說會〉近 8 季：每季挑一場代表的，沒讀過的簡報讀一次、舊版解讀重讀一次
+    rows = [r for r in TK.read_index(c.root) if r.get("code") == c.code]
+    picked = TK.pick_quarters(rows, 8)
+    files = {r["file"] for r in picked if r.get("file")}
+    recent = {r["file"] for r in rows if r.get("file") and r["date"] >= (today - timedelta(days=120)).isoformat()}
     llm = Gemini()
-    res = TK.process(c.root, llm, priority=[c.code], today=today, max_pdf=5, codes=[c.code],
-                     budget=240.0)
-    feats = TK.read_features(c.root)
-    mine = sorted((r for r in feats.values() if r.get("code") == c.code), key=lambda r: r["date"])
-    last = mine[-1] if mine else None
+    res = TK.process(c.root, llm, priority=[c.code], today=today, max_pdf=10, codes=[c.code],
+                     budget=360.0, since_days=900, only_files=files | recent, upgrade=True)
+    c.state["talks_quarters"] = len(picked)
     if res.get("processed"):
         c.state["ai"] = True
+    feats = TK.read_features(c.root)
+    mine = sorted((f for f in feats.values() if str(f.get("code")) == c.code),
+                  key=lambda f: str(f.get("date") or ""))
+    last = mine[-1] if mine else None
     tail = ""
     if last:
         how = "Gemini 解讀" if last.get("llm") else ("簡報規則判讀" if last.get("source") == "pdf" else "公告摘要")
-        tail = f"最近一場 {last['date']}（{how}）"
+        tail = f"最近一場 {last.get('date', '')}（{how}）"
     else:
-        tail = "近一年沒有法說會"
+        tail = "近兩年沒有法說會"
     if not llm.enabled:
         tail += "；沒有設定 Gemini 金鑰，只用規則"
     if res.get("errors") and not res.get("processed"):
         return "warn", note + "簡報讀不到（" + res["errors"][0] + "）；" + tail
     if c.state.get("talks_blocked") and not res.get("processed"):
         return "warn", note + tail
+    if picked:
+        tail += f"；個股頁〈法說會〉近 {len(picked)} 季"
     return ("ok" if res.get("processed") else "skip"), note + (
         f"讀了 {res['processed']} 場；" if res.get("processed") else "沒有新的一場；") + tail
 

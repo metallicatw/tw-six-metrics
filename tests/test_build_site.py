@@ -182,7 +182,8 @@ def test_the_stock_page_is_tabs_rather_than_one_long_scroll():
 
     tabs = page.count('role="tab" id="tab-')
     assert tabs == page.count('class="panel"')
-    assert tabs == 12
+    assert tabs == 13
+    assert 'id="tab-talks"' in page
     assert 'id="tab-ai"' in page
     assert 'id="tab-statements"' not in page
     assert page.count('role="tabpanel" aria-labelledby="tab-summary">') == 1
@@ -1500,3 +1501,14 @@ def test_匯入觀察清單時打的名字和現有群組同名_可以直接覆�
     assert "改一下名字" not in dlg
     assert "bc.textContent = taken && !self ? '覆蓋〔' + v + '〕' : '另存新群組'" in dlg
     assert "bc.hidden = self" in dlg and "dlg.close(bc.hidden ? 'over' : 'copy')" in dlg
+
+
+def test_個股頁有法說會分頁_而且桌機一列排完(tmp_path=None):
+    tmp = tmp_path or _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = served(out, "stock/5439.html")
+    assert 'id="tab-talks"' in page and 'data-src="../talks/5439.json"' in page
+    assert page.index('id="tab-talks"') < page.index('id="tab-ai"'), "法說會排在 AI 選股前面"
+    css = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.css").read_text("utf-8")
+    assert "@media (min-width:900px){\n  .tabs{gap:4px}\n  .tabs .tab{flex:1 1 auto;min-width:0" in css

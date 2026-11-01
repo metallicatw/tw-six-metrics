@@ -1018,6 +1018,14 @@ def build_site(
     written[f"{AI_PAGE}（AI 選股）"] = _write_ai_page(
         env, base, out_dir, sheets_dir.parent if sheets_dir is not None else None)
 
+    try:
+        from .talks_page import write_talks_json  # noqa: PLC0415
+
+        written["talks/*.json（法說會）"] = write_talks_json(
+            sheets_dir.parent if sheets_dir is not None else None, out_dir)
+    except Exception as exc:  # noqa: BLE001 - 一個分頁的資料不能讓建站失敗
+        print(f"::warning::個股頁〈法說會〉的資料沒有寫：{exc!r}")
+
     written[f"{RADAR_PAGE}（籌碼雷達）"] = _write_radar_page(env, base, out_dir)
 
     written[f"{SCREENER_PAGE}（選股功能）"] = _write_screener_page(

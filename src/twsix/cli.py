@@ -1914,6 +1914,32 @@ def cmd_aipick_fetch(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_talks_backfill(args: argparse.Namespace) -> int:
+    settings = Settings.load(args.config)
+    from .aipick import talks as TK  # noqa: PLC0415
+    from .aipick.fetch import TAIPEI, priority_codes  # noqa: PLC0415
+    from .aipick.llm import Gemini  # noqa: PLC0415
+
+    root = Path(args.data or settings.data_dir)
+    today = datetime.now(TAIPEI).date()
+    first = [c.strip() for c in (args.codes or "").split(",") if c.strip()]
+    pri = first + [c for c in priority_codes(root)[0] if c not in first]
+    llm = Gemini()
+    r = TK.backfill(root, llm, today=today, priority=pri, months=args.months, max_pdf=args.max_pdf,
+                    budget=args.minutes * 60)
+    lst = r["list"]
+    print(f"法說會近 8 季：清單查了 {lst['asked']} 次、新增 {lst['new']} 場；"
+          f"這一趟讀了 {r['pdf']} 份簡報、Gemini 解讀 {r['llm']} 份、處理 {r['processed']} 場；"
+          f"全市場每季代表場次 {r['quarters_done']}／{r['quarters_total']} 已處理")
+    if r.get("stopped"):
+        print(r["stopped"])
+    for e in (lst.get("errors") or [])[:3] + (r.get("errors") or [])[:3]:
+        print(f"::warning::{e}")
+    if not llm.enabled:
+        print("（沒有設定 Gemini 金鑰：只做規則判讀與挑重點句）")
+    return EXIT_OK
+
+
 def cmd_restate(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest.workbook import GridsSource  # noqa: PLC0415
@@ -3299,6 +3325,17 @@ def build_parser() -> argparse.ArgumentParser:
     fr.add_argument("stock", help="股票代號")
     fr.add_argument("--data", help="資料目錄")
     fr.set_defaults(func=cmd_fresh)
+
+    tb = sub.add_parser(
+        "talks-backfill",
+        help="法說會近 8 季：補全市場清單，依優先順序讀每檔每季代表場次的簡報（要在家裡的網路跑，可中斷續跑）",
+    )
+    tb.add_argument("--data", help="資料目錄")
+    tb.add_argument("--codes", help="這幾檔排最前面（逗號分隔）")
+    tb.add_argument("--months", type=int, default=24, help="清單往回補幾個月（預設 24＝8 季）")
+    tb.add_argument("--max-pdf", type=int, default=60, help="這一趟最多讀幾份簡報（預設 60）")
+    tb.add_argument("--minutes", type=float, default=30.0, help="這一趟最多跑幾分鐘（預設 30）")
+    tb.set_defaults(func=cmd_talks_backfill)
 
     rs = sub.add_parser(
         "restate",
