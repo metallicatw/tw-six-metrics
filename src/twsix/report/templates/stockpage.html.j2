@@ -12,7 +12,8 @@
           aria-pressed="false" aria-label="把 {{ p.stock_id }} 加入觀察清單"
           title="加入觀察清單">☆</button>
         <a class="gf-link" href="{{ rel }}radar.html#t1-{{ p.stock_id }}-gf" target="_blank" rel="noopener"
-       title="籌碼雷達：{{ p.stock_id }} 的貪婪／恐懼指標（另開分頁）">貪婪／恐懼<span aria-hidden="true">↗</span></a></h2>
+       title="籌碼雷達：{{ p.stock_id }} 的貪婪／恐懼指標（另開分頁）">貪婪／恐懼<span aria-hidden="true">↗</span></a>
+    <span class="rf" data-refresh="{{ p.stock_id }}" hidden></span></h2>
   <p class="facts">
     <span>財報 <b>{{ p.fiscal_quarter or "—" }}</b></span>
     <span>營收 <b>{{ p.revenue_month or "—" }}</b></span>

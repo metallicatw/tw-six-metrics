@@ -2889,3 +2889,206 @@ window.TWSIXImport = window.TWSIXImport || {};
     var L = inp.value.length; try{ inp.setSelectionRange(L, L); }catch(e){}
   }
 })();
+
+/* ── 一鍵更新 ─────────────────────────────────────────────────────────────
+   只有網站背後有一台自己的機器（本機版／NAS 版的服務，`api/ping` 回 refresh）時才出現。
+   按下去在那台機器上跑 `twsix refresh-stock`：報表、股權、行情、月營收、合約負債、
+   法說會、新聞、籌碼雷達、AI 卡片、趨勢選股，最後只重畫那一檔。進度面板把每一項的
+   結果列成清單（✅ 已更新、⏭️ 還很新、⚠️ 失敗、☁️ 雲端抓不到）。 */
+var TWSIXRefresh = (function(){
+  var base = (window.TWSIX && TWSIX.rel) || '';
+  var ICON = {ok: '✅', skip: '⏭️', warn: '⚠️', cloud: '☁️', fail: '❌', run: '⏳', wait: '·'};
+  var live = null, panel = null, timer = null, t0 = 0, after = null;
+
+  function ping(){
+    if(live) return live;
+    live = fetch(base + 'api/ping', {cache: 'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){ return !!(j && j.service === 'twsix' && j.refresh); })
+      .catch(function(){ return false; });
+    return live;
+  }
+  function esc(t){ return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function clock(){
+    var s = Math.round((Date.now() - t0) / 1000);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+  function scopeOf(el){
+    var sel = el && el.querySelector('select');
+    return sel && sel.value === 'quick' ? 'quick' : 'full';
+  }
+
+  function ensurePanel(){
+    if(panel) return panel;
+    panel = document.createElement('section');
+    panel.className = 'rf-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-live', 'polite');
+    panel.innerHTML = '<header><b class="rf-h"></b><span class="rf-t"></span>' +
+      '<button type="button" class="rf-x" aria-label="關閉">✕</button></header>' +
+      '<div class="rf-bar"><i></i></div><ol class="rf-list"></ol><p class="rf-foot"></p>' +
+      '<details class="rf-log"><summary>詳細紀錄</summary><pre></pre></details>';
+    panel.querySelector('.rf-x').addEventListener('click', function(){
+      clearTimeout(timer); timer = null; panel.hidden = true;
+    });
+    document.body.appendChild(panel);
+    return panel;
+  }
+  function head(text){ ensurePanel().querySelector('.rf-h').textContent = text; }
+  function foot(html){ panel.querySelector('.rf-foot').innerHTML = html || ''; }
+
+  function drawStages(st, done){
+    var n = st.length ? st[0].n : 0, fin = 0;
+    var html = st.map(function(s){
+      if(s.state !== 'run') fin++;
+      return '<li class="rf-' + s.state + '"><span class="rf-i">' + (ICON[s.state] || '·') + '</span>' +
+        '<span class="rf-n">' + esc(s.title) + '</span><span class="rf-d">' + esc(s.note === '進行中' ? '進行中…' : s.note) + '</span></li>';
+    }).join('');
+    for(var k = st.length; k < n; k++) html += '<li class="rf-wait"><span class="rf-i">·</span><span class="rf-n">…</span></li>';
+    panel.querySelector('.rf-list').innerHTML = html;
+    var pct = done ? 100 : (n ? Math.round(fin / n * 100) : 3);
+    panel.querySelector('.rf-bar i').style.width = Math.max(3, pct) + '%';
+    panel.querySelector('.rf-t').textContent = clock() + (n ? '　' + fin + '/' + n : '');
+  }
+  function drawLog(lines){
+    var pre = panel.querySelector('.rf-log pre');
+    pre.textContent = (lines || []).join('\n');
+  }
+  function mark(code){
+    try{ localStorage.setItem('twsix.fresh.' + code, String(Date.now())); }catch(e){}
+  }
+  function summary(st){
+    var c = {};
+    st.forEach(function(s){ c[s.state] = (c[s.state] || 0) + 1; });
+    return ['ok', 'skip', 'warn', 'cloud', 'fail'].filter(function(k){ return c[k]; })
+      .map(function(k){ return ICON[k] + ' ' + c[k]; }).join('　');
+  }
+
+  function poll(code){
+    fetch(base + 'api/job/' + encodeURIComponent(code), {cache: 'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j.error){ foot('<span class="rf-bad">' + esc(j.error) + '</span>'); return; }
+        var st = j.stages || [];
+        drawStages(st, j.done); drawLog(j.lines);
+        if(!j.done){
+          if(!st.length) foot(esc((j.lines || []).slice(-1)[0] || '準備中…'));
+          else foot('');
+          timer = setTimeout(function(){ poll(code); }, 1000);
+          return;
+        }
+        mark(code);
+        var fail = st.some(function(s){ return s.state === 'fail'; });
+        head(code + (j.ok && !fail ? ' 一鍵更新完成' : ' 一鍵更新沒有全部完成'));
+        foot(summary(st) + (after ? '　<button type="button" class="rf-go rf-reload">重新載入這一頁</button>' : ''));
+        var b = panel.querySelector('.rf-reload');
+        if(b) b.addEventListener('click', function(){ after(code); });
+        if(after && j.ok && !fail) setTimeout(function(){ if(!panel.hidden) after(code); }, 2500);
+      })
+      .catch(function(){ foot('<span class="rf-bad">連不上這台機器的服務</span>'); timer = setTimeout(function(){ poll(code); }, 3000); });
+  }
+
+  function start(code, scope, onDone){
+    after = onDone || null;
+    ensurePanel().hidden = false; t0 = Date.now(); clearTimeout(timer);
+    head('一鍵更新 ' + code + (scope === 'quick' ? '（快速）' : '（完整）'));
+    panel.querySelector('.rf-list').innerHTML = ''; drawLog([]);
+    panel.querySelector('.rf-bar i').style.width = '3%';
+    foot('送出中…');
+    fetch(base + 'api/fetch/' + encodeURIComponent(code) + '?scope=' + scope, {method: 'POST'})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j.error){ foot('<span class="rf-bad">' + esc(j.error) + '</span>'); return; }
+        poll(code);
+      })
+      .catch(function(){ foot('<span class="rf-bad">送不出去：連不上這台機器的服務</span>'); });
+  }
+
+  function pollBatch(){
+    fetch(base + 'api/batch', {cache: 'no-store'})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        var rows = j.rows || [], fin = 0;
+        panel.querySelector('.rf-list').innerHTML = rows.map(function(r){
+          var st = r.stages || [], state = r.done ? (r.ok ? 'ok' : 'warn') : (r.queued ? 'wait' : 'run');
+          if(r.done) fin++;
+          var note = r.done ? (summary(st) || (r.ok ? '完成' : '沒有跑完')) : (r.queued ? '排隊中' : esc(r.last || '進行中…'));
+          return '<li class="rf-' + state + '"><span class="rf-i">' + ICON[state] + '</span>' +
+            '<span class="rf-n">' + esc(r.code) + '</span><span class="rf-d">' + note + '</span></li>';
+        }).join('');
+        panel.querySelector('.rf-bar i').style.width = Math.max(3, rows.length ? Math.round(fin / rows.length * 100) : 3) + '%';
+        panel.querySelector('.rf-t').textContent = clock() + '　' + fin + '/' + rows.length;
+        if(!j.done){ timer = setTimeout(pollBatch, 2000); return; }
+        rows.forEach(function(r){ if(r.done && r.ok) mark(r.code); });
+        head('觀察清單整批更新完成');
+        foot('<button type="button" class="rf-go rf-reload">重新載入這一頁</button>');
+        panel.querySelector('.rf-reload').addEventListener('click', function(){ location.reload(); });
+      })
+      .catch(function(){ timer = setTimeout(pollBatch, 4000); });
+  }
+
+  function batch(codes, scope){
+    if(!codes.length) return;
+    var est = scope === 'quick' ? 1.5 : 3;
+    if(!window.confirm('要依序更新目前群組的 ' + codes.length + ' 檔嗎？\n一次一檔，大約 ' +
+                       Math.ceil(codes.length * est) + ' 分鐘；中途可以按〔取消剩下的〕。')) return;
+    ensurePanel().hidden = false; t0 = Date.now(); clearTimeout(timer);
+    head('觀察清單整批更新（' + codes.length + ' 檔）');
+    panel.querySelector('.rf-list').innerHTML = ''; drawLog([]);
+    foot('送出中…');
+    fetch(base + 'api/fetch-batch', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                     body: JSON.stringify({codes: codes, scope: scope})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j.error){ foot('<span class="rf-bad">' + esc(j.error) + '</span>'); return; }
+        foot('<button type="button" class="rf-go rf-cancel">取消剩下的</button>');
+        panel.querySelector('.rf-cancel').addEventListener('click', function(){
+          fetch(base + 'api/batch/cancel', {method: 'POST'}).then(function(){ foot('已要求取消，跑到一半的那一檔會停在目前這一項'); });
+        });
+        pollBatch();
+      })
+      .catch(function(){ foot('<span class="rf-bad">送不出去：連不上這台機器的服務</span>'); });
+  }
+
+  function control(label, title){
+    return '<button type="button" class="rf-go" title="' + title + '">' + label + '</button>' +
+      '<select aria-label="更新範圍" title="完整＝所有資料（2–5 分鐘）；快速＝報表、新聞、重算與重畫（約 1 分鐘）">' +
+      '<option value="full">完整</option><option value="quick">快速</option></select>';
+  }
+
+  function mount(root){
+    (root || document).querySelectorAll('[data-refresh]:not([data-rf-on])').forEach(function(el){
+      el.setAttribute('data-rf-on', '1');
+      ping().then(function(ok){
+        if(!ok) return;
+        var code = el.getAttribute('data-refresh');
+        el.innerHTML = control(el.classList.contains('rf-mini') ? '↻' : '↻ 一鍵更新',
+          '在這台機器上更新 ' + code + ' 的所有資料（報表、股權、行情、月營收、合約負債、法說會、新聞、籌碼雷達、AI、趨勢）');
+        el.hidden = false;
+        el.querySelector('.rf-go').addEventListener('click', function(){
+          var then = el.getAttribute('data-refresh-after') === 'reload'
+            ? function(){ location.reload(); }
+            : function(c){ location.href = location.pathname + '?v=' + Date.now() + location.hash; };
+          start(code, scopeOf(el), then);
+        });
+      });
+    });
+    (root || document).querySelectorAll('[data-refresh-batch]:not([data-rf-on])').forEach(function(el){
+      el.setAttribute('data-rf-on', '1');
+      ping().then(function(ok){
+        if(!ok || !window.TWSIXWatch) return;
+        el.innerHTML = control('↻ 全部一鍵更新', '依序更新目前這個群組的每一檔（一次一檔）');
+        el.hidden = false;
+        el.querySelector('.rf-go').addEventListener('click', function(){
+          batch(TWSIXWatch.order(), scopeOf(el));
+        });
+      });
+    });
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ mount(); });
+  else mount();
+  return {mount: mount, start: start, batch: batch, ping: ping, fresh: function(code){
+    try{ return localStorage.getItem('twsix.fresh.' + code) || ''; }catch(e){ return ''; }
+  }};
+})();

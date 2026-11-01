@@ -439,6 +439,9 @@ PAGE_FILE = "radar.html"
 VERSION_MARK = "@@CFV@@"
 
 
+FRESH_FILE = "fresh.json"  # 一鍵更新改過哪幾檔（併進頁面的版本碼，瀏覽器才不會拿快取裡的舊檔）
+
+
 def stamp_page(site_dir: Path) -> str:
     page = site_dir / PAGE_FILE
     stamp = site_dir / SITE_DIR / "stamp.json"
@@ -447,7 +450,8 @@ def stamp_page(site_dir: Path) -> str:
     html = page.read_text(encoding="utf-8")
     if VERSION_MARK not in html:
         return ""
-    v = hashlib.sha1(stamp.read_bytes()).hexdigest()[:10]
+    fresh = site_dir / SITE_DIR / FRESH_FILE
+    v = hashlib.sha1(stamp.read_bytes() + (fresh.read_bytes() if fresh.exists() else b"")).hexdigest()[:10]
     page.write_text(html.replace(VERSION_MARK, v), encoding="utf-8")
     return v
 
@@ -481,16 +485,7 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
     ia = p.asof_index
     days = list(range(max(0, ia - DAYS + 1), ia + 1))
     long_days = list(range(max(0, ia - LONG_DAYS + 1), ia + 1))
-    ranks: dict[int, dict] = {}
-    for i in long_days:
-        st = engine.day_stats(i)
-        vals = [v for v in st["val20"].values() if not isnan(v)]
-        wn = _whale_counts(engine, i)
-        per_fi = {c: st["fi60"].get(c, NAN) / n for c, n in wn.items()}
-        per_val = {c: st["val20"].get(c, NAN) / n for c, n in wn.items()}
-        ranks[i] = {"fi": rank_desc(st["fi60"]), "val": rank_desc(st["val20"]),
-                    "val_total": sum(vals), "val_n": len(vals), "wr": rank_desc(per_fi),
-                    "xr": rank_desc(per_val)}
+    ranks = _ranks(engine, long_days)
     avg_va = [_r(ranks[i]["val_total"] / ranks[i]["val_n"] / 1e8, 3) if ranks[i]["val_n"] else None
               for i in days]
 
@@ -535,36 +530,92 @@ def export(data_dir: Path, site_dir: Path, *, force: bool = False,
     if vendor.exists():
         (out / "chart.umd.min.js").write_bytes(vendor.read_bytes())
 
-    income = load_income(data_dir)
-    balance = load_balance(data_dir)
-    from ..aipick.revenue import load_revenue  # noqa: PLC0415
-
-    revenue = load_revenue(data_dir)
-    notes = load_revenue_notes(data_dir)
+    fund = _fund_sources(data_dir)
     written = 0
     for c in engine.codes:
         if isnan(p.close[c][ia]) and c not in rows:
             continue
-        doc: dict[str, object] = {"c": c, "n": rows.get(c, {}).get("n") or
-                                  engine.names.get(c, (c, ""))[0] or c,
-                                  "asof": p.asof}
-        if c in daily_codes:
-            full = daily_series(engine, c, long_days, ranks)
-            cut = len(long_days) - len(days)
-            recent = {k: v[cut:] for k, v in full.items()}
-            doc["d"] = {k: v for k, v in recent.items() if any(x is not None for x in v)}
-            (out / "stock" / f"{c}.L.bin").write_bytes(encode_long(full, len(long_days)))
-        doc["h"] = holders_series(engine, c)
-        doc["fq"] = fundamentals_series(income.get(c, {}), balance.get(c, {}))
-        doc["fs"] = sheet_series(engine.fund.sheets.get(c, {}), income.get(c, {}))
-        doc["fm"] = revenue_series(engine, c, revenue.get(c, {}), notes.get(c, {}))
-        (out / "stock" / f"{c}.json").write_bytes(_dump(doc))
+        _write_stock(out, engine, c, rows, c in daily_codes, days, long_days, ranks, fund)
         written += 1
     (out / LONG_HEAD).write_bytes(_dump({"dates": [p.dates[i] for i in long_days],
                                          "fields": [[k, sc] for k, sc in LONG_FIELDS]}))
     stamp.write_text(json.dumps(key), encoding="utf-8")
     return {"資料日": p.asof, "個股檔": written, "含日序列": len(daily_codes), "逐日歷史": hist,
             "產業氣泡圖": sector}
+
+
+def _ranks(engine: Engine, long_days: list[int]) -> dict[int, dict]:
+    ranks: dict[int, dict] = {}
+    for i in long_days:
+        st = engine.day_stats(i)
+        vals = [v for v in st["val20"].values() if not isnan(v)]
+        wn = _whale_counts(engine, i)
+        per_fi = {c: st["fi60"].get(c, NAN) / n for c, n in wn.items()}
+        per_val = {c: st["val20"].get(c, NAN) / n for c, n in wn.items()}
+        ranks[i] = {"fi": rank_desc(st["fi60"]), "val": rank_desc(st["val20"]),
+                    "val_total": sum(vals), "val_n": len(vals), "wr": rank_desc(per_fi),
+                    "xr": rank_desc(per_val)}
+    return ranks
+
+
+def _fund_sources(data_dir: Path) -> dict[str, dict]:
+    from ..aipick.revenue import load_revenue  # noqa: PLC0415
+
+    return {"income": load_income(data_dir), "balance": load_balance(data_dir),
+            "revenue": load_revenue(data_dir), "notes": load_revenue_notes(data_dir)}
+
+
+def _write_stock(out: Path, engine: Engine, c: str, rows: dict, daily: bool, days: list[int],
+                 long_days: list[int], ranks: dict[int, dict], fund: dict[str, dict]) -> None:
+    p = engine.p
+    doc: dict[str, object] = {"c": c, "n": rows.get(c, {}).get("n") or
+                              engine.names.get(c, (c, ""))[0] or c,
+                              "asof": p.asof}
+    if daily:
+        full = daily_series(engine, c, long_days, ranks)
+        cut = len(long_days) - len(days)
+        recent = {k: v[cut:] for k, v in full.items()}
+        doc["d"] = {k: v for k, v in recent.items() if any(x is not None for x in v)}
+        (out / "stock" / f"{c}.L.bin").write_bytes(encode_long(full, len(long_days)))
+    income, balance = fund["income"].get(c, {}), fund["balance"].get(c, {})
+    doc["h"] = holders_series(engine, c)
+    doc["fq"] = fundamentals_series(income, balance)
+    doc["fs"] = sheet_series(engine.fund.sheets.get(c, {}), income)
+    doc["fm"] = revenue_series(engine, c, fund["revenue"].get(c, {}), fund["notes"].get(c, {}))
+    (out / "stock" / f"{c}.json").write_bytes(_dump(doc))
+
+
+def export_codes(data_dir: Path, site_dir: Path, codes: list[str]) -> dict[str, object]:
+    """只重寫這幾檔的 stock/<代號>.json 與 .L.bin（一鍵更新用；全市場檔不動）。"""
+    out = site_dir / SITE_DIR
+    (out / "stock").mkdir(parents=True, exist_ok=True)
+    rows: dict = {}
+    radar = data_dir / OUT_DIR / RADAR_FILE
+    if radar.exists():
+        rows = {r["c"]: r for r in json.loads(gzip.decompress(radar.read_bytes())).get("rows", [])}
+    engine = Engine(data_dir)
+    p = engine.p
+    ia = p.asof_index
+    days = list(range(max(0, ia - DAYS + 1), ia + 1))
+    long_days = list(range(max(0, ia - LONG_DAYS + 1), ia + 1))
+    want = [c for c in codes if c in set(engine.codes)]
+    if not want:
+        return {"資料日": p.asof, "個股檔": 0}
+    ranks = _ranks(engine, long_days)
+    fund = _fund_sources(data_dir)
+    for c in want:
+        daily = not isnan(p.close[c][ia]) or c in rows
+        _write_stock(out, engine, c, rows, daily, days, long_days, ranks, fund)
+    fresh = out / FRESH_FILE
+    try:
+        marks = json.loads(fresh.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        marks = {}
+    import time  # noqa: PLC0415
+
+    marks.update({c: int(time.time()) for c in want})
+    fresh.write_text(json.dumps(marks, sort_keys=True), encoding="utf-8")
+    return {"資料日": p.asof, "個股檔": len(want)}
 
 
 def _write_sector(engine: Engine, data_dir: Path, out: Path, rows: dict[str, dict]) -> str:

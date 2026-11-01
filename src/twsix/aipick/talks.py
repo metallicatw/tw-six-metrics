@@ -271,14 +271,16 @@ def _append_features(data_dir: Path, recs: list[dict]) -> None:
 
 
 def process(data_dir: Path, llm, *, priority: list[str], today: date, max_pdf: int = 25,
-            get=None, since_days: int = 400, budget: float = TIME_BUDGET, clock=None) -> dict:
+            get=None, since_days: int = 400, budget: float = TIME_BUDGET, clock=None,
+            codes: list[str] | None = None) -> dict:
     from .llm import QuotaExhausted  # noqa: PLC0415
 
     get = get or _get_bytes
     feats = read_features(data_dir)
     rank = {c: k for k, c in enumerate(priority)}
     cutoff = (today - timedelta(days=since_days)).isoformat()
-    rows = [r for r in read_index(data_dir) if r.get("file") and r["date"] >= cutoff]
+    rows = [r for r in read_index(data_dir) if r.get("file") and r["date"] >= cutoff
+            and (codes is None or r["code"] in codes)]
     uniq: dict[str, dict] = {}
     for r in rows:
         uniq.setdefault(r["file"], r)

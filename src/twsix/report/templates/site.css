@@ -1367,3 +1367,48 @@ html body :is(input:not([type]),input[type=text],input[type=number],input[type=s
   border-color:var(--accent-2)!important;outline:none;
   box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-2) 28%,transparent)}
 html body :is(.qf-btn,.sc-sel):not(#cf *):hover{border-color:color-mix(in srgb,var(--accent-2) 55%,var(--field-line))!important}
+/* 一鍵更新 */
+.rf{display:inline-flex;align-items:center;gap:0;margin-left:8px;vertical-align:3px;white-space:nowrap}
+.rf[hidden]{display:none}
+.rf .rf-go,.rf select{font:inherit;font-size:12.5px;font-weight:600;padding:3px 10px;cursor:pointer;
+  border:1.5px solid var(--accent);background:var(--surface);color:var(--accent)}
+.rf .rf-go{border-radius:999px 0 0 999px}
+.rf select{border-left:none;border-radius:0 999px 999px 0;padding:3px 6px;font-weight:500;
+  color:var(--ink-2);appearance:auto}
+.rf .rf-go:hover{background:var(--accent);color:#fff}
+.rf .rf-go:focus-visible,.rf select:focus-visible{outline:2px solid var(--accent-2);outline-offset:1px}
+.rf.rf-mini{margin-left:4px;vertical-align:0}
+.rf.rf-mini .rf-go{padding:2px 9px}
+.rf-panel{position:fixed;z-index:80;right:16px;bottom:16px;width:min(440px,calc(100vw - 32px));
+  max-height:min(78vh,640px);display:flex;flex-direction:column;background:var(--surface);
+  border:1px solid var(--accent);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.22);
+  padding:10px 12px;font-size:13px;color:var(--ink)}
+.rf-panel[hidden]{display:none}
+.rf-panel header{display:flex;align-items:baseline;gap:8px;padding-right:22px;position:relative}
+.rf-panel .rf-h{font-weight:700}
+.rf-panel .rf-t{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rf-panel .rf-x{position:absolute;right:-4px;top:-3px;border:none;background:none;color:var(--muted);
+  font:inherit;cursor:pointer;padding:2px 6px;border-radius:4px}
+.rf-panel .rf-x:hover{background:var(--surface-2);color:var(--ink)}
+.rf-panel .rf-bar{height:5px;border-radius:3px;background:var(--rule);margin:8px 0 6px;overflow:hidden}
+.rf-panel .rf-bar i{display:block;height:100%;width:3%;background:var(--accent);transition:width .4s}
+.rf-panel .rf-list{list-style:none;margin:0;padding:0;overflow:auto;flex:1 1 auto}
+.rf-panel .rf-list li{display:grid;grid-template-columns:1.6em 9.5em 1fr;gap:4px;align-items:baseline;
+  padding:3px 0;border-bottom:1px dashed var(--rule);line-height:1.45}
+.rf-panel .rf-n{font-weight:600;overflow-wrap:anywhere}
+.rf-panel .rf-d{color:var(--ink-2);font-size:12px;overflow-wrap:anywhere}
+.rf-panel li.rf-run .rf-n{color:var(--accent)}
+.rf-panel li.rf-run .rf-i{animation:twsix-pulse 1.1s ease-in-out infinite}
+.rf-panel li.rf-warn .rf-d,.rf-panel li.rf-fail .rf-d,.rf-panel .rf-bad{color:var(--g0)}
+.rf-panel li.rf-skip .rf-d,.rf-panel li.rf-cloud .rf-d,.rf-panel li.rf-wait{color:var(--muted)}
+.rf-panel .rf-foot{margin:8px 0 0;font-size:12.5px;max-width:none}
+.rf-panel .rf-foot .rf-go{font:inherit;font-size:12px;padding:2px 10px;border-radius:999px;cursor:pointer;
+  border:1.5px solid var(--accent);background:var(--surface);color:var(--accent)}
+.rf-panel .rf-foot .rf-go:hover{background:var(--accent);color:#fff}
+.rf-panel .rf-log{margin-top:6px}
+.rf-panel .rf-log summary{font-size:11px;color:var(--muted);cursor:pointer}
+.rf-panel .rf-log pre{margin:4px 0 0;max-height:180px;overflow:auto;font-size:11px;line-height:1.5;
+  white-space:pre-wrap;word-break:break-all;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.rf-panel li.rf-run .rf-i{animation:none}}
+@media (max-width:560px){.rf-panel{right:8px;left:8px;bottom:8px;width:auto}
+  .rf-panel .rf-list li{grid-template-columns:1.6em 1fr}.rf-panel .rf-d{grid-column:2}}

@@ -6,11 +6,17 @@ on:
   workflow_dispatch:
     inputs:
       stock:
-        description: "股票代號（例如 2330）。一次一檔。"
+        description: "股票代號（例如 2330）。可以一次多檔，用逗號隔開（最多 10 檔）。"
         required: true
         type: string
+      scope:
+        description: "完整（full）＝所有雲端抓得到的資料；快速（quick）＝報表、新聞、重算與重畫"
+        required: false
+        default: full
+        type: choice
+        options: [full, quick]
       force:
-        description: "就算今天已經抓過也重抓一次"
+        description: "就算還很新也重抓一次"
         required: false
         default: false
         type: boolean
@@ -46,12 +52,13 @@ jobs:
           INPUT: ${{ inputs.stock }}
         run: |
           raw="${INPUT:-$TITLE}"
-          code=$(printf '%s' "$raw" | tr -cd '0-9 ' | tr -s ' ' | awk '{print $1}')
-          if ! printf '%s' "$code" | grep -Eq '^[0-9]{4,6}$'; then
+          codes=$(printf '%s' "$raw" | tr -c '0-9' ' ' | tr -s ' ' '\n' | grep -E '^[0-9]{4,6}$' | awk '!seen[$0]++' | head -n 10 | paste -sd, -)
+          if [ -z "$codes" ]; then
             echo "::error::「$raw」裡找不到 4~6 位數字的股號"
             exit 1
           fi
-          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "codes=$codes" >> "$GITHUB_OUTPUT"
+          echo "code=${codes%%,*}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v5
         with:
@@ -60,38 +67,25 @@ jobs:
 
       - run: pip install -e ".[report]"
 
-      - name: 需要抓嗎
+      - name: 測試並一鍵更新
         id: need
         env:
+          CODES: ${{ steps.pick.outputs.codes }}
+          SCOPE: ${{ inputs.scope || 'full' }}
           IN_FORCE: ${{ inputs.force }}
-        run: |
-          code="${{ steps.pick.outputs.code }}"
-          if [ "$IN_FORCE" = "true" ]; then
-            echo "::notice::強制重抓 $code"
-            echo "stale=yes" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          out="$(twsix fresh "$code" || true)"
-          echo "$out"
-          case "$out" in
-            fresh*)
-              echo "::notice::$code 的資料已經是最新的，這次不抓（要強制重抓的話用 Actions 分頁的 Run workflow，勾 force）"
-              echo "stale=no" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "stale=yes" >> "$GITHUB_OUTPUT"
-              ;;
-          esac
-
-      - name: 測試並抓取
-        if: steps.need.outputs.stale == 'yes'
         run: |
           python -c "import twsix.cli"
           python scripts/run_tests.py > /tmp/tests.log 2>&1 &
           tests=$!
+          # 雲端這一段只更新資料（公開資訊觀測站的項目自動略過）；個股頁、籌碼雷達與清單
+          # 交給下面的〔建站〕一起重畫，才不會畫兩次。
+          only="sheets,yearly,holders,directors,levels,daily,revenue,cl,news,talks,page,aipick"
+          force=""; [ "$IN_FORCE" = "true" ] && force="--force"
           set +e
-          twsix report "${{ steps.pick.outputs.code }}"
-          fetch=$?
+          bad=0
+          for c in $(printf '%s' "$CODES" | tr ',' ' '); do
+            twsix refresh-stock "$c" --scope "$SCOPE" --only "$only" --out /tmp/rs-site $force || bad=$((bad+1))
+          done
           wait "$tests"
           suite=$?
           set -e
@@ -101,22 +95,26 @@ jobs:
             echo "::error::測試沒過，不 commit 這次抓到的資料"
             exit 1
           fi
-          exit "$fetch"
+          echo "stale=yes" >> "$GITHUB_OUTPUT"
+          n=$(printf '%s' "$CODES" | tr ',' '\n' | wc -l)
+          if [ "$bad" -ge "$n" ]; then
+            echo "::error::每一檔的券商報表都沒抓到（多半是 IP 被擋），不重畫"
+            exit 1
+          fi
 
       - name: Commit
         if: steps.need.outputs.stale == 'yes'
         run: |
-          code="${{ steps.pick.outputs.code }}"
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A -- "data/sheets/$code" data/ownership data/ratings.csv || true
+          git add -A -- data || true
           if ! git diff --quiet; then
             echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
             git diff --name-only | sed 's/^/  /'
             exit 1
           fi
           if git diff --cached --quiet; then
-            echo "::notice::$code 的資料沒有變化，不需要 commit"
+            echo "::notice::資料沒有變化，不需要 commit"
             exit 0
           fi
           git commit -q -m "data"
@@ -137,6 +135,7 @@ jobs:
           setup: "false"   # 上面已經 setup 過了
           incremental: "true"
           save_cache: "false"
+          codes: ${{ steps.pick.outputs.codes }}
 
       - name: 發布
         id: deployment
@@ -156,7 +155,7 @@ jobs:
         run: |
           url="https://metallicatw.github.io/tw-six-metrics/stock/$CODE.html"
           {
-            echo "### $CODE 已加入觀察清單"
+            echo "### $CODE 一鍵更新完成"
             echo ""
             echo "接下來 publish 工作會重建並發布網站，完成後在這裡："
             echo ""

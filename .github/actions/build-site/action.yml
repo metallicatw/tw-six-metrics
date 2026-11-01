@@ -19,6 +19,11 @@ inputs:
       只重畫內容真的變了的那幾檔（拿內容指紋跟上一次建站比對）。要搭配把 site/
       從快取取回來——沒有上一次的成果可以沿用時會自動整站重建，不會畫錯。
     default: "false"
+  codes:
+    description: >-
+      一鍵更新的那幾檔（逗號分隔）。建站之後再重寫這幾檔的籌碼雷達個股檔，
+      並在〔趨勢選股〕報告裡重算這幾檔。空白＝不做。
+    default: ""
 
 runs:
   using: composite
@@ -87,6 +92,24 @@ runs:
         fi
       shell: bash
 
+    - name: 〔趨勢選股〕重算一鍵更新的那幾檔
+      if: inputs.codes != ''
+      env:
+        CODES: ${{ inputs.codes }}
+      run: |
+        [ -s site/trend-report.html ] || { echo "沒有趨勢選股報告，略過"; exit 0; }
+        rm -rf /tmp/tf-code
+        if ! git clone --depth 1 --quiet https://github.com/metallicatw/tw-trend-filter.git /tmp/tf-code; then
+          echo "::warning::tw-trend-filter 的程式取不到，趨勢選股這次不重算"; exit 0
+        fi
+        [ -f /tmp/tf-code/tw_trend_filter/single.py ] || { echo "趨勢選股的程式還沒有單檔更新，略過"; exit 0; }
+        pip install -q -r /tmp/tf-code/requirements.txt || { echo "::warning::趨勢選股的套件裝不起來，略過"; exit 0; }
+        for c in $(printf '%s' "$CODES" | tr ',' ' '); do
+          (cd /tmp/tf-code && python -m tw_trend_filter.single "$c" --report "$GITHUB_WORKSPACE/site/trend-report.html") \
+            || echo "::warning::趨勢選股 $c 沒有重算"
+        done
+      shell: bash
+
     - name: 建立網站
       run: |
         if [ "${{ inputs.incremental }}" = "true" ]; then
@@ -97,7 +120,11 @@ runs:
       shell: bash
 
     - name: 籌碼雷達（網站資料）
-      run: twsix chipflow-site || echo "::warning::籌碼雷達的網站資料沒產生"
+      run: |
+        twsix chipflow-site || echo "::warning::籌碼雷達的網站資料沒產生"
+        if [ -n "${{ inputs.codes }}" ]; then
+          twsix chipflow-site --codes "${{ inputs.codes }}" || echo "::warning::一鍵更新那幾檔的籌碼雷達個股檔沒有重寫"
+        fi
       shell: bash
 
     - name: 登入畫面

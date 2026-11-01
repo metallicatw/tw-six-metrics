@@ -40,8 +40,9 @@ function bgJumps(code, from){
   var name = (ROWS[code] || {}).n || "";
   host.innerHTML = '<span class="bg-jump-l">切換</span>' + BG_JUMPS.filter(function(t){ return t[0] !== from; }).map(function(t){
     return '<button type="button" class="bg-jump" data-jump="' + t[0] + '" data-code="' + bgAttr(code) + '" title="' + bgAttr(code + " " + name + " → " + t[2]) + '">' + t[1] + '</button>';
-  }).join("");
+  }).join("") + '<span class="rf rf-mini" data-refresh="' + bgAttr(code) + '" data-refresh-after="reload" hidden></span>';
   host.hidden = false;
+  if (window.TWSIXRefresh) TWSIXRefresh.mount(host);
 }
 CFX.ind = function(c){ var r = ROWS[c]; return r && r.ind ? r.ind : "#N/A"; };
 

@@ -262,6 +262,22 @@ def test_建站資料_個股序列_第二次沒換資料就跳過():
     assert again == {"略過": "資料沒有換"}
 
 
+def test_一鍵更新只重寫那一檔_內容跟全市場匯出一模一樣():
+    from twsix.chipflow import site as S
+
+    root = _market()
+    _with_thresholds(lambda: RD.run(root))
+    full, one = Path(tempfile.mkdtemp()), Path(tempfile.mkdtemp())
+    _with_thresholds(lambda: S.export(root, full, repo_root=root))
+    got = _with_thresholds(lambda: S.export_codes(root, one, ["2030", "9999"]))
+    assert got["個股檔"] == 1
+    names = sorted(p.name for p in (one / "chipflow" / "stock").iterdir())
+    assert names == ["2030.L.bin", "2030.json"]
+    for n in names:
+        assert (one / "chipflow" / "stock" / n).read_bytes() == (full / "chipflow" / "stock" / n).read_bytes(), n
+    assert not (one / "chipflow" / "radar.json").exists()
+
+
 def test_建站資料壞了也不讓指令失敗():
     import argparse
 

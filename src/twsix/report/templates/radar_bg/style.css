@@ -1152,4 +1152,9 @@
   #cf .bg2 header.top .msg{grid-row:5;}
   #cf .bg-jump{padding:6px 10px; font-size:12.5px;}
 }
+#cf .rf .rf-go, #cf .rf select{font-family:inherit; font-size:12.5px; font-weight:600; line-height:1.3;
+  padding:5px 10px; border:1.5px solid var(--accent); background:var(--surface); color:var(--accent); cursor:pointer;}
+#cf .rf .rf-go{border-radius:999px 0 0 999px;}
+#cf .rf select{border-left:none; border-radius:0 999px 999px 0; padding:5px 6px; font-weight:500; color:var(--ink-2, inherit);}
+#cf .rf .rf-go:hover{background:var(--accent); color:#fff;}
 {% endraw %}

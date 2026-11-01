@@ -75,10 +75,16 @@ def test_the_browser_decides_before_it_opens_a_workflow_at_all():
 
 
 def test_the_workflow_asks_before_it_fetches():
+    # 「需不需要重抓」改成一鍵更新的每一個階段各自判斷（報表沿用 is_fresh，其他看最新一期有沒有）
     wf = (ROOT / ".github/workflows/stock.yml").read_text("utf-8")
-    assert "twsix fresh" in wf
+    assert "twsix refresh-stock" in wf
     assert "steps.need.outputs.stale == 'yes'" in wf
-    assert wf.count("steps.need.outputs.stale == 'yes'") == 5
+    assert wf.count("steps.need.outputs.stale == 'yes'") == 4
+    import inspect
+
+    from twsix import refresh
+
+    assert "is_fresh(base)" in inspect.getsource(refresh.st_sheets)
 
 
 def test_a_run_that_skipped_everything_does_not_leave_the_panel_spinning():

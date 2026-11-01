@@ -177,11 +177,21 @@ def candidates(data_dir: Path) -> list[str]:
             grid = json.loads(gzip.decompress(f.read_bytes()).decode("utf-8"))
         except (OSError, ValueError, EOFError):
             continue
-        for row in grid if isinstance(grid, list) else []:
-            if row and str(row[0]).strip() in CL_NAMES and any((_num(str(c)) or 0) for c in row[1:]):
-                out.append(d.name)
-                break
+        if any(row and str(row[0]).strip() in CL_NAMES and any((_num(str(x)) or 0) for x in row[1:])
+               for row in (grid if isinstance(grid, list) else [])):
+            out.append(d.name)
     return out
+
+
+def has_cl(data_dir: Path, code: str) -> bool:
+    """這一檔的券商資產負債表裡有沒有非 0 的合約負債（沒有就不必去觀測站查）。"""
+    f = data_dir / "sheets" / code / "BSQ.json.gz"
+    try:
+        grid = json.loads(gzip.decompress(f.read_bytes()).decode("utf-8"))
+    except (OSError, ValueError, EOFError):
+        return False
+    return any(row and str(row[0]).strip() in CL_NAMES and any((_num(str(x)) or 0) for x in row[1:])
+               for row in (grid if isinstance(grid, list) else []))
 
 
 def read(path: Path) -> dict[str, dict[str, float]]:

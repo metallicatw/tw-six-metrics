@@ -180,24 +180,71 @@ def test_the_static_site_is_still_served():
         s.stop()
 
 
-def test_the_button_passes_everything_report_actually_reads():
-    import argparse
+def test_the_button_passes_everything_refresh_stock_actually_reads():
     import inspect
     import re
 
     from twsix import cli, serve
 
-    needs = set(re.findall(r"args\.([a-z_]+)", inspect.getsource(cli.cmd_report)))
+    needs = set(re.findall(r"args\.([a-z_]+)", inspect.getsource(cli.cmd_refresh_stock)))
     call = inspect.getsource(serve.run_report)
     body = call.split("argparse.Namespace(", 1)[1]
     gives = set(re.findall(r"(\w+)\s*=", body))
     missing = sorted(needs - gives)
-    assert not missing, f"serve 沒有傳給 report 的欄位：{missing}"
+    assert not missing, f"serve 沒有傳給 refresh-stock 的欄位：{missing}"
 
-    ns = argparse.Namespace(
-        config=None, stock="2330", data=None, out=None, as_of=None,
-        host=None, save_html=None, retries=1, rebuild=True,
-        no_backfill=False, cached=False,
-    )
-    for name in sorted(needs):
-        getattr(ns, name)
+
+def _wait(s, code):
+    for _ in range(80):
+        _, state = s.get("/api/job/" + code)
+        if state.get("done"):
+            return state
+        time.sleep(0.05)
+    return state
+
+
+def test_範圍參數會傳到管線_而且階段行整理成清單():
+    seen = []
+
+    def run(code, scope):
+        seen.append((code, scope))
+        print("【1/2】券商九張報表｜⏳ 進行中")
+        print("【1/2】券商九張報表｜✅ 九張報表已更新 · 3 秒")
+        print("【2/2】合約負債（近 5 年）｜☁️ 雲端會被擋")
+        return 0
+
+    s = _Server(_site(_tmp()), run)
+    try:
+        s.post("/api/fetch/2330?scope=quick")
+        state = _wait(s, "2330")
+        assert seen == [("2330", "quick")]
+        assert [(x["i"], x["state"]) for x in state["stages"]] == [(1, "ok"), (2, "cloud")]
+        assert state["stages"][0]["note"].startswith("九張報表已更新")
+    finally:
+        s.stop()
+
+
+def test_觀察清單整批更新一次跑一檔_可以取消排隊中的():
+    order = []
+
+    def run(code, scope):
+        order.append(code)
+        time.sleep(0.3)
+        return 0
+
+    s = _Server(_site(_tmp()), run)
+    try:
+        req = urllib.request.Request(s.url("/api/fetch-batch"), method="POST",
+                                     data=json.dumps({"codes": ["2330", "bad", "1101", "2330", "2317"]}).encode())
+        with urllib.request.urlopen(req, timeout=5) as r:
+            body = json.loads(r.read())
+        assert body["codes"] == ["2330", "1101", "2317"]
+        time.sleep(0.1)
+        _, c = s.post("/api/batch/cancel")
+        assert c["cancelled"] == 2
+        time.sleep(0.5)
+        _, b = s.get("/api/batch")
+        assert order == ["2330"] and b["done"] is True
+        assert [r["ok"] for r in b["rows"]] == [True, False, False]
+    finally:
+        s.stop()

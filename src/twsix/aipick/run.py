@@ -372,7 +372,7 @@ def regime_changes(ctx: Context, start: str) -> list[tuple[str, str, str]]:
 
 
 
-def stock_digests(ctx: Context, port: dict) -> dict:
+def stock_digests(ctx: Context, port: dict, codes: set[str] | None = None) -> dict:
     p = ctx.panel
     asof = p.asof
     d = ctx.d()
@@ -393,7 +393,7 @@ def stock_digests(ctx: Context, port: dict) -> dict:
                           "entry_price": pos["entry_price"]} for pos in port.get("positions", [])}
     out: dict[str, dict] = {}
     for code, m in ctx.meta.items():
-        if m.delisted:
+        if m.delisted or (codes is not None and code not in codes):
             continue
         v = ctx.quality.verdict(code, asof)
         rec: dict = {"name": m.name, "industry": m.industry}
@@ -616,6 +616,25 @@ def _signal_quality(ctx: Context, model: C.ChipsModel) -> dict:
     }
 
 
+
+
+def refresh_digests(data_dir: Path, codes: list[str]) -> dict[str, object]:
+    """一鍵更新用：只重算這幾檔的個股摘要，併回 stocks.json.gz（其他檔與今天的候選名單不動）。"""
+    ctx = Context(data_dir)
+    path = data_dir / "aipick" / "stocks.json.gz"
+    try:
+        old = json.loads(gzip.decompress(path.read_bytes()).decode("utf-8"))
+    except (OSError, ValueError, EOFError):
+        old = None
+    port = _read(data_dir / "aipick" / "portfolio.json") or {}
+    fresh = stock_digests(ctx, port, set(codes))
+    if not isinstance(old, dict) or not isinstance(old.get("stocks"), dict):
+        old = fresh
+    else:
+        old["stocks"].update(fresh["stocks"])
+        old["asof"] = fresh["asof"]
+    _write_gz(path, old)
+    return {"資料日": fresh["asof"], "個股": len(fresh["stocks"])}
 
 
 def run_all(data_dir: Path, *, with_backtest: bool = True) -> dict[str, int]:

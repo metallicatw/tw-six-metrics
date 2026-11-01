@@ -14,3 +14,5 @@ build/
 *.xlsm
 *.xlsx
 
+# 一鍵更新記錄「全市場小檔多久前抓過」，只對這台機器有意義
+data/.refresh_stamps.json

@@ -1755,9 +1755,13 @@ def cmd_chipflow_site(args: argparse.Namespace) -> int:
     root = Path(args.data or settings.data_dir)
     out = Path(args.out or "site")
     try:
-        from .chipflow.site import export, stamp_page  # noqa: PLC0415
+        from .chipflow.site import export, export_codes, stamp_page  # noqa: PLC0415
 
-        summary = export(root, out, force=args.force, repo_root=Path.cwd())
+        codes = [c.strip() for c in (getattr(args, "codes", "") or "").split(",") if c.strip()]
+        if codes:
+            summary = export_codes(root, out, codes)
+        else:
+            summary = export(root, out, force=args.force, repo_root=Path.cwd())
         print("籌碼雷達（網站）：" + "、".join(f"{k} {v}" for k, v in summary.items()))
         v = stamp_page(out)
         print(f"籌碼雷達（網站）：頁面資料版本碼 {v or '沒有換（頁面每次向伺服器確認）'}")
@@ -2082,7 +2086,7 @@ def cmd_fetch_revenue_early(args: argparse.Namespace) -> int:
     http = HttpClient(
         cache_dir=None, cache_ttl=0,
         min_interval=max(6.0, settings.ingest.min_interval_seconds),
-        retries=8, timeout=120.0,
+        retries=getattr(args, "retries", 8), timeout=getattr(args, "timeout", 120.0),
         retry_307=True,
     )
     got = EarlyRevenue(http).fetch(roc, m)
@@ -2104,6 +2108,31 @@ def cmd_fetch_revenue_early(args: argparse.Namespace) -> int:
         print(f"  {folder}/{roc_month}.csv：已申報 {len(merged)} 家（這一次拿到 {len(rows)} 家）")
     _fold_revenue(root)
     return EXIT_OK
+
+
+def cmd_refresh_stock(args: argparse.Namespace) -> int:
+    import os  # noqa: PLC0415
+
+    from . import refresh as R  # noqa: PLC0415
+
+    settings = Settings.load(args.config)
+    stock = args.stock.strip()
+    if not stock.isdigit() or not 4 <= len(stock) <= 6:
+        print(f"「{stock}」看起來不是股票代號（要 4~6 位數字）", file=sys.stderr)
+        return EXIT_FAIL
+    site = Path(args.out or settings.report.site_dir)
+    reports = [Path(p) for p in (args.trend_report or [])]
+    if not reports and (site / "trend-report.html").exists():
+        reports = [site / "trend-report.html"]
+    trend_data = Path(args.trend_data) if args.trend_data else (
+        site / "trend-d" if (site / "trend-d").is_dir() else None)
+    ctx = R.Ctx(code=stock, config=args.config, root=Path(args.data or settings.data_dir), site=site,
+                force=args.force, cloud=args.cloud or os.environ.get("GITHUB_ACTIONS") == "true",
+                cl_keep=Path(args.cl_out) if args.cl_out else None, trend_reports=reports,
+                trend_data=trend_data, trend_repo=Path(args.trend_repo) if args.trend_repo else None)
+    only = {s.strip() for s in (args.only or "").split(",") if s.strip()} or None
+    counts = R.run(ctx, scope=args.scope, only=only)
+    return EXIT_FAIL if counts.get("fail") else EXIT_OK
 
 
 def cmd_backfill_cl(args: argparse.Namespace) -> int:
@@ -3326,6 +3355,7 @@ def build_parser() -> argparse.ArgumentParser:
     cfs.add_argument("--data", help="資料目錄")
     cfs.add_argument("--out", help="網站目錄（預設 site）")
     cfs.add_argument("--force", action="store_true", help="資料沒換也重算")
+    cfs.add_argument("--codes", help="只重寫這幾檔的個股檔（逗號分隔；一鍵更新用，全市場檔不動）")
     cfs.set_defaults(func=cmd_chipflow_site)
 
     aif = sub.add_parser(
@@ -3384,6 +3414,26 @@ def build_parser() -> argparse.ArgumentParser:
     br.add_argument("--force", action="store_true", help="官方月報已經有了也照抓")
     br.add_argument("--out", help="資料目錄")
     br.set_defaults(func=cmd_fetch_revenue_early)
+
+    rfs = sub.add_parser(
+        "refresh-stock",
+        help="一鍵更新：一檔個股網站上看得到的每一項資料（報表、股權、行情、月營收、合約負債、法說會、新聞、雷達、AI、趨勢、重畫）",
+    )
+    rfs.add_argument("stock", help="股票代號")
+    rfs.add_argument("--scope", choices=("full", "quick"), default="full",
+                     help="full＝全部（預設）；quick＝雲端也抓得到、而且快的那幾項")
+    rfs.add_argument("--force", action="store_true", help="就算還很新也重抓")
+    rfs.add_argument("--only", help="只跑這幾個階段（逗號分隔，例如 sheets,page,build；除錯用）")
+    rfs.add_argument("--cloud", action="store_true",
+                     help="當成在雲端跑：公開資訊觀測站的項目直接略過（GitHub Actions 上自動判斷）")
+    rfs.add_argument("--data", help="資料目錄")
+    rfs.add_argument("--out", help="網站目錄（預設 site）")
+    rfs.add_argument("--cl-out", help="合約負債回補寫到哪個 CSV（本機版／NAS 的保留檔；會再併進 data）")
+    rfs.add_argument("--trend-report", action="append",
+                     help="要改寫的趨勢選股報告（可給多次；預設 site/trend-report.html）")
+    rfs.add_argument("--trend-data", help="趨勢選股的圖表資料目錄（預設 site/trend-d）")
+    rfs.add_argument("--trend-repo", help="tw-trend-filter 的程式目錄（沒有安裝成套件時用）")
+    rfs.set_defaults(func=cmd_refresh_stock)
 
     bcl = sub.add_parser(
         "backfill-cl",

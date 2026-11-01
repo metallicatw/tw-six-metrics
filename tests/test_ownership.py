@@ -394,14 +394,14 @@ def test_director_floor_survives_and_stops_asking_for_months_that_never_existed(
 
 def test_stock_workflow_commits_the_directors_backfill_it_paid_for():
     text = (ROOT.parent / ".github" / "workflows" / "stock.yml").read_text("utf-8")
-    line = next(ln for ln in text.splitlines() if "git add -A --" in ln and "data/sheets/$code" in ln)
-    assert "data/ownership" in line
+    line = next(ln for ln in text.splitlines() if "git add -A --" in ln)
+    assert line.split("--", 1)[1].split("||")[0].split() == ["data"], "一鍵更新會改到 data 底下很多地方，整個 data 都要 add"
 
 
 def test_stock_workflow_commits_the_rating_it_just_recomputed():
     text = (ROOT.parent / ".github" / "workflows" / "stock.yml").read_text("utf-8")
     add = text[text.index("git add "):text.index("if git diff --cached --quiet")]
-    assert "data/ratings.csv" in add, "commit 那一步沒有 add data/ratings.csv"
+    assert "data/ratings.csv" in add or "-A -- data " in add, "commit 那一步沒有 add data/ratings.csv"
     assert "git diff --name-only" in text, "漏了「還有什麼沒被 commit」的自白"
 
 
@@ -452,7 +452,7 @@ def test_the_stock_workflow_runs_the_suite_alongside_the_fetch_not_before_it():
     assert "run_tests.py > /tmp/tests.log 2>&1 &" in body, "測試沒有丟到背景"
     assert 'wait "$tests"' in body, "沒有等測試結束就往下走了"
     assert '不 commit 這次抓到的資料' in body
-    order = body.index("run_tests.py"), body.index("twsix report"), body.index("git commit")
+    order = body.index("run_tests.py"), body.index("twsix refresh-stock"), body.index("git commit")
     assert order[0] < order[1] < order[2]
 
 
