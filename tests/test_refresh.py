@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import tempfile
 from pathlib import Path
 
@@ -28,11 +30,21 @@ def _stages(calls):
             R.Stage("c", "觀測站", home, home=True), R.Stage("d", "最後一項", ok, quick=True))
 
 
-def test_一項失敗不擋後面_雲端略過要在家跑的項目(monkeypatch, capsys):
+def _run(calls, **kw):
+    """不靠 pytest 的 fixture（CI 的零相依測試也要能跑）：暫時換掉登錄表、自己接住輸出。"""
+    old, R.STAGES = R.STAGES, _stages(calls)
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            counts = R.run(_ctx(cloud=kw.pop("cloud", False)), **kw)
+    finally:
+        R.STAGES = old
+    return counts, buf.getvalue().splitlines()
+
+
+def test_一項失敗不擋後面_雲端略過要在家跑的項目():
     calls = []
-    monkeypatch.setattr(R, "STAGES", _stages(calls))
-    counts = R.run(_ctx(cloud=True))
-    out = capsys.readouterr().out.splitlines()
+    counts, out = _run(calls, cloud=True)
     assert calls == ["ok", "boom", "ok"]
     assert counts == {"ok": 2, "warn": 1, "cloud": 1}
     st = R.parse_stages(out)
@@ -41,11 +53,10 @@ def test_一項失敗不擋後面_雲端略過要在家跑的項目(monkeypatch,
     assert out[-1].startswith("一鍵更新完成：")
 
 
-def test_快速範圍只跑標了_quick_的項目(monkeypatch, capsys):
+def test_快速範圍只跑標了_quick_的項目():
     calls = []
-    monkeypatch.setattr(R, "STAGES", _stages(calls))
-    R.run(_ctx(), scope="quick")
-    st = R.parse_stages(capsys.readouterr().out.splitlines())
+    _, out = _run(calls, scope="quick")
+    st = R.parse_stages(out)
     assert [s["title"] for s in st] == ["第一項", "最後一項"] and st[0]["n"] == 2
 
 
@@ -81,13 +92,15 @@ def test_沒有報表就不重畫個股頁():
     assert R.st_build(c)[0] == "skip"
 
 
-def test_子程式的輸出縮排而且不會被當成階段行(capsys):
+def test_子程式的輸出縮排而且不會被當成階段行():
     def noisy():
         print("【9/9】假的｜✅ 不該算")
         print("第二行")
         return 7
 
-    assert R._quiet(noisy) == 7
-    out = capsys.readouterr().out.splitlines()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert R._quiet(noisy) == 7
+    out = buf.getvalue().splitlines()
     assert all(x.startswith("    ") for x in out)
     assert R.parse_stages(out) == []
