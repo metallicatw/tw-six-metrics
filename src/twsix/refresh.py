@@ -356,6 +356,19 @@ def st_talks(c: Ctx) -> tuple[str, str]:
     c.state["talks_quarters"] = len(picked)
     if res.get("processed"):
         c.state["ai"] = True
+    # 法人 Q&A（富果研究、BigGo 財經的逐場整理）：簡報以外的口頭指引、漲價、擴產、長約
+    from .aipick import talk_qa as TQ
+
+    qa = {"checked": 0, "found": 0}
+    try:
+        qa = TQ.fetch(c.root, llm, today=today, budget=240.0,
+                      targets=TQ.targets_for(rows, [c.code], today, quarters=8, recent_days=120))
+    except Exception as exc:  # noqa: BLE001 - Q&A 是加分項，失敗不影響其他
+        qa = {"checked": 0, "found": 0, "errors": [type(exc).__name__]}
+    if qa.get("found"):
+        c.state["ai"] = True
+    qa_all = TQ.read_qa(c.root)
+    have_qa = sum(1 for r in picked if TQ.has_content(TQ.lookup(qa_all, c.code, r["date"], r.get("file") or "")))
     feats = TK.read_features(c.root)
     mine = sorted((f for f in feats.values() if str(f.get("code")) == c.code),
                   key=lambda f: str(f.get("date") or ""))
@@ -373,8 +386,10 @@ def st_talks(c: Ctx) -> tuple[str, str]:
     if c.state.get("talks_blocked") and not res.get("processed"):
         return "warn", note + tail
     if picked:
-        tail += f"；個股頁〈法說會〉近 {len(picked)} 季"
-    return ("ok" if res.get("processed") else "skip"), note + (
+        tail += f"；個股頁〈法說會〉近 {len(picked)} 季（{have_qa} 季有法人 Q&A）"
+    if qa.get("found"):
+        note += f"法人 Q&A 補 {qa['found']} 場；"
+    return ("ok" if res.get("processed") or qa.get("found") else "skip"), note + (
         f"讀了 {res['processed']} 場；" if res.get("processed") else "沒有新的一場；") + tail
 
 

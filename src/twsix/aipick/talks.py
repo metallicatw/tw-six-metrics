@@ -419,8 +419,8 @@ def read_features(data_dir: Path) -> dict[str, dict]:
             rec = json.loads(line)
         except ValueError:
             continue
-        if isinstance(rec, dict) and rec.get("file"):
-            out[rec["file"]] = rec
+        if isinstance(rec, dict) and rec.get("file") and not str(rec["file"]).startswith("qa:"):
+            out[rec["file"]] = rec   # "qa:" 開頭是法說 Q&A（talk_qa.read_qa 讀）
     return out
 
 
@@ -603,13 +603,39 @@ def explain(cur: dict, prev: dict | None, method: str, score: float) -> str:
     return out + only
 
 
+def with_qa(rec: dict, qa: dict[str, dict]) -> dict:
+    """把同一場法說會的 Q&A（法人提問、口頭指引）併進簡報特徵：
+    簡報沒有 Gemini 解讀 → 用 Q&A 的營收／毛利率展望與口氣判斷轉折；有解讀但沒有指引 → 補上口頭指引。"""
+    from .talk_qa import lookup  # noqa: PLC0415 - 避免循環匯入
+
+    q = lookup(qa, rec["code"], rec["date"], rec.get("file", ""))
+    x = (q or {}).get("llm")
+    if not x:
+        return rec
+    mine = rec.get("llm")
+    if not mine:
+        synth = {k: x.get(k, 0) for k in ("revenue_outlook", "margin_outlook", "tone", "capex")}
+        synth.update({"utilization": None, "new_business": False, "hedging": 0.0, "summary": "",
+                      "highlights": list(x.get("points") or []) + [i["a"] for i in x.get("qa", [])][:2],
+                      "guidance": list(x.get("guidance") or []), "risks": [], "from_qa": True})
+        return {**rec, "llm": synth}
+    if not mine.get("guidance") and x.get("guidance"):
+        return {**rec, "llm": {**mine, "guidance": list(x["guidance"])}}
+    return rec
+
+
 class TalkBook:
 
-    def __init__(self, features: dict[str, dict], notes: dict[str, str] | None = None):
+    def __init__(self, features: dict[str, dict], notes: dict[str, str] | None = None,
+                 qa: dict[str, dict] | None = None):
         self.notes = notes or {}
         self.by_code: dict[str, list[dict]] = {}
+        qa_by: dict[str, dict[str, dict]] = {}
+        for k, r in (qa or {}).items():
+            qa_by.setdefault(r.get("code", ""), {})[k] = r
         for rec in features.values():
-            self.by_code.setdefault(rec["code"], []).append(rec)
+            mine = qa_by.get(rec["code"])
+            self.by_code.setdefault(rec["code"], []).append(with_qa(rec, mine) if mine else rec)
         for v in self.by_code.values():
             v.sort(key=lambda r: (r["date"], r["file"]))
 

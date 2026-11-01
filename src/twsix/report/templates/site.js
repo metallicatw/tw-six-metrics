@@ -3112,6 +3112,7 @@ var TWSIXRefresh = (function(){
         if(!/\d/.test(num)) return m;
         if(/^(19|20)\d{2}\s*(年)?$/.test(num.trim())) return m;   // 年份不加色
         if(/[A-Za-z&#]$/.test(s.slice(Math.max(0, off - 1), off))) return m;  // Q3、N3 這類代號不加色
+        if(/^[A-Za-z]/.test(s.slice(off + m.length, off + m.length + 1))) return m;  // 4Q26、1H27 也不加色
         var before = s.slice(Math.max(0, off - 6), off);
         var cls = /[+]/.test(num) || UP.test(before) ? 'up' : (/^[\-−]/.test(num) || /(減|衰退|下滑|下降|下修|降低|減少|虧損)/.test(before) ? 'dn' : '');
         return '<b class="tk-n' + (cls ? ' ' + cls : '') + '">' + num + '</b>';
@@ -3124,9 +3125,27 @@ var TWSIXRefresh = (function(){
   function list(items, cls){
     return '<ul class="tk-list' + (cls ? ' ' + cls : '') + '">' + items.map(function(x){ return '<li>' + hl(x) + '</li>'; }).join('') + '</ul>';
   }
-  function card(q){
-    var x = q.llm, h = '<div class="tk-q">';
+  var SITE_OK = /^https:\/\/(blog\.fugle\.tw|finance\.biggo\.com\.tw)\//;
+  function qaBlock(a, q, open){
+    var h = '';
+    if(a.guidance && a.guidance.length) h += '<p class="tk-sec g">法說會現場指引（法人 Q&amp;A 整理）</p>' + list(a.guidance, 'guide');
+    if(a.points && a.points.length) h += '<p class="tk-sec q">其他重要資訊</p>' + list(a.points);
+    if(a.qa && a.qa.length){
+      h += '<details class="tk-qad"' + (open ? ' open' : '') + '><summary>法人 Q&amp;A（' + a.qa.length + ' 則）</summary><dl class="tk-qa">' +
+        a.qa.map(function(i){ return '<dt><span class="qk">Q</span>' + hl(i.q) + '</dt><dd><span class="qk">A</span>' + hl(i.a) + '</dd>'; }).join('') + '</dl></details>';
+    }
+    var links = (a.sources || []).filter(function(s){ return SITE_OK.test(s.url || ''); }).map(function(s){
+      return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + esc(s.site) + ' ↗</a>';
+    });
+    h += '<p class="tk-foot">Q&amp;A 整理來源：' + (links.join('、') || '—') + '（' +
+      (a.method === 'llm' ? 'Gemini 改寫重點' : '只節錄每則開頭一句') + (a.date && a.date !== q.date ? '；' + esc(a.date) + ' 那一場' : '') +
+      '；數字以公司公告為準）</p>';
+    return h;
+  }
+  function card(q, idx){
+    var x = q.llm, a = q.qa, h = '<div class="tk-q">';
     var src = x ? 'Gemini 解讀' + (q.source === 'pdf' ? '（簡報）' : '') : (q.source === 'pdf' ? '簡報重點句（未經 AI 解讀）' : (q.source === 'summary' ? '只有公告摘要' : '還沒有讀取'));
+    if(a) src += '＋法人 Q&A';
     h += '<h4><span class="tk-qn">' + esc(q.q) + '</span><span class="tk-date">' + esc(q.date) + (q.time ? ' ' + esc(q.time) : '') +
          (q.others ? '　另有 ' + q.others + ' 場' : '') + '</span><span class="tk-src muted">' + esc(src) + '</span></h4>';
     if(q.title) h += '<p class="tk-title">' + esc(q.title) + '</p>';
@@ -3140,6 +3159,12 @@ var TWSIXRefresh = (function(){
       if(x.capex) chips.push(chip('資本支出', x.capex > 0 ? '上修' : '下修', x.capex > 0 ? 'up' : 'dn'));
       if(x.utilization !== null && x.utilization !== undefined) chips.push(chip('產能利用率', x.utilization + '%'));
       if(x.new_business) chips.push(chip('新產品／新客戶／新市場', '', 'up'));
+    } else if(a && a.outlook){
+      var o = a.outlook, t2 = TONE[String(o.tone)], r2 = DIR[String(o.revenue_outlook)], m2 = MDIR[String(o.margin_outlook)];
+      if(r2) chips.push(chip('營收展望', r2[0], r2[1]));
+      if(m2) chips.push(chip('毛利率展望', m2[0], m2[1]));
+      if(t2) chips.push(chip('整體口氣', t2[0], t2[1]));
+      if(o.capex) chips.push(chip('資本支出', o.capex > 0 ? '上修' : '下修', o.capex > 0 ? 'up' : 'dn'));
     }
     if(chips.length) h += '<div class="tk-chips">' + chips.join('') + '</div>';
     if(x && x.summary) h += '<p class="tk-sum">' + hl(x.summary) + '</p>';
@@ -3147,7 +3172,8 @@ var TWSIXRefresh = (function(){
     else if(q.lines && q.lines.length) h += '<p class="tk-sec">簡報重點句</p>' + list(q.lines);
     if(x && x.guidance && x.guidance.length) h += '<p class="tk-sec g">公司指引／展望</p>' + list(x.guidance, 'guide');
     if(x && x.risks && x.risks.length) h += '<p class="tk-sec r">風險</p>' + list(x.risks, 'risk');
-    if(!x && !(q.lines && q.lines.length) && q.rules && (q.rules.pos || q.rules.neg))
+    if(a) h += qaBlock(a, q, idx === 0);
+    if(!x && !a && !(q.lines && q.lines.length) && q.rules && (q.rules.pos || q.rules.neg))
       h += '<p class="tk-foot">簡報用詞：正面 ' + (q.rules.pos || 0) + ' 次、負面 ' + (q.rules.neg || 0) + ' 次</p>';
     if(q.turn && q.turn.why) h += '<p class="tk-why"><b>' + esc(q.turn.kind) + '</b>：' + hl(q.turn.why) + '</p>';
     if(q.url) h += '<p class="tk-foot"><a href="' + esc(q.url) + '" target="_blank" rel="noopener noreferrer">法說會簡報 PDF（公開資訊觀測站）↗</a></p>';
@@ -3156,11 +3182,11 @@ var TWSIXRefresh = (function(){
   function render(d){
     var qs = d.quarters || [];
     if(!qs.length){ box.innerHTML = '<p class="muted">近兩年沒有這一檔的法說會紀錄。</p>'; return; }
-    var read = qs.filter(function(q){ return q.llm; }).length;
+    var read = qs.filter(function(q){ return q.llm; }).length, withQa = qs.filter(function(q){ return q.qa; }).length;
     var out = ['<div class="tk-head"><b>近 ' + qs.length + ' 季法說會</b><span class="muted">每季挑一場代表（有簡報、談財報與營運的優先）；共 ' +
-      (d.events || qs.length) + ' 場，' + read + ' 場有 Gemini 解讀。數字：<b class="tk-n up">紅</b>＝增加、<b class="tk-n dn">綠</b>＝減少、<b class="tk-n">藍</b>＝其他數據。</span></div>'];
-    qs.forEach(function(q){ out.push(card(q)); });
-    out.push('<p class="muted note-s">簡報讀取與解讀在家裡的 NAS／本機版進行（雲端會被公開資訊觀測站擋下）；按個股頁的〔↻ 一鍵更新〕可補齊這一檔的近 8 季。內容由程式依公開資訊整理，不構成投資建議。</p>');
+      (d.events || qs.length) + ' 場，' + read + ' 場有 Gemini 解讀、' + withQa + ' 季有法人 Q&amp;A。數字：<b class="tk-n up">紅</b>＝增加、<b class="tk-n dn">綠</b>＝減少、<b class="tk-n">藍</b>＝其他數據。</span></div>'];
+    qs.forEach(function(q, i){ out.push(card(q, i)); });
+    out.push('<p class="muted note-s">簡報讀取與解讀在家裡的 NAS／本機版進行（雲端會被公開資訊觀測站擋下）；法人 Q&amp;A 取自富果研究、BigGo 財經的逐場整理（AI 依影音整理，可能有誤）；按個股頁的〔↻ 一鍵更新〕可補齊這一檔的近 8 季。內容由程式依公開資訊整理，不構成投資建議。</p>');
     box.innerHTML = out.join('');
   }
   function load(){

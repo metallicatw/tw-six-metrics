@@ -19,6 +19,7 @@ from . import regime as R
 from . import relate as RL
 from . import revenue as RV
 from . import sim as S
+from . import talk_qa as TQ
 from . import talks as TK
 from .tech import Tech
 
@@ -94,7 +95,8 @@ class Context:
         self.revenue = RV.load_revenue(data_dir)
         self._sue: dict | None = None
         self.talks = TK.TalkBook(TK.read_features(data_dir),
-                                 {r["file"]: r.get("summary", "") for r in TK.read_index(data_dir) if r.get("file")})
+                                 {r["file"]: r.get("summary", "") for r in TK.read_index(data_dir) if r.get("file")},
+                                 qa=TQ.read_qa(data_dir))
         self.relations = RL.load(data_dir)
         self._models: dict[str, object] = {}
 

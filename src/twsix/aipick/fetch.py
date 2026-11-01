@@ -85,6 +85,14 @@ def _fetch_all(data_dir, today, llm, status, news_get, list_post, pdf_get, max_p
     except Exception as exc:  # noqa: BLE001
         status["talks"] = {"error": type(exc).__name__}
     try:
+        from . import talk_qa as TQ  # noqa: PLC0415
+
+        status["talks_qa"] = TQ.fetch(data_dir, llm, today=today, budget=180.0, max_items=40,
+                                      targets=TQ.targets_for(TK.read_index(data_dir), None, today,
+                                                             quarters=0, recent_days=14))
+    except Exception as exc:  # noqa: BLE001
+        status["talks_qa"] = {"error": type(exc).__name__}
+    try:
         status["relations"] = RL.label_pairs(data_dir, llm, pairs, names, today)
     except Exception as exc:  # noqa: BLE001
         status["relations"] = {"error": type(exc).__name__}

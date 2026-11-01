@@ -1460,7 +1460,16 @@ html body :is(.qf-btn,.sc-sel):not(#cf *):hover{border-color:color-mix(in srgb,v
 .tk-why{margin:6px 0 2px;font-size:12.5px;color:var(--ink-2);max-width:none;
   border-left:3px solid var(--rule);padding:2px 0 2px 8px}
 .tk-foot{margin:4px 0 0;font-size:12px;color:var(--muted);max-width:none}
+.tk-sec.q{color:#6a3fb5}
+.tk-qad{margin:6px 0 4px;border:1px solid var(--rule);border-radius:8px;padding:4px 10px 6px}
+.tk-qad>summary{cursor:pointer;font-size:12.5px;font-weight:700;color:#6a3fb5;padding:2px 0}
+.tk-qa{margin:4px 0 2px;font-size:13.5px;line-height:1.65}
+.tk-qa dt{font-weight:700;margin-top:6px;color:var(--ink-2)}
+.tk-qa dd{margin:1px 0 0 1.4em}
+.tk-qa .qk{display:inline-block;min-width:1.4em;color:#6a3fb5;font-weight:700}
 @media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) .tk-sec.q,:root:not([data-theme=light]) .tk-qad>summary,
+  :root:not([data-theme=light]) .tk-qa .qk{color:#c4a7ff}
   :root:not([data-theme=light]) .tk-n{color:#7fb6ff}
   :root:not([data-theme=light]) .tk-n.up,:root:not([data-theme=light]) .tk-chip.up{color:#ff7a70}
   :root:not([data-theme=light]) .tk-n.dn,:root:not([data-theme=light]) .tk-chip.dn{color:#5fd38a}
@@ -1472,3 +1481,4 @@ html body :is(.qf-btn,.sc-sel):not(#cf *):hover{border-color:color-mix(in srgb,v
 :root[data-theme=dark] .tk-n.dn,:root[data-theme=dark] .tk-chip.dn{color:#5fd38a}
 :root[data-theme=dark] .tk-sec.g{color:#ffb470}
 :root[data-theme=dark] .tk-sec.r{color:#ff8a80}
+:root[data-theme=dark] .tk-sec.q,:root[data-theme=dark] .tk-qad>summary,:root[data-theme=dark] .tk-qa .qk{color:#c4a7ff}

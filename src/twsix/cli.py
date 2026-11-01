@@ -1904,10 +1904,10 @@ def cmd_aipick_fetch(args: argparse.Namespace) -> int:
             signal.alarm(0)
     llm = status.get("llm") or {}
     print("AI 選股（抓取）：" + "、".join(
-        f"{k} {v}" for k, v in status.items() if k in ("news", "talks_list", "talks", "relations")))
+        f"{k} {v}" for k, v in status.items() if k in ("news", "talks_list", "talks", "talks_qa", "relations")))
     print(f"LLM：{'啟用' if llm.get('enabled') else '沒有金鑰，只用規則'}，"
           f"呼叫 {llm.get('calls', 0)} 次" + (f"，{llm['stopped']}" if llm.get("stopped") else ""))
-    for part in ("news", "talks_list", "talks"):
+    for part in ("news", "talks_list", "talks", "talks_qa"):
         errs = (status.get(part) or {}).get("errors") or []
         if errs:
             print(f"::warning::{part}：" + "；".join(errs[:5]))
@@ -1925,18 +1925,56 @@ def cmd_talks_backfill(args: argparse.Namespace) -> int:
     first = [c.strip() for c in (args.codes or "").split(",") if c.strip()]
     pri = first + [c for c in priority_codes(root)[0] if c not in first]
     llm = Gemini()
+    from .aipick import talk_qa as TQ  # noqa: PLC0415
+
+    # 先補法人 Q&A（每場只要讀兩個網頁，比讀簡報 PDF 快很多），用掉這一趟 40% 的時間
+    t0 = time.monotonic()
+    qa = TQ.fetch(root, llm, today=today, budget=args.minutes * 60 * 0.4,
+                  targets=TQ.targets_for(TK.read_index(root), pri + sorted(
+                      {r["code"] for r in TK.read_index(root)} - set(pri)), today, quarters=8, recent_days=30))
+    left = max(60.0, args.minutes * 60 - (time.monotonic() - t0))
     r = TK.backfill(root, llm, today=today, priority=pri, months=args.months, max_pdf=args.max_pdf,
-                    budget=args.minutes * 60)
+                    budget=left)
     lst = r["list"]
     print(f"法說會近 8 季：清單查了 {lst['asked']} 次、新增 {lst['new']} 場；"
           f"這一趟讀了 {r['pdf']} 份簡報、Gemini 解讀 {r['llm']} 份、處理 {r['processed']} 場；"
           f"全市場每季代表場次 {r['quarters_done']}／{r['quarters_total']} 已處理")
+    print(f"法人 Q&A：這一趟查了 {qa['checked']} 場、找到 {qa['found']} 場（Gemini 整理 {qa['llm']} 場）")
     if r.get("stopped"):
         print(r["stopped"])
-    for e in (lst.get("errors") or [])[:3] + (r.get("errors") or [])[:3]:
+    for e in (lst.get("errors") or [])[:3] + (r.get("errors") or [])[:3] + (qa.get("errors") or [])[:3]:
         print(f"::warning::{e}")
     if not llm.enabled:
         print("（沒有設定 Gemini 金鑰：只做規則判讀與挑重點句）")
+    return EXIT_OK
+
+
+def cmd_talks_qa(args: argparse.Namespace) -> int:
+    """法人 Q&A：從富果研究、BigGo 財經的逐場整理補法說會的口頭指引與問答。"""
+    settings = Settings.load(args.config)
+    from .aipick import talk_qa as TQ  # noqa: PLC0415
+    from .aipick import talks as TK  # noqa: PLC0415
+    from .aipick.fetch import TAIPEI, priority_codes  # noqa: PLC0415
+    from .aipick.llm import Gemini  # noqa: PLC0415
+
+    root = Path(args.data or settings.data_dir)
+    today = datetime.now(TAIPEI).date()
+    rows = TK.read_index(root)
+    first = [c.strip() for c in (args.codes or "").split(",") if c.strip()]
+    if first:
+        order = first
+    else:
+        pri = priority_codes(root)[0]
+        order = pri + sorted({r["code"] for r in rows} - set(pri))
+    llm = Gemini()
+    r = TQ.fetch(root, llm, today=today, budget=args.minutes * 60, max_items=args.max,
+                 targets=TQ.targets_for(rows, order, today, quarters=args.quarters, recent_days=args.days))
+    print(f"法人 Q&A：查了 {r['checked']} 場、找到 {r['found']} 場、Gemini 整理 {r['llm']} 場、"
+          f"連線 {r['requests']} 次" + (f"；{r['stopped']}" if r.get("stopped") else ""))
+    for e in r.get("errors") or []:
+        print(f"::warning::{e}")
+    if not llm.enabled:
+        print("（沒有設定 Gemini 金鑰：只留每則問答的第一句）")
     return EXIT_OK
 
 
@@ -3336,6 +3374,18 @@ def build_parser() -> argparse.ArgumentParser:
     tb.add_argument("--max-pdf", type=int, default=60, help="這一趟最多讀幾份簡報（預設 60）")
     tb.add_argument("--minutes", type=float, default=30.0, help="這一趟最多跑幾分鐘（預設 30）")
     tb.set_defaults(func=cmd_talks_backfill)
+
+    tq = sub.add_parser(
+        "talks-qa",
+        help="法人 Q&A：從富果研究、BigGo 財經的逐場整理補法說會的口頭指引與問答（遵守 robots.txt、每站間隔 2 秒）",
+    )
+    tq.add_argument("--data", help="資料目錄")
+    tq.add_argument("--codes", help="只做這幾檔（逗號分隔）；不給就全市場，自選股優先")
+    tq.add_argument("--quarters", type=int, default=8, help="每檔近幾季（預設 8）")
+    tq.add_argument("--days", type=int, default=30, help="另外加最近幾天的每一場（預設 30）")
+    tq.add_argument("--max", type=int, default=200, help="這一趟最多整理幾場（預設 200）")
+    tq.add_argument("--minutes", type=float, default=20.0, help="這一趟最多跑幾分鐘（預設 20）")
+    tq.set_defaults(func=cmd_talks_qa)
 
     rs = sub.add_parser(
         "restate",
