@@ -531,6 +531,7 @@
   <div class="subtabs" role="tablist" aria-label="財務健診">
     <button type="button" role="tab" class="subtab" data-sub="hl-mines" aria-selected="true">財務地雷</button>
     <button type="button" role="tab" class="subtab" data-sub="hl-growth" aria-selected="false">成長力分析</button>
+    <button type="button" role="tab" class="subtab" data-sub="hl-cl" aria-selected="false">合約負債判讀</button>
   </div>
   <div class="subpanel" id="hl-mines" role="tabpanel">
   {% if p.health.rows %}
@@ -572,6 +573,10 @@
   {% else %}
     <p class="stale">這一檔還沒有季報資料。</p>
   {% endif %}
+  </div>
+  <div class="subpanel" id="hl-cl" role="tabpanel" hidden data-src="{{ rel }}cl/{{ p.stock_id }}.json" data-page="{{ rel }}cl.html">
+    <div class="clx" aria-live="polite"><p class="muted">讀取中……</p></div>
+    <noscript><p class="stale">這一個分頁要開啟 JavaScript 才看得到。</p></noscript>
   </div>
 </div>
 </section>

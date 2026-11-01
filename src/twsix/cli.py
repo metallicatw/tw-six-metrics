@@ -1978,6 +1978,53 @@ def cmd_talks_qa(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cl_stocks(root: Path) -> list[dict[str, str]]:
+    from .report.build import unrated_rows  # noqa: PLC0415
+
+    return [{"code": r.stock_id, "name": r.name, "market": r.market, "industry": r.industry}
+            for r in unrated_rows(root, set()) if not r.stock_id.startswith("00")]
+
+
+def cmd_cl_screen(args: argparse.Namespace) -> int:
+    """合約負債選股：在命令列列出 A／B／C 層級（網站上的〈合約負債選股〉頁是同一套規則）。"""
+    settings = Settings.load(args.config)
+    from . import clscreen as CX  # noqa: PLC0415
+
+    root = Path(args.data or settings.data_dir)
+    book = CX.Book(root, _cl_stocks(root))
+    res = book.run()
+    rows = sorted(((c, r) for c, r in res.items() if r["e"]["tier"] in set(args.tiers)),
+                  key=lambda x: ("ABCW".index(x[1]["e"]["tier"]), -(x[1]["e"]["score"] or 0)))
+    print(f"合約負債選股：{len(res)} 檔判讀，" + "、".join(
+        f"{t} {CX.TIERS[t]} {sum(1 for r in res.values() if r['e']['tier'] == t)} 檔" for t in "ABCW"))
+    for c, r in rows[:args.top]:
+        m, e = r["m"], r["e"]
+        flags = "；".join(f["t"].split("：")[0] for f in e["flags"])
+        print(f"{e['tier']} {e['score']:>3} {c:<6}{book.stocks[c]['name']:<8}{CX.SECTORS[m['sec']]:<8}"
+              f"含金量 {m.get('ratio')}% 年增 {m.get('yoy')}% 季增 {m.get('qoq')}%" + (f"｜{flags}" if flags else ""))
+    return EXIT_OK
+
+
+def cmd_cl_backtest(args: argparse.Namespace) -> int:
+    settings = Settings.load(args.config)
+    from . import clscreen as CX  # noqa: PLC0415
+
+    root = Path(args.data or settings.data_dir)
+    bt = CX.backtest(root, _cl_stocks(root), start=args.start, end=args.end)
+    out = root / "clscreen" / "backtest.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(bt, ensure_ascii=False, indent=1), encoding="utf-8")
+    for t in ("A", "B", "C", "W"):
+        g = bt["groups"].get(t) or {}
+        print(t, CX.TIERS[t], "；".join(f"{h} 日：{v['n']} 筆、超額中位數 {v['median']:+.2f}%、勝率 {v['win']}%"
+                                       for h, v in g.items() if v))
+    nv = bt.get("naive") or {}
+    print("對照（只看年增>20%、季增>5%）", "；".join(f"{h} 日：超額中位數 {v['median']:+.2f}%、勝率 {v['win']}%"
+                                            for h, v in nv.items() if v))
+    print(f"寫到 {out}")
+    return EXIT_OK
+
+
 def cmd_restate(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest.workbook import GridsSource  # noqa: PLC0415
@@ -3386,6 +3433,18 @@ def build_parser() -> argparse.ArgumentParser:
     tq.add_argument("--max", type=int, default=200, help="這一趟最多整理幾場（預設 200）")
     tq.add_argument("--minutes", type=float, default=20.0, help="這一趟最多跑幾分鐘（預設 20）")
     tq.set_defaults(func=cmd_talks_qa)
+
+    cx = sub.add_parser("cl-screen", help="合約負債選股：產業分流＋四段漏斗（含金量→排雷→月營收點火→籌碼）")
+    cx.add_argument("--data", help="資料目錄")
+    cx.add_argument("--tiers", default="ABC", help="列出哪些層級（預設 ABC；W＝警示）")
+    cx.add_argument("--top", type=int, default=50, help="最多列幾檔")
+    cx.set_defaults(func=cmd_cl_screen)
+
+    cb = sub.add_parser("cl-backtest", help="合約負債選股的歷史驗證（逐月檢查點，只用當時已公布的資料）")
+    cb.add_argument("--data", help="資料目錄")
+    cb.add_argument("--start", default="2025-12-01", help="第一個檢查點的月份（每月 11 日）")
+    cb.add_argument("--end", default="2026-09-30", help="最後一個檢查點的月份")
+    cb.set_defaults(func=cmd_cl_backtest)
 
     rs = sub.add_parser(
         "restate",

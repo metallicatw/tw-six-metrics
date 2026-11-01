@@ -466,7 +466,7 @@ def st_build(c: Ctx) -> tuple[str, str]:
         from .chipflow.site import stamp_page
 
         stamp_page(c.site)  # 重畫過的籌碼雷達頁換上新的版本碼（含這一次改過的個股檔）
-    return ("ok", "清單、搜尋、選股功能、AI 選股頁") if rc == EXIT_OK else ("warn", "建站沒完成")
+    return ("ok", "清單、搜尋、選股功能、合約負債選股、AI 選股頁") if rc == EXIT_OK else ("warn", "建站沒完成")
 
 
 STAGES: tuple[Stage, ...] = (
@@ -484,7 +484,7 @@ STAGES: tuple[Stage, ...] = (
     Stage("chipflow", "籌碼雷達（①②③、基本面與籌碼概況）", st_chipflow, quick=True),
     Stage("aipick", "AI 選股個股卡片", st_aipick, quick=True),
     Stage("trend", "趨勢選股", st_trend),
-    Stage("build", "清單・搜尋・選股功能", st_build, quick=True),
+    Stage("build", "清單・搜尋・選股功能・合約負債選股", st_build, quick=True),
 )
 
 

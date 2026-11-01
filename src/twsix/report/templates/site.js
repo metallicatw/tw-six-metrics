@@ -3209,3 +3209,59 @@ var TWSIXRefresh = (function(){
   if(tab) tab.addEventListener('click', load);
   if(!panel.hidden) load();
 })();
+
+
+/* ── 個股頁〈財務健診〉→〈合約負債判讀〉：讀 cl/<代號>.json（建站時算好的） ─────────────── */
+(function(){
+  var panel = document.getElementById('hl-cl');
+  if(!panel) return;
+  var box = panel.querySelector('.clx'), loaded = false;
+  function esc(s){ return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function num(v, d){ return v === null || v === undefined ? '—' : Number(v).toLocaleString('zh-TW', {maximumFractionDigits: d, minimumFractionDigits: d}); }
+  function pc(v){ return v === null || v === undefined ? '<span class="muted">—</span>' : '<span class="' + (v > 0 ? 'up' : v < 0 ? 'down' : '') + '">' + (v > 0 ? '+' : '') + num(v, 1) + '%</span>'; }
+  function mark(v){ return v === true ? '<span class="clx-ok">✔ 通過</span>' : v === false ? '<span class="clx-ng">✘ 未過</span>' : '<span class="muted">— 不適用</span>'; }
+  var TIER_TXT = {A: '①～④ 全過：合約負債有含金量、排雷過關、月營收已點火、籌碼也跟上',
+                  B: '①～③ 過：月營收已點火，籌碼還沒跟上', C: '①② 過：條件到位，等月營收點火',
+                  W: '① 過但 ② 沒過：合約負債在成長，但交叉檢查有疑慮'};
+  function render(d){
+    var m = d.m || {}, c = d.c_ || {}, p = d.p || {};
+    var h = '<div class="clx-head">';
+    h += d.tier ? '<span class="clx-tier clx-t' + d.tier + '">' + d.tier + ' ' + esc((d.tiers || {})[d.tier] || '') + '</span>' : '<span class="clx-tier clx-tn">未入選</span>';
+    h += '<span>分數 <b>' + (d.score === null || d.score === undefined ? '—' : d.score) + '</b>／100</span><span>分流：<b>' + esc(d.sector) + '</b></span><span>季報：<b>' + esc(m.q || '—') + '</b></span>';
+    if (m.rm) h += '<span>月營收：<b>' + esc(m.rm) + '</b></span>';
+    h += '</div>';
+    if (d.tier) h += '<p class="hl-sub">' + esc(TIER_TXT[d.tier]) + '</p>';
+    var rows = [
+      ['① 合約負債規模', c.size, num(m.cl, 0) + ' 百萬（下限 ' + p.min_cl + '）'],
+      ['① 含金量', c.ratio, (m.ratio === null || m.ratio === undefined ? '—' : num(m.ratio, 1) + '%') + '（合約負債 ÷ 近四季平均單季營收，下限 ' + p.ratio + '%）'],
+      ['① 年增率', c.yoy, pc(m.yoy) + '（下限 ' + p.yoy + '%）'],
+      ['① 新增／營收', c.delta, (m.delta === null || m.delta === undefined ? '—' : num(m.delta, 1) + '%') + '（一年新增的合約負債 ÷ 平均單季營收，下限 ' + p.delta + '%）'],
+      ['① 季增或連續季增', c.mom, '季增 ' + pc(m.qoq) + '、連續季增 ' + (m.streak === null || m.streak === undefined ? '—' : m.streak) + ' 季（季增 ≥ ' + p.qoq + '% 或連增 ≥ ' + p.streak + ' 季）'],
+      ['② 備料同步', c.inv, '存貨' + (m.sec === 'equip' ? '＋合約資產' : '') + '季增 ' + pc(m.inv_q) + '、年增 ' + pc(m.inv_y)],
+      ['② 毛利守門', c.gm, '毛利率 ' + num(m.gm_q, 2) + '%（前四季平均 ' + num(m.gm4, 2) + '%，容許下滑 ' + p.gm_tol + ' 個百分點）' + (m.sec === 'soft' ? '；營益率 ' + num(m.opm_q, 2) + '%（前四季 ' + num(m.opm4, 2) + '%）' : '')],
+      ['② 現金流與應收', c.cash, '近四季營業現金流 ' + num(m.ocf4, 0) + ' 百萬；應收帳款天數 ' + num(m.dso, 0) + '（前四季 ' + num(m.dso4, 0) + '）'],
+      ['③ 認列點火', c.ignite, (m.high6 ? '單月營收創 6 個月新高' : '單月營收未創 6 個月新高') + '；近 3 月均／近 12 月均 ' + num(m.ma_r, 2) + '；近 3 月年增 ' + pc(m.m_yoy3)],
+      ['④ 籌碼確認', c.chips, '近 10 日投信 ' + num(m.trust10, 0) + ' 張、外資 ' + num(m.foreign10, 0) + ' 張；400 張以上大戶' + (m.whale_up ? '連兩週增加' : '未連兩週增加')]];
+    h += '<div class="scroll"><table class="hl-t"><thead><tr><th>檢查</th><th class="st">結果</th><th>數據</th></tr></thead><tbody>';
+    rows.forEach(function(r){ h += '<tr><td>' + r[0] + '</td><td class="st">' + mark(r[1]) + '</td><td>' + r[2] + '</td></tr>'; });
+    h += '</tbody></table></div>';
+    if ((d.flags || []).length) h += '<div class="clx-flags">' + d.flags.map(function(f){ return '<span class="clx-fl ' + f.lv + '">' + esc(f.t) + '</span>'; }).join('') + '</div>';
+    var extra = [];
+    if (m.dep_y !== null && m.dep_y !== undefined) extra.push('折舊年增 ' + pc(m.dep_y));
+    if (m.ppe_y !== null && m.ppe_y !== undefined) extra.push('廠房設備年增 ' + pc(m.ppe_y));
+    if (m.capex_r !== null && m.capex_r !== undefined) extra.push('近四季資本支出是前四季的 ' + num(m.capex_r, 2) + ' 倍');
+    if (extra.length) h += '<p class="note-s">產能：' + extra.join('、') + '</p>';
+    h += '<p class="note-s">判讀邏輯與全市場排行見 <a href="' + esc(panel.getAttribute('data-page')) + '">〈合約負債選股〉</a>；門檻是「' + esc(d.sector) + '」分流的預設值。本判讀僅為機械式篩選，非投資建議。</p>';
+    box.innerHTML = h;
+  }
+  function load(){
+    if(loaded) return;
+    loaded = true;
+    if(!window.fetch){ box.innerHTML = '<p class="stale">這個瀏覽器不支援讀取這份資料。</p>'; return; }
+    fetch(panel.getAttribute('data-src'), {cache: 'no-cache'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function(d){ try{ render(d); }catch(e){ box.innerHTML = '<p class="stale">資料格式看不懂，這一個分頁暫時無法顯示。</p>'; } })
+      .catch(function(){ box.innerHTML = '<p class="muted">這一檔沒有合約負債判讀（金融保險業、或券商季報還沒有這一檔）。</p>'; });
+  }
+  if(window.MutationObserver) new MutationObserver(function(){ if(!panel.hidden) load(); }).observe(panel, {attributes: true, attributeFilter: ['hidden']});
+  if(!panel.hidden) load();
+})();

@@ -1,0 +1,423 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import tip %}
+{% block title %}合約負債選股｜{{ site_title }}{% endblock %}
+{% block head_early %}
+<script>
+window.CX_V = "{{ data_v|default('') }}";
+try { window.CX_EARLY = fetch("cl/all.json" + (window.CX_V ? "?v=" + window.CX_V : ""), window.CX_V ? {} : {cache: "no-cache"}); } catch (e) {}
+</script>
+{% endblock %}
+{% block body %}
+<style>
+.cx{--cx:#2e7d32}
+.cx-note{color:var(--muted);font-size:13px;line-height:1.65;max-width:none}
+.cx-card{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;margin:0 0 14px}
+.cx-funnel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0 14px}
+.cx-st{appearance:none;font:inherit;text-align:left;cursor:pointer;border:1.5px solid color-mix(in srgb,var(--sc) 50%,transparent);
+  background:color-mix(in srgb,var(--sc) 8%,var(--surface));border-radius:12px;padding:10px 12px;color:var(--ink);position:relative}
+.cx-st[aria-pressed=true]{background:color-mix(in srgb,var(--sc) 22%,var(--surface));border-color:var(--sc)}
+.cx-st b{display:block;font-size:13px;color:var(--sc)}
+.cx-st .n{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--sc)}
+.cx-st .d{display:block;font-size:11.5px;color:var(--muted);line-height:1.4;margin-top:2px}
+.cx-st:not(:last-child)::after{content:"›";position:absolute;right:-9px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:18px}
+.cx-st[data-s="1"]{--sc:#1c62b8}.cx-st[data-s="2"]{--sc:#b25a00}.cx-st[data-s="3"]{--sc:#c62828}.cx-st[data-s="4"]{--sc:#6d3fd1}
+.cx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 16px;margin:6px 0 10px}
+.cx-f label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin:0 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cx-f label .u{font-size:11px;font-weight:500;color:var(--muted)}
+.cx input[type=number],.cx select,.cx input[type=search]{font:inherit;font-size:13px;height:32px;box-sizing:border-box;padding:4px 8px;
+  border:1px solid var(--rule);border-radius:7px;background:var(--surface);color:var(--ink);width:100%}
+.cx input:disabled{opacity:.55}
+.cx-chk{display:flex;align-items:center;gap:6px;font-size:13px;height:32px;color:var(--ink-2)}
+.cx-tiers{display:flex;flex-wrap:wrap;gap:6px}
+.cx-tb{appearance:none;font:inherit;font-size:12.5px;font-weight:700;border-radius:999px;padding:4px 11px;cursor:pointer;
+  border:1.5px solid var(--tc);color:var(--tc);background:transparent}
+.cx-tb[aria-pressed=true]{background:var(--tc);color:#fff}
+.cx-btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.cx-btn{font:inherit;font-size:13px;border:1px solid var(--rule);background:var(--surface-2);color:var(--ink);border-radius:8px;padding:6px 14px;cursor:pointer}
+.cx-btn.pri{background:var(--cx);border-color:var(--cx);color:#fff;font-weight:600}
+.cx-pnote{font-size:12px;color:var(--muted);flex:1 1 16em}
+.t-A{--tc:#c62828}.t-B{--tc:#b25a00}.t-C{--tc:#1c62b8}.t-W{--tc:#6b7480}
+.cx-tier{display:inline-block;min-width:4.6em;text-align:center;font-size:12px;font-weight:700;border-radius:999px;padding:2px 8px;color:#fff;background:var(--tc)}
+.cx-scroll{overflow:auto;max-height:72vh;border:1px solid var(--rule);border-radius:10px;margin-top:10px}
+.cx-tbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.cx-tbl th,.cx-tbl td{padding:6px 6px;border-bottom:1px solid var(--rule);text-align:right;white-space:nowrap}
+.cx-tbl th{position:sticky;top:0;z-index:2;background:var(--surface-2);cursor:pointer;user-select:none;font-size:12.5px}
+@media (min-width:1024px){.cx-tbl th{white-space:normal;word-break:keep-all;line-height:1.25;vertical-align:bottom}}
+.cx-tbl th.l,.cx-tbl td.l{text-align:left}
+.cx-tbl td.nm{max-width:7em;white-space:normal;word-break:keep-all}
+.cx-tbl a{color:var(--accent-2);text-decoration:none}
+.cx-tbl tr.det td{white-space:normal;text-align:left;background:color-mix(in srgb,var(--cx) 5%,var(--surface));font-size:12.5px;line-height:1.6}
+.cx-tbl tr.main{cursor:pointer}
+.cx-tbl tr.main:hover td{background:var(--surface-2)}
+.cx .up{color:var(--up)}.cx .dn{color:var(--down)}
+.cx-ok{color:#2e7d32}.cx-ng{color:#c62828}.cx-na{color:var(--muted)}
+.cx-fl{display:inline-block;font-size:11.5px;border-radius:6px;padding:1px 6px;margin:1px 3px 1px 0;white-space:nowrap}
+.cx-fl.bad{background:#fde8e8;color:#b3261e}.cx-fl.warn{background:#fff3db;color:#8a5300}
+.cx-fl.good{background:#e3f4e6;color:#1b6b2c}.cx-fl.info{background:#e8f0fb;color:#1c4f94}
+.cx-sec{display:inline-block;font-size:11.5px;border-radius:6px;padding:1px 6px;background:color-mix(in srgb,var(--cx) 12%,transparent);color:var(--cx)}
+.cx-checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:2px 16px;margin:4px 0}
+.cx-bt{border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;margin-top:6px}
+.cx-bt th,.cx-bt td{padding:5px 10px;border-bottom:1px solid var(--rule);text-align:right}
+.cx-bt th:first-child,.cx-bt td:first-child{text-align:left}
+.cx-legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 18px;font-size:13px;color:var(--muted);line-height:1.6}
+.cx-legend b{color:var(--ink-2)}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) .cx{--cx:#7fd88a}
+  :root:not([data-theme=light]) .cx-st[data-s="1"]{--sc:#6fb0f5}
+  :root:not([data-theme=light]) .cx-st[data-s="2"]{--sc:#ffa94d}
+  :root:not([data-theme=light]) .cx-st[data-s="3"]{--sc:#ff8787}
+  :root:not([data-theme=light]) .cx-st[data-s="4"]{--sc:#b39cff}
+  :root:not([data-theme=light]) .t-A{--tc:#ff7a70} :root:not([data-theme=light]) .t-B{--tc:#ffa94d}
+  :root:not([data-theme=light]) .t-C{--tc:#6fb0f5} :root:not([data-theme=light]) .t-W{--tc:#98a6b4}
+  :root:not([data-theme=light]) .cx-tier,:root:not([data-theme=light]) .cx-tb[aria-pressed=true],
+  :root:not([data-theme=light]) .cx-btn.pri{color:var(--ground)}
+  :root:not([data-theme=light]) .cx-ok{color:#7fd88a} :root:not([data-theme=light]) .cx-ng{color:#ff8a80}
+  :root:not([data-theme=light]) .cx-fl.bad{background:#4a1f1d;color:#ffb4ab}
+  :root:not([data-theme=light]) .cx-fl.warn{background:#46340f;color:#ffd38a}
+  :root:not([data-theme=light]) .cx-fl.good{background:#173a20;color:#9be3a8}
+  :root:not([data-theme=light]) .cx-fl.info{background:#172c4a;color:#a9c9f5}
+}
+:root[data-theme=dark] .cx{--cx:#7fd88a}
+:root[data-theme=dark] .cx-st[data-s="1"]{--sc:#6fb0f5}
+:root[data-theme=dark] .cx-st[data-s="2"]{--sc:#ffa94d}
+:root[data-theme=dark] .cx-st[data-s="3"]{--sc:#ff8787}
+:root[data-theme=dark] .cx-st[data-s="4"]{--sc:#b39cff}
+:root[data-theme=dark] .t-A{--tc:#ff7a70} :root[data-theme=dark] .t-B{--tc:#ffa94d}
+:root[data-theme=dark] .t-C{--tc:#6fb0f5} :root[data-theme=dark] .t-W{--tc:#98a6b4}
+:root[data-theme=dark] .cx-tier,:root[data-theme=dark] .cx-tb[aria-pressed=true],:root[data-theme=dark] .cx-btn.pri{color:var(--ground)}
+:root[data-theme=dark] .cx-ok{color:#7fd88a} :root[data-theme=dark] .cx-ng{color:#ff8a80}
+:root[data-theme=dark] .cx-fl.bad{background:#4a1f1d;color:#ffb4ab}
+:root[data-theme=dark] .cx-fl.warn{background:#46340f;color:#ffd38a}
+:root[data-theme=dark] .cx-fl.good{background:#173a20;color:#9be3a8}
+:root[data-theme=dark] .cx-fl.info{background:#172c4a;color:#a9c9f5}
+@media (max-width:640px){.cx-funnel{grid-template-columns:repeat(2,minmax(0,1fr))}.cx-st:nth-child(2)::after{display:none}
+  .cx-card{padding:12px}.cx-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+
+<div class="cx">
+<h2 class="sr">合約負債選股</h2>
+<p class="cx-note"><span id="cx-msg">載入中…</span>
+{% call tip() %}合約負債是向客戶預收的訂金，是營收的領先指標；但單看季增／年增，會選到「驗收卡關、認列不了」或「低價搶來的賠錢單」。
+這裡把它放回<b>接單 → 備料生產 → 交貨驗收 → 獲利變現</b>的閉環：先依產業分流（認列週期不同），再走四段漏斗，
+每一段都要先過前一段。點表格任一列可以看每一項檢查的結果。篩選在你的瀏覽器裡進行，門檻會記住。{% endcall %}</p>
+
+<div class="cx-funnel" id="cx-funnel">
+  <button type="button" class="cx-st" data-s="1" aria-pressed="false"><b>① 含金量＋成長</b><span class="n" id="cx-n1">—</span><span class="d">合約負債夠大、年增、季增或連續季增</span></button>
+  <button type="button" class="cx-st" data-s="2" aria-pressed="false"><b>② 交叉排雷</b><span class="n" id="cx-n2">—</span><span class="d">備料同步、毛利守門、現金流；剔除卡關／毒藥單</span></button>
+  <button type="button" class="cx-st" data-s="3" aria-pressed="false"><b>③ 認列點火</b><span class="n" id="cx-n3">—</span><span class="d">月營收創 6 個月新高或 3 月均＞12 月均</span></button>
+  <button type="button" class="cx-st" data-s="4" aria-pressed="false"><b>④ 籌碼確認</b><span class="n" id="cx-n4">—</span><span class="d">投信／外資 10 日買超或大戶連兩週增加</span></button>
+</div>
+
+<div class="cx-card">
+  <div class="cx-grid">
+    <div class="cx-f"><label for="cx-sec">產業分流</label><select id="cx-sec"></select></div>
+    <div class="cx-f"><label for="cx-mk">市場別</label><select id="cx-mk"><option value="">全部</option><option>上市</option><option>上櫃</option></select></div>
+    <div class="cx-f"><label for="cx-q">找代號／名稱</label><input type="search" id="cx-q" placeholder="例如 2404"></div>
+    <div class="cx-f" style="grid-column:span 2"><label>顯示層級</label><div class="cx-tiers" id="cx-tiers"></div></div>
+  </div>
+  <div id="cx-params"></div>
+  <div class="cx-btns">
+    <button class="cx-btn pri" id="cx-run">重新掃描</button>
+    <button class="cx-btn" id="cx-preset">預設條件</button>
+    <button class="cx-btn" id="cx-clear">清除條件</button>
+    <span class="cx-pnote" id="cx-pnote"></span>
+  </div>
+</div>
+
+<div class="cx-card">
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">篩選結果</h3><span class="cx-tier t-A" id="cx-count" style="font-size:13px">—</span>
+    <span class="cx-note" id="cx-asof"></span></div>
+  <div class="cx-scroll"><table class="cx-tbl" id="cx-tbl"></table></div>
+</div>
+
+<div class="cx-card" id="cx-btcard" hidden>
+  <h3 style="margin:0 0 4px">歷史驗證 {% call tip() %}每月 11 日（月營收公布後）用當時已經公布的季報、月營收、籌碼跑一次預設條件，
+  看之後 20、60 個交易日相對全市場中位數的超額報酬。檢查點互相重疊、期間也短（多頭行情），只能說明「各層級的相對強弱」，
+  不代表未來報酬。{% endcall %}</h3>
+  <div class="cx-scroll" style="max-height:none"><table class="cx-bt" id="cx-bt"></table></div>
+  <p class="cx-note" id="cx-btnote"></p>
+</div>
+
+<div class="cx-card">
+  <h3 style="margin:0 0 8px">怎麼判讀</h3>
+  <div class="cx-legend">
+    <div><b>含金量</b>：合約負債 ÷ 近四季平均單季營收。比值越高，預收款模式越是公司的核心；比值很小時，就算合約負債翻倍也推不動營收。</div>
+    <div><b>新增／營收</b>：一年內新增的合約負債 ÷ 平均單季營收，看新接訂單的規模，避免小基期的年增率失真。</div>
+    <div><b>備料同步</b>：收到訂金後要開始備料生產，存貨（設備與工程加上合約資產）應該跟著增加；但存貨長得比接單快太多＝堆貨。</div>
+    <div><b>毛利守門</b>：毛利率要為正，而且最近一季沒有比前四季平均掉太多；軟體與資安看營業利益率。過不了＝可能是低價搶單或成本失控。</div>
+    <div><b>現金流</b>：真正的預收款會帶進現金。近四季營業現金流要為正、應收帳款天數不能異常拉長。營建業不看（蓋房子期間現金流本來就是負的）。</div>
+    <div><b>危險訊號（直接剔除）</b>：訂單卡關（合約負債高檔持平＋存貨暴增＋營收年減）、毒藥單（合約負債高檔但毛利大跌）、現金黑洞（合約負債增加但現金流為負）。</div>
+    <div><b>認列點火</b>：合約負債一季才公布一次，月營收每月 10 日公布。單月營收創 6 個月新高、或近 3 個月平均高於近 12 個月平均，代表訂單開始大量認列。</div>
+    <div><b>籌碼確認</b>：近 10 個交易日投信或外資淨買超，或 400 張以上大戶連兩週增加；「投信首買」另外標示。</div>
+    <div><b>層級</b>：<span class="cx-tier t-A">A 主升候選</span> ①～④ 全過；<span class="cx-tier t-B">B 已點火</span> ①～③；<span class="cx-tier t-C">C 蓄勢待發</span> ①②（等月營收點火）；<span class="cx-tier t-W">W 警示</span> ① 過但 ② 沒過。</div>
+    <div><b>產業分流</b>：設備與工程（驗收／完工比例認列）、IC 設計與 IP（里程碑認列）、軟體與資安（按期攤提）、營建與資產（交屋一次認列，獨立比較）、一般製造；金融保險排除。各分流有自己的預設門檻。</div>
+    <div><b>分數</b>：含金量 25、成長動能 20、轉換品質 25、產能 10、點火 10、籌碼 10，危險訊號扣分。同一層級內用分數排序。</div>
+    <div><b>資料限制</b>：存貨的原料／在製品／製成品細項只在財報附註，沒有固定格式，這裡用「存貨＋合約資產」代替；季報每季公布一次，合約負債的時點會落後。</div>
+  </div>
+  <p class="cx-note">本頁僅為機械式篩選，非投資建議。</p>
+</div>
+</div>
+
+<script>
+/*CLX-BEGIN*/
+var CLX = (function(){
+  function ge(v, lo){ return lo === null || lo === undefined ? true : (v === null || v === undefined ? null : v >= lo); }
+  function nn(v){ return v === null || v === undefined ? null : v; }
+  function flagsOf(m, p){
+    var out = [], sec = m.sec, hi = nn(m.cl_hi), qoq = nn(m.qoq), yoy = nn(m.yoy), gq = nn(m.gm_q), g4 = nn(m.gm4);
+    if (sec !== "build" && hi !== null && hi >= 0.9 && qoq !== null && Math.abs(qoq) <= 5 && (m.inv_y || 0) >= 30 && nn(m.rev_qy) !== null && m.rev_qy < 0)
+      out.push({k: "stuck", lv: "bad", t: "訂單可能卡關：合約負債高檔持平、存貨年增 30% 以上、營收卻年減"});
+    if (p.gm_tol !== null && hi !== null && hi >= 0.95 && gq !== null && g4 !== null && gq < g4 - 2 * p.gm_tol)
+      out.push({k: "poison", lv: "bad", t: "毒藥單疑慮：合約負債在高檔，毛利率卻比前四季平均低 " + (g4 - gq).toFixed(1) + " 個百分點"});
+    if (p.ocf && (yoy || 0) > 0 && nn(m.ocf4) !== null && m.ocf4 < 0)
+      out.push({k: "cash", lv: "bad", t: "現金黑洞疑慮：合約負債增加，近四季營業現金流卻是負的"});
+    if (p.ocf && nn(m.dso) !== null && m.dso4 && m.dso > m.dso4 * 1.5)
+      out.push({k: "dso", lv: "warn", t: "應收帳款天數拉長到 " + m.dso.toFixed(0) + " 天（前四季平均 " + m.dso4.toFixed(0) + " 天）"});
+    if (qoq !== null && qoq <= -15 && (m.rev_qy || 0) > 10)
+      out.push({k: "consume", lv: "info", t: "合約負債下降、營收成長：在手訂單正在轉成營收（之後動能可能放緩）"});
+    var mfg = sec === "general" || sec === "equip" || sec === "icd";
+    if (mfg && (m.dep_y || 0) >= 10 && (m.ppe_y || 0) >= 10)
+      out.push({k: "capacity", lv: "good", t: "折舊與廠房設備都年增 10% 以上：新產能開出，可以消化訂單"});
+    else if (mfg && (m.capex_r || 0) >= 1.3)
+      out.push({k: "capex", lv: "info", t: "近四季資本支出比前四季多 30% 以上：擴產中，產能還沒開出"});
+    if (m.trust_first) out.push({k: "trust_first", lv: "good", t: "投信首買：近 5 日買超、之前 20 日沒有買"});
+    return out;
+  }
+  function cap(x, full){ return x === null || x === undefined || !(full > 0) ? 0 : Math.max(0, Math.min(1, x / full)); }
+  function score(m, p, c, flags){
+    var s = 15 * cap(m.ratio, 2 * p.ratio) + 10 * cap(m.delta, 3 * p.delta);
+    s += 10 * cap(m.yoy, 3 * p.yoy) + 6 * cap(m.streak, 4) + ((m.qoq || 0) > 0 ? 4 : 0);
+    s += c.inv === true ? 8 : (c.inv === null ? 4 : 0);
+    var gq = nn(m.gm_q), g4 = nn(m.gm4);
+    s += (gq !== null && g4 !== null && gq >= g4) ? 9 : (c.gm !== false ? 5 : 0);
+    s += (c.cash === true && (nn(m.dso) === null || !m.dso4 || m.dso <= m.dso4)) ? 8 : (c.cash !== false ? 5 : 0);
+    if (m.sec === "soft" || m.sec === "build") s += 5;
+    else s += ((m.dep_y || 0) >= 10 ? 5 : 0) + (((m.ppe_y || 0) >= 10 || (m.capex_r || 0) >= 1.2) ? 5 : 0);
+    s += (m.high6 ? 5 : 0) + ((m.ma_r || 0) >= 1 + (p.ignite_ma || 0) / 100 ? 5 : 0);
+    s += ((m.trust10 || 0) > 0 ? 4 : 0) + ((m.foreign10 || 0) > 0 ? 3 : 0) + (m.whale_up ? 3 : 0);
+    flags.forEach(function(f){ s -= (f.k === "stuck" || f.k === "poison") ? 15 : (f.k === "cash" ? 10 : 0); });
+    return Math.floor(Math.max(0, Math.min(100, s)) + 0.5);
+  }
+  function evaluate(m, p){
+    if (m.sec === "fin" || !m.q) return {tier: "", s: [false, false, false, false], c: {}, flags: [], score: null};
+    var c = {};
+    c.size = ge(m.cl, p.min_cl); c.ratio = ge(m.ratio, p.ratio); c.yoy = ge(m.yoy, p.yoy); c.delta = ge(m.delta, p.delta);
+    var qoq = nn(m.qoq);
+    c.mom = qoq === null ? null : ((p.qoq === null || qoq >= p.qoq) || (p.streak !== null && (m.streak || 0) >= p.streak));
+    var s1 = ["size", "ratio", "yoy", "delta", "mom"].every(function(k){ return c[k] === true; });
+    if (p.inv && nn(m.inv_q) !== null) {
+      var iy = nn(m.inv_y);
+      if (iy !== null && p.inv_mult !== null && iy > Math.max(p.inv_mult * Math.max(m.yoy || 0, 0), 20)) c.inv = false;
+      else if (m.inv_q >= 0 || (iy !== null && iy >= 0)) c.inv = true;
+      else c.inv = null;
+    } else c.inv = null;
+    var gq = nn(m.gm_q), g4 = nn(m.gm4);
+    if (m.sec === "soft" && nn(m.opm_q) !== null && nn(m.opm4) !== null) { gq = m.opm_q; g4 = m.opm4; }
+    c.gm = (gq === null || g4 === null) ? null : ((m.gm_q || 0) > 0 && (p.gm_tol === null || gq >= g4 - p.gm_tol));
+    if (p.ocf && nn(m.ocf4) !== null) {
+      var d = nn(m.dso);
+      c.cash = m.ocf4 > 0 && (d === null || !m.dso4 || p.dso_mult === null || d <= m.dso4 * p.dso_mult);
+    } else c.cash = null;
+    var flags = flagsOf(m, p), bad = flags.some(function(f){ return f.lv === "bad"; });
+    var s2 = s1 && c.inv !== false && c.gm !== false && c.cash !== false && !bad;
+    var h6 = nn(m.high6), mr = nn(m.ma_r);
+    c.ignite = (h6 === null && mr === null) ? null : (!!h6 || (mr !== null && mr >= 1 + (p.ignite_ma || 0) / 100));
+    var s3 = s2 && c.ignite === true;
+    var t10 = nn(m.trust10), f10 = nn(m.foreign10), wu = nn(m.whale_up);
+    c.chips = (t10 === null && f10 === null && wu === null) ? null : ((t10 || 0) > 0 || (f10 || 0) > 0 || !!wu);
+    var s4 = s3 && (c.chips === true || !p.chips);
+    var tier = s4 ? "A" : s3 ? "B" : s2 ? "C" : s1 ? "W" : "";
+    return {tier: tier, s: [s1, s2, s3, s4], c: c, flags: flags, score: score(m, p, c, flags)};
+  }
+  return {evaluate: evaluate, flagsOf: flagsOf};
+})();
+/*CLX-END*/
+
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var KEY = "twsix-cl-params-v1", D = null, PARAMS = {}, STAGE = 0, TIERS = {A: true, B: true, C: true, W: false};
+  var sortKey = "score", sortDir = -1, open = {};
+  var FIELDS = [
+    ["min_cl", "合約負債下限", "百萬元"], ["ratio", "含金量下限", "%"], ["yoy", "年增率下限", "%"], ["qoq", "季增率下限", "%"],
+    ["streak", "或連續季增", "季"], ["delta", "新增／營收下限", "%"], ["inv_mult", "存貨年增上限", "倍接單"],
+    ["gm_tol", "毛利率容許下滑", "百分點"], ["dso_mult", "應收天數上限", "倍"], ["ignite_ma", "點火：3月均高於12月均", "%"]];
+  var CHECKS = [["inv", "檢查備料同步"], ["ocf", "檢查現金流"], ["chips", "④ 要籌碼確認"]];
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify({p: PARAMS, t: TIERS, sec: $("cx-sec").value})); } catch (e) {} }
+  function restore(){ try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { return null; } }
+  function esc(s){ return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function f1(v, d){ return v === null || v === undefined ? '<span class="cx-na">—</span>' : Number(v).toLocaleString("zh-TW", {maximumFractionDigits: d === undefined ? 1 : d, minimumFractionDigits: d === undefined ? 1 : d}); }
+  function pc(v){ if (v === null || v === undefined) return '<span class="cx-na">—</span>'; return '<span class="' + (v > 0 ? "up" : v < 0 ? "dn" : "") + '">' + (v > 0 ? "+" : "") + f1(v) + "%</span>"; }
+  function lots(v){ if (v === null || v === undefined) return '<span class="cx-na">—</span>'; return '<span class="' + (v > 0 ? "up" : v < 0 ? "dn" : "") + '">' + (v > 0 ? "+" : "") + f1(v, 0) + "</span>"; }
+
+  function paramsUI(){
+    var sec = $("cx-sec").value, host = $("cx-params");
+    if (!sec) { host.innerHTML = '<p class="cx-note">「全部分流」用各分流自己的預設門檻；選一個分流就可以調整那一個分流的門檻。</p>'; return; }
+    var p = PARAMS[sec], h = '<div class="cx-grid">';
+    FIELDS.forEach(function(f){
+      h += '<div class="cx-f"><label for="cx-p-' + f[0] + '" title="' + esc(D.help[f[0]] || "") + '">' + f[1] + ' <span class="u">' + f[2] + '</span></label>' +
+        '<input type="number" step="any" id="cx-p-' + f[0] + '" data-k="' + f[0] + '" value="' + (p[f[0]] === null ? "" : p[f[0]]) + '" placeholder="不限"></div>';
+    });
+    CHECKS.forEach(function(f){
+      h += '<div class="cx-f"><label>&nbsp;</label><label class="cx-chk" title="' + esc(D.help[f[0]] || "") + '"><input type="checkbox" data-k="' + f[0] + '"' + (p[f[0]] ? " checked" : "") + '> ' + f[1] + '</label></div>';
+    });
+    host.innerHTML = h + "</div>";
+    host.querySelectorAll("input").forEach(function(inp){
+      inp.onchange = function(){
+        var k = inp.getAttribute("data-k");
+        PARAMS[sec][k] = inp.type === "checkbox" ? inp.checked : (inp.value === "" ? null : Number(inp.value));
+        save(); run();
+      };
+    });
+  }
+
+  function evalAll(){
+    var sec = $("cx-sec").value, mk = $("cx-mk").value, q = ($("cx-q").value || "").trim(), out = [], n = [0, 0, 0, 0];
+    D.rows.forEach(function(r){
+      var m = r.m;
+      if (m.sec === "fin") return;
+      if (sec && m.sec !== sec) return;
+      if (mk && r.mk !== mk) return;
+      var e = CLX.evaluate(m, PARAMS[m.sec] || PARAMS.general);
+      for (var i = 0; i < 4; i++) if (e.s[i]) n[i]++;
+      if (q && r.c.indexOf(q) !== 0 && (r.n || "").indexOf(q) < 0) return;
+      if (STAGE && !e.s[STAGE - 1]) return;
+      if (!e.tier || !TIERS[e.tier]) { if (!(q && e.tier === "")) return; }
+      out.push({r: r, e: e});
+    });
+    for (var i = 0; i < 4; i++) $("cx-n" + (i + 1)).textContent = n[i];
+    return out;
+  }
+  var TIER_ORDER = {A: 4, B: 3, C: 2, W: 1, "": 0};
+  var COLS = [
+    ["c", "代號", "l"], ["n", "名稱", "l"], ["sec", "分流", "l"], ["tier", "層級", ""], ["score", "分數", ""],
+    ["cl", "合約負債<br>百萬", ""], ["ratio", "含金量", ""], ["yoy", "年增", ""], ["qoq", "季增", ""], ["streak", "連增", ""],
+    ["delta", "新增／<br>營收", ""], ["inv_y", "存貨<br>年增", ""], ["gm_q", "毛利率", ""], ["gmd", "毛利<br>變化", ""],
+    ["ocf4", "近四季<br>現金流", ""], ["ma_r", "3月均／<br>12月均", ""], ["trust10", "投信<br>10日", ""], ["foreign10", "外資<br>10日", ""], ["flags", "訊號", "l"]];
+  function val(x, k){
+    var m = x.r.m;
+    if (k === "c" || k === "n") return x.r[k];
+    if (k === "sec") return m.sec;
+    if (k === "tier") return TIER_ORDER[x.e.tier] * 1000 + (x.e.score || 0);
+    if (k === "score") return x.e.score;
+    if (k === "gmd") return (m.gm_q !== null && m.gm_q !== undefined && m.gm4 !== null && m.gm4 !== undefined) ? m.gm_q - m.gm4 : null;
+    if (k === "flags") return x.e.flags.length;
+    return m[k];
+  }
+  function mark(v){ return v === true ? '<span class="cx-ok">✔ 通過</span>' : v === false ? '<span class="cx-ng">✘ 未過</span>' : '<span class="cx-na">— 不適用／資料不足</span>'; }
+  function detail(x){
+    var m = x.r.m, c = x.e.c, sname = D.sectors[m.sec] || "";
+    var rows = [
+      ["合約負債 ≥ 下限", c.size, f1(m.cl, 0) + " 百萬"], ["含金量", c.ratio, m.ratio === null || m.ratio === undefined ? "—" : f1(m.ratio) + "%"],
+      ["年增率", c.yoy, pc(m.yoy)], ["新增／營收", c.delta, m.delta === null || m.delta === undefined ? "—" : f1(m.delta) + "%"],
+      ["季增或連續季增", c.mom, pc(m.qoq) + "，連增 " + (m.streak === null || m.streak === undefined ? "—" : m.streak) + " 季"],
+      ["備料同步", c.inv, "存貨季增 " + pc(m.inv_q) + "、年增 " + pc(m.inv_y)],
+      ["毛利守門", c.gm, (m.sec === "soft" ? "營益率 " + f1(m.opm_q, 2) + "%（前四季 " + f1(m.opm4, 2) + "%）；" : "") + "毛利率 " + f1(m.gm_q, 2) + "%（前四季 " + f1(m.gm4, 2) + "%）"],
+      ["現金流與應收", c.cash, "近四季營業現金流 " + f1(m.ocf4, 0) + " 百萬；應收天數 " + f1(m.dso, 0) + "（前四季 " + f1(m.dso4, 0) + "）"],
+      ["認列點火", c.ignite, (m.rm ? m.rm + " 月營收" : "月營收") + (m.high6 ? "創 6 個月新高" : "未創 6 個月新高") + "；3 月均／12 月均 " + f1(m.ma_r, 2) + "；近 3 月年增 " + pc(m.m_yoy3)],
+      ["籌碼確認", c.chips, "投信 10 日 " + lots(m.trust10) + " 張、外資 " + lots(m.foreign10) + " 張；400 張以上大戶" + (m.whale_up ? "連兩週增加" : "未連兩週增加") + (m.whale_d === null || m.whale_d === undefined ? "" : "（兩週 " + (m.whale_d > 0 ? "+" : "") + m.whale_d + " 個百分點）")]];
+    var h = '<div><b>' + esc(x.r.c + " " + x.r.n) + '</b>　' + esc(m.q) + ' 季報　分流：<span class="cx-sec">' + esc(sname) + '</span>　分數 <b>' + x.e.score + '</b></div><div class="cx-checks">';
+    rows.forEach(function(r){ h += '<div>' + mark(r[1]) + '　' + r[0] + '：' + r[2] + '</div>'; });
+    h += '</div>';
+    if (x.e.flags.length) h += '<div>' + x.e.flags.map(function(f){ return '<span class="cx-fl ' + f.lv + '">' + esc(f.t) + '</span>'; }).join(" ") + '</div>';
+    var extra = [];
+    if (m.dep_y !== null && m.dep_y !== undefined) extra.push("折舊年增 " + pc(m.dep_y));
+    if (m.ppe_y !== null && m.ppe_y !== undefined) extra.push("廠房設備年增 " + pc(m.ppe_y));
+    if (m.capex_r !== null && m.capex_r !== undefined) extra.push("近四季資本支出是前四季的 " + f1(m.capex_r, 2) + " 倍");
+    if (extra.length) h += '<div class="cx-note">產能：' + extra.join("、") + '</div>';
+    return h;
+  }
+  function render(list){
+    list.sort(function(a, b){
+      var x = val(a, sortKey), y = val(b, sortKey);
+      if (x === y) return (b.e.score || 0) - (a.e.score || 0);
+      if (x === null || x === undefined) return 1;
+      if (y === null || y === undefined) return -1;
+      return (x > y ? 1 : -1) * sortDir;
+    });
+    var h = "<thead><tr>" + COLS.map(function(c){
+      return '<th class="' + c[2] + '" data-k="' + c[0] + '">' + c[1] + (sortKey === c[0] ? (sortDir > 0 ? " ▲" : " ▼") : "") + "</th>";
+    }).join("") + "</tr></thead><tbody>";
+    list.forEach(function(x){
+      var r = x.r, m = r.m, e = x.e, link = "stock/" + encodeURIComponent(r.c) + ".html";
+      var gmd = val(x, "gmd");
+      h += '<tr class="main" data-c="' + esc(r.c) + '">' +
+        '<td class="l"><a href="' + link + '">' + esc(r.c) + '</a></td><td class="l nm"><a href="' + link + '">' + esc(r.n) + '</a></td>' +
+        '<td class="l"><span class="cx-sec">' + esc((D.sectors[m.sec] || "").replace("與其他", "")) + '</span></td>' +
+        '<td>' + (e.tier ? '<span class="cx-tier t-' + e.tier + '">' + e.tier + " " + esc(D.tiers[e.tier]) + '</span>' : '<span class="cx-na">—</span>') + '</td>' +
+        '<td><b>' + (e.score === null ? "—" : e.score) + '</b></td>' +
+        '<td>' + f1(m.cl, 0) + '</td><td>' + (m.ratio === null || m.ratio === undefined ? '<span class="cx-na">—</span>' : f1(m.ratio) + "%") + '</td>' +
+        '<td>' + pc(m.yoy) + '</td><td>' + pc(m.qoq) + '</td><td>' + (m.streak === null || m.streak === undefined ? "—" : m.streak) + '</td>' +
+        '<td>' + (m.delta === null || m.delta === undefined ? '<span class="cx-na">—</span>' : f1(m.delta) + "%") + '</td><td>' + pc(m.inv_y) + '</td>' +
+        '<td>' + (m.gm_q === null || m.gm_q === undefined ? '<span class="cx-na">—</span>' : f1(m.gm_q) + "%") + '</td>' +
+        '<td>' + (gmd === null ? '<span class="cx-na">—</span>' : '<span class="' + (gmd > 0 ? "up" : gmd < 0 ? "dn" : "") + '">' + (gmd > 0 ? "+" : "") + gmd.toFixed(1) + '</span>') + '</td>' +
+        '<td>' + f1(m.ocf4, 0) + '</td><td>' + f1(m.ma_r, 2) + '</td><td>' + lots(m.trust10) + '</td><td>' + lots(m.foreign10) + '</td>' +
+        '<td class="l">' + e.flags.map(function(f){ return '<span class="cx-fl ' + f.lv + '" title="' + esc(f.t) + '">' + ({stuck: "卡關", poison: "毒藥單", cash: "現金黑洞", dso: "應收拉長", consume: "消化中", capacity: "產能開出", capex: "擴產中", trust_first: "投信首買"}[f.k] || f.k) + '</span>'; }).join("") + '</td></tr>';
+      if (open[r.c]) h += '<tr class="det"><td colspan="' + COLS.length + '">' + detail(x) + '</td></tr>';
+    });
+    if (!list.length) h += '<tr><td class="l" colspan="' + COLS.length + '"><span class="cx-na">沒有符合的股票。可以放寬門檻，或在上方勾選更多層級。</span></td></tr>';
+    $("cx-tbl").innerHTML = h + "</tbody>";
+    $("cx-count").textContent = "共 " + list.length + " 檔";
+    $("cx-tbl").querySelectorAll("th").forEach(function(th){
+      th.onclick = function(){ var k = th.getAttribute("data-k"); if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = (k === "c" || k === "n" || k === "sec") ? 1 : -1; } render(list); };
+    });
+    $("cx-tbl").querySelectorAll("tr.main").forEach(function(tr){
+      tr.onclick = function(ev){ if (ev.target.closest("a")) return; var c = tr.getAttribute("data-c"); open[c] = !open[c]; render(list); };
+    });
+  }
+  function run(){ if (D) render(evalAll()); }
+  function tiersUI(){
+    $("cx-tiers").innerHTML = ["A", "B", "C", "W"].map(function(t){
+      return '<button type="button" class="cx-tb t-' + t + '" data-t="' + t + '" aria-pressed="' + (TIERS[t] ? "true" : "false") + '">' + t + " " + esc(D.tiers[t]) + "</button>";
+    }).join("");
+    $("cx-tiers").querySelectorAll("button").forEach(function(b){
+      b.onclick = function(){ var t = b.getAttribute("data-t"); TIERS[t] = !TIERS[t]; b.setAttribute("aria-pressed", TIERS[t] ? "true" : "false"); save(); run(); };
+    });
+  }
+  function backtest(){
+    var bt = D.backtest;
+    if (!bt || !bt.groups) return;
+    $("cx-btcard").hidden = false;
+    var hs = bt.horizons || [20, 60], names = {A: "A 主升候選", AB: "A＋B", B: "B 已點火", ABC: "A＋B＋C", C: "C 蓄勢待發", W: "W 警示"};
+    var h = "<thead><tr><th>組別</th>" + hs.map(function(x){ return "<th>" + x + " 日樣本</th><th>平均超額</th><th>中位數超額</th><th>勝率</th>"; }).join("") + "</tr></thead><tbody>";
+    function cells(g){ return hs.map(function(x){ var v = g && g[String(x)]; return v ? "<td>" + v.n + "</td><td>" + pc(v.mean) + "</td><td>" + pc(v.median) + "</td><td>" + f1(v.win) + "%</td>" : "<td colspan=4>—</td>"; }).join(""); }
+    ["A", "B", "C", "W", "AB", "ABC"].forEach(function(t){ if (bt.groups[t]) h += "<tr><td>" + names[t] + "</td>" + cells(bt.groups[t]) + "</tr>"; });
+    if (bt.naive) h += '<tr><td>對照：只看合約負債年增 &gt; 20%、季增 &gt; 5%</td>' + cells(bt.naive) + "</tr>";
+    $("cx-bt").innerHTML = h + "</tbody>";
+    $("cx-btnote").textContent = "期間 " + (bt.checkpoints && bt.checkpoints.length ? bt.checkpoints[0].date + " ～ " + bt.checkpoints[bt.checkpoints.length - 1].date + "，共 " + bt.checkpoints.length + " 個檢查點；" : "") + (bt.note || "");
+  }
+  function init(doc){
+    D = doc;
+    var saved = restore();
+    PARAMS = clone(D.defaults);
+    if (saved && saved.p) Object.keys(saved.p).forEach(function(s){ if (PARAMS[s]) Object.keys(PARAMS[s]).forEach(function(k){ if (k in saved.p[s]) PARAMS[s][k] = saved.p[s][k]; }); });
+    if (saved && saved.t) TIERS = saved.t;
+    var sel = $("cx-sec");
+    sel.innerHTML = '<option value="">全部分流</option>' + Object.keys(D.sectors).filter(function(k){ return k !== "fin"; }).map(function(k){
+      var n = D.rows.filter(function(r){ return r.m.sec === k; }).length;
+      return '<option value="' + k + '">' + esc(D.sectors[k]) + "（" + n + "）</option>";
+    }).join("");
+    if (saved && saved.sec !== undefined) sel.value = saved.sec;
+    sel.onchange = function(){ paramsUI(); save(); run(); };
+    $("cx-mk").onchange = run; $("cx-q").oninput = run;
+    $("cx-run").onclick = run;
+    $("cx-preset").onclick = function(){ var s = sel.value; if (s) PARAMS[s] = clone(D.defaults[s]); else PARAMS = clone(D.defaults); TIERS = {A: true, B: true, C: true, W: false}; tiersUI(); paramsUI(); save(); run(); };
+    $("cx-clear").onclick = function(){
+      var s = sel.value, keys = s ? [s] : Object.keys(PARAMS);
+      keys.forEach(function(k){ FIELDS.forEach(function(f){ PARAMS[k][f[0]] = null; }); PARAMS[k].inv = false; PARAMS[k].ocf = false; PARAMS[k].chips = false; });
+      paramsUI(); save(); run();
+    };
+    document.querySelectorAll(".cx-st").forEach(function(b){
+      b.onclick = function(){ var s = +b.getAttribute("data-s"); STAGE = STAGE === s ? 0 : s;
+        document.querySelectorAll(".cx-st").forEach(function(x){ x.setAttribute("aria-pressed", +x.getAttribute("data-s") === STAGE ? "true" : "false"); }); run(); };
+    });
+    tiersUI(); paramsUI(); backtest();
+    $("cx-msg").textContent = "最新季報 " + (D.asof || "—") + "；" + D.rows.filter(function(r){ return r.m.sec !== "fin"; }).length + " 檔有合約負債（金融保險排除）。漏斗上的數字是各段通過的檔數，點一下只看那一段。";
+    $("cx-pnote").textContent = "門檻改了會自動重算；「清除條件」＝不設門檻（只剩危險訊號與資料完整度）。";
+    run();
+  }
+  (window.CX_EARLY || fetch("cl/all.json", {cache: "no-cache"})).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(init).catch(function(){ $("cx-msg").textContent = "還沒有合約負債選股的資料（下一次建站後就會出現）。"; });
+})();
+</script>
+{% endblock %}

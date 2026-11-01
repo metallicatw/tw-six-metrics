@@ -167,7 +167,7 @@ def test_the_three_stale_pages_are_unlinked_but_still_built():
 
     nav = re.search(r"<nav>(.*?)</nav>", (out / "index.html").read_text("utf-8"), re.S)
     labels = re.findall(r">([^<>]+)</a>", nav.group(1))
-    assert labels == ["台股評等清單", "台股觀察清單", "選股功能", "AI 選股", "籌碼雷達"]
+    assert labels == ["台股評等清單", "台股觀察清單", "選股功能", "AI 選股", "籌碼雷達", "合約負債選股"]
     for name in ("picks.html", "stats.html", "about.html"):
         assert (out / name).is_file(), f"{name} 不該被刪掉，只是不連過去"
     old = (out / "list.html").read_text("utf-8")
@@ -834,6 +834,7 @@ NAV_EXPECTED = [
     ("nav-screen", "選股功能"),
     ("nav-ai",     "AI 選股"),
     ("nav-radar",  "籌碼雷達"),
+    ("nav-cl",     "合約負債選股"),
     ("nav-mon",    "全球市場監控＋日股觀察"),
 ]
 
@@ -1512,3 +1513,17 @@ def test_個股頁有法說會分頁_而且桌機一列排完(tmp_path=None):
     assert page.index('id="tab-talks"') < page.index('id="tab-ai"'), "法說會排在 AI 選股前面"
     css = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.css").read_text("utf-8")
     assert "@media (min-width:900px){\n  .tabs{gap:4px}\n  .tabs .tab{flex:1 1 auto;min-width:0" in css
+
+
+def test_合約負債選股是籌碼雷達右邊的大分頁_個股頁財務健診有判讀子分頁():
+    tmp = _tmp()
+    out = tmp / "site"
+    build_site(_records(), out, sheets_dir=_sheets(tmp))
+    page = (out / "cl.html").read_text("utf-8")
+    nav = page[page.index("<nav>"):page.index("</nav>")]
+    assert nav.index('href="radar.html"') < nav.index('href="cl.html"') < nav.index("</a>", nav.index('href="cl.html"'))
+    assert 'class="nav-cl" href="cl.html" aria-current="page"' in nav
+    assert "/*CLX-BEGIN*/" in page and "cl/all.json" in page
+    assert (out / "cl" / "all.json").exists()
+    stock = (out / "stock" / "5439.html").read_text("utf-8")
+    assert 'data-sub="hl-cl"' in stock and 'data-src="../cl/5439.json"' in stock

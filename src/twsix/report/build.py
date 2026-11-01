@@ -50,6 +50,7 @@ GRADE_KEYS = ["AA", "A", "BB", "B", "C", "不評分", "數據不足"]
 MONITOR_PAGE = "monitor.html"
 AI_PAGE = "ai.html"
 RADAR_PAGE = "radar.html"
+CL_PAGE = "cl.html"
 SCREENER_PAGE = "screener.html"
 MONITOR_REPORT = "monitor-report.html"
 
@@ -1028,6 +1029,9 @@ def build_site(
 
     written[f"{RADAR_PAGE}（籌碼雷達）"] = _write_radar_page(env, base, out_dir)
 
+    written[f"{CL_PAGE}（合約負債選股）"] = _write_cl_page(
+        env, base, out_dir, sheets_dir.parent if sheets_dir is not None else None, live)
+
     written[f"{SCREENER_PAGE}（選股功能）"] = _write_screener_page(
         env, base, out_dir, sheets_dir.parent if sheets_dir is not None else None, live)
 
@@ -1379,6 +1383,32 @@ def _write_screener_page(env: Any, base: dict[str, Any], out_dir: Path,
         return 1
     except Exception as exc:  # noqa: BLE001 - 新的一頁不能讓整站建不起來
         print(f"::error::選股功能頁面畫不出來（其他頁面不受影響）：{exc!r}")
+        return 0
+
+
+def _write_cl_page(env: Any, base: dict[str, Any], out_dir: Path,
+                   data_dir: Path | None, live: list[Any]) -> int:
+    """〈合約負債選股〉：cl/all.json＋cl/<代號>.json（個股頁〈財務健診〉用）＋cl.html。"""
+    from .. import clscreen  # noqa: PLC0415
+
+    data_v = ""
+    if data_dir is not None:
+        try:
+            n = clscreen.write(out_dir, data_dir, [
+                {"code": r.stock_id, "name": r.name, "market": r.market, "industry": r.industry}
+                for r in live if not r.stock_id.startswith("00")
+            ])
+            print(f"  cl/*.json         {n} 檔")
+            data_v = str(int((out_dir / clscreen.OUT).stat().st_mtime))
+        except Exception as exc:  # noqa: BLE001 - 頁面照畫，會寫「還沒有資料」
+            print(f"::error::合約負債選股的資料寫不出來（頁面會顯示沒有資料）：{exc!r}")
+    try:
+        env.get_template("cl.html.j2").stream(
+            **base, page="cl", rel="", data_v=data_v
+        ).dump(str(out_dir / CL_PAGE))
+        return 1
+    except Exception as exc:  # noqa: BLE001 - 新的一頁不能讓整站建不起來
+        print(f"::error::合約負債選股頁面畫不出來（其他頁面不受影響）：{exc!r}")
         return 0
 
 

@@ -79,6 +79,7 @@
 :root:not([data-theme=light]) nav a.nav-mon  {--nav-c:#6fb0f5}
 :root:not([data-theme=light]) nav a.nav-ai   {--nav-c:#b39cff}
 :root:not([data-theme=light]) nav a.nav-radar{--nav-c:#e3d35a}
+:root:not([data-theme=light]) nav a.nav-cl   {--nav-c:#7fd88a}
 :root:not([data-theme=light]) nav a.nav-screen{--nav-c:#ff8a80}
 :root:not([data-theme=light]) nav a.nav-more {--nav-c:#98a6b4}
 :root:not([data-theme=light]) .tabs #tab-summary{--tc:#4fd6c4}
@@ -104,6 +105,7 @@
 :root[data-theme=dark] nav a.nav-mon  {--nav-c:#6fb0f5}
 :root[data-theme=dark] nav a.nav-ai   {--nav-c:#b39cff}
 :root[data-theme=dark] nav a.nav-radar{--nav-c:#e3d35a}
+:root[data-theme=dark] nav a.nav-cl   {--nav-c:#7fd88a}
 :root[data-theme=dark] nav a.nav-screen{--nav-c:#ff8a80}
 :root[data-theme=dark] nav a.nav-more {--nav-c:#98a6b4}
 :root[data-theme=dark] .tabs #tab-summary{--tc:#4fd6c4}
@@ -186,8 +188,18 @@ nav a.nav-trend{--nav-c:#a3306b}
 nav a.nav-mon  {--nav-c:#1c62b8}   
 nav a.nav-ai   {--nav-c:#6d3fd1}   
 nav a.nav-radar{--nav-c:#6f6400}   
+nav a.nav-cl   {--nav-c:#2e7d32}   
 nav a.nav-screen{--nav-c:#c62828}  
 nav a.nav-more {--nav-c:#5f6b78}   
+/* 桌機：上方分頁全部排在同一列、不用左右捲（窄螢幕照舊左右滑） */
+@media (min-width:1000px){
+  nav{gap:6px;overflow-x:visible;padding-left:0;padding-right:0;margin-left:0;margin-right:0}
+  nav a{flex:0 1 auto;min-width:0;padding:7px 12px;font-size:14.5px;overflow:hidden;text-overflow:ellipsis}
+}
+@media (min-width:1000px) and (max-width:1240px){
+  nav{gap:4px}
+  nav a{padding:6px 8px;font-size:13.5px}
+}
 .stamp{font-size:11.5px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
 .stamp:empty{display:none}
 .linkish{appearance:none;border:none;background:none;padding:0;font:inherit;
@@ -1482,3 +1494,31 @@ html body :is(.qf-btn,.sc-sel):not(#cf *):hover{border-color:color-mix(in srgb,v
 :root[data-theme=dark] .tk-sec.g{color:#ffb470}
 :root[data-theme=dark] .tk-sec.r{color:#ff8a80}
 :root[data-theme=dark] .tk-sec.q,:root[data-theme=dark] .tk-qad>summary,:root[data-theme=dark] .tk-qa .qk{color:#c4a7ff}
+
+/* 個股頁〈財務健診〉→〈合約負債判讀〉 */
+.clx-head{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin:4px 0 6px;font-size:13.5px}
+.clx-tier{display:inline-block;font-size:13px;font-weight:700;border-radius:999px;padding:3px 12px;color:#fff;background:var(--tc,#6b7480)}
+.clx-tA{--tc:#c62828}.clx-tB{--tc:#b25a00}.clx-tC{--tc:#1c62b8}.clx-tW{--tc:#6b7480}.clx-tn{--tc:#87909a}
+.clx-ok{color:#2e7d32;white-space:nowrap}.clx-ng{color:#c62828;white-space:nowrap}
+.clx-flags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.clx-fl{font-size:12.5px;border-radius:8px;padding:3px 9px}
+.clx-fl.bad{background:#fde8e8;color:#b3261e}.clx-fl.warn{background:#fff3db;color:#8a5300}
+.clx-fl.good{background:#e3f4e6;color:#1b6b2c}.clx-fl.info{background:#e8f0fb;color:#1c4f94}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) .clx-tA{--tc:#ff7a70} :root:not([data-theme=light]) .clx-tB{--tc:#ffa94d}
+  :root:not([data-theme=light]) .clx-tC{--tc:#6fb0f5} :root:not([data-theme=light]) .clx-tW{--tc:#98a6b4}
+  :root:not([data-theme=light]) .clx-tier{color:var(--ground)}
+  :root:not([data-theme=light]) .clx-ok{color:#7fd88a} :root:not([data-theme=light]) .clx-ng{color:#ff8a80}
+  :root:not([data-theme=light]) .clx-fl.bad{background:#4a1f1d;color:#ffb4ab}
+  :root:not([data-theme=light]) .clx-fl.warn{background:#46340f;color:#ffd38a}
+  :root:not([data-theme=light]) .clx-fl.good{background:#173a20;color:#9be3a8}
+  :root:not([data-theme=light]) .clx-fl.info{background:#172c4a;color:#a9c9f5}
+}
+:root[data-theme=dark] .clx-tA{--tc:#ff7a70} :root[data-theme=dark] .clx-tB{--tc:#ffa94d}
+:root[data-theme=dark] .clx-tC{--tc:#6fb0f5} :root[data-theme=dark] .clx-tW{--tc:#98a6b4}
+:root[data-theme=dark] .clx-tier{color:var(--ground)}
+:root[data-theme=dark] .clx-ok{color:#7fd88a} :root[data-theme=dark] .clx-ng{color:#ff8a80}
+:root[data-theme=dark] .clx-fl.bad{background:#4a1f1d;color:#ffb4ab}
+:root[data-theme=dark] .clx-fl.warn{background:#46340f;color:#ffd38a}
+:root[data-theme=dark] .clx-fl.good{background:#173a20;color:#9be3a8}
+:root[data-theme=dark] .clx-fl.info{background:#172c4a;color:#a9c9f5}
