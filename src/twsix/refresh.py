@@ -287,7 +287,7 @@ def st_cl(c: Ctx) -> tuple[str, str]:
     data_file = c.root / CL.FILE
     out = c.cl_keep or data_file
     before = len(CL.read(out).get(c.code, {}))
-    res = _quiet(CL.backfill, out, [c.code], today=c.now().date(), minutes=3.0, pause=2.5,
+    res = _quiet(CL.backfill, out, [c.code], today=c.now().date(), minutes=4.0, pause=2.5,
                  data_dir=c.root)
     if out != data_file:
         CL.merge(data_file, out)
@@ -295,10 +295,14 @@ def st_cl(c: Ctx) -> tuple[str, str]:
     mine = CL.read(out).get(c.code, {})
     after = len(mine)
     na = sum(1 for v in mine.values() if v is None)
-    tail = f"；其中 {na} 期觀測站的表沒有單獨列出合約負債（併在其他負債科目）" if na else ""
+    tail = ""
+    if res.get("pdf_filled"):
+        tail += f"；{res['pdf_filled']} 期從財務報告 PDF 附註補回"
+    if na:
+        tail += f"；{na} 期查不到單獨數字（表上併在其他負債科目、附註也沒讀到）"
     if res.get("stopped") and "擋" in res["stopped"]:
-        return "warn", "公開資訊觀測站擋下或連不上（下次接著補）"
-    if after > before:
+        return "warn", res["stopped"] + "（下次接著補）" + tail
+    if after > before or res.get("pdf_filled"):
         c.state["changed"] = True
         return "ok", f"新增 {after - before} 期（共 {after} 期）" + tail
     return "skip", f"已經補過（{after} 期）" + tail

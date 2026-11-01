@@ -266,11 +266,92 @@ def merge(dst: Path, src: Path) -> int:
     return n
 
 
+def bsq_known(data_dir: Path | None, code: str) -> dict[str, float]:
+    """券商季報（最近 8 季）的合約負債（百萬元），拿來核對 PDF 讀出來的數字。"""
+    if data_dir is None:
+        return {}
+    try:
+        grid = json.loads(gzip.decompress((data_dir / "sheets" / code / "BSQ.json.gz").read_bytes()))
+    except (OSError, ValueError, EOFError):
+        return {}
+    head = next((r for r in grid if r and str(r[0]).strip() == "期別"), None)
+    if not head:
+        return {}
+    out: dict[str, float] = {}
+    for row in grid:
+        if row and str(row[0]).strip() in CL_NAMES:
+            for lb, cell in zip(head[1:], row[1:], strict=False):
+                lb, v = str(lb).strip(), _num(str(cell))
+                if len(lb) == 7 and v is not None:
+                    q = f"{lb[:4]}Q{lb[5]}"
+                    out[q] = out.get(q, 0.0) + v
+    return out
+
+
+def covers(q: str) -> set[str]:
+    """一份 q 季的財報附註帶回的期末：當季、去年同季、上一年底、前年底（1 月 1 日）。"""
+    y = int(q[:4])
+    return {q, f"{y - 1}Q{q[-1]}", f"{y - 1}Q4", f"{y - 2}Q4"}
+
+
+def _fill_from_pdf(data: dict, codes: list[str], steps: list[str], out: Path, *, data_dir: Path | None,
+                   t0: float, minutes: float, pause: float, sleep, clock, log, from_report=None) -> dict:
+    """觀測站的表沒有單獨列出合約負債的那幾季（None），改讀財務報告 PDF 的附註。"""
+    from . import cl_pdf  # noqa: PLC0415
+
+    from_report = from_report or cl_pdf.from_report
+    done_path = out.with_name(out.name + ".pdfdone")
+    try:
+        done = set(done_path.read_text(encoding="utf-8").split())
+    except OSError:
+        done = set()
+    want = [(c, q) for q in steps for c in codes if f"{c},{q}" not in done
+            and any(x in data.get(c, {}) and data[c][x] is None for x in covers(q))]
+    asked = filled = blocked = 0
+    stopped = ""
+    files: dict = {}
+    with open(done_path, "a", encoding="utf-8") as dfh:
+        for code, q in want:
+            if not any(x in data.get(code, {}) and data[code][x] is None for x in covers(q)):
+                continue  # 前一份 PDF 已經補到了
+            if minutes and clock() - t0 > minutes * 60:
+                stopped = f"跑滿 {minutes:g} 分鐘，財報 PDF 其餘下次再讀"
+                break
+            asked += 1
+            try:
+                got = from_report(code, q, bsq_known(data_dir, code), files_cache=files)
+            except cl_pdf.Blocked:
+                blocked += 1
+                if blocked >= BLOCK_LIMIT:
+                    stopped = "證交所電子書連續擋下，財報 PDF 這一趟先停"
+                    break
+                sleep(pause * 4)
+                continue
+            except Exception as exc:  # noqa: BLE001 - 一份 PDF 壞掉不影響其他
+                log(f"  {code} {q} 財報 PDF：{type(exc).__name__}")
+                got = {}
+            blocked = 0
+            for qq, v in got.items():
+                if qq in data.get(code, {}) and data[code][qq] is None:
+                    data[code][qq] = v
+                    filled += 1
+            dfh.write(f"{code},{q}\n")
+            dfh.flush()
+            if asked % 10 == 0:
+                write(out, data)
+                log(f"  財報 PDF 已讀 {asked} 份，補回 {filled} 期")
+            sleep(pause + random.random())  # noqa: S311
+    return {"pdf": asked, "pdf_filled": filled, "pdf_stopped": stopped}
+
+
 def backfill(out: Path, codes: list[str], *, today: date, minutes: float = 40.0,
              pause: float = 2.5, get: Callable[[dict], str] | None = None,
              sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic,
-             log: Callable[[str], None] = print, data_dir: Path | None = None) -> dict:
-    """照「每一輪每檔查一季（最新的先）」的順序補，中斷了下次接著補。"""
+             log: Callable[[str], None] = print, data_dir: Path | None = None,
+             pdf: bool = True, from_report=None) -> dict:
+    """照「每一輪每檔查一季（最新的先）」的順序補，中斷了下次接著補。
+
+    觀測站的表沒有單獨列出合約負債的季別（記 None），接著讀財務報告 PDF 的附註補上。"""
     get = get or post
     done_path = out.with_name(out.name + ".done")
     try:
@@ -319,7 +400,12 @@ def backfill(out: Path, codes: list[str], *, today: date, minutes: float = 40.0,
                 write(out, data)
                 log(f"  已查 {len(done)}／{total}（這一趟 {asked} 次）")
             sleep(pause + random.random())  # noqa: S311 - 只是錯開時間
+    extra = {"pdf": 0, "pdf_filled": 0, "pdf_stopped": ""}
+    if pdf and not stopped:
+        extra = _fill_from_pdf(data, codes, steps, out, data_dir=data_dir, t0=t0, minutes=minutes,
+                               pause=max(pause, 3.0), sleep=sleep, clock=clock, log=log,
+                               from_report=from_report)
     write(out, data)
     left = total - len(done)
     return {"asked": asked, "added": got, "done": len(done), "total": total, "left": left,
-            "stocks": len(codes), "stopped": stopped}
+            "stocks": len(codes), "stopped": stopped or extra["pdf_stopped"], **extra}

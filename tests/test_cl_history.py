@@ -95,11 +95,11 @@ def test_未揭露存成_NA_讀回來是_None_而且不再查():
     out = tmp / "cl.csv"
     page = _page(["會計項目", "113年06月30日", "112年12月31日", "112年06月30日"], [["其他流動負債", "1", "0", "1", "0", "1", "0"]])
     r = CH.backfill(out, ["2330"], today=date(2026, 10, 29), minutes=0, get=lambda f: page,
-                    sleep=lambda s: None, log=lambda m: None)
+                    sleep=lambda s: None, log=lambda m: None, pdf=False)
     got = CH.read(out)["2330"]
     assert got["2024Q2"] is None and "NA" in out.read_text(encoding="utf-8")
     again = CH.backfill(out, ["2330"], today=date(2026, 10, 29), minutes=0, get=lambda f: page,
-                        sleep=lambda s: None, log=lambda m: None)
+                        sleep=lambda s: None, log=lambda m: None, pdf=False)
     assert r["asked"] > 0 and again["asked"] == 0
 
 
@@ -122,3 +122,47 @@ def test_舊版誤記的0_券商頁有合約負債的公司改成未揭露_畫�
     assert CH.repair_zeros(tmp / CH.FILE, tmp) == 2
     assert CH.read(tmp / CH.FILE)["2330"] == {"2024Q2": None, "2023Q2": None}
     assert CH.read(tmp / CH.FILE)["9999"]["2024Q2"] == 0.0
+
+
+def test_表上沒有的季別改讀財報PDF附註補回_一份帶回好幾個期末_讀過的不再讀():
+    from twsix.ingest import cl_pdf as P
+
+    tmp = Path(tempfile.mkdtemp())
+    out = tmp / "cl.csv"
+    page = _page(["會計項目", "113年06月30日", "112年12月31日", "112年06月30日"], [["其他流動負債", "1", "0", "1", "0", "1", "0"]])
+    asked = []
+    NOTE = {"2024Q2": "113 年 6 月 30 日 112 年 12 月 31 日 112 年 6 月 30 日 112 年 1 月 1 日 合約負債（帳列應付費用 及其他流動負債） $ 67,450,001 $ 52,736,430 $ 43,731,063 $ 70,806,617"}
+
+    def report(code, q, known, files_cache=None):
+        asked.append(q)
+        return P.parse_pages(["單位：新台幣仟元 " + NOTE.get(q, "")])
+
+    r = CH.backfill(out, ["2330"], today=date(2026, 10, 29), minutes=0, get=lambda f: page,
+                    sleep=lambda s: None, log=lambda m: None, from_report=report)
+    got = CH.read(out)["2330"]
+    assert got["2024Q2"] == 67450.0 and got["2023Q2"] == 43731.1 and got["2023Q4"] == 52736.4
+    assert r["pdf_filled"] >= 3 and asked[0] == "2024Q2"
+    n = len(asked)
+    CH.backfill(out, ["2330"], today=date(2026, 10, 29), minutes=0, get=lambda f: page,
+                sleep=lambda s: None, log=lambda m: None, from_report=report)
+    assert len(asked) == n, "讀過的 PDF 不再讀"
+
+
+def test_財報PDF附註解析_台積電格式_非流動加總_單位與核對():
+    from twsix.ingest import cl_pdf as P
+
+    tsmc = ("- 31 - 二 十 、 營 業 收 入 ( 一 ) 客 戶 合 約 收 入 之 細 分 113 年 4 月 1 日 至 6 月 30 日 晶 圓 $ 596,240,6 "
+            "單位：新台幣仟元 ( 二 ) 合 約 餘 額 113 年 6 月 30 日 112 年 12 月 31 日 112 年 6 月 30 日 112 年 1 月 1 日 "
+            "合約負債（帳列應付費用 及其他流動負債） $ 67,450,001 $ 52,736,430 $ 43,731,063 $ 70,806,617 "
+            "合約負債餘額之變動主要係 - 32 -")
+    got = P.parse_pages(["封面", tsmc])
+    assert got == {"2024Q2": 67450.0, "2023Q4": 52736.4, "2023Q2": 43731.1, "2022Q4": 70806.6}
+    two = ("單位：新臺幣千元\n114年6月30日 113年12月31日 113年6月30日\n"
+           "合約負債－流動 $ 1,200 $ 1,000 $ 900\n合約負債－非流動 300 200 －\n說明")
+    assert P.parse_pages([two]) == {"2025Q2": 1.5, "2024Q4": 1.2, "2024Q2": 0.9}
+    assert P.parse_pages(["期初合約負債本期認列收入 113 年 6 月 30 日 $ 5,000"]) == {}
+    assert P.consistent(got, {"2024Q2": 67450.0, "2026Q2": 1.0})
+    assert not P.consistent(got, {"2024Q2": 67.45}), "單位錯了（差一千倍）就整份不用"
+    assert P.pick(["202402_2330_AI1.pdf", "202402_2330_AIA.pdf"], "2024Q2") == "202402_2330_AI1.pdf"
+    assert P.pick(["202404_9999_AI3.pdf"], "2024Q4") == "202404_9999_AI3.pdf"
+    assert P.pick(["202401_2330_AI1.pdf"], "2024Q2") is None

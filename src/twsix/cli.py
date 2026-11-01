@@ -2149,6 +2149,8 @@ def cmd_backfill_cl(args: argparse.Namespace) -> int:
                     pause=args.pause, data_dir=data)
     print(f"合約負債回補：{r['stocks']} 檔、這一趟查 {r['asked']} 次、新增 {r['added']} 個期別；"
           f"進度 {r['done']}／{r['total']}" + ("，全部補完" if r["left"] <= 0 else f"，還剩 {r['left']} 次"))
+    if r.get("pdf"):
+        print(f"  觀測站表上沒有單獨列出的公司：讀了 {r['pdf']} 份財務報告 PDF，從附註補回 {r['pdf_filled']} 期")
     if r["stopped"]:
         print(("::warning::" if "擋" in r["stopped"] else "") + r["stopped"])
     print(f"  寫入 {out}")
