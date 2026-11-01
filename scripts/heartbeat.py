@@ -267,10 +267,20 @@ def check_statements(data_dir: Path, report: Report) -> None:
         report.note(f"季財報 {exch}", f"最新期別 {newest} " + " ".join(
             f"{k}:{v}" for k, v in sorted(got.items())))
         if len(got) < 3:
-            report.bad(
-                f"季財報 {exch}",
-                f"{newest} 少了 {sorted({'income', 'balance', 'cashflow'} - set(got))} 這幾張表",
-            )
+            missing = sorted({"income", "balance", "cashflow"} - set(got))
+            older = [k for k in counts if k < newest]
+            prev = max(counts[max(older)].values()) if older else 0
+            if prev and max(got.values()) < prev * 0.5:
+                # 申報季剛開始：開放資料先有少數幾家的損益表與資產負債表，現金流量表要等
+                # 〔全市場官方資料〕從觀測站的彙總表補——這是正常的時間差，不是壞掉。
+                zh = {"income": "損益表", "balance": "資產負債表", "cashflow": "現金流量表"}
+                report.note(
+                    f"季財報 {exch} 申報中",
+                    f"{newest} 已有 {max(got.values())} 家申報（上一期 {prev} 家）；"
+                    f"{'、'.join(zh[m] for m in missing)}稍後由〔全市場官方資料〕補上，申報截止後就會齊（正常，不用處理）",
+                )
+                continue
+            report.bad(f"季財報 {exch}", f"{newest} 少了 {missing} 這幾張表")
             continue
         if len(set(got.values())) != 1:
             odd = [k for k, v in got.items() if list(got.values()).count(v) == 1]

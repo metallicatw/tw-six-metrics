@@ -326,3 +326,25 @@ def test_交易日只數平日():
     for start, end, want in cases:
         got = hb.trading_days_between(start, end)
         assert got == want, f"{start} → {end} 應該是 {want} 個交易日，算出 {got}"
+
+
+def _statements(tmp: Path, periods: dict[str, dict[str, int]]) -> hb.Report:
+    for period, tables in periods.items():
+        for table, n in tables.items():
+            d = tmp / "market" / f"twse_{table}"
+            d.mkdir(parents=True, exist_ok=True)
+            (d / f"{period}.csv").write_text("公司代號\n" + "".join(f"{1000 + i}\n" for i in range(n)),
+                                             encoding="utf-8")
+    report = hb.Report()
+    hb.check_statements(tmp, report)
+    return report
+
+
+def test_季財報申報季剛開始只有少數幾家_現金流量表還沒有_只是提示不是警報():
+    full = {"income": 1000, "balance": 1000, "cashflow": 1000}
+    r = _statements(Path(tempfile.mkdtemp()), {"115Q2": full, "115Q3": {"income": 46, "balance": 46}})
+    assert not r.problems, r.problems
+    note = dict(r.facts)["季財報 twse 申報中"]
+    assert "46 家" in note and "現金流量表" in note and "不用處理" in note
+    r2 = _statements(Path(tempfile.mkdtemp()), {"115Q2": full, "115Q3": {"income": 990, "balance": 990}})
+    assert r2.problems and "少了" in r2.problems[0].detail, "大部分都申報了還少一張表，才是真的壞了"
