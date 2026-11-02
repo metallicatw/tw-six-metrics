@@ -2118,6 +2118,62 @@ def cmd_backfill_prices(args: argparse.Namespace) -> int:
     return 0
 
 
+def tpex_has_odd_lots(rows: list[dict]) -> bool:
+    """上櫃成交股數混進零股的那幾天：整股交易一定是 1,000 股的倍數。"""
+    vols = []
+    for r in rows:
+        if r.get("market") != "上櫃":
+            continue
+        try:
+            vols.append(float(r.get("volume") or ""))
+        except ValueError:
+            continue
+    odd = sum(1 for v in vols if v % 1000)
+    return bool(vols) and odd > len(vols) * 0.3
+
+
+def cmd_repair_tpex_volume(args: argparse.Namespace) -> int:
+    """把混進零股的上櫃成交量／值，改回「每日收盤行情（不含定價）」的整股口徑。"""
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient  # noqa: PLC0415
+    from .ingest.daily import PRICE_COLUMNS, Daily  # noqa: PLC0415
+    from .store.daily import read_day_rows  # noqa: PLC0415
+
+    store = Store(args.out or settings.data_dir)
+    folder = store.root / "market" / "daily" / "prices"
+    days = [p.name[:10] for p in sorted(folder.glob("*.csv.gz"))]
+    bad = [d for d in days if tpex_has_odd_lots(read_day_rows(store.root, "prices", d))]
+    print(f"上櫃成交量混進零股的日子：{len(bad)} 天" + (f"（{bad[0]}～{bad[-1]}）" if bad else ""))
+    if not bad or args.dry_run:
+        return 0
+    http = HttpClient(cache_dir=None, cache_ttl=0, min_interval=max(3.0, args.pause),
+                      retries=settings.ingest.retries, timeout=90.0)
+    daily = Daily(http)
+    fixed = 0
+    for d in bad:
+        rows = daily._tpex_by_date(d)  # noqa: SLF001
+        if not rows:
+            print(f"  {d} 櫃買網頁表沒拿到，下次再修")
+            continue
+        new = {r["code"]: r for r in rows}
+        had = read_day_rows(store.root, "prices", d)
+        out, n = [], 0
+        for r in had:
+            if r.get("market") == "上櫃" and r.get("code") in new:
+                g = new[r["code"]]
+                r = dict(r)
+                for k in ("close", "open", "high", "low", "change", "volume", "value"):
+                    v = g.get(k)
+                    r[k] = "" if v is None else v
+                n += 1
+            out.append(r)
+        store.write_gz(f"market/daily/prices/{d}", out, PRICE_COLUMNS, sort_by=("code",))
+        fixed += 1
+        print(f"  {d} 改回整股口徑：{n} 檔")
+    print(f"修好 {fixed}/{len(bad)} 天")
+    return 0
+
+
 def cmd_backfill_institutional(args: argparse.Namespace) -> int:
     from datetime import timedelta  # noqa: PLC0415
 
@@ -3543,6 +3599,15 @@ def build_parser() -> argparse.ArgumentParser:
                          "給了這個參數，只拿到半個市場的那一天會等一下再問一次")
     bp.add_argument("--minutes", type=float, default=0.0, help="時間預算（分鐘），0＝不限")
     bp.set_defaults(func=cmd_backfill_prices)
+
+    rt = sub.add_parser(
+        "repair-tpex-volume",
+        help="把混進零股的上櫃成交量／成交金額改回整股口徑（2026-09 起櫃買 openapi 的問題）",
+    )
+    rt.add_argument("--out", help="資料目錄")
+    rt.add_argument("--pause", type=float, default=3.0, help="兩個請求之間至少隔幾秒")
+    rt.add_argument("--dry-run", action="store_true", help="只列出要修的日子")
+    rt.set_defaults(func=cmd_repair_tpex_volume)
 
     bi = sub.add_parser(
         "backfill-institutional",

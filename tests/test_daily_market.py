@@ -277,7 +277,7 @@ def test_the_otc_falls_back_to_the_other_endpoint_when_the_big_one_dies():
     assert any(u.startswith("https://www.tpex.org.tw/www/") for u in http.asked)
 
 
-def test_the_fallback_only_runs_when_the_otc_is_actually_missing():
+def test_上櫃量價固定抓openapi那一天的整股網頁表():
 
     class _EverythingWorks:
         def __init__(self):
@@ -285,6 +285,8 @@ def test_the_fallback_only_runs_when_the_otc_is_actually_missing():
 
         def get(self, url, **_kw):
             self.asked.append(url)
+            if url.startswith("https://www.tpex.org.tw/www/"):
+                return json.dumps(_sample("tpex_daily_rwd_dated")).encode()
             name = {
                 daily.TWSE_PRICES: "twse_daily_all",
                 daily.TWSE_PRICES_WEB: "twse_mi_index",
@@ -294,7 +296,10 @@ def test_the_fallback_only_runs_when_the_otc_is_actually_missing():
 
     http = _EverythingWorks()
     daily.Daily(http).prices(day="2026-09-09")
-    assert not any(u.startswith("https://www.tpex.org.tw/www/") for u in http.asked)
+    latest = max(r["date"] for r in daily.parse_tpex_prices(_sample("tpex_daily_openapi")))
+    y, m, d = latest.split("-")
+    want = daily.TPEX_PRICES_DATED.format(y=y, m=m, d=d)
+    assert want in http.asked, http.asked
 
 
 def test_backfill_can_reach_today():
@@ -520,3 +525,43 @@ def test_新聞抓不到不會讓整支失敗():
         )
     assert "個股新聞" in out, "新聞那一步沒有跑到？"
     assert code == 0, "新聞抓不到卻讓整支失敗了\n" + out
+
+
+class _FakeHttp:
+    def __init__(self, pages):
+        self.pages, self.calls = pages, []
+
+    def get(self, url, use_cache=False):
+        self.calls.append(url)
+        for key, body in self.pages.items():
+            if key in url:
+                if isinstance(body, Exception):
+                    raise body
+                return body
+        raise RuntimeError("沒有這一頁")
+
+
+def test_上櫃成交量用整股口徑_openapi混進零股():
+    oa = load(SAMPLES, "tpex_openapi_close_20261030")
+    rwd = load(SAMPLES, "tpex_rwd_close_20261030")
+    # openapi 的 1240：7,872 股（含零股）；官方整股 7,000 股、375,700 元
+    raw = {r["code"]: r for r in daily.parse_tpex_prices(json.loads(oa))}
+    assert raw["1240"]["volume"] == 7872
+    http = _FakeHttp({"openapi.twse": RuntimeError("x"), "twse.com.tw": RuntimeError("x"),
+                      "tpex_mainboard_daily_close_quotes": oa,
+                      "afterTrading/otc?date=2026/10/30": rwd})
+    got = {r["code"]: r for r in daily.Daily(http).prices() if r["market"] == "上櫃"}
+    assert got["1240"]["volume"] == 7000 and got["1240"]["value"] == 375700
+    assert got["1240"]["date"] == "2026-10-30" and got["1240"]["close"] == 53.7
+    # 網頁表拿不到：價格照存，量／值留空（寧缺勿錯，回補會再補）
+    http = _FakeHttp({"tpex_mainboard_daily_close_quotes": oa})
+    got = {r["code"]: r for r in daily.Daily(http).prices() if r["market"] == "上櫃"}
+    assert got["1240"]["close"] == 53.7 and got["1240"]["volume"] is None
+
+
+def test_偵測混進零股的那幾天():
+    from twsix.cli import tpex_has_odd_lots
+    good = [{"market": "上櫃", "volume": "7000"}, {"market": "上櫃", "volume": "12000"}]
+    bad = [{"market": "上櫃", "volume": "7872"}, {"market": "上櫃", "volume": "12345"}]
+    assert not tpex_has_odd_lots(good) and tpex_has_odd_lots(bad)
+    assert not tpex_has_odd_lots([{"market": "上市", "volume": "7872"}])

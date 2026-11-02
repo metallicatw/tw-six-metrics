@@ -448,21 +448,41 @@ class Daily:
         for url, parse in (
             (TWSE_PRICES, parse_twse_prices),
             (TWSE_PRICES_WEB, parse_twse_mi_index),
-            (TPEX_PRICES, parse_tpex_prices),
         ):
             try:
                 groups.append(parse(self._json(url)))
             except Exception as exc:  # noqa: BLE001 - 一個來源掛掉不該拖垮其餘
                 self.problems.append(f"{url.split('/')[2]} 沒拿到：{exc}")
                 print(f"    （{url.split('/')[2]} 沒拿到：{exc}）")
-
         rows = merge_prices(*groups)
-        if not any(r.get("market") == "上櫃" for r in rows):
-            iso = day or datetime.now(TAIPEI).date().isoformat()
-            extra = self._tpex_by_date(iso)
-            if extra:
-                rows = merge_prices(rows, extra)
-        return rows
+        return merge_prices(rows, self._tpex_today(day))
+
+    def _tpex_today(self, day: str | None) -> list[dict[str, Any]]:
+        """上櫃收盤行情：以「每日收盤行情（不含定價）」為準。
+
+        櫃買 openapi 的成交股數／金額把零股也算進去（例：1240 在 2026-10-30
+        一般交易 7,000 股、openapi 7,872 股），跟上市（只算整股）口徑不同，
+        也跟回補用的網頁表對不起來；量能、成交值、流動性門檻都會被灌水。
+        所以 openapi 只拿來確認「最新是哪一天」，量價一律改抓那天的網頁表；
+        網頁表真的拿不到才退回 openapi，並把 volume／value 留空（不要錯的數字）。
+        """
+        fallback: list[dict[str, Any]] = []
+        try:
+            fallback = parse_tpex_prices(self._json(TPEX_PRICES))
+        except Exception as exc:  # noqa: BLE001
+            self.problems.append(f"www.tpex.org.tw openapi 沒拿到：{exc}")
+            print(f"    （櫃買 openapi 沒拿到：{exc}）")
+        latest = max((str(r.get("date") or "") for r in fallback), default="")
+        iso = latest or day or datetime.now(TAIPEI).date().isoformat()
+        rows = self._tpex_by_date(iso)
+        if rows:
+            return rows
+        if fallback:
+            self.problems.append(f"上櫃 {iso} 網頁表沒拿到，只先存價格（成交量／值留空）")
+            for r in fallback:
+                r["volume"] = None
+                r["value"] = None
+        return fallback
 
     def _tpex_by_date(self, iso: str) -> list[dict[str, Any]]:
         y, m, d = iso.split("-")
@@ -476,7 +496,7 @@ class Daily:
         if not rows:
             print(f"    （上櫃備援 {iso} 回空表，可能是非交易日）")
             return []
-        print(f"    （上櫃改用備援來源 {iso}，取得 {len(rows)} 檔）")
+        print(f"    （上櫃收盤行情 {iso}：{len(rows)} 檔）")
         return rows
 
     def prices_on(self, day: str) -> list[dict[str, Any]]:
