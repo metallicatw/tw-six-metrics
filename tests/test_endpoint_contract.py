@@ -159,12 +159,17 @@ def test_一般業那兩檔真的取得到數字():
         folder = DATA / "market" / f"{exchange}_income"
         paths = sorted(folder.glob("*.csv"))
         assert paths, f"{folder} 底下沒有任何一期"
-        path = paths[-1]
-        with path.open(encoding="utf-8", newline="") as fh:
-            row = next(
-                (r for r in csv.DictReader(fh)
-                 if market._first(r, market.CODE_KEYS) == code), None)
-        assert row, f"{path.name} 裡找不到 {code}"
+        # 申報期間最新一季只有先申報的幾家（例如 11 月初的 115Q3）：
+        # 從最新一期往回找，最近兩期裡要有一期找得到這一檔
+        row = path = None
+        for path in reversed(paths[-2:]):
+            with path.open(encoding="utf-8", newline="") as fh:
+                row = next(
+                    (r for r in csv.DictReader(fh)
+                     if market._first(r, market.CODE_KEYS) == code), None)
+            if row:
+                break
+        assert row, f"最近兩期（{', '.join(p.name for p in paths[-2:])}）都找不到 {code}"
         for what, aliases in (("營業收入", market.REVENUE_KEYS),
                               ("營業利益", market.OPERATING_INCOME_KEYS),
                               ("每股盈餘", market.EPS_KEYS)):
