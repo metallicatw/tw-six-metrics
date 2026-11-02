@@ -2174,6 +2174,68 @@ def cmd_repair_tpex_volume(args: argparse.Namespace) -> int:
     return 0
 
 
+def compare_rows(stored: list[dict], official: list[dict], fields: tuple[str, ...]) -> dict:
+    """逐檔逐欄比對（數字相等才算對；官方有、我們沒有也算）。"""
+    have = {(r.get("market"), r.get("code")): r for r in stored}
+    out = {"checked": 0, "missing": [], "diff": []}
+    for o in official:
+        key = (o.get("market"), o.get("code"))
+        if len(str(key[1] or "")) != 4:      # 存檔只收四碼的普通股（TDR 91xxxx 等不收）
+            continue
+        s = have.get(key)
+        if s is None:
+            out["missing"].append(key[1])
+            continue
+        out["checked"] += 1
+        for k in fields:
+            a, b = o.get(k), s.get(k)
+            try:
+                same = (a in (None, 0, 0.0) and b in (None, "")) or abs(float(a) - float(b)) < 1e-6
+            except (TypeError, ValueError):
+                same = False
+            if not same:
+                out["diff"].append((key[1], k, a, b))
+    return out
+
+
+def cmd_verify_official(args: argparse.Namespace) -> int:
+    """拿交易所當天的官方表，逐檔核對已存的收盤行情與三大法人（在自己的電腦上跑：雲端常被證交所擋）。"""
+    settings = Settings.load(args.config)
+    from .ingest.base import HttpClient  # noqa: PLC0415
+    from .ingest.daily import Daily  # noqa: PLC0415
+    from .store.daily import read_day_rows  # noqa: PLC0415
+
+    store = Store(args.out or settings.data_dir)
+    http = HttpClient(cache_dir=None, cache_ttl=0, min_interval=3.0,
+                      retries=settings.ingest.retries, timeout=90.0)
+    daily = Daily(http)
+    bad = 0
+    for label, folder, fetch, fields in (
+        ("收盤行情", "prices", daily.prices_on,
+         ("close", "open", "high", "low", "volume", "value")),
+        ("三大法人", "institutional", daily.institutional_on,
+         ("foreign", "trust", "dealer", "total", "f_buy", "f_sell", "t_buy", "t_sell")),
+    ):
+        official = fetch(args.date)
+        stored = read_day_rows(store.root, folder, args.date)
+        for market in ("上市", "上櫃"):
+            off = [r for r in official if r.get("market") == market]
+            if not off:
+                print(f"  {label} {market}：官方表沒拿到（被擋或非交易日），略過")
+                continue
+            res = compare_rows([r for r in stored if r.get("market") == market], off, fields)
+            n = len(res["diff"]) + len(res["missing"])
+            bad += n
+            mark = "✅" if not n else "❌"
+            print(f"  {mark} {label} {market}：核對 {res['checked']} 檔，"
+                  f"欄位不符 {len(res['diff'])} 處，缺 {len(res['missing'])} 檔")
+            for d in res["diff"][:8]:
+                print(f"      {d[0]} {d[1]}：官方 {d[2]}／已存 {d[3]}")
+            if res["missing"]:
+                print(f"      缺：{', '.join(res['missing'][:12])}")
+    return 1 if bad else 0
+
+
 def cmd_backfill_institutional(args: argparse.Namespace) -> int:
     from datetime import timedelta  # noqa: PLC0415
 
@@ -3599,6 +3661,14 @@ def build_parser() -> argparse.ArgumentParser:
                          "給了這個參數，只拿到半個市場的那一天會等一下再問一次")
     bp.add_argument("--minutes", type=float, default=0.0, help="時間預算（分鐘），0＝不限")
     bp.set_defaults(func=cmd_backfill_prices)
+
+    vo = sub.add_parser(
+        "verify-official",
+        help="拿交易所當天的官方表，逐檔核對已存的收盤行情與三大法人（建議在自己的電腦上跑）",
+    )
+    vo.add_argument("date", help="日期，例如 2026-10-30")
+    vo.add_argument("--out", help="資料目錄")
+    vo.set_defaults(func=cmd_verify_official)
 
     rt = sub.add_parser(
         "repair-tpex-volume",

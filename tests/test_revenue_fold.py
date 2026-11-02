@@ -220,3 +220,14 @@ def test_rerating_keeps_the_old_row_when_the_new_one_is_older():
     newest = next(r for r in Store(root).read("ratings")
                   if r["period_index"] == "1")
     assert newest["fiscal_quarter"] == "2099.4Q", "比較舊的那一份不該蓋過去"
+
+
+def test_年增率用公司申報的去年同期_不是自己拿兩年相除():
+    from twsix.transform.revenue import MonthlyRevenue, RevenueSeries
+
+    # 1340 勝悅-KY：114/09 帳上 2,785（當時申報），115/09 申報的「去年同期」更正為 2,859
+    s = RevenueSeries("1340", [MonthlyRevenue("115/09", 6390), MonthlyRevenue("114/09", 2785)],
+                      prior={"115/09": 2859})
+    assert round(s.yoy()["115/09"], 2) == 123.50          # 官方 123.50%
+    s = RevenueSeries("1340", [MonthlyRevenue("115/09", 6390), MonthlyRevenue("114/09", 2785)])
+    assert round(s.yoy()["115/09"], 2) == 129.44          # 沒有申報值才退回自己相除

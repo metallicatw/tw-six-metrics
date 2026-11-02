@@ -638,18 +638,21 @@ def backtest(data_dir: Path, stocks: list[dict[str, str]], *, start: str, end: s
         if i < 20:
             continue
         res = book.run(asof=days[i])
+        # 法人買賣超是收盤後（約 15～16 時）才公布：用第 i 天的資料選股，
+        # 最早只能用「隔一個交易日」的收盤價進場，不然就偷看了當天盤後的數字。
+        e0 = i + 1
         fwd: dict[int, dict[str, float]] = {h: {} for h in horizons}
         for code in res:
             cl = panel.close.get(code)
-            if cl is None or math.isnan(cl[i]) or cl[i] < 10:
+            if cl is None or e0 >= len(days) or math.isnan(cl[e0]) or cl[i] < 10:
                 continue
             vol = [panel.volume[code][j] * cl[j] for j in range(i - 19, i + 1)
                    if not math.isnan(cl[j]) and not math.isnan(panel.volume[code][j])]
             if not vol or sum(vol) / len(vol) < min_value:
                 continue
             for h in horizons:
-                if i + h < len(days) and not math.isnan(cl[i + h]):
-                    fwd[h][code] = cl[i + h] / cl[i] - 1
+                if e0 + h < len(days) and not math.isnan(cl[e0 + h]):
+                    fwd[h][code] = cl[e0 + h] / cl[e0] - 1
         cnt = {}
         for h in horizons:
             if not fwd[h]:
@@ -681,5 +684,5 @@ def backtest(data_dir: Path, stocks: list[dict[str, str]], *, start: str, end: s
     return {"v": VERSION, "start": start, "end": end, "horizons": list(horizons), "checkpoints": per_cp,
             "groups": {t: {str(h): summ(v[h]) for h in horizons} for t, v in groups.items()},
             "naive": {str(h): summ(naive[h]) for h in horizons},
-            "note": "逐月 11 日檢查（只用當時已公布的季報與月營收），報酬為對全市場中位數的超額報酬；"
+            "note": "逐月 11 日檢查（只用當時已公布的季報與月營收），隔一個交易日收盤進場，報酬為對全市場中位數的超額報酬；"
                     "排除股價 10 元以下、近 20 日平均成交值 2,000 萬元以下"}

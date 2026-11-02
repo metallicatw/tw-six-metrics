@@ -199,6 +199,7 @@ class SheetSource:
     def _revenue(self) -> RevenueSeries:
         cells = self.cells(REVENUE_SHEET)
         raw: dict[str, float] = {}
+        before: dict[str, float] = {}
         for (row, col), value in sorted(cells.items()):
             if col != 1 or row <= REVENUE_HEADER_ROW:
                 continue
@@ -206,9 +207,13 @@ class SheetSource:
             if not isinstance(value, str) or "/" not in value or amount is None:
                 continue
             raw[value.strip()] = amount
+            last_year = _as_float(cells.get((row, 4)))
+            if last_year is not None:
+                before[value.strip()] = last_year
         self._raw_monthly = dict(raw)
 
         rows: list[MonthlyRevenue] = []
+        prior: dict[str, float] = {}
         for label, amount in raw.items():
             year, part = label.split("/")
             if part == "02":
@@ -218,9 +223,13 @@ class SheetSource:
                 rows.append(
                     MonthlyRevenue(label=f"{year}/01-02", revenue=amount + january)
                 )
+                if label in before and f"{year}/01" in before:
+                    prior[f"{year}/01-02"] = before[label] + before[f"{year}/01"]
             else:
                 rows.append(MonthlyRevenue(label=label, revenue=amount))
-        return RevenueSeries(stock_id=self.stock_id, rows=rows)
+                if label in before:
+                    prior[label] = before[label]
+        return RevenueSeries(stock_id=self.stock_id, rows=rows, prior=prior)
 
     @staticmethod
     def _merged_view(labels: list[str]) -> list[str]:

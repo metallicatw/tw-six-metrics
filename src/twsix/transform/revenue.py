@@ -20,6 +20,10 @@ class RevenueSeries:
 
     stock_id: str
     rows: list[MonthlyRevenue] = field(default_factory=list)
+    # 公司申報的「去年同期」營收（同一張表的第 4 欄）。去年那幾個月事後若有更正
+    # （KY 股換匯、合併、重編），官方年增率是拿更正後的數字算的；只拿兩年的
+    # 「當月營收」自己相除會算錯（例：1340 115/09 官方 123.50%，自除 129.44%）。
+    prior: dict[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.rows.sort(key=_sort_key, reverse=True)
@@ -38,8 +42,9 @@ class RevenueSeries:
         out: dict[str, float] = {}
         for row in self.rows:
             year, part = row.label.split("/")
-            prior = f"{int(year) - 1}/{part}"
-            base = table.get(prior)
+            base = self.prior.get(row.label)
+            if base is None:
+                base = table.get(f"{int(year) - 1}/{part}")
             if base is None or base == 0:
                 continue
             out[row.label] = (row.revenue - base) / base * 100

@@ -385,3 +385,18 @@ def test_a_missing_net_stops_the_backward_walk():
     _carry_holdings(days, {})
     assert days[1]["holding"]["投信"] == 104.0
     assert days[0]["holding"]["投信"] is None
+
+
+def test_上櫃外資口徑跟上市一樣_不含外資自營商():
+    from twsix.ingest.daily import parse_tpex_institutional_dated
+
+    def row(code):
+        # 外資(不含) 買1000 賣400 超600；外資自營商 超100；合計 700；投信 50；自營商 -20；三大 730
+        cells = ["1,000", "400", "600", "100", "0", "100", "1,100", "400", "700",
+                 "50", "0", "50", "0", "0", "0", "0", "20", "-20", "0", "20", "-20", "730"]
+        return [code, "某公司", *cells]
+
+    payload = {"tables": [{"date": "20261030", "data": [row("6180"), row("6488")]}]}
+    got = parse_tpex_institutional_dated(payload)
+    assert got and got[0]["foreign"] == 600 and got[0]["f_buy"] == 1000 and got[0]["f_sell"] == 400
+    assert got[0]["total"] == 730                                   # 合計照官方（四者都含）

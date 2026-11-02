@@ -289,8 +289,11 @@ def parse_tpex_institutional(payload: Any) -> list[dict[str, Any]]:
     return _check_gross(out, "上櫃三大法人（開放資料）")
 
 
-_TPEX_INSTI_COLS = {"foreign": 10, "trust": 13, "dealer": 22, "total": 23,
-                    "f_buy": 8, "f_sell": 9, "t_buy": 11, "t_sell": 12}
+# 外資跟上市一樣用「外資及陸資（不含外資自營商）」（第 2～4 欄）；
+# 第 5～7 欄是外資自營商，第 8～10 欄是兩者合計。合計欄（23）四者都含。
+_TPEX_INSTI_COLS = {"foreign": 4, "trust": 13, "dealer": 22, "total": 23,
+                    "f_buy": 2, "f_sell": 3, "t_buy": 11, "t_sell": 12}
+_TPEX_INSTI_FDEALER = 7
 _TPEX_INSTI_MIN_COLS = 24
 
 
@@ -311,7 +314,7 @@ def parse_tpex_institutional_dated(payload: Any) -> list[dict[str, Any]]:
         if not _CODE.match(code):
             continue
         vals = {k: _num(row[i]) for k, i in _TPEX_INSTI_COLS.items()}
-        parts = (vals["foreign"], vals["trust"], vals["dealer"])
+        parts = (vals["foreign"], _num(row[_TPEX_INSTI_FDEALER]), vals["trust"], vals["dealer"])
         if vals["total"] is not None and all(v is not None for v in parts):
             checked += 1
             if sum(parts) != vals["total"]:
@@ -321,7 +324,7 @@ def parse_tpex_institutional_dated(payload: Any) -> list[dict[str, Any]]:
     if checked and bad / checked > 0.10:
         print(
             f"    ⚠️ 上櫃三大法人 {day}：{bad}/{checked} 列的"
-            "「合計 = 外資 + 投信 + 自營商」對不上，欄序可能變了，整批不採用。"
+            "「合計 = 外資 + 外資自營商 + 投信 + 自營商」對不上，欄序可能變了，整批不採用。"
         )
         return []
     return _check_gross(out, f"上櫃三大法人 {day}")

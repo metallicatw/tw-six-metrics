@@ -565,3 +565,16 @@ def test_偵測混進零股的那幾天():
     bad = [{"market": "上櫃", "volume": "7872"}, {"market": "上櫃", "volume": "12345"}]
     assert not tpex_has_odd_lots(good) and tpex_has_odd_lots(bad)
     assert not tpex_has_odd_lots([{"market": "上市", "volume": "7872"}])
+
+
+def test_官方表核對_逐檔逐欄():
+    from twsix.cli import compare_rows
+    off = [{"market": "上櫃", "code": "1240", "volume": 7000.0},
+           {"market": "上櫃", "code": "6180", "volume": 0.0},
+           {"market": "上市", "code": "910322", "volume": 1.0},
+           {"market": "上櫃", "code": "8069", "volume": 5.0}]
+    got = [{"market": "上櫃", "code": "1240", "volume": "7872"},
+           {"market": "上櫃", "code": "6180", "volume": ""}]
+    res = compare_rows(got, off, ("volume",))
+    assert res["diff"] == [("1240", "volume", 7000.0, "7872")]
+    assert res["missing"] == ["8069"] and res["checked"] == 2
