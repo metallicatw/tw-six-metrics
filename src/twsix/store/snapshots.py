@@ -66,7 +66,24 @@ class Store:
         writer.writeheader()
         writer.writerows(materialised)
         atomic_write(self.path(table), text.getvalue().encode("utf-8"))
+        self._sync_count(table, len(materialised))
         return len(materialised)
+
+    def _sync_count(self, table: str, n: int) -> None:
+        """manifest 有登記這張表的話，列數跟著改。
+
+        季財報回補、評等清單更新這類步驟各自寫檔，以前沒有回頭改 manifest，
+        資料新鮮度就會報「manifest 寫 47，實際 53」。寫檔的地方統一在這裡同步。
+        """
+        try:
+            raw = self.read_json("manifest")
+        except (OSError, ValueError):
+            return
+        if not raw or (raw.get("counts") or {}).get(table, n) == n:
+            return
+        manifest = Manifest(**raw)
+        manifest.counts[table] = n
+        self.save_manifest(manifest)
 
     def write_gz(
         self,
