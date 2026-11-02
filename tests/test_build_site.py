@@ -1535,3 +1535,9 @@ def test_合約負債選股可以匯入觀察清單_群組名稱跟著篩選():
     assert '"合約負債選股" + STAGE_NAMES[STAGE - 1]' in page
     for name in ("① 含金量＋成長", "② 交叉排雷", "③ 認列點火", "④ 籌碼確認"):
         assert name in page
+
+
+def test_合約負債選股的代號連個股頁_名稱連貪婪恐懼():
+    page = (ROOT.parent / "src/twsix/report/templates/cl.html.j2").read_text("utf-8")
+    assert '"radar.html#t1-" + encodeURIComponent(r.c) + "-gf"' in page
+    assert "<a href=\"' + gf + '\" target=\"_blank\" rel=\"noopener\"" in page

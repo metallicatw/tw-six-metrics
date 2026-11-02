@@ -107,7 +107,7 @@ try { window.CX_EARLY = fetch("cl/all.json" + (window.CX_V ? "?v=" + window.CX_V
 <p class="cx-note"><span id="cx-msg">載入中…</span>
 {% call tip() %}合約負債是向客戶預收的訂金，是營收的領先指標；但單看季增／年增，會選到「驗收卡關、認列不了」或「低價搶來的賠錢單」。
 這裡把它放回<b>接單 → 備料生產 → 交貨驗收 → 獲利變現</b>的閉環：先依產業分流（認列週期不同），再走四段漏斗，
-每一段都要先過前一段。點表格任一列可以看每一項檢查的結果。篩選在你的瀏覽器裡進行，門檻會記住。{% endcall %}</p>
+每一段都要先過前一段。點表格任一列可以看每一項檢查的結果；點代號開個股資訊頁，點名稱另開分頁看〔籌碼雷達〕那一檔的貪婪／恐懼指標。篩選在你的瀏覽器裡進行，門檻會記住。{% endcall %}</p>
 
 <div class="cx-funnel" id="cx-funnel">
   <button type="button" class="cx-st" data-s="1" aria-pressed="false"><span class="on">篩選中・再點取消</span><b>① 含金量＋成長</b><span class="n" id="cx-n1">—</span><span class="d">合約負債夠大、年增、季增或連續季增</span></button>
@@ -352,9 +352,10 @@ var CLX = (function(){
     }).join("") + "</tr></thead><tbody>";
     list.forEach(function(x){
       var r = x.r, m = r.m, e = x.e, link = "stock/" + encodeURIComponent(r.c) + ".html";
+      var gf = "radar.html#t1-" + encodeURIComponent(r.c) + "-gf";   // 名稱連到〔籌碼雷達〕的貪婪／恐懼指標（全站慣例）
       var gmd = val(x, "gmd");
       h += '<tr class="main" data-c="' + esc(r.c) + '">' +
-        '<td class="l"><a href="' + link + '">' + esc(r.c) + '</a></td><td class="l nm"><a href="' + link + '">' + esc(r.n) + '</a></td>' +
+        '<td class="l"><a href="' + link + '" title="個股資訊頁">' + esc(r.c) + '</a></td><td class="l nm"><a href="' + gf + '" target="_blank" rel="noopener" title="籌碼雷達：貪婪／恐懼指標（另開分頁）">' + esc(r.n) + '</a></td>' +
         '<td class="l"><span class="cx-sec">' + esc((D.sectors[m.sec] || "").replace("與其他", "")) + '</span></td>' +
         '<td>' + (e.tier ? '<span class="cx-tier t-' + e.tier + '">' + e.tier + " " + esc(D.tiers[e.tier]) + '</span>' : '<span class="cx-na">—</span>') + '</td>' +
         '<td><b>' + (e.score === null ? "—" : e.score) + '</b></td>' +
