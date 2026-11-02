@@ -2366,6 +2366,7 @@ def cmd_refresh_stock(args: argparse.Namespace) -> int:
 
 
 def cmd_backfill_cl(args: argparse.Namespace) -> int:
+    started = time.monotonic()
     settings = Settings.load(args.config)
     from .ingest import cl_history as CH  # noqa: PLC0415
 
@@ -2381,6 +2382,38 @@ def cmd_backfill_cl(args: argparse.Namespace) -> int:
           f"進度 {r['done']}／{r['total']}" + ("，全部補完" if r["left"] <= 0 else f"，還剩 {r['left']} 次"))
     if r.get("pdf"):
         print(f"  觀測站表上沒有單獨列出的公司：讀了 {r['pdf']} 份財務報告 PDF，從附註補回 {r['pdf_filled']} 期")
+    if r["stopped"]:
+        print(("::warning::" if "擋" in r["stopped"] else "") + r["stopped"])
+    print(f"  寫入 {out}")
+    if getattr(args, "no_capex", False) or "擋" in (r["stopped"] or ""):
+        return EXIT_OK
+    left = args.minutes - (time.monotonic() - started) / 60 if args.minutes else 0
+    if args.minutes and left < 1:
+        print("資本支出回補：這一趟時間用完了，下次接著補")
+        return EXIT_OK
+    ns = argparse.Namespace(**{**vars(args), "minutes": left if args.minutes else 0,
+                               "out": str(out.with_name("capex_hist.csv"))})
+    return cmd_backfill_capex(ns)
+
+
+def cmd_backfill_capex(args: argparse.Namespace) -> int:
+    settings = Settings.load(args.config)
+    from .ingest import cx_history as CX  # noqa: PLC0415
+
+    data = Path(args.data or settings.data_dir)
+    data_file = data / CX.FILE
+    out = Path(args.out) if args.out else data_file
+    codes = ([c.strip() for c in args.codes.split(",") if c.strip()] if args.codes
+             else CX.candidates(data))
+    if not codes:
+        print("資本支出回補：找不到要補的個股（data/sheets 底下沒有現金流量表）")
+        return EXIT_OK
+    r = CX.backfill(out, codes, today=datetime.now(_TAIPEI).date(), minutes=args.minutes,
+                    pause=args.pause)
+    if out.resolve() != data_file.resolve():
+        CX.merge(data_file, out)
+    print(f"資本支出回補：{r['stocks']} 檔、這一趟查 {r['asked']} 次、新增 {r['added']} 個期別；"
+          f"進度 {r['done']}／{r['total']}" + ("，全部補完" if r["left"] <= 0 else f"，還剩 {r['left']} 次"))
     if r["stopped"]:
         print(("::warning::" if "擋" in r["stopped"] else "") + r["stopped"])
     print(f"  寫入 {out}")
@@ -3728,7 +3761,20 @@ def build_parser() -> argparse.ArgumentParser:
     bcl.add_argument("--codes", help="只補這幾檔（逗號分隔）")
     bcl.add_argument("--minutes", type=float, default=40.0, help="這一趟最多跑幾分鐘（預設 40）")
     bcl.add_argument("--pause", type=float, default=2.5, help="每次查詢之間至少停幾秒（預設 2.5）")
+    bcl.add_argument("--no-capex", action="store_true",
+                     help="不要接著補資本支出（預設合約負債補完、時間還有剩就接著補）")
     bcl.set_defaults(func=cmd_backfill_cl)
+
+    bcx = sub.add_parser(
+        "backfill-capex",
+        help="回補較早季別的資本支出（公開資訊觀測站現金流量表；要在家裡的網路跑，可中斷續跑）",
+    )
+    bcx.add_argument("--data", help="資料目錄（讀 sheets/ 找要補的個股）")
+    bcx.add_argument("--out", help="寫到哪個 CSV（預設 data/market/capex_hist.csv；給別的路徑會再併進 data）")
+    bcx.add_argument("--codes", help="只補這幾檔（逗號分隔）")
+    bcx.add_argument("--minutes", type=float, default=40.0, help="這一趟最多跑幾分鐘（預設 40）")
+    bcx.add_argument("--pause", type=float, default=2.5, help="每次查詢之間至少停幾秒（預設 2.5）")
+    bcx.set_defaults(func=cmd_backfill_capex)
 
     bq = sub.add_parser(
         "backfill-qfii",

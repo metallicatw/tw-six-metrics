@@ -279,7 +279,7 @@ def st_revenue(c: Ctx) -> tuple[str, str]:
     return ("warn" if early and not c.cloud else "skip"), "官方月報與變動說明已是最新" + early
 
 
-def st_cl(c: Ctx) -> tuple[str, str]:
+def _st_cl_only(c: Ctx) -> tuple[str, str]:
     from .ingest import cl_history as CL
 
     if not CL.has_cl(c.root, c.code):
@@ -306,6 +306,34 @@ def st_cl(c: Ctx) -> tuple[str, str]:
         c.state["changed"] = True
         return "ok", f"新增 {after - before} 期（共 {after} 期）" + tail
     return "skip", f"已經補過（{after} 期）" + tail
+
+
+def _st_capex(c: Ctx) -> tuple[str, str]:
+    from .ingest import cx_history as CX
+
+    if not CX.has_capex(c.root, c.code):
+        return "skip", "這一檔沒有資本支出科目"
+    data_file = c.root / CX.FILE
+    out = (c.cl_keep.with_name("capex_hist.csv") if c.cl_keep else data_file)
+    before = len(CX.single(CX.read(out).get(c.code, {})))
+    res = _quiet(CX.backfill, out, [c.code], today=c.now().date(), minutes=3.0, pause=2.5)
+    if out != data_file:
+        CX.merge(data_file, out)
+    after = len(CX.single(CX.read(out).get(c.code, {})))
+    if res.get("stopped") and "擋" in res["stopped"]:
+        return "warn", res["stopped"] + "（下次接著補）"
+    if after > before:
+        c.state["changed"] = True
+        return "ok", f"資本支出新增 {after - before} 季（共 {after} 季）"
+    return "skip", f"資本支出已經補過（{after} 季）"
+
+
+def st_cl(c: Ctx) -> tuple[str, str]:
+    """合約負債與資本支出的較早季別（券商頁只有最近 8 季）。"""
+    rank = {"warn": 3, "ok": 2, "skip": 1}
+    parts = [_st_cl_only(c), _st_capex(c)]
+    state = max((p[0] for p in parts), key=lambda k: rank.get(k, 0))
+    return state, "；".join(p[1] for p in parts)
 
 
 def st_news(c: Ctx) -> tuple[str, str]:
@@ -477,7 +505,7 @@ STAGES: tuple[Stage, ...] = (
     Stage("levels", "集保 15 級一年", st_levels),
     Stage("daily", "收盤行情・三大法人・外資持股", st_daily),
     Stage("revenue", "月營收與變動說明", st_revenue),
-    Stage("cl", "合約負債（近 5 年）", st_cl, home=True),
+    Stage("cl", "合約負債・資本支出（近 5 年）", st_cl, home=True),
     Stage("news", "重大訊息", st_news, quick=True),
     Stage("talks", "法說會簡報＋AI 解讀", st_talks, home=True),
     Stage("page", "評等・估值・個股頁", st_page, quick=True),

@@ -58,7 +58,9 @@ def _stamp_key(data_dir: Path) -> dict[str, str]:
         "notes": str((data_dir / NOTES_HISTORY).stat().st_size) if (data_dir / NOTES_HISTORY).exists() else "",
         "clh": str((data_dir / "market" / "contract_liab.csv").stat().st_size)
         if (data_dir / "market" / "contract_liab.csv").exists() else "",
-        "version": "9",
+        "cxh": str((data_dir / "market" / "capex_hist.csv").stat().st_size)
+        if (data_dir / "market" / "capex_hist.csv").exists() else "",
+        "version": "10",
     }
 
 

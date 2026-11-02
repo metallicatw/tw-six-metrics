@@ -215,6 +215,11 @@ def load_quarters(data_dir: Path, codes: set[str] | None = None) -> dict[str, di
         hist = read(data_dir / FILE)
     except Exception:  # noqa: BLE001
         hist = {}
+    try:
+        from .ingest import cx_history as CX  # noqa: PLC0415
+        cx_hist = CX.read(data_dir / CX.FILE)
+    except Exception:  # noqa: BLE001
+        CX, cx_hist = None, {}
     for d in sorted(root.iterdir()):
         if not d.is_dir() or (codes is not None and d.name not in codes):
             continue
@@ -230,6 +235,11 @@ def load_quarters(data_dir: Path, codes: set[str] | None = None) -> dict[str, di
             i = qidx(f"{q[:4]}.{q[-1]}Q")
             if i is not None and v is not None and "cl" not in merged.get(i, {}):
                 merged.setdefault(i, {})["cl"] = float(v)
+        if CX is not None:
+            for q, v in CX.single(cx_hist.get(d.name, {})).items():   # 券商頁沒有的較早季別
+                i = qidx(f"{q[:4]}.{q[-1]}Q")
+                if i is not None and "capex" not in merged.get(i, {}):
+                    merged.setdefault(i, {})["capex"] = v
         if merged:
             out[d.name] = merged
     return out
