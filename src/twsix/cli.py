@@ -2199,7 +2199,7 @@ def compare_rows(stored: list[dict], official: list[dict], fields: tuple[str, ..
 
 
 def cmd_verify_official(args: argparse.Namespace) -> int:
-    """拿交易所當天的官方表，逐檔核對已存的收盤行情與三大法人（在自己的電腦上跑：雲端常被證交所擋）。"""
+    """拿交易所當天的官方表，逐檔核對已存的收盤行情、三大法人與外資持股（在自己的電腦上跑：雲端常被證交所擋）。"""
     settings = Settings.load(args.config)
     from .ingest.base import HttpClient  # noqa: PLC0415
     from .ingest.daily import Daily  # noqa: PLC0415
@@ -2215,6 +2215,7 @@ def cmd_verify_official(args: argparse.Namespace) -> int:
          ("close", "open", "high", "low", "volume", "value")),
         ("三大法人", "institutional", daily.institutional_on,
          ("foreign", "trust", "dealer", "total", "f_buy", "f_sell", "t_buy", "t_sell")),
+        ("外資持股", "qfii", daily.qfii_on, ("issued", "held", "pct")),
     ):
         official = fetch(args.date)
         stored = read_day_rows(store.root, folder, args.date)
