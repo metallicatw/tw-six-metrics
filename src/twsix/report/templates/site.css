@@ -843,6 +843,7 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 #t.compact th button.sortable{padding:4px 1px;font-size:11px}
 #t.compact td.seq{padding-left:4px;padding-right:2px;font-size:11px}
 #t.compact td.nm{white-space:normal;min-width:4em;max-width:5.2em;line-height:1.3}
+#t.compact td.nm .nm-w{white-space:normal}
 #t.compact .ai-mk{font-size:10.5px;padding:0 5px}
 #t.compact td.muted{font-size:11.5px}
 #t.compact td.ind{white-space:normal;min-width:3.6em;max-width:4.6em;line-height:1.3}
@@ -1525,8 +1526,11 @@ html body :is(.qf-btn,.sc-sel):not(#cf *):hover{border-color:color-mix(in srgb,v
 :root[data-theme=dark] .clx-fl.good{background:#173a20;color:#9be3a8}
 :root[data-theme=dark] .clx-fl.info{background:#172c4a;color:#a9c9f5}
 
-/* 名稱旁的〔概況〕：開〔籌碼雷達〕的〈基本面與籌碼概況〉面板（全站一致） */
-a.ins-btn{display:inline-block;margin-left:5px;padding:1px 6px;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);
-  border-radius:999px;color:var(--accent);font-size:11.5px;font-weight:600;line-height:1.35;text-decoration:none;
-  vertical-align:middle;white-space:nowrap}
-a.ins-btn:hover,a.ins-btn:focus-visible{background:color-mix(in srgb,var(--accent) 12%,transparent);border-color:var(--accent)}
+/* 名稱旁的〔概況〕小圖示：右側打開〈基本面與籌碼概況〉面板（全站一致，跟籌碼雷達同一個圖示） */
+.nm-w{white-space:nowrap}
+a.ins-btn{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:4px;
+  vertical-align:-4px;border:1px solid var(--rule);border-radius:4px;background:var(--surface-2);color:var(--muted);
+  text-decoration:none;cursor:pointer}
+a.ins-btn::before{content:'';width:12px;height:12px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round'%3E%3Crect x='2.5' y='1.5' width='11' height='13' rx='2'/%3E%3Cpath d='M5 5h6M5 8h6M5 11h4'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.4' stroke-linecap='round'%3E%3Crect x='2.5' y='1.5' width='11' height='13' rx='2'/%3E%3Cpath d='M5 5h6M5 8h6M5 11h4'/%3E%3C/svg%3E") center/contain no-repeat}
+a.ins-btn:hover,a.ins-btn:focus-visible,tr.cfi-cur a.ins-btn{color:var(--accent);border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,transparent)}

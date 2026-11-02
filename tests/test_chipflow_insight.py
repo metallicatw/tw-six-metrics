@@ -216,7 +216,7 @@ def test_合約負債未單獨揭露的期別顯示未揭露不是0():
 def test_概況面板接到各工具():
     api = (TPL / "radar_bg" / "api.js").read_text("utf-8")
     mods = (TPL / "radar_bg" / "mods.js").read_text("utf-8")
-    src = (TPL / "radar.html.j2").read_text("utf-8")
+    src = (TPL / "radar.html.j2").read_text("utf-8") + (TPL / "radar_bg" / "cfi.css").read_text("utf-8")
     ins = (TPL / "radar_bg" / "insight.js").read_text("utf-8")
     t2html = (TPL / "radar_bg" / "t2.html").read_text("utf-8")
     assert '{% include "radar_bg/insight.js" %}' in src and "CFI.wire();" in src
@@ -233,7 +233,7 @@ def test_概況面板接到各工具():
 
 
 def test_手機版_概況表格不撐寬_點狀圖窄螢幕改版面_時間軸換行():
-    src = (TPL / "radar.html.j2").read_text("utf-8")
+    src = (TPL / "radar.html.j2").read_text("utf-8") + (TPL / "radar_bg" / "cfi.css").read_text("utf-8")
     css = (TPL / "radar_bg" / "style.css").read_text("utf-8")
     mods = (TPL / "radar_bg" / "mods.js").read_text("utf-8")
     assert "table.cfi-tbl{width:100%;min-width:0;table-layout:fixed" in src, "site.css 的 table{min-width:560px} 會把面板撐破"

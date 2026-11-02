@@ -84,6 +84,7 @@ window.SC_V = "{{ data_v|default('') }}";
   .sc-tbl td.ind{white-space:normal;min-width:4em;max-width:6.2em;line-height:1.3}
   .sc-tbl.many td.ind{max-width:5.5em}
   .sc-tbl td.nm{white-space:normal;word-break:keep-all;max-width:6em;line-height:1.3}
+  .sc-tbl td.nm .nm-w{white-space:normal}
   .sc-tbl.many{font-size:12.5px}
   .sc-tbl.many th,.sc-tbl.many td{padding:5px 3px}
   .sc-tbl th:first-child,.sc-tbl td:first-child{padding-left:8px}
@@ -369,11 +370,14 @@ function numTd(x, d, pct, extra){
   if (s.full) a.title = s.full;
   return el("td", a);
 }
+function insBtn(code){   // 名稱旁的〔概況〕：右側打開〈基本面與籌碼概況〉面板（全站一致）
+  return el("a", {cls: "ins-btn", "data-ins": code, href: "radar.html#t1-" + encodeURIComponent(code) + "-ins", target: "_blank", rel: "noopener", title: "基本面與籌碼概況（右側面板）", "aria-label": code + " 基本面與籌碼概況"});
+}
 function cell(v, col){
   var k = col[0], kind = col[2], x = v[k];
   if (kind === "code") return el("td", {cls: "l"}, el("a", {href: "stock/" + encodeURIComponent(v.c) + ".html", title: "個股資訊頁", text: v.c}));
-  if (kind === "name") return el("td", {cls: "l nm"}, el("a", {href: "stock/" + encodeURIComponent(v.c) + ".html", title: "個股資訊頁", text: v.n}),
-    el("a", {cls: "ins-btn", href: "radar.html#t1-" + encodeURIComponent(v.c) + "-ins", target: "_blank", rel: "noopener", title: "基本面與籌碼概況（籌碼雷達，另開分頁）", text: "概況"}));
+  if (kind === "name") return el("td", {cls: "l nm"}, el("span", {cls: "nm-w"}, el("a", {href: "stock/" + encodeURIComponent(v.c) + ".html", title: "個股資訊頁", text: v.n}),
+    insBtn(v.c)));
   if (kind === "mk") return el("td", {cls: "l"}, v.m ? el("span", {cls: "sc-mk", text: v.m}) : "");
   if (kind === "text") return el("td", {cls: "l ind", text: x || ""});
   if (kind === "price") return el("td", null, el("span", {cls: cls(v.chg), text: short(x, 2).t}),

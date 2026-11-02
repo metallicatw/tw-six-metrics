@@ -127,11 +127,26 @@ def _env(assets: bool = False):  # type: ignore[no-untyped-def]
     return env
 
 
-ASSET_FILES = ("site.css", "site.js")
+ASSET_FILES = ("site.css", "site.js", "ins.js", "ins.css")
+INS_HOST_CSS = """
+/* 其他頁的〈基本面與籌碼概況〉面板：跟籌碼雷達同一份樣式，掛在 body 底下的 #cf 容器 */
+#cf.cf-ins-host{position:static}
+#cf.cf-ins-host .cfi-drawer{font-family:inherit}
+@media (min-width:1180px){html.cfi-on body > .wrap{margin-right:min(500px,100vw)}}
+tr.cfi-cur > td{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+tr.cfi-cur > td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+"""
 
 
-@functools.lru_cache(maxsize=4)
+@functools.lru_cache(maxsize=8)
 def asset_text(name: str) -> str:
+    if name == "ins.js":
+        shim = (TEMPLATE_DIR / "radar_bg" / "ins_shim.js").read_text(encoding="utf-8")
+        body = (TEMPLATE_DIR / "radar_bg" / "insight.js").read_text(encoding="utf-8")
+        body = body.replace("{% raw %}", "").replace("{% endraw %}", "")
+        return shim.replace("/*@@INSIGHT@@*/", body)
+    if name == "ins.css":
+        return (TEMPLATE_DIR / "radar_bg" / "cfi.css").read_text(encoding="utf-8") + INS_HOST_CSS
     text = (TEMPLATE_DIR / name).read_text(encoding="utf-8")
     if name == "site.js":
         text = (TEMPLATE_DIR / "gz.js").read_text(encoding="utf-8") + "\n" + text

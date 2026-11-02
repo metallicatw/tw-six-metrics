@@ -385,8 +385,13 @@ var CFI = (function(){
   }
 
   var D = {el: null, code: null, row: null, list: null, timer: null};
-  function rowsOf(tb){ return tb ? [].filter.call(tb.rows, function(tr){ return codeOf(tr); }) : []; }
-  function codeOf(tr){ var a = tr && tr.querySelector && tr.querySelector('a.bg-lk[href^="stock/"]'); return a ? decodeURIComponent(a.getAttribute("href").slice(6).replace(/\.html$/, "")) : null; }
+  function rowsOf(tb){ return tb && tb.rows ? [].filter.call(tb.rows, function(tr){ return codeOf(tr) && tr.offsetParent !== null; }) : []; }
+  function codeOf(tr){
+    var a = tr && tr.querySelector && tr.querySelector('a.bg-lk[href^="stock/"]');
+    if (a) return decodeURIComponent(a.getAttribute("href").slice(6).replace(/\.html$/, ""));
+    var b = tr && tr.querySelector && tr.querySelector("[data-ins]");   // 其他頁：名稱旁的〔概況〕
+    return b ? b.getAttribute("data-ins") : null;
+  }
   function drawer(){
     if (D.el) return D.el;
     var el = document.createElement("aside");
@@ -409,7 +414,7 @@ var CFI = (function(){
     return el;
   }
   function paintRow(){
-    document.querySelectorAll("#cf tr.cfi-cur").forEach(function(t){ t.classList.remove("cfi-cur"); });
+    document.querySelectorAll("tr.cfi-cur").forEach(function(t){ t.classList.remove("cfi-cur"); });
     if (D.row && D.row.isConnected) D.row.classList.add("cfi-cur");
   }
   function show(code, tr){
@@ -440,7 +445,7 @@ var CFI = (function(){
     if (!D.el) return;
     D.el.hidden = true; D.code = null;
     document.documentElement.classList.remove("cfi-on");
-    document.querySelectorAll("#cf tr.cfi-cur").forEach(function(t){ t.classList.remove("cfi-cur"); });
+    document.querySelectorAll("tr.cfi-cur").forEach(function(t){ t.classList.remove("cfi-cur"); });
   }
   function step(k){
     var rows = rowsOf(D.list), i = rows.indexOf(D.row);

@@ -3265,3 +3265,46 @@ var TWSIXRefresh = (function(){
   if(window.MutationObserver) new MutationObserver(function(){ if(!panel.hidden) load(); }).observe(panel, {attributes: true, attributeFilter: ['hidden']});
   if(!panel.hidden) load();
 })();
+
+/* ── 名稱旁的〔概況〕：在這一頁右側打開〈基本面與籌碼概況〉面板（籌碼雷達同一份） ──────────
+   第一次按才下載 assets/ins.js、ins.css（平常不拖慢頁面）。趨勢×六大×報酬的報告在 iframe 裡，
+   它呼叫 window.TWSIXIns(代號) 讓面板開在外層頁面。 */
+(function(){
+  if(document.getElementById('cf-tabs')) return;   // 籌碼雷達自己有
+  var T = window.TWSIX || {}, rel = T.rel || '', v = T.av ? '?v=' + T.av : '';
+  var ready = null;
+  function load(){
+    if(ready) return ready;
+    ready = new Promise(function(ok, bad){
+      var css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = rel + 'assets/ins.css' + v;
+      document.head.appendChild(css);
+      var s = document.createElement('script');
+      s.src = rel + 'assets/ins.js' + v;
+      s.onload = function(){
+        if(!window.CFI){ bad(new Error('ins.js')); return; }
+        var host = document.getElementById('cf');
+        if(!host){ host = document.createElement('div'); host.id = 'cf'; host.className = 'cf-ins-host'; document.body.appendChild(host); }
+        window.CFI.wire();
+        window.CFI_ROWS().then(function(){ ok(window.CFI); }, function(){ ok(window.CFI); });
+      };
+      s.onerror = function(){ bad(new Error('ins.js')); };
+      document.head.appendChild(s);
+    });
+    ready.catch(function(){ ready = null; });
+    return ready;
+  }
+  function show(code, tr){
+    return load().then(function(C){ C.show(code, tr || null); }, function(){
+      window.open(rel + 'radar.html#t1-' + encodeURIComponent(code) + '-ins', '_blank', 'noopener');
+    });
+  }
+  window.TWSIXIns = function(code){ return show(code, null); };
+  document.addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('.ins-btn[data-ins]');
+    if(!b || (e.button && e.button !== 0) || e.ctrlKey || e.metaKey || e.shiftKey) return;   // Ctrl＋點＝照連結另開籌碼雷達
+    e.preventDefault(); e.stopPropagation();
+    var tr = b.closest('tr');
+    show(b.getAttribute('data-ins'), tr);
+  }, true);
+})();
