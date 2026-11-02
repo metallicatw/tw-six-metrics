@@ -103,25 +103,51 @@ def test_未揭露存成_NA_讀回來是_None_而且不再查():
     assert r["asked"] > 0 and again["asked"] == 0
 
 
-def test_舊版誤記的0_券商頁有合約負債的公司改成未揭露_畫面不再顯示0():
+def test_0是真的0_未揭露才是未揭露_畫面照實顯示():
     from twsix.chipflow.site import sheet_series
 
     tmp = Path(tempfile.mkdtemp())
-    for code, cl in (("2330", "55,852"), ("9999", "0")):
-        d = tmp / "sheets" / code
-        d.mkdir(parents=True)
-        grid = [["期別", "2026.2Q", "2025.2Q"], ["合約負債－流動", cl, cl], ["股本", "259,325", "259,325"]]
-        (d / "BSQ.json.gz").write_bytes(gzip.compress(json.dumps(grid).encode()))
-    CH.write(tmp / CH.FILE, {"2330": {"2024Q2": 0.0, "2023Q2": 0.0}, "9999": {"2024Q2": 0.0}})
-    q = load_sheet_quarters(tmp, {"2330", "9999"})
-    assert "cl" not in q["2330"]["2024.2Q"] and q["2330"]["2024.2Q"]["cl_na"] == 1.0
-    assert q["9999"]["2024.2Q"]["cl"] == 0.0, "券商頁本來就沒有合約負債的公司，0 照舊"
-    s = sheet_series(q["2330"], {})
-    i = s["q"].index("2024Q2")
-    assert s["cl"][i] is None and s["cl_na"][i] == 1
-    assert CH.repair_zeros(tmp / CH.FILE, tmp) == 2
-    assert CH.read(tmp / CH.FILE)["2330"] == {"2024Q2": None, "2023Q2": None}
-    assert CH.read(tmp / CH.FILE)["9999"]["2024Q2"] == 0.0
+    d = tmp / "sheets" / "4538"
+    d.mkdir(parents=True)
+    grid = [["期別", "2026.2Q", "2025.2Q"], ["合約負債－流動", "4", "0"], ["股本", "1,000", "1,000"]]
+    (d / "BSQ.json.gz").write_bytes(gzip.compress(json.dumps(grid).encode()))
+    CH.write(tmp / CH.FILE, {"4538": {"2024Q2": 0.0, "2023Q2": None}})
+    q = load_sheet_quarters(tmp, {"4538"})
+    assert q["4538"]["2024.2Q"]["cl"] == 0.0, "券商頁有合約負債的公司，觀測站的 0 也是真的 0"
+    assert "cl" not in q["4538"]["2023.2Q"] and q["4538"]["2023.2Q"]["cl_na"] == 1.0
+    s = sheet_series(q["4538"], {})
+    assert s["cl"][s["q"].index("2024Q2")] == 0 and s["cl_na"][s["q"].index("2023Q2")] == 1
+    # 回補不再自動把 0 改成未揭露（以前每一趟都改，連真的 0 也被改掉）
+    CH.backfill(tmp / CH.FILE, ["4538"], today=date(2026, 10, 29), minutes=0, get=lambda f: "",
+                sleep=lambda s: None, log=lambda m: None, data_dir=tmp, pdf=False)
+    assert CH.read(tmp / CH.FILE)["4538"]["2024Q2"] == 0.0
+
+
+def test_重查未揭露_表上有科目就改回數字_含0_續跑不重查():
+    tmp = Path(tempfile.mkdtemp())
+    out = tmp / CH.FILE
+    CH.write(out, {"4538": {"2023Q3": None, "2022Q3": None, "2022Q4": None, "2021Q3": 1.3},
+                   "2330": {"2023Q3": None}})
+    pages = {
+        ("4538", "2023Q3"): _page(["會計項目", "112年09月30日", "111年12月31日", "111年09月30日"],
+                                  [["合約負債－流動", "0", "0", "12,000", "0.1", "0", "0"]]),
+        ("2330", "2023Q3"): _page(["會計項目", "112年09月30日", "111年12月31日", "111年09月30日"],
+                                  [["其他流動負債", "1", "0", "1", "0", "1", "0"]]),
+    }
+    asked = []
+
+    def get(form):
+        key = (form["co_id"], f"{int(form['year']) + 1911}Q{int(form['season'])}")
+        asked.append(key)
+        return pages[key]
+
+    r = CH.recheck_na(out, None, minutes=0, get=get, sleep=lambda s: None, log=lambda m: None)
+    got = CH.read(out)
+    assert got["4538"] == {"2023Q3": 0.0, "2022Q3": 0.0, "2022Q4": 12.0, "2021Q3": 1.3}  # 一次查詢帶回三季
+    assert got["2330"]["2023Q3"] is None                                                # 表上真的沒有：維持未揭露
+    assert r["fixed"] == 3 and len(asked) == 2
+    again = CH.recheck_na(out, None, minutes=0, get=get, sleep=lambda s: None, log=lambda m: None)
+    assert again["asked"] == 0 and len(asked) == 2
 
 
 def test_表上沒有的季別改讀財報PDF附註補回_一份帶回好幾個期末_讀過的不再讀():

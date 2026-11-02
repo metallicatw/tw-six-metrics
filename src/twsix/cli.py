@@ -2385,7 +2385,22 @@ def cmd_backfill_cl(args: argparse.Namespace) -> int:
     if r["stopped"]:
         print(("::warning::" if "擋" in r["stopped"] else "") + r["stopped"])
     print(f"  寫入 {out}")
-    if getattr(args, "no_capex", False) or "擋" in (r["stopped"] or ""):
+    if "擋" in (r["stopped"] or ""):
+        return EXIT_OK
+    if r["left"] <= 0:
+        # 一次性：舊版每一趟都把 0 改成「未揭露」，連真的 0 也改掉了；重查一次改回來（可中斷續跑）
+        left = args.minutes - (time.monotonic() - started) / 60 if args.minutes else 0
+        if args.minutes and left < 1:
+            print("重查未揭露：這一趟時間用完了，下次接著查")
+            return EXIT_OK
+        rr = CH.recheck_na(out, codes, minutes=left if args.minutes else 0, pause=args.pause)
+        if rr["asked"] or rr["fixed"]:
+            print(f"重查未揭露：這一趟查 {rr['asked']} 次，改回數字（含 0）{rr['fixed']} 期"
+                  + ("，全部查完" if not rr["stopped"] else f"，還剩約 {rr['left']} 次"))
+        if rr["stopped"]:
+            print(("::warning::" if "擋" in rr["stopped"] else "") + rr["stopped"])
+            return EXIT_OK
+    if getattr(args, "no_capex", False):
         return EXIT_OK
     left = args.minutes - (time.monotonic() - started) / 60 if args.minutes else 0
     if args.minutes and left < 1:

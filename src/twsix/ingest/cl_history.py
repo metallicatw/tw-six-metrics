@@ -360,10 +360,8 @@ def backfill(out: Path, codes: list[str], *, today: date, minutes: float = 40.0,
         done = set(done_path.read_text(encoding="utf-8").split())
     except OSError:
         done = set()
-    if data_dir is not None:
-        fixed = repair_zeros(out, data_dir)
-        if fixed:
-            log(f"  舊紀錄裡 {fixed} 筆「表上沒有合約負債科目」被記成 0，已改成「未單獨揭露」")
+    # 以前每一趟都先把 0 改成「未揭露」（當年舊版把「表上沒有科目」記成 0），
+    # 但現在的解析分得出「科目在、金額 0」與「沒有科目」——再改會把真的 0 也改掉，所以不再自動做。
     data = read(out)
     steps = plan(_latest_quarter(today))
     # 這一季查詢會帶回的期別（當季、去年同季、上一年底）都已經有了（例如從另一台機器併進來），就不必再查
@@ -425,3 +423,70 @@ def backfill(out: Path, codes: list[str], *, today: date, minutes: float = 40.0,
     left = total - len(done)
     return {"asked": asked, "added": got, "done": len(done), "total": total, "left": left,
             "stocks": len(codes), "stopped": stopped or extra["pdf_stopped"], **extra}
+
+
+def recheck_plan(data: dict[str, dict[str, float | None]], codes: list[str]) -> list[tuple[str, str]]:
+    """「未揭露」的期別要重查哪幾次：一次查詢帶回當季、去年同季與上一年底。"""
+    out = []
+    for code in codes:
+        nas = sorted((q for q, v in data.get(code, {}).items() if v is None), reverse=True)
+        cov: set[str] = set()
+        for q in nas:
+            if q in cov:
+                continue
+            out.append((code, q))
+            cov |= {q, _qs(_qi(q) - 4), f"{int(q[:4]) - 1}Q4"}
+    return out
+
+
+def recheck_na(out: Path, codes: list[str] | None = None, *, minutes: float = 40.0, pause: float = 2.5,
+               get: Callable[[dict], str] | None = None, sleep: Callable[[float], None] = time.sleep,
+               clock: Callable[[], float] = time.monotonic, log: Callable[[str], None] = print) -> dict:
+    """把「未揭露」重新向觀測站查一次（一次性，可中斷續跑）。
+
+    以前每一趟回補都先把 0 改成「未揭露」，連「科目在、金額真的是 0」的季別也被改掉了
+    （2026-11-02 抽驗：4538 2023Q3 官方 0，檔案 NA）。重查後表上有科目的改回數字（含 0），
+    表上真的沒有的維持「未揭露」。"""
+    get = get or post
+    done_path = out.with_name(out.name + ".nachk")
+    try:
+        done = set(done_path.read_text(encoding="utf-8").split())
+    except OSError:
+        done = set()
+    data = read(out)
+    todo = [(c, q) for c, q in recheck_plan(data, sorted(codes or data)) if f"{c},{q}" not in done]
+    t0, asked, fixed, blocked, stopped = clock(), 0, 0, 0, ""
+    with open(done_path, "a", encoding="utf-8") as dfh:
+        for code, q in todo:
+            if minutes and clock() - t0 > minutes * 60:
+                stopped = f"跑滿 {minutes:g} 分鐘，其餘下次再補"
+                break
+            try:
+                page = get(form(code, q))
+            except Exception as exc:  # noqa: BLE001
+                page, err = "", type(exc).__name__
+            else:
+                err = ""
+            asked += 1
+            if not page or is_block(page):
+                blocked += 1
+                log(f"  {code} {q}：{err or '被擋下'}")
+                if blocked >= BLOCK_LIMIT:
+                    stopped = "公開資訊觀測站連續擋下或連不上，這一趟先停（下次接著補）"
+                    break
+                sleep(pause * 4)
+                continue
+            blocked = 0
+            for qq, v in (parse(page) or {}).items():
+                if v is not None and qq in data.get(code, {}) and data[code][qq] is None:
+                    data[code][qq] = v
+                    fixed += 1
+            dfh.write(f"{code},{q}\n")
+            dfh.flush()
+            if asked % 50 == 0:
+                write(out, data)
+                log(f"  重查未揭露：已查 {asked}／{len(todo)}，改回數字 {fixed} 期")
+            sleep(pause + random.random())  # noqa: S311
+    write(out, data)
+    left = len(todo) - asked if stopped else 0
+    return {"asked": asked, "fixed": fixed, "left": max(left, 0), "stopped": stopped}
