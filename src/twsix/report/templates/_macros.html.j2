@@ -1,3 +1,6 @@
+{% macro ins(code, rel='') -%}
+<a class="ins-btn" href="{{ rel }}radar.html#t1-{{ code }}-ins" target="_blank" rel="noopener" title="基本面與籌碼概況（籌碼雷達，另開分頁）">概況</a>
+{%- endmacro %}
 {% macro grade(letter) -%}
 {%- if letter in ('AA','A','BB','B','C') -%}
 <span class="g g-{{ letter }}">{{ letter }}</span>
@@ -49,7 +52,8 @@
   <td data-s="{{ r.stock_id }}"><a href="{{ href }}"{{ ext }}>{{ r.stock_id }}</a></td>
       {%- set gf = href if r.unrated else rel ~ 'radar.html#t1-' ~ r.stock_id ~ '-gf' %}
   {%- set gfx = ext if r.unrated else ' target="_blank" rel="noopener" title="籌碼雷達：貪婪／恐懼指標（另開分頁）"'|safe %}
-  <td class="nm" data-s="{{ r.name }}"><a href="{{ gf }}"{{ gfx }}>{{ r.name }}</a></td>
+  <td class="nm" data-s="{{ r.name }}"><a href="{{ gf }}"{{ gfx }}>{{ r.name }}</a>
+    {%- if not r.unrated %}{{ ins(r.stock_id, rel) }}{% endif %}</td>
     <td class="muted mid" data-s="{{ r.market }}">{{ r.market }}</td>
   <td class="muted ind" data-s="{{ r.industry }}">{{ r.industry }}</td>
       <td class="when-cell" data-s="{{ r.fiscal_quarter }}|{{ r.revenue_month }}"

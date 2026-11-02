@@ -12,7 +12,7 @@ function bgAttr(v){ return String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot
 function bgCode(c){ return '<a class="bg-lk" href="stock/' + encodeURIComponent(c) + '.html" title="個股資訊頁">' + c + '</a>'; }
 function bgName(c, n){ return '<a class="bg-t1" href="#t1-' + bgAttr(c) + '-gf" title="① 貪婪／恐懼指標圖">' + (n || c) + '</a>' + bgIns(c); }
 var BG_INS_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><rect x="2.5" y="1.5" width="11" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 5h6M5 8h6M5 11h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
-function bgIns(c){ return '<button type="button" class="bg-ins" data-ins="' + bgAttr(c) + '" title="基本面與籌碼概況" aria-label="' + bgAttr(c) + ' 基本面與籌碼概況">' + BG_INS_ICON + '</button>'; }
+function bgIns(c){ return '<button type="button" class="bg-ins" data-ins="' + bgAttr(c) + '" title="基本面與籌碼概況" aria-label="' + bgAttr(c) + ' 基本面與籌碼概況">概況</button>'; }
 function bgYf(c){ return '<a class="yf bg-lk" href="' + bgAttr(yahooTA(c)) + '" target="_blank" rel="noopener" title="Yahoo股市技術分析" aria-label="' + bgAttr(c) + ' Yahoo 技術分析"></a>'; }
 
 function bgDecorate(code, codeEl, nameEl, after){

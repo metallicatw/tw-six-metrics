@@ -372,7 +372,8 @@ function numTd(x, d, pct, extra){
 function cell(v, col){
   var k = col[0], kind = col[2], x = v[k];
   if (kind === "code") return el("td", {cls: "l"}, el("a", {href: "stock/" + encodeURIComponent(v.c) + ".html", title: "個股資訊頁", text: v.c}));
-  if (kind === "name") return el("td", {cls: "l nm"}, el("a", {href: "stock/" + encodeURIComponent(v.c) + ".html", title: "個股資訊頁", text: v.n}));
+  if (kind === "name") return el("td", {cls: "l nm"}, el("a", {href: "stock/" + encodeURIComponent(v.c) + ".html", title: "個股資訊頁", text: v.n}),
+    el("a", {cls: "ins-btn", href: "radar.html#t1-" + encodeURIComponent(v.c) + "-ins", target: "_blank", rel: "noopener", title: "基本面與籌碼概況（籌碼雷達，另開分頁）", text: "概況"}));
   if (kind === "mk") return el("td", {cls: "l"}, v.m ? el("span", {cls: "sc-mk", text: v.m}) : "");
   if (kind === "text") return el("td", {cls: "l ind", text: x || ""});
   if (kind === "price") return el("td", null, el("span", {cls: cls(v.chg), text: short(x, 2).t}),

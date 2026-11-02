@@ -347,7 +347,8 @@ var CLX = (function(){
       var gf = "radar.html#t1-" + encodeURIComponent(r.c) + "-gf";   // 名稱連到〔籌碼雷達〕的貪婪／恐懼指標（全站慣例）
       var gmd = val(x, "gmd");
       h += '<tr class="main" data-c="' + esc(r.c) + '">' +
-        '<td class="l"><a href="' + link + '" title="個股資訊頁">' + esc(r.c) + '</a></td><td class="l nm"><a href="' + gf + '" target="_blank" rel="noopener" title="籌碼雷達：貪婪／恐懼指標（另開分頁）">' + esc(r.n) + '</a></td>' +
+        '<td class="l"><a href="' + link + '" title="個股資訊頁">' + esc(r.c) + '</a></td><td class="l nm"><a href="' + gf + '" target="_blank" rel="noopener" title="籌碼雷達：貪婪／恐懼指標（另開分頁）">' + esc(r.n) + '</a>' +
+          '<a class="ins-btn" href="radar.html#t1-' + encodeURIComponent(r.c) + '-ins" target="_blank" rel="noopener" title="基本面與籌碼概況（籌碼雷達，另開分頁）">概況</a></td>' +
         '<td class="l"><span class="cx-sec">' + esc((D.sectors[m.sec] || "").replace("與其他", "")) + '</span></td>' +
         '<td>' + (e.tier ? '<span class="cx-tier t-' + e.tier + '">' + e.tier + " " + esc(D.tiers[e.tier]) + '</span>' : '<span class="cx-na">—</span>') + '</td>' +
         '<td><b>' + (e.score === null ? "—" : e.score) + '</b></td>' +

@@ -1524,3 +1524,9 @@ html body :is(.qf-btn,.sc-sel):not(#cf *):hover{border-color:color-mix(in srgb,v
 :root[data-theme=dark] .clx-fl.warn{background:#46340f;color:#ffd38a}
 :root[data-theme=dark] .clx-fl.good{background:#173a20;color:#9be3a8}
 :root[data-theme=dark] .clx-fl.info{background:#172c4a;color:#a9c9f5}
+
+/* 名稱旁的〔概況〕：開〔籌碼雷達〕的〈基本面與籌碼概況〉面板（全站一致） */
+a.ins-btn{display:inline-block;margin-left:5px;padding:1px 6px;border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);
+  border-radius:999px;color:var(--accent);font-size:11.5px;font-weight:600;line-height:1.35;text-decoration:none;
+  vertical-align:middle;white-space:nowrap}
+a.ins-btn:hover,a.ins-btn:focus-visible{background:color-mix(in srgb,var(--accent) 12%,transparent);border-color:var(--accent)}
