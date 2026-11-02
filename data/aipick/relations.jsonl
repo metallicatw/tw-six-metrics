@@ -190,3 +190,6 @@
 {"a":"2883","b":"2882","asked":"2026-10-30","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.95,"note":"凱基金（2883）與國泰金（2882）皆為台灣上市櫃之金控公司，屬於金融保險業的同業競爭關係。"}
 {"a":"2883","b":"8454","asked":"2026-10-30","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.9,"note":"凱基金與富邦媒皆為台灣知名大型企業集團之核心公司，常被歸類於大型權值股或特定金融/集團題材。"}
 {"a":"2883","b":"5426","asked":"2026-10-30","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.95,"note":"凱基金為金控公司，振發為機殼廠，兩者業務性質不同，無直接業務往來或集團關係。"}
+{"a":"3162","b":"6190","asked":"2026-11-03","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.5,"note":"兩者皆屬電子零組件產業，因題材連動或資金效應常同步變動，非直接上下游。"}
+{"a":"3162","b":"8109","asked":"2026-11-03","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"兩者皆屬台股中小電子股或車用相關概念股，常因盤面資金輪動而具備題材連動性。"}
+{"a":"3162","b":"6233","asked":"2026-11-03","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"精確為車用零組件廠，旺玖為IC設計，兩者業務無直接供應或客戶關係，常因台股題材連動而被歸類在一起。"}
