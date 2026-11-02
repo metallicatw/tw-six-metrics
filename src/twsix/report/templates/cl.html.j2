@@ -135,6 +135,7 @@ try { window.CX_EARLY = fetch("cl/all.json" + (window.CX_V ? "?v=" + window.CX_V
 <div class="cx-card">
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">篩選結果</h3><span class="cx-tier t-A" id="cx-count" style="font-size:13px">—</span>
     <button type="button" class="cx-unstage" id="cx-unstage" hidden>✕ 取消漏斗篩選</button>
+    <button type="button" class="wg-imp" id="cx-imp" data-wg-src="cl-tiers" data-wg-name="合約負債選股">⇩ 匯入觀察清單</button>
     <span class="cx-note" id="cx-asof"></span></div>
   <div class="cx-scroll"><table class="cx-tbl" id="cx-tbl"></table></div>
 </div>
@@ -369,6 +370,16 @@ var CLX = (function(){
     if (!list.length) h += '<tr><td class="l" colspan="' + COLS.length + '"><span class="cx-na">沒有符合的股票。可以放寬門檻，或在上方勾選更多層級。</span></td></tr>';
     $("cx-tbl").innerHTML = h + "</tbody>";
     $("cx-count").textContent = "共 " + list.length + " 檔";
+    // 〔⇩ 匯入觀察清單〕：群組名稱跟著目前的篩選——漏斗某一段＝「合約負債選股① 含金量＋成長」；依層級＝「合約負債選股 A＋B＋C」
+    var STAGE_NAMES = ["① 含金量＋成長", "② 交叉排雷", "③ 認列點火", "④ 籌碼確認"];
+    var impSrc = STAGE ? "cl-s" + STAGE : "cl-tiers";
+    var impName = STAGE ? "合約負債選股" + STAGE_NAMES[STAGE - 1]
+      : "合約負債選股 " + ["A", "B", "C", "W"].filter(function(t){ return TIERS[t]; }).join("＋");
+    var imp = $("cx-imp");
+    imp.setAttribute("data-wg-src", impSrc); imp.setAttribute("data-wg-name", impName);
+    imp.title = "把目前列出的 " + list.length + " 檔匯入觀察清單〔" + impName + "〕";
+    window.TWSIXImport = window.TWSIXImport || {};
+    window.TWSIXImport[impSrc] = function(){ return list.map(function(x){ return x.r.c; }); };
     var parts = ["A", "B", "C", "W"].map(function(t){ return t + " " + (TCOUNT[t] || 0); }).join("、");
     var hidden = ["A", "B", "C", "W"].filter(function(t){ return !TIERS[t]; });
     $("cx-asof").textContent = STAGE

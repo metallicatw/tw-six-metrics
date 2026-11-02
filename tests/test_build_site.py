@@ -1527,3 +1527,11 @@ def test_合約負債選股是籌碼雷達右邊的大分頁_個股頁財務健�
     assert (out / "cl" / "all.json").exists()
     stock = (out / "stock" / "5439.html").read_text("utf-8")
     assert 'data-sub="hl-cl"' in stock and 'data-src="../cl/5439.json"' in stock
+
+
+def test_合約負債選股可以匯入觀察清單_群組名稱跟著篩選():
+    page = (ROOT.parent / "src/twsix/report/templates/cl.html.j2").read_text("utf-8")
+    assert 'class="wg-imp" id="cx-imp"' in page
+    assert '"合約負債選股" + STAGE_NAMES[STAGE - 1]' in page
+    for name in ("① 含金量＋成長", "② 交叉排雷", "③ 認列點火", "④ 籌碼確認"):
+        assert name in page
