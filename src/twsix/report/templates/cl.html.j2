@@ -16,11 +16,6 @@ try { window.CX_EARLY = fetch("cl/all.json" + (window.CX_V ? "?v=" + window.CX_V
 .cx-st{appearance:none;font:inherit;text-align:left;cursor:pointer;border:1.5px solid color-mix(in srgb,var(--sc) 50%,transparent);
   background:color-mix(in srgb,var(--sc) 8%,var(--surface));border-radius:12px;padding:10px 12px;color:var(--ink);position:relative}
 .cx-st[aria-pressed=true]{background:color-mix(in srgb,var(--sc) 22%,var(--surface));border-color:var(--sc);border-width:2.5px}
-.cx-st .on{display:none;position:absolute;top:8px;right:10px;font-size:11.5px;font-weight:700;color:#fff;background:var(--sc);border-radius:999px;padding:2px 8px}
-.cx-st[aria-pressed=true] .on{display:inline-block}
-.cx-tiers.off{opacity:.4}
-.cx-unstage{font:inherit;font-size:12.5px;font-weight:600;border:1.5px solid var(--rule);background:var(--surface-2);color:var(--ink);border-radius:999px;padding:3px 10px;cursor:pointer}
-.cx-unstage[hidden]{display:none}
 .cx-st b{display:block;font-size:13px;color:var(--sc)}
 .cx-st .n{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--sc)}
 .cx-st .d{display:block;font-size:11.5px;color:var(--muted);line-height:1.4;margin-top:2px}
@@ -110,10 +105,10 @@ try { window.CX_EARLY = fetch("cl/all.json" + (window.CX_V ? "?v=" + window.CX_V
 每一段都要先過前一段。點表格任一列可以看每一項檢查的結果；點代號開個股資訊頁，點名稱另開分頁看〔籌碼雷達〕那一檔的貪婪／恐懼指標。篩選在你的瀏覽器裡進行，門檻會記住。{% endcall %}</p>
 
 <div class="cx-funnel" id="cx-funnel">
-  <button type="button" class="cx-st" data-s="1" aria-pressed="false"><span class="on">篩選中・再點取消</span><b>① 含金量＋成長</b><span class="n" id="cx-n1">—</span><span class="d">合約負債夠大、年增、季增或連續季增</span></button>
-  <button type="button" class="cx-st" data-s="2" aria-pressed="false"><span class="on">篩選中・再點取消</span><b>② 交叉排雷</b><span class="n" id="cx-n2">—</span><span class="d">備料同步、毛利守門、現金流；剔除卡關／毒藥單</span></button>
-  <button type="button" class="cx-st" data-s="3" aria-pressed="false"><span class="on">篩選中・再點取消</span><b>③ 認列點火</b><span class="n" id="cx-n3">—</span><span class="d">月營收創 6 個月新高或 3 月均＞12 月均</span></button>
-  <button type="button" class="cx-st" data-s="4" aria-pressed="false"><span class="on">篩選中・再點取消</span><b>④ 籌碼確認</b><span class="n" id="cx-n4">—</span><span class="d">投信／外資 10 日買超或大戶連兩週增加</span></button>
+  <button type="button" class="cx-st" data-s="1" aria-pressed="false"><b>① 含金量＋成長</b><span class="n" id="cx-n1">—</span><span class="d">合約負債夠大、年增、季增或連續季增</span></button>
+  <button type="button" class="cx-st" data-s="2" aria-pressed="false"><b>② 交叉排雷</b><span class="n" id="cx-n2">—</span><span class="d">備料同步、毛利守門、現金流；剔除卡關／毒藥單</span></button>
+  <button type="button" class="cx-st" data-s="3" aria-pressed="false"><b>③ 認列點火</b><span class="n" id="cx-n3">—</span><span class="d">月營收創 6 個月新高或 3 月均＞12 月均</span></button>
+  <button type="button" class="cx-st" data-s="4" aria-pressed="false"><b>④ 籌碼確認</b><span class="n" id="cx-n4">—</span><span class="d">投信／外資 10 日買超或大戶連兩週增加</span></button>
 </div>
 
 <div class="cx-card">
@@ -134,7 +129,6 @@ try { window.CX_EARLY = fetch("cl/all.json" + (window.CX_V ? "?v=" + window.CX_V
 
 <div class="cx-card">
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">篩選結果</h3><span class="cx-tier t-A" id="cx-count" style="font-size:13px">—</span>
-    <button type="button" class="cx-unstage" id="cx-unstage" hidden>✕ 取消漏斗篩選</button>
     <button type="button" class="wg-imp" id="cx-imp" data-wg-src="cl-tiers" data-wg-name="合約負債選股">⇩ 匯入觀察清單</button>
     <span class="cx-note" id="cx-asof"></span></div>
   <div class="cx-scroll"><table class="cx-tbl" id="cx-tbl"></table></div>
@@ -245,7 +239,7 @@ var CLX = (function(){
 
 (function(){
   var $ = function(id){ return document.getElementById(id); };
-  var KEY = "twsix-cl-params-v1", D = null, PARAMS = {}, STAGE = 0, TIERS = {A: true, B: true, C: true, W: false}, TCOUNT = {};
+  var KEY = "twsix-cl-params-v1", D = null, PARAMS = {}, STAGE = 0, TIERS = {A: true, B: true, C: true, W: false};
   var sortKey = "score", sortDir = -1, open = {};
   var FIELDS = [
     ["min_cl", "合約負債下限", "百萬元"], ["ratio", "含金量下限", "%"], ["yoy", "年增率下限", "%"], ["qoq", "季增率下限", "%"],
@@ -283,7 +277,6 @@ var CLX = (function(){
 
   function evalAll(){
     var sec = $("cx-sec").value, mk = $("cx-mk").value, q = ($("cx-q").value || "").trim(), out = [], n = [0, 0, 0, 0];
-    TCOUNT = {A: 0, B: 0, C: 0, W: 0};
     D.rows.forEach(function(r){
       var m = r.m;
       if (m.sec === "fin") return;
@@ -292,9 +285,8 @@ var CLX = (function(){
       var e = CLX.evaluate(m, PARAMS[m.sec] || PARAMS.general);
       for (var i = 0; i < 4; i++) if (e.s[i]) n[i]++;
       if (q && r.c.indexOf(q) !== 0 && (r.n || "").indexOf(q) < 0) return;
-      if (e.tier) TCOUNT[e.tier]++;
-      if (STAGE) { if (!e.s[STAGE - 1]) return; }          // 點了漏斗的某一段：列出通過那一段的全部（含 W），數字跟漏斗一致
-      else if (!e.tier || !TIERS[e.tier]) { if (!(q && e.tier === "")) return; }
+      if (STAGE && !e.s[STAGE - 1]) return;               // 選了漏斗某一段：只留通過那一段的
+      if (!e.tier || !TIERS[e.tier]) { if (!(q && e.tier === "")) return; }   // 再和「顯示層級」取交集
       out.push({r: r, e: e});
     });
     for (var i = 0; i < 4; i++) $("cx-n" + (i + 1)).textContent = n[i];
@@ -381,11 +373,8 @@ var CLX = (function(){
     imp.title = "把目前列出的 " + list.length + " 檔匯入觀察清單〔" + impName + "〕";
     window.TWSIXImport = window.TWSIXImport || {};
     window.TWSIXImport[impSrc] = function(){ return list.map(function(x){ return x.r.c; }); };
-    var parts = ["A", "B", "C", "W"].map(function(t){ return t + " " + (TCOUNT[t] || 0); }).join("、");
-    var hidden = ["A", "B", "C", "W"].filter(function(t){ return !TIERS[t]; });
-    $("cx-asof").textContent = STAGE
-      ? "列出通過「" + ["① 含金量＋成長", "② 交叉排雷", "③ 認列點火", "④ 籌碼確認"][STAGE - 1] + "」的全部股票（不分層級，含 W 警示）。"
-      : "各層級：" + parts + (hidden.length ? "；目前沒顯示 " + hidden.join("、") + "（在上方「顯示層級」勾選）" : "") + "。① 的檔數＝A＋B＋C＋W。";
+    var shown = ["A", "B", "C", "W"].filter(function(t){ return TIERS[t]; }).join("、") || "（沒有勾選）";
+    $("cx-asof").textContent = (STAGE ? ["① 含金量＋成長", "② 交叉排雷", "③ 認列點火", "④ 籌碼確認"][STAGE - 1] + " ∩ " : "") + "顯示層級 " + shown;
     $("cx-tbl").querySelectorAll("th").forEach(function(th){
       th.onclick = function(){ var k = th.getAttribute("data-k"); if (sortKey === k) sortDir = -sortDir; else { sortKey = k; sortDir = (k === "c" || k === "n" || k === "sec") ? 1 : -1; } render(list); };
     });
@@ -397,9 +386,6 @@ var CLX = (function(){
   function setStage(s){
     STAGE = s;
     document.querySelectorAll(".cx-st").forEach(function(x){ x.setAttribute("aria-pressed", +x.getAttribute("data-s") === STAGE ? "true" : "false"); });
-    $("cx-tiers").classList.toggle("off", !!STAGE);
-    $("cx-tiers").title = STAGE ? "漏斗篩選中，層級暫時不作用；點任一層級就會取消漏斗篩選" : "";
-    $("cx-unstage").hidden = !STAGE;
     run();
   }
   function tiersUI(){
@@ -409,7 +395,6 @@ var CLX = (function(){
     $("cx-tiers").querySelectorAll("button").forEach(function(b){
       b.onclick = function(){
         var t = b.getAttribute("data-t");
-        if (STAGE) { setStage(0); return; }      // 漏斗篩選中：第一下只取消漏斗篩選，回到依層級顯示
         TIERS[t] = !TIERS[t]; b.setAttribute("aria-pressed", TIERS[t] ? "true" : "false"); save(); run();
       };
     });
@@ -450,9 +435,7 @@ var CLX = (function(){
     document.querySelectorAll(".cx-st").forEach(function(b){
       b.onclick = function(){ var s = +b.getAttribute("data-s"); setStage(STAGE === s ? 0 : s); };
     });
-    $("cx-unstage").onclick = function(){ setStage(0); };
-    // 用「上一頁」回到這一頁時，瀏覽器會把頁面原樣還原：漏斗篩選一律取消，回到依層級顯示
-    window.addEventListener("pageshow", function(ev){ if (ev.persisted && STAGE) setStage(0); });
+
     tiersUI(); paramsUI(); backtest();
     $("cx-msg").textContent = "最新季報 " + (D.asof || "—") + "；" + D.rows.filter(function(r){ return r.m.sec !== "fin"; }).length + " 檔有合約負債（金融保險排除）。漏斗上的數字是各段通過的檔數，點一下只看那一段。";
     $("cx-pnote").textContent = "門檻改了會自動重算；「清除條件」＝不設門檻（只剩危險訊號與資料完整度）。";
