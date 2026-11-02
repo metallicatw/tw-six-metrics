@@ -14,6 +14,21 @@ def isnan(v: float | None) -> bool:
 
 
 
+def kline_ratios(o: float, h: float, lo: float, c: float, prev: float = NAN) -> tuple[float, float]:
+    """一根 K 線的（買盤比例, 賣盤比例）；完全沒動（買＋賣＝0）兩者都是 0，不算恐懼。"""
+    if isnan(o) or isnan(h) or isnan(lo) or isnan(c):
+        return NAN, NAN
+    p = o if isnan(prev) else prev
+    if c > p:
+        buy = (o - lo) + max(h - p, 0.0)
+        sell = (o - lo) + (h - c)
+    else:
+        buy = (h - o) + (c - lo)
+        sell = (h - o) + max(p - lo, 0.0)
+    total = buy + sell
+    return (buy / total, sell / total) if total > 0 else (0.0, 0.0)
+
+
 def kline_buy_ratio(o: float, h: float, lo: float, c: float, prev: float = NAN) -> float:
     if isnan(o) or isnan(h) or isnan(lo) or isnan(c):
         return NAN

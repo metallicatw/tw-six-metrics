@@ -842,3 +842,26 @@ def test_每張卡片自己的股價開關與縮放區間():
     assert '"stroke-dasharray":"4 3"' not in t3
     guide = (tpl / "radar_guide.html.j2").read_text("utf-8")
     assert "每張圖自己的縮放區間" in guide and "〔股價〕開關" in guide
+
+
+def test_恐懼是賣盤比例加總_沒成交和沒動的日子不算賣壓():
+    from twsix.chipflow.gfcross import _diffs
+    from twsix.chipflow.indicators import kline_ratios
+
+    assert kline_ratios(10, 10, 10, 10, 10) == (0.0, 0.0)          # 完全沒動：買賣都 0
+    b, s = kline_ratios(10, 11, 9.5, 10.8, 10)
+    assert abs(b + s - 1) < 1e-12 and b > s
+    bars = [(10.0 + k * 0.1, 10.6 + k * 0.1, 9.9 + k * 0.1, 10.4 + k * 0.1) for k in range(20)]
+    bars[5] = None                                                  # 沒成交
+    bars[9] = (bars[8][3],) * 4                                     # 完全沒動（開高低收＝昨收）
+    d = _diffs(bars, 20)[-1]
+    want, buys, prev = 0.0, 0.0, float("nan")
+    for x in bars:
+        if x is None:
+            continue
+        b, s = kline_ratios(*x, prev)
+        want += b - s
+        buys += b
+        prev = x[3]
+    assert abs(d - want) < 1e-9, (d, want)
+    assert abs(d - (2 * buys - 20)) > 0.5                           # 舊算法（天數−貪婪）會差一截

@@ -285,7 +285,7 @@
 {% endcall %}</span></th>
   <th class="mid gf-cell"><span class="hdtip"><button type="button" class="sortable" data-col="{{ 19 + o }}">貪婪<br>恐懼</button>{% call tip() %}
   <b>貪婪／恐懼指標的交叉</b>（每個交易日收盤後更新；點標籤另開分頁看〔籌碼雷達〕那一檔的四張圖）。
-  貪婪指標＝買盤比例 20（或 60）日加總、恐懼指標＝賣盤比例加總，兩者相加是 20（60），
+  貪婪指標＝買盤比例 20（或 60）日加總、恐懼指標＝賣盤比例加總（沒成交、完全沒動的日子不算），
   所以看的是「貪婪 − 恐懼」的正負：
   <ul class="rrguide">
     <li><b>金叉20／60</b><em>3 個交易日內</em>

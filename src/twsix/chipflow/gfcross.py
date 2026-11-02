@@ -6,7 +6,7 @@ import gzip
 import io
 from pathlib import Path
 
-from .indicators import NAN, isnan, kline_buy_ratio
+from .indicators import NAN, isnan, kline_ratios
 
 RECENT = 3
 NEAR = 0.5
@@ -41,19 +41,22 @@ def _read_days(data_dir: Path) -> tuple[list[str], dict[str, list[tuple]]]:
 
 def _diffs(row: list[tuple | None], window: int) -> list[float]:
     n = len(row)
-    ratio = [NAN] * n
+    diff = [NAN] * n
     prev = NAN
     for i, b in enumerate(row):
         if b is None or isnan(b[3]):
             continue
         o = b[0] if not isnan(b[0]) else b[3]
-        ratio[i] = kline_buy_ratio(o, b[1], b[2], b[3], prev)
+        h = b[1] if not isnan(b[1]) else b[3]
+        lo = b[2] if not isnan(b[2]) else b[3]
+        buy, sell = kline_ratios(o, h, lo, b[3], prev)
+        diff[i] = buy - sell
         prev = b[3]
     out = [NAN] * n
     for i in range(window - 1, n):
-        w = [x for x in ratio[i - window + 1:i + 1] if not isnan(x)]
+        w = [x for x in diff[i - window + 1:i + 1] if not isnan(x)]
         if len(w) >= window * MIN_FRAC:
-            out[i] = 2 * sum(w) - window
+            out[i] = sum(w)
     return out
 
 

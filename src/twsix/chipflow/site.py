@@ -19,7 +19,7 @@ LONG_DAYS = 750
 LONG_FIELDS = (
     ("cl", 100), ("fa", 100), ("z", 10000), ("yr", 1), ("va", 100), ("vs", 1000),
     ("vr", 1), ("vc", 1000), ("hp", 100), ("hc", 1), ("sh", 1), ("g20", 100),
-    ("g60", 100), ("tex", 100), ("fpw", 10), ("vpw", 10), ("wr", 1), ("xr", 1),
+    ("g60", 100), ("f20", 100), ("f60", 100), ("tex", 100), ("fpw", 10), ("vpw", 10), ("wr", 1), ("xr", 1),
     ("fa20", 100), ("ft", 100), ("hk", 1),
 )
 LONG_HEAD = "long.json"
@@ -329,7 +329,7 @@ def daily_series(engine: Engine, code: str, days: list[int], ranks: dict[int, di
     ws = engine.tiers.get(code, [])
     out: dict[str, list] = {k: [] for k in (
         "cl", "fa", "z", "yr", "va", "vs", "vr", "vc", "hp", "hc", "sh",
-        "g20", "g60", "tex", "fpw", "vpw", "wr", "xr", "fa20", "ft", "hk")}
+        "g20", "g60", "f20", "f60", "tex", "fpw", "vpw", "wr", "xr", "fa20", "ft", "hk")}
     for i in days:
         cap = engine.capital_at(code, i)
         st = engine.day_stats(i)
@@ -359,6 +359,8 @@ def daily_series(engine: Engine, code: str, days: list[int], ranks: dict[int, di
         out["sh"].append(None if w is None or isnan(w.holders) else int(w.holders))
         out["g20"].append(_r(engine.buy[code].window(i, 20), 2))
         out["g60"].append(_r(engine.buy[code].window(i, 60), 2))
+        out["f20"].append(_r(engine.sell[code].window(i, 20), 2))
+        out["f60"].append(_r(engine.sell[code].window(i, 60), 2))
         mcap = cl * cap / 10 if not isnan(cl) and cap > 0 else NAN
         float_cap = mcap * (1 - ratio) if not isnan(mcap) and not isnan(ratio) else NAN
         out["tex"].append(_r(val20 / float_cap * 100, 2) if float_cap and float_cap > 0

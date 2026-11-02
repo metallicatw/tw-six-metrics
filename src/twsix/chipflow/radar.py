@@ -16,7 +16,7 @@ from .indicators import (
     NAN,
     Prefix,
     isnan,
-    kline_buy_ratio,
+    kline_ratios,
     pct_rank,
     rank_desc,
     spearman,
@@ -114,6 +114,7 @@ class Engine:
         self.val: dict[str, Prefix] = {}
         self.bs: dict[str, Prefix] = {}
         self.buy: dict[str, Prefix] = {}
+        self.sell: dict[str, Prefix] = {}
         self.ma20: dict[str, array] = {}
         self.ma60: dict[str, array] = {}
         for c in self.codes:
@@ -147,17 +148,21 @@ class Engine:
                         fit[i] = sum(0.0 if isnan(x) else x for x in parts) / 2 * avg[i]
             self.fit[c] = Prefix(fit)
             br = array("d", [NAN]) * n
+            sr = array("d", [NAN]) * n
             prev = NAN
             for i in range(n):
                 if isnan(cl[i]):
                     continue
-                br[i] = kline_buy_ratio(op[i] if not isnan(op[i]) else cl[i],
-                                        hi[i], lo[i], cl[i], prev)
+                br[i], sr[i] = kline_ratios(op[i] if not isnan(op[i]) else cl[i],
+                                            hi[i], lo[i], cl[i], prev)
                 prev = cl[i]
             self.fi[c] = Prefix(fi)
             self.val[c] = Prefix(val)
             self.buy[c] = Prefix(br)
-            self.bs[c] = Prefix(array("d", (2 * b - 1 if not isnan(b) else NAN for b in br)))
+            # 恐懼＝賣盤比例加總：沒成交的日子不算、完全沒動的日子買賣都是 0
+            # （以前用「天數 − 貪婪」，沒成交或沒動的日子被當成整天都是賣壓）
+            self.sell[c] = Prefix(sr)
+            self.bs[c] = Prefix(array("d", (b - s if not isnan(b) else NAN for b, s in zip(br, sr, strict=True))))
             self.ma20[c] = D.sma(cl, 20)
             self.ma60[c] = D.sma(cl, 60)
         counts: dict[str, int] = {}
@@ -470,10 +475,11 @@ def build_today(engine: Engine, history: list[dict], vetoes: set[str] | None = N
             shs.append(None if isnan(tw.holders) else int(tw.holders))
         row["hps"], row["shs"] = hps, shs
         g20, g60 = engine.buy[c].window(ia, 20), engine.buy[c].window(ia, 60)
+        f20, f60 = engine.sell[c].window(ia, 20), engine.sell[c].window(ia, 60)
         row["g20"] = _r(g20, 2)
-        row["f20"] = _r(20 - g20, 2) if not isnan(g20) else None
+        row["f20"] = _r(f20, 2)
         row["g60"] = _r(g60, 2)
-        row["f60"] = _r(60 - g60, 2) if not isnan(g60) else None
+        row["f60"] = _r(f60, 2)
         d20, d20p = engine.bs[c].window(ia, 20), engine.bs[c].window(ia - 5, 20)
         row["d20"] = _r(d20, 2)
         row["t1"] = 1 if engine.trend_ok(c, ia) else 0

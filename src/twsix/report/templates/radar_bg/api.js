@@ -73,8 +73,16 @@ function t1Map(d){
       fi_turnover20: d.ft, turn_ex_holder20: d.tex, fi_ti_per_holder60: d.fpw, fi_ti_per_holder60_rank: d.wr,
       holder_cnt: d.hc, holder_ratio: d.hp, holder_stock: d.hk, total_holders: d.sh,
       val_20d_pct: d.vs, val_over_cap20: d.vc, val_per_holder20: d.vpw, val_per_holder20_rank: d.xr,
-      greed1: m(d.g20, id), greed2: m(d.g60, id), fear1: m(d.g20, function(v){ return 20 - v; }), fear2: m(d.g60, function(v){ return 60 - v; }),
-      diff20: m(d.g20, function(v){ return 2 * v - 20; }), diff60: m(d.g60, function(v){ return 2 * v - 60; })};
+      greed1: m(d.g20, id), greed2: m(d.g60, id), fear1: fearOf(d.g20, d.f20, 20), fear2: fearOf(d.g60, d.f60, 60),
+      diff20: diffOf(d.g20, d.f20, 20), diff60: diffOf(d.g60, d.f60, 60)};
+}
+// 恐懼＝賣盤比例加總（後端算好的 f20／f60）；舊資料沒有才退回「天數 − 貪婪」
+function fearOf(g, f, n){
+  return (g || []).map(function(v, i){ var x = f && f[i]; return x != null ? x : (v == null ? null : n - v); });
+}
+function diffOf(g, f, n){
+  var fe = fearOf(g, f, n);
+  return (g || []).map(function(v, i){ return v == null || fe[i] == null ? null : v - fe[i]; });
 }
 
 var CFX_LONG = {head: null, cache: {}};

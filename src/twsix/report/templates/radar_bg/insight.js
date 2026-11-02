@@ -87,10 +87,10 @@ var CFI = (function(){
     for (var k in d) n = Math.max(n, d[k].length);
     var cut = function(a){ a = a || []; return a.slice(Math.max(0, a.length - DAYS)); };
     var C = {};
-    ["cl", "hp", "hc", "sh", "z", "wr", "vs", "vc", "xr", "g20", "g60"].forEach(function(k){ C[k] = cut(d[k]); });
+    ["cl", "hp", "hc", "sh", "z", "wr", "vs", "vc", "xr", "g20", "g60", "f20", "f60"].forEach(function(k){ C[k] = cut(d[k]); });
     var dl = (dates || []).slice(Math.max(0, (dates || []).length - Math.min(n, DAYS)));
     C.dates = dl;
-    C.diff = C.g60.map(function(v){ return nn(v) ? 2 * v - 60 : null; });
+    C.diff = C.g60.map(function(v, i){ var f = C.f60[i]; return nn(v) ? v - (nn(f) ? f : 60 - v) : null; });
     return {fund: F, chip: C};
   }
 
@@ -322,12 +322,12 @@ var CFI = (function(){
   function secPower(C, out){
     var g = C.g60, j = lastIdx(g);
     if (j < 0) return null;
-    var g2 = g[j], f2 = 60 - g2, df = 2 * g2 - 60, ok = clean(C.diff), mean = avg(ok);
+    var g2 = g[j], f2 = nn(C.f60[j]) ? C.f60[j] : 60 - g2, df = g2 - f2, ok = clean(C.diff), mean = avg(ok);
     var posPct = ok.length ? ok.filter(function(v){ return v > 0; }).length / ok.length * 100 : null;
     var L = ['買盤比例合計 <b class="cfi-up">' + fx(g2, 1) + '</b>、賣盤比例合計 <b class="cfi-dn">' + fx(f2, 1) + "</b>（" + (Math.abs(df) < 1 ? "兩者接近" : df > 0 ? "買盤較多" : "賣盤較多") + "）"];
     if (mean !== null) L.push("半年內差值平均 " + chip(mean, 2) + "，" + fx(posPct, 0) + "% 的交易日為正（買盤較多）");
     var k = lastIdx(C.g20);
-    if (k >= 0) L.push("近 20 日買盤減賣盤 " + chip(2 * C.g20[k] - 20, 2));
+    if (k >= 0) L.push("近 20 日買盤減賣盤 " + chip(C.g20[k] - (nn(C.f20[k]) ? C.f20[k] : 20 - C.g20[k]), 2));
     if (Math.abs(df) >= 1) out.flags.push({t: "60 日" + (df > 0 ? "買盤" : "賣盤") + "比例較高", k: df > 0 ? "up" : "dn"});
     return {k: "買盤比例 − 賣盤比例（60 日）", sub: span(C), head: chip(df, 2), spark: spark(C.diff, {zero: true}), lines: L};
   }
