@@ -2568,7 +2568,7 @@ function reveal(bar, el){
 (function(){
   var h = document.querySelector('header.top');
   if(!h) return;
-  function set(){ document.documentElement.style.setProperty('--head-h', h.offsetHeight + 'px'); }
+  function set(){ document.documentElement.style.setProperty('--head-h', Math.floor(h.getBoundingClientRect().height) + 'px'); }
   set();
   if(window.ResizeObserver) new ResizeObserver(set).observe(h);
   else window.addEventListener('resize', set);
@@ -2589,6 +2589,15 @@ function reveal(bar, el){
   }
   function later(){ if(!busy){ busy = true; requestAnimationFrame(fit); } }
   fit();
+  // 標題列真的貼住頁首時才補上方那一截底色（沒貼住時補了會在表格上方多一條色帶）
+  var stuck = false;
+  function onScroll(){
+    var hh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head-h')) || 0;
+    var s = box.classList.contains('sticky-ok') && box.getBoundingClientRect().top < hh;
+    if(s !== stuck){ stuck = s; box.classList.toggle('is-stuck', s); }
+  }
+  window.addEventListener('scroll', onScroll, {passive: true});
+  onScroll();
   if(window.ResizeObserver){ var ro = new ResizeObserver(later); ro.observe(box); ro.observe(t); }
   window.addEventListener('resize', later);
 })();
