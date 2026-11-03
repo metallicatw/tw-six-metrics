@@ -49,7 +49,7 @@
     </span></td>
     {%- set href = yahoo_ta(r.stock_id, r.market) if r.unrated else rel ~ 'stock/' ~ r.stock_id ~ '.html' %}
   {%- set ext = ' target="_blank" rel="noopener" title="不在評等清單（六大指標不適用），開 Yahoo 技術分析"'|safe if r.unrated else '' %}
-  <td data-s="{{ r.stock_id }}"><a href="{{ href }}"{{ ext }}>{{ r.stock_id }}</a></td>
+  <td class="cd" data-s="{{ r.stock_id }}"><a href="{{ href }}"{{ ext }}>{{ r.stock_id }}</a></td>
       {%- set gf = href if r.unrated else rel ~ 'radar.html#t1-' ~ r.stock_id ~ '-gf' %}
   {%- set gfx = ext if r.unrated else ' target="_blank" rel="noopener" title="籌碼雷達：貪婪／恐懼指標（另開分頁）"'|safe %}
   <td class="nm" data-s="{{ r.name }}"><span class="nm-w"><a href="{{ gf }}"{{ gfx }}>{{ r.name }}</a>

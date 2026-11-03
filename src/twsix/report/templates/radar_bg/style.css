@@ -501,7 +501,7 @@
 #cf .bg6 footer{margin-top:20px; padding-top:14px; border-top:1px solid var(--border); font-size:11px; color:var(--muted); line-height:1.7;}
 #cf .bg6 footer p{margin:0 0 8px;}
 #cf .bg6 footer p:last-child{margin-bottom:0;}
-#cf .bg6 .table-wrap thead th{white-space:normal;padding:7px 5px;line-height:1.3;vertical-align:bottom;min-width:3.2em}#cf .bg6 .table-wrap tbody td{padding:7px 5px}#cf .bg6 .table-wrap table{font-size:12px}
+#cf .bg6 .table-wrap thead th{white-space:normal;padding:7px 5px;line-height:1.3;vertical-align:middle;min-width:3.2em}#cf .bg6 .table-wrap tbody td{padding:7px 5px}#cf .bg6 .table-wrap table{font-size:12px}
 #cf .bg7{--bg:#F2F5F4;--panel:#FFFFFF;--ink:#16211D;--muted:#5F6D67;--line:#D6DEDA;--grid:#E4EAE7; --accent:#1C5C72;--accent-soft:#DDEBF0;--warn-soft:#FBF1DC;--warn-ink:#7A5310; --s1:#2A62B8;--s2:#C8423B;--s3:#C98410;--s4:#2E8B57;--s5:#7A4FB0;--s6:#148A94;--s7:#B5487F;--s8:#5E6B2A; --sans:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]) #cf .bg7{color-scheme:dark;--bg:#0F1513;--panel:#161E1B;--ink:#E3EAE7;--muted:#95A39C;--line:#2B3632;--grid:#222C29; --accent:#6DB4CB;--accent-soft:#1B3038;--warn-soft:#33280F;--warn-ink:#EBC572; --s1:#74A3EE;--s2:#F07A72;--s3:#F0B34C;--s4:#5FC28C;--s5:#B191E3;--s6:#4EC6CE;--s7:#E683B3;--s8:#AABA66;}}
 :root[data-theme=dark] #cf .bg7{color-scheme:dark;--bg:#0F1513;--panel:#161E1B;--ink:#E3EAE7;--muted:#95A39C;--line:#2B3632;--grid:#222C29; --accent:#6DB4CB;--accent-soft:#1B3038;--warn-soft:#33280F;--warn-ink:#EBC572; --s1:#74A3EE;--s2:#F07A72;--s3:#F0B34C;--s4:#5FC28C;--s5:#B191E3;--s6:#4EC6CE;--s7:#E683B3;--s8:#AABA66;}

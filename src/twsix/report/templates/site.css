@@ -222,7 +222,7 @@ thead th .hdtip::before{content:'';flex:0 0 auto;width:var(--bulb)}
 thead th .hdtip .bulb{min-width:var(--bulb)}
 table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:560px}
 th,td{padding:5px 10px;text-align:left;border-bottom:1px solid var(--rule);
-  white-space:nowrap;vertical-align:baseline}
+  white-space:nowrap;vertical-align:middle}
 th.num,thead th.num,td.series{text-align:right}
 thead th{background:var(--surface-2);font-size:12px;font-weight:600;color:var(--ink-2);position:sticky;top:0}
 tbody tr:last-child td{border-bottom:none}
@@ -794,7 +794,7 @@ table.matrix.mt3 th.corner span{color:var(--t3)}
 .basis>.scroll{margin:12px 14px;border-radius:5px}
 .basis>.warnings{margin:0 14px 14px;padding-left:18px}
 table.basis-t{font-size:12.5px;min-width:0;table-layout:fixed}
-table.basis-t th,table.basis-t td{white-space:normal;vertical-align:top;line-height:1.6}
+table.basis-t th,table.basis-t td{white-space:normal;vertical-align:middle;line-height:1.6}
 table.basis-t th:nth-child(1),table.basis-t td:nth-child(1){width:8.5em}
 table.basis-t th:nth-child(2),table.basis-t td:nth-child(2){width:31%}
 table.basis-t td.f{font-weight:600;color:var(--ink)}
@@ -1062,7 +1062,7 @@ table.hl-t{min-width:0}
 .ai-gauges em{font-style:normal;font-size:11.5px;color:var(--muted)}
 .ai-chart{margin:8px 0 12px;min-height:230px;position:relative}
 .ai-t{width:100%;border-collapse:collapse;font-size:13px}
-.ai-t th,.ai-t td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top;white-space:nowrap}
+.ai-t th,.ai-t td{padding:6px 8px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:middle;white-space:nowrap}
 .ai-t thead th{font-size:12px;color:var(--muted);font-weight:600;background:var(--surface-2)}
 .ai-t .num{text-align:right;font-variant-numeric:tabular-nums}
 .ai-turnwhy{display:block;margin:0 0 3px;font-weight:600;line-height:1.5}
@@ -1563,3 +1563,6 @@ a.ins-btn:hover,a.ins-btn:focus-visible,tr.cfi-cur a.ins-btn{color:var(--accent)
 #t thead th button.sortable,#t thead th.num button.sortable{text-align:center}
 #t thead th .hdtip{justify-content:center}
 #t thead th .hsub{text-align:center}
+/* 評等清單／觀察清單：每一格都垂直置中；代號、名稱、市場、產業、財報基準、收盤價也和標題一樣水平置中 */
+#t td{vertical-align:middle}
+#t td.seq,#t td.cd,#t td.nm,#t td.when-cell,#t td.px{text-align:center}
