@@ -171,7 +171,8 @@ def test_兩張表都收緊了():
     assert '<table id="t" class="compact">' in _listing()
     assert "#t.compact th,#t.compact td{padding:3px 2px}" in CSS
     assert re.search(r"#t\.compact td\.ind\{[^}]*white-space:normal", CSS), "產業不會折行"
-    assert re.search(r"#t\.compact td\.nm\{[^}]*white-space:normal", CSS), "名稱不會折行"
+    # 名稱和〔概況〕圖示同一列：名稱不折行
+    assert re.search(r"#t\.compact td\.nm\{[^}]*white-space:nowrap", CSS), "名稱會折行"
     assert '<td class="nm" data-s=' in _listing()
 
 
@@ -273,3 +274,15 @@ def test_標題的收盤日期取最多檔的那一天():
              "d": v("2026-09-23")}
     assert common_price_date(views) == "2026/09/22"
     assert common_price_date({}) == ""
+
+
+def test_標題列固定_放得下不開內層捲動():
+    js = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.js").read_text("utf-8")
+    assert ".scroll.sticky-ok{overflow:visible}" in CSS
+    assert ".scroll.sticky-ok #t thead th{top:var(--head-h,0px)" in CSS
+    assert "box.classList.toggle('sticky-ok', ok)" in js
+
+
+def test_觀察清單工具列同一列():
+    w = _watch()
+    assert '<div class="wl-bar">' in w and 'id="wg-add"' in w.split('<div class="wl-bar">', 1)[1].split("</div>", 1)[0]

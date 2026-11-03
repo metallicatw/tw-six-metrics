@@ -2574,6 +2574,25 @@ function reveal(bar, el){
   else window.addEventListener('resize', set);
 })();
 
+/* 評等清單／觀察清單的標題列固定：表格放得下就讓外框不當捲動容器（.sticky-ok），標題列貼著頁首、
+   跟整頁一起捲，沒有內層捲動軸；桌機放不下（要左右捲）才改成外框限高、內層捲（.sticky-in）；手機維持原樣。 */
+(function(){
+  var t = document.querySelector('.scroll.wide > table#t');
+  if(!t) return;
+  var box = t.parentNode, busy = false;
+  function fit(){
+    busy = false;
+    var ok = t.offsetWidth <= box.clientWidth + 1;
+    var inner = !ok && window.innerWidth >= 900 && window.innerHeight >= 560;   // 手機不開內層捲動
+    if(ok !== box.classList.contains('sticky-ok')) box.classList.toggle('sticky-ok', ok);
+    if(inner !== box.classList.contains('sticky-in')) box.classList.toggle('sticky-in', inner);
+  }
+  function later(){ if(!busy){ busy = true; requestAnimationFrame(fit); } }
+  fit();
+  if(window.ResizeObserver){ var ro = new ResizeObserver(later); ro.observe(box); ro.observe(t); }
+  window.addEventListener('resize', later);
+})();
+
 (function(){
   var host = document.getElementById('wg');
   if(!host || typeof TWSIXWatch === 'undefined') return;

@@ -842,11 +842,13 @@ table.basis-t td.q{font-variant-numeric:tabular-nums}
 #t.compact{font-size:12px}
 #t.compact th button.sortable{padding:4px 1px;font-size:11px}
 #t.compact td.seq{padding-left:4px;padding-right:2px;font-size:11px}
-#t.compact td.nm{white-space:normal;min-width:4em;max-width:5.2em;line-height:1.3}
-#t.compact td.nm .nm-w{white-space:normal}
+#t.compact td.nm{white-space:nowrap;line-height:1.3}
+#t.compact td.nm .nm-w{white-space:nowrap}
+#t.compact td.nm a.ins-btn{margin-left:2px}
 #t.compact .ai-mk{font-size:10.5px;padding:0 5px}
 #t.compact td.muted{font-size:11.5px}
-#t.compact td.ind{white-space:normal;min-width:3.6em;max-width:4.6em;line-height:1.3}
+#t.compact td.ind{white-space:normal;min-width:3.6em;max-width:4.6em;line-height:1.25;font-size:11px}
+#t.compact th.ind button.sortable,#t.compact td.ind{text-align:center}
 #t.compact .basis{font-size:9.5px;gap:0;line-height:1.2}
 #t.compact .basis b{font-size:10px}
 #t.compact .pick{font-size:11px}
@@ -875,7 +877,25 @@ thead th .hsub{display:block;margin-top:1px;font-size:10px;font-weight:400;
 #t.compact thead th .hdtip .bulb{width:var(--bulb);min-width:0;height:var(--bulb);
   padding:0;font-size:10px;box-sizing:border-box;display:inline-flex;
   align-items:center;justify-content:center}
-.wrap:has(table#t.compact){max-width:1340px}
+.wrap:has(table#t.compact){max-width:1400px}
+/* 標題列固定：表格放得下（不用左右捲）時，外框不再是捲動容器，標題列就貼在頁首下面跟著整頁捲；
+   放不下（手機、窄視窗）照舊左右捲。不用另開內層的上下捲動軸。 */
+.scroll.sticky-ok{overflow:visible}
+.scroll.sticky-ok #t thead th{top:var(--head-h,0px);z-index:6;box-shadow:inset 0 -1px 0 var(--rule)}
+/* 桌機但放不下（要左右捲）：外框限高、裡面上下捲，標題列一樣固定（只有這種情況才有內層捲動軸） */
+.scroll.sticky-in{max-height:calc(100vh - var(--head-h,0px) - 12px);overflow:auto;overscroll-behavior:contain}
+.scroll.sticky-in #t thead th{top:0;z-index:6;box-shadow:inset 0 -1px 0 var(--rule)}
+/* 觀察清單：檔數、一鍵更新、加入自選股、說明放同一列 */
+.wl-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin:2px 0 12px;
+  font-size:13.5px;color:var(--ink-2)}
+.wl-bar .wl-tally{white-space:nowrap}
+.wl-bar #tally{color:var(--ink)}
+.wl-bar #tally>b:first-child{font-size:15px}
+.wl-bar .rf{margin-left:0;vertical-align:0}
+.wl-bar .wg-add{margin-left:0;flex-wrap:nowrap;gap:6px}
+.wl-bar .wg-add[hidden]{display:none}
+.wl-bar .wg-add input{width:200px}
+.wl-bar .tip{margin:0}
 .hl-head{display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;margin:4px 0 10px;
   font-size:15px}
 .hl-head b{font-weight:700}
