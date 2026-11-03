@@ -143,8 +143,8 @@ def test_標題和數值站在同一條軸上():
 
 def test_左讀的那幾欄不置中():
     rows = _macro("row(r,")
-    for cell in ('class="when-cell"', 'data-s="{{ r.name }}"',
-                 'data-s="{{ r.industry }}"'):
+    # 產業改成標題與內容一起置中（用 CSS 的 td.ind，不靠 mid），這裡只看財報基準與名稱
+    for cell in ('class="when-cell"', 'data-s="{{ r.name }}"'):
         assert cell in rows, f"找不到 {cell}，欄位是不是改名了？"
         i = rows.index(cell)
         start = rows.rindex("<td", 0, i)
@@ -188,3 +188,9 @@ def test_窄版的嵌入報告要夠高():
     block = CSS[CSS.index("@container page (max-width:760px)"):]
     block = block[:block.index("\n}")]
     assert "iframe.embed" in block, "窄版那一條不在 @container page 裡"
+
+
+def test_產業標題與內容一起置中():
+    css = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.css").read_text("utf-8")
+    assert "#t.compact th.ind button.sortable,#t.compact td.ind{text-align:center}" in css
+    assert '<th class="mid ind"><button type="button" class="sortable" data-col="5">產業</button></th>' in _macro("table_head(")

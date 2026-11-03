@@ -4,8 +4,8 @@
 {% block body %}
 <h2 class="sr">台股觀察清單</h2>
 <div class="wg" id="wg"></div>
-<p class="muted">
-  這個群組共 <span id="tally">0 檔</span>。
+<div class="wl-bar">
+  <span class="wl-tally">這個群組共 <span id="tally">0 檔</span></span>
   <span class="rf" data-refresh-batch hidden></span>
     <span class="wg-add" id="wg-add" hidden>
     <input type="search" id="wg-add-q" list="wg-add-dl" placeholder="加入自選股：代號或名稱" autocomplete="off"
@@ -27,7 +27,7 @@
   電腦、手機看到同一份；沒有登入功能時只存在這台瀏覽器。清單不會進到這個網站的原始碼裡。
   <br><br>{{ price_note() }}
   {% endcall %}
-</p>
+</div>
 <div class="filters">
     {{ quick_filters(rows) }}
 </div>
