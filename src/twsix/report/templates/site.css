@@ -1566,3 +1566,13 @@ a.ins-btn:hover,a.ins-btn:focus-visible,tr.cfi-cur a.ins-btn{color:var(--accent)
 /* 評等清單／觀察清單：每一格都垂直置中；代號、名稱、市場、產業、財報基準、收盤價也和標題一樣水平置中 */
 #t td{vertical-align:middle}
 #t td.seq,#t td.cd,#t td.nm,#t td.when-cell,#t td.px{text-align:center}
+
+/* 全站資料表（2026-11-03）：標題與內容一律水平、垂直置中，標題和底下的數字對在同一條中線上。
+   例外：右側〈基本面與籌碼概況〉面板（cfi-tbl，數字旁有長條）與財報基準說明（basis-t，整段文字）。 */
+table:not(.cfi-tbl):not(.basis-t) tr > :is(th,td){text-align:center !important;vertical-align:middle !important}
+table:not(.cfi-tbl):not(.basis-t) th button.sortable{text-align:center !important}
+table:not(.cfi-tbl):not(.basis-t) th .hdtip{justify-content:center}
+/* 名稱和〔概況〕圖示同一列（選股功能、合約負債選股、AI 選股、籌碼雷達都一樣） */
+td.nm .nm-w,.sc-tbl td.nm .nm-w{white-space:nowrap}
+/* 財報基準那兩行（財報／營收）跟同一列其他格對在中線 */
+td.when-cell .basis{vertical-align:middle}
