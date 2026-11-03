@@ -279,7 +279,7 @@ def test_標題的收盤日期取最多檔的那一天():
 def test_標題列固定_放得下不開內層捲動():
     js = (Path(__file__).resolve().parents[1] / "src/twsix/report/templates/site.js").read_text("utf-8")
     assert ".scroll.sticky-ok{overflow:visible}" in CSS
-    assert ".scroll.sticky-ok #t thead th{top:var(--head-h,0px)" in CSS
+    assert ".scroll.sticky-ok > table > thead th{top:var(--head-h,0px)" in CSS
     assert "box.classList.toggle('sticky-ok', ok)" in js
 
 

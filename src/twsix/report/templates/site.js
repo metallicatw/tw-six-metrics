@@ -2574,32 +2574,83 @@ function reveal(bar, el){
   else window.addEventListener('resize', set);
 })();
 
-/* 評等清單／觀察清單的標題列固定：表格放得下就讓外框不當捲動容器（.sticky-ok），標題列貼著頁首、
-   跟整頁一起捲，沒有內層捲動軸；桌機放不下（要左右捲）才改成外框限高、內層捲（.sticky-in）；手機維持原樣。 */
+/* 標題列固定（評等清單、觀察清單、AI 選股的各張表）：表格放得下就讓外框不當捲動容器（.sticky-ok），
+   標題列貼著頁首、跟整頁一起捲，沒有內層捲動軸；桌機放不下（要左右捲）才改成外框限高、內層捲（.sticky-in）；
+   手機維持原樣。 */
 (function(){
-  var t = document.querySelector('.scroll.wide > table#t');
-  if(!t) return;
-  var box = t.parentNode, busy = false;
-  function fit(){
-    busy = false;
-    var ok = t.offsetWidth <= box.clientWidth + 1;
-    var inner = !ok && window.innerWidth >= 900 && window.innerHeight >= 560;   // 手機不開內層捲動
-    if(ok !== box.classList.contains('sticky-ok')) box.classList.toggle('sticky-ok', ok);
-    if(inner !== box.classList.contains('sticky-in')) box.classList.toggle('sticky-in', inner);
+  function setup(t){
+    var box = t.parentNode, busy = false, stuck = false;
+    function fit(){
+      busy = false;
+      var ok = t.offsetWidth <= box.clientWidth + 1;
+      var inner = !ok && window.innerWidth >= 900 && window.innerHeight >= 560;   // 手機不開內層捲動
+      if(ok !== box.classList.contains('sticky-ok')) box.classList.toggle('sticky-ok', ok);
+      if(inner !== box.classList.contains('sticky-in')) box.classList.toggle('sticky-in', inner);
+      onScroll();
+    }
+    function later(){ if(!busy){ busy = true; requestAnimationFrame(fit); } }
+    // 標題列真的貼住頁首時才補上方那一截底色（沒貼住時補了會在表格上方多一條色帶）
+    function onScroll(){
+      var hh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head-h')) || 0;
+      var r = box.getBoundingClientRect();
+      var s = box.classList.contains('sticky-ok') && r.top < hh && r.bottom > hh;
+      if(s !== stuck){ stuck = s; box.classList.toggle('is-stuck', s); }
+    }
+    fit();
+    window.addEventListener('scroll', onScroll, {passive: true});
+    if(window.ResizeObserver){ var ro = new ResizeObserver(later); ro.observe(box); ro.observe(t); }
+    window.addEventListener('resize', later);
   }
-  function later(){ if(!busy){ busy = true; requestAnimationFrame(fit); } }
-  fit();
-  // 標題列真的貼住頁首時才補上方那一截底色（沒貼住時補了會在表格上方多一條色帶）
-  var stuck = false;
-  function onScroll(){
-    var hh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head-h')) || 0;
-    var s = box.classList.contains('sticky-ok') && box.getBoundingClientRect().top < hh;
-    if(s !== stuck){ stuck = s; box.classList.toggle('is-stuck', s); }
+  var list = document.querySelectorAll('.scroll.wide > table#t, .scroll > table.ai-t');
+  for(var i = 0; i < list.length; i++){
+    var t = list[i];
+    if(!t.tHead || t.tBodies.length !== 1 || t.tBodies[0].rows.length < 6) continue;   // 短表不用固定
+    t.parentNode.classList.add('sticky-box');
+    setup(t);
   }
-  window.addEventListener('scroll', onScroll, {passive: true});
-  onScroll();
-  if(window.ResizeObserver){ var ro = new ResizeObserver(later); ro.observe(box); ro.observe(t); }
-  window.addEventListener('resize', later);
+})();
+
+/* 文字欄靠左（標題維持置中）：名稱、時機、成長旗標、法說、理由這幾欄是一段字，靠左比較好讀。
+   依標題文字找出是第幾欄，整欄的格子加上 .tl；籌碼雷達這類用程式畫出來的表，畫好後也會補上。 */
+(function(){
+  var LEFT = {'名稱': 1, '時機': 1, '成長旗標': 1, '法說': 1, '理由': 1};
+  function mark(table){
+    var head = table.tHead ? table.tHead.rows[table.tHead.rows.length - 1] : (table.rows[0] && table.rows[0].querySelector('th') ? table.rows[0] : null);
+    if(!head) return;
+    var cols = [], x = 0;
+    for(var i = 0; i < head.cells.length; i++){
+      var c = head.cells[i], txt = (c.textContent || '').replace(/[\s▼▲💡]/g, '');
+      if(LEFT[txt]) cols.push(x);
+      x += c.colSpan || 1;
+    }
+    table.setAttribute('data-tl', cols.join(','));
+    if(!cols.length) return;
+    var rows = table.tBodies.length ? table.tBodies : [table];
+    for(var b = 0; b < rows.length; b++){
+      var rr = rows[b].rows;
+      for(var r = 0; r < rr.length; r++){
+        if(rr[r] === head) continue;
+        var cx = 0, cells = rr[r].cells;
+        for(var k = 0; k < cells.length; k++){
+          if(cells[k].tagName === 'TD' && cols.indexOf(cx) >= 0) cells[k].classList.add('tl');
+          cx += cells[k].colSpan || 1;
+        }
+      }
+    }
+  }
+  function all(){
+    var ts = document.querySelectorAll('table:not(.cfi-tbl):not(.basis-t)');
+    for(var i = 0; i < ts.length; i++) mark(ts[i]);
+  }
+  all();
+  if(window.MutationObserver){
+    var pending = false;
+    new MutationObserver(function(){
+      if(pending) return;
+      pending = true;
+      setTimeout(function(){ pending = false; all(); }, 120);
+    }).observe(document.body, {childList: true, subtree: true});
+  }
 })();
 
 (function(){

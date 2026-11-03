@@ -881,13 +881,14 @@ thead th .hsub{display:block;margin-top:1px;font-size:10px;font-weight:400;
 /* 標題列固定：表格放得下（不用左右捲）時，外框不再是捲動容器，標題列就貼在頁首下面跟著整頁捲；
    放不下（手機、窄視窗）照舊左右捲。不用另開內層的上下捲動軸。 */
 .scroll.sticky-ok{overflow:visible}
-.scroll.sticky-ok #t thead th{top:var(--head-h,0px);z-index:6;box-shadow:inset 0 -1px 0 var(--rule)}
+.scroll.sticky-box > table > thead th{position:sticky;background:var(--surface-2)}
+.scroll.sticky-ok > table > thead th{top:var(--head-h,0px);z-index:6;box-shadow:inset 0 -1px 0 var(--rule)}
 /* 縮放比例不是 100% 時頁首高度有小數，標題列和頁首之間會露出一條縫、看得到底下的列：往上補一截同色的底 */
-.scroll.sticky-ok.is-stuck #t thead th::before{content:'';position:absolute;left:0;right:0;bottom:100%;height:10px;
+.scroll.sticky-ok.is-stuck > table > thead th::before{content:'';position:absolute;left:0;right:0;bottom:100%;height:10px;
   background:var(--surface);pointer-events:none}
 /* 桌機但放不下（要左右捲）：外框限高、裡面上下捲，標題列一樣固定（只有這種情況才有內層捲動軸） */
 .scroll.sticky-in{max-height:calc(100vh - var(--head-h,0px) - 12px);overflow:auto;overscroll-behavior:contain}
-.scroll.sticky-in #t thead th{top:0;z-index:6;box-shadow:inset 0 -1px 0 var(--rule)}
+.scroll.sticky-in > table > thead th{top:0;z-index:6;box-shadow:inset 0 -1px 0 var(--rule)}
 /* 觀察清單：檔數、一鍵更新、加入自選股、說明放同一列 */
 .wl-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin:2px 0 12px;
   font-size:13.5px;color:var(--ink-2)}
@@ -1576,3 +1577,7 @@ table:not(.cfi-tbl):not(.basis-t) th .hdtip{justify-content:center}
 td.nm .nm-w,.sc-tbl td.nm .nm-w{white-space:nowrap}
 /* 財報基準那兩行（財報／營收）跟同一列其他格對在中線 */
 td.when-cell .basis{vertical-align:middle}
+/* 文字欄靠左（名稱、時機、成長旗標、法說、理由；標題仍置中）——由 site.js 依標題加上 .tl */
+table:not(.cfi-tbl):not(.basis-t) tr > td.tl{text-align:left !important}
+/* 財報基準那兩行：做成一個置中的方塊，不再坐在文字基線上，和左右格子對齊同一條中線 */
+td.when-cell .basis{display:flex;width:max-content;margin:0 auto;vertical-align:middle}
