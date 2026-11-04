@@ -23,3 +23,14 @@ def test_沒有_manifest_的資料夾不會憑空產生():
     store = Store(tempfile.mkdtemp())
     store.write("ratings", [{"a": 1}], ["a"])
     assert not (store.root / "manifest.json").exists()
+
+
+def test_有_commit_守門的排程都會把_manifest_一起_commit():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+    for f in sorted(root.glob("*.yml")):
+        text = f.read_text("utf-8")
+        if "這些檔案被改到了但沒有被 commit" in text:
+            assert "data/manifest.json" in text, f"{f.name} 沒有 git add data/manifest.json"
+    act = (root.parent / "actions" / "push-with-retry" / "action.yml").read_text("utf-8")
+    assert 'DERIVED="$DERIVED data/manifest.json"' in act

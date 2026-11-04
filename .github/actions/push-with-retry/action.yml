@@ -26,6 +26,8 @@ runs:
         DERIVED: ${{ inputs.derived }}
       run: |
         set -uo pipefail
+        # manifest.json 是寫資料表時順手更新的帳本（各排程都會改到 generated_at），一律當衍生產物
+        DERIVED="$DERIVED data/manifest.json"
         all_derived() {
           local f p hit
           while IFS= read -r f; do

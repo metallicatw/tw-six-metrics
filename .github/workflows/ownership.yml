@@ -46,6 +46,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/ownership data/sheets
+          git add -- data/manifest.json 2>/dev/null || true   # 寫資料表時列數會同步到 manifest
           if ! git diff --quiet; then
             echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："
             git diff --name-only | sed 's/^/  /'
