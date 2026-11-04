@@ -182,7 +182,7 @@ def test_the_stock_page_is_tabs_rather_than_one_long_scroll():
 
     tabs = page.count('role="tab" id="tab-')
     assert tabs == page.count('class="panel"')
-    assert tabs == 13
+    assert tabs == 14          # 〔推估三年目標價〕從〔推估今年目標價〕拉出來成一個分頁（2026-11-04）
     assert 'id="tab-talks"' in page
     assert 'id="tab-ai"' in page
     assert 'id="tab-statements"' not in page

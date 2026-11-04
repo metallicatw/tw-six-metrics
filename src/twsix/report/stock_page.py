@@ -189,6 +189,7 @@ class StockPage:
     health: dict[str, Any] = field(default_factory=dict)
     growth_q: dict[str, Any] = field(default_factory=dict)
     three_year: dict[str, Any] = field(default_factory=dict)
+    est: dict[str, Any] = field(default_factory=dict)
     history: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -630,11 +631,18 @@ def build_page(
         page.methodology = _methodology(valuation, settings)
     page.calc = _calc_seed(reader, page.stock_id, valuation)
 
-    from .health import encode_history, financial_health, growth_analysis, three_year_seed
+    from .health import (
+        encode_history,
+        estimator_seed,
+        financial_health,
+        growth_analysis,
+        three_year_seed,
+    )
 
     page.health = financial_health(data, page.fiscal_quarter)
     page.growth_q = growth_analysis(data, page.fiscal_quarter)
     page.three_year = three_year_seed(data, page.calc, page.fiscal_quarter)
+    page.est = estimator_seed(data, every_month, page.fiscal_quarter) if page.calc else {}
     if history:
         page.history = encode_history(list(history[0]), list(history[1]))
 

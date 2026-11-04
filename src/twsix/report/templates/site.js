@@ -1552,18 +1552,117 @@ window.TWSIXStarMenu = (function(){
       function(v){ return v.toFixed(2); }, 'n', 0, false);
 
     var fams = ['a', 'b', 'c'];
-    nums(el.pe.value).slice().sort(function(a, b){ return a - b; })
-      .forEach(function(pe, i){
-        html += matrix('預估目標價（元）　本益比 ' + pe,
+    var pes = nums(el.pe.value).slice().sort(function(a, b){ return a - b; });
+    pes.forEach(function(pe, i){
+        html += matrix(peTitle(pes, i),
           function(gv, mv){ return eps(gv, mv) * pe; },
           money, fams[i % 3], i % 3 + 1, true);
       });
     el.out.innerHTML = html;
+    drawChart(eps, pes, money);
+    if(user) tell();
   }
 
-  document.getElementById('c-run').addEventListener('click', run);
+  /* 目標價矩陣的標題：三個 PE 依小到大＝保守／中性／樂觀（2026-11-04 依使用者指定的字樣） */
+  var SCEN = ['保守', '中性', '樂觀'];
+  function scenName(n, i){
+    if(n === 3) return SCEN[i];
+    if(n === 1) return SCEN[1];
+    if(n === 2) return i ? SCEN[2] : SCEN[0];
+    return '';
+  }
+  function peTitle(pes, i){
+    var nm = scenName(pes.length, i);
+    var tag = nm ? '<span class="scn scn-' + ({'保守': 1, '中性': 2, '樂觀': 3})[nm] + '">' + nm + '</span>' : '';
+    return tag + '預估目標價（元，預估PE=' + pes[i] + '）';
+  }
+
+  /* 股價走勢 vs 目標價：每個 PE 三條線——悲觀（成長率、淨利率都取最低）、中性（都取中間）、樂觀（都取最高） */
+  var H = typeof pxHistory === 'function' ? pxHistory() : null;
+  var chartBox = document.getElementById('calc-chart');
+  var lastChart = null;
+  function scenVals(list){
+    var a = list.slice().sort(function(x, y){ return x - y; });
+    if(!a.length) return null;
+    return [a[0], a[Math.floor((a.length - 1) / 2)], a[a.length - 1]];
+  }
+  function drawChart(eps, pes, money){
+    if(!chartBox) return;
+    if(!H || !H.c || H.c.length < 2){ chartBox.innerHTML = ''; return; }
+    var g = scenVals(nums(el.g.value)), m = scenVals(nums(el.m.value));
+    if(!g || !m || !pes.length){ chartBox.innerHTML = ''; return; }
+    lastChart = {eps: eps, pes: pes, g: g, m: m, money: money};
+    if(chartBox.offsetWidth === 0){ chartBox._dirty = true; return; }
+    chartBox._dirty = false;
+    // 九條線依目標價高低上色：低的綠、高的紅（台股慣例的漲紅跌綠，也和矩陣的色階方向一致）
+    var RAMP = ['#2f9e44', '#37b24d', '#74b816', '#94d82d', '#fab005', '#f59f00', '#f76707', '#e8590c', '#e03131'];
+    var lines = [];
+    pes.forEach(function(pe){
+      [['悲觀', 0], ['中性', 1], ['樂觀', 2]].forEach(function(x){
+        var v = eps(g[x[1]], m[x[1]]) * pe;
+        lines.push({value: v, label: 'PE=' + pe + ' ' + x[0] + ' ' + money(v)});
+      });
+    });
+    var order = lines.map(function(l, i){ return i; }).sort(function(a, b){ return lines[a].value - lines[b].value; });
+    order.forEach(function(idx, rank){
+      lines[idx].color = RAMP[Math.round(rank * (RAMP.length - 1) / Math.max(1, order.length - 1))];
+    });
+    chartBox.innerHTML = '<h5 class="mtitle mt0">股價走勢 vs 目標價</h5><div class="pxc" id="calc-pxc"></div>';
+    TWSIXChart(document.getElementById('calc-pxc'), {x: H.d, range: [Math.max(0, H.c.length - 500), H.c.length - 1],
+      title: (box.getAttribute('data-code') || '') + ' 近兩年股價走勢 vs 目標價',
+      series: [{name: '收盤價', color: 'ink', values: H.c, width: 1.4}], hlines: lines});
+  }
+  if(chartBox && typeof ResizeObserver !== 'undefined'){
+    new ResizeObserver(function(){
+      if(chartBox._dirty && chartBox.offsetWidth > 0 && lastChart) drawChart(lastChart.eps, lastChart.pes, lastChart.money);
+    }).observe(chartBox);
+  }
+
+  /* 使用者改了假設（不是開頁面時的預設值）：告訴〔推估三年目標價〕把「今年」那一格跟著換 */
+  var user = false;
+  function mid(list){ var v = scenVals(list); return v ? v[1] : null; }
+  function tell(){
+    try{
+      document.dispatchEvent(new CustomEvent('twsix:calc', {detail: {
+        rev: parseFloat(el.rev.value), sh: parseFloat(el.sh.value),
+        g: mid(nums(el.g.value)), m: mid(nums(el.m.value))}}));
+    }catch(e){}
+  }
+  function userRun(){ user = true; run(); user = false; }
+
+  /* 〔營收成長率推估〕〔淨利率推估〕把算出來的數字帶進來當中性值 */
+  var from = document.getElementById('calc-from'), brought = {};
+  function setMid(input, v){
+    var a = nums(input.value);
+    var r = Math.round(v * 10) / 10;
+    if(a.length >= 3) a[1] = r;
+    else if(a.length === 2) a = [a[0], r, a[1]];
+    else a = [r];
+    input.value = a.join(', ');
+  }
+  window.TWSIXCalc = {
+    setNeutral: function(kind, v, source){
+      if(v === null || v === undefined || !isFinite(v)) return;
+      setMid(kind === 'g' ? el.g : el.m, v);
+      brought[kind] = (kind === 'g' ? '中性營收成長率 ' : '中性淨利率 ') + (Math.round(v * 10) / 10) + '%（' + source + '）';
+      if(from){
+        from.hidden = false;
+        from.innerHTML = '已帶入：<b>' + [brought.g, brought.m].filter(Boolean).join('；') +
+          '</b>。要回到原本的預設值，按〔↺ 還原預設值〕。';
+      }
+      userRun();
+      var tabBtn = document.querySelector('.est-tabs [data-sub=est-calc]');
+      if(tabBtn) tabBtn.click();
+      var sec = document.getElementById('est-calc');
+      if(sec && sec.scrollIntoView) sec.scrollIntoView({block: 'start'});
+    }
+  };
+
+  document.getElementById('c-run').addEventListener('click', userRun);
   document.getElementById('c-reset').addEventListener('click', function(){
-    fill(defaults()); run();
+    fill(defaults()); brought = {};
+    if(from){ from.hidden = true; from.innerHTML = ''; }
+    userRun();
   });
 
   if(costIn){
@@ -1576,13 +1675,267 @@ window.TWSIXStarMenu = (function(){
     });
   }
   [el.rev, el.sh, el.g, el.m, el.pe].forEach(function(i){
-    i.addEventListener('change', run);
-    i.addEventListener('keydown', function(e){ if(e.key === 'Enter') run(); });
+    i.addEventListener('change', userRun);
+    i.addEventListener('keydown', function(e){ if(e.key === 'Enter') userRun(); });
   });
 
   fill(defaults());
   basis();
   run();
+})();
+
+/* 〈推估今年目標價〉→〔營收成長率推估〕〔淨利率推估〕（2026-11-04）
+   兩頁共用同一份預估：營收那頁填的預估月營收，淨利率那頁算季營收（年增率、加權權重）時也用得到。
+   推出來的「今年總營收年增率」「今年稅後淨利率（營收加權）」用 TWSIXCalc.setNeutral 帶進〔自訂假設試算〕。 */
+(function(){
+  var er = document.getElementById('er');
+  if(!er) return;
+  var S = {};
+  try{ S = JSON.parse(er.getAttribute('data-seed') || '{}'); }catch(e){ return; }
+  if(!S.year || !S.cur) return;
+  var Y = S.year, cur = S.cur, ly = S.ly || [];
+  var pred = {};            // 月份（1~12）→ 預估營收（百萬）
+  var nmPred = {};          // 季別（1~4）→ 預估淨利率（%）
+  var $ = function(id){ return document.getElementById(id); };
+
+  function n0(v){ return Math.round(v).toLocaleString(); }
+  function pctCell(v, est){
+    if(v === null || v === undefined || !isFinite(v)) return '<td class="num muted">—</td>';
+    if(Math.abs(v) < 0.005) v = 0;        // 四捨五入後是 0 就不要出現「-0.00%」
+    var cls = v > 0 ? 'up' : (v < 0 ? 'down' : '');
+    return '<td class="num ' + cls + '">' + v.toFixed(2) + '%' + (est ? '<small class="est-tag">估</small>' : '') + '</td>';
+  }
+  function published(m){ var c = cur[m - 1]; return !!(c && c.rev !== null && c.rev !== undefined); }
+  function merged(m){ var c = cur[m - 1]; return !!(c && c.merged_into); }
+  function lyRev(m){ var c = ly[m - 1]; return c && c.rev !== null && c.rev !== undefined && !c.merged_into ? c.rev : null; }
+  function lyCum(m){
+    var c = ly[m - 1];
+    if(c && c.cum !== null && c.cum !== undefined) return c.cum;
+    var s = 0;
+    for(var k = 1; k <= m; k++){ var x = ly[k - 1]; if(!x || x.rev === null || x.rev === undefined) return null; s += x.rev; }
+    return s;
+  }
+  function revOf(m){                     // 這個月的營收：公告 → 預估 → 沒有
+    if(published(m)) return cur[m - 1].rev;
+    if(pred[m] !== undefined) return pred[m];
+    return null;
+  }
+  function revOrLy(m){ var v = revOf(m); return v !== null ? v : lyRev(m); }
+  function lyTotal(){
+    if(S.ly_total) return S.ly_total;
+    return lyCum(12);
+  }
+
+  /* ── 營收成長率推估 ── */
+  var tRev = $('er-t'), sumRev = $('er-sum'), lastG = null;
+  function renderRev(){
+    var h = '<thead><tr><th>月份</th><th class="num">當月營收(百萬)</th><th class="num">月增率</th><th class="num">年增率</th>' +
+            '<th class="num">累計營收(百萬)</th><th class="num">累計年增率</th></tr></thead><tbody>';
+    var cum = {};                         // 1~12 月的累計（公告或推算）
+    for(var m = 1; m <= 12; m++){
+      if(published(m) && !merged(m) && cur[m - 1].cum !== null && cur[m - 1].cum !== undefined) cum[m] = cur[m - 1].cum;
+      else{
+        var r = merged(m) ? 0 : revOf(m), prev = m === 1 ? 0 : cum[m - 1];
+        cum[m] = (r === null || prev === undefined || prev === null) ? null : prev + r;
+      }
+    }
+    for(m = 12; m >= 1; m--){
+      var lab = Y + '/' + (m < 10 ? '0' : '') + m;
+      if(merged(m)){
+        h += '<tr class="muted"><td>' + lab + '</td><td class="num" colspan="5">與 ' + (cur[m - 1].merged_into < 10 ? '0' : '') +
+             cur[m - 1].merged_into + ' 月合併公告</td></tr>';
+        continue;
+      }
+      if(published(m)){
+        var c = cur[m - 1];
+        h += '<tr><td>' + lab + (c.merged ? '<small class="muted">（' + c.merged + '）</small>' : '') + '</td><td class="num">' + n0(c.rev) + '</td>' +
+             pctCell(c.mom) + pctCell(c.yoy) + '<td class="num">' + (c.cum === null || c.cum === undefined ? '—' : n0(c.cum)) + '</td>' + pctCell(c.cumyoy) + '</tr>';
+        continue;
+      }
+      var v = pred[m], prevRev = m === 1 ? lyRev(12) : revOf(m - 1), base = lyRev(m), lc = lyCum(m);
+      var has = v !== undefined;
+      h += '<tr class="pred"><td>' + lab + ' <small class="muted">(預估)</small></td>' +
+           '<td class="num"><span class="est-in"><input type="number" step="any" min="0" data-m="' + m + '" value="' +
+           (has ? Math.round(v * 100) / 100 : '') + '" placeholder="百萬"></span></td>' +
+           pctCell(has && prevRev ? (v / prevRev - 1) * 100 : null) +
+           pctCell(has && base ? (v / base - 1) * 100 : null) +
+           '<td class="num">' + (cum[m] === null || cum[m] === undefined ? '<span class="muted">—</span>' : n0(cum[m])) + '</td>' +
+           pctCell(cum[m] !== null && cum[m] !== undefined && lc ? (cum[m] / lc - 1) * 100 : null) + '</tr>';
+    }
+    for(m = 12; m >= 10; m--){
+      var x = ly[m - 1];
+      if(!x || x.rev === null || x.rev === undefined) continue;
+      h += '<tr class="ly"><td>' + (Y - 1) + '/' + (m < 10 ? '0' : '') + m + '</td><td class="num">' + n0(x.rev) + '</td>' +
+           pctCell(x.mom) + pctCell(x.yoy) + '<td class="num">' + (x.cum === null || x.cum === undefined ? '—' : n0(x.cum)) + '</td>' + pctCell(x.cumyoy) + '</tr>';
+    }
+    tRev.innerHTML = h + '</tbody>';
+    [].forEach.call(tRev.querySelectorAll('input[data-m]'), function(inp){
+      inp.addEventListener('change', function(){
+        var m = +inp.getAttribute('data-m'), v = parseFloat(inp.value);
+        if(isNaN(v) || v < 0) delete pred[m]; else pred[m] = v;
+        lastG = null; renderAll();
+      });
+    });
+    renderRevSum(cum);
+  }
+  function renderRevSum(cum){
+    var pub = 0, est = 0, miss = 0;
+    for(var m = 1; m <= 12; m++){
+      if(merged(m)) continue;
+      if(published(m)) pub++; else if(pred[m] !== undefined) est++; else miss++;
+    }
+    // 已公告月份含合併的一、二月
+    var pubMonths = 0; for(m = 1; m <= 12; m++) if(published(m) || merged(m)) pubMonths++;
+    var total = cum[12], lt = lyTotal();
+    var h = '<span>' + (Y - 1) + ' 全年營收 <b>' + (lt ? n0(lt) : '—') + '</b> 百萬</span>' +
+      '<span>' + Y + ' 已公佈 ' + pubMonths + ' 個月 ＋ 預估 ' + est + ' 個月 ＝ <b>' +
+      (total === null || total === undefined ? '—' : n0(total)) + '</b> 百萬' + (miss ? '（尚有 ' + miss + ' 個月未填）' : '') + '</span>' +
+      '<button type="button" class="btn-grab" id="er-calc"' + (miss || !lt ? ' disabled title="12 個月都要有數字（公告或預估）才算得出全年年增率"' : '') + '>回推今年總營收年增率</button>';
+    if(lastG !== null){
+      h += '<span>' + Y + ' 總營收年增率 <b class="' + (lastG >= 0 ? 'up' : 'down') + '">' + lastG.toFixed(1) + '%</b></span>' +
+           '<button type="button" class="btn-grab" id="er-use">帶入目標價推估（中性成長率）</button>';
+    }
+    sumRev.innerHTML = h;
+    var b = $('er-calc');
+    if(b) b.addEventListener('click', function(){
+      if(total === null || !lt) return;
+      lastG = (total / lt - 1) * 100; renderRevSum(cum);
+    });
+    var u = $('er-use');
+    if(u) u.addEventListener('click', function(){
+      if(window.TWSIXCalc) window.TWSIXCalc.setNeutral('g', lastG, '營收成長率推估');
+    });
+  }
+  $('er-fill').addEventListener('click', function(){
+    var r = parseFloat($('er-rate').value);
+    if(isNaN(r)) return;
+    for(var m = 1; m <= 12; m++){
+      if(published(m) || merged(m)) continue;
+      var b = lyRev(m);
+      if(b !== null) pred[m] = Math.round(b * (1 + r / 100) * 100) / 100;
+    }
+    lastG = null; renderAll();
+  });
+  $('er-reset').addEventListener('click', function(){
+    pred = {}; lastG = null; $('er-rate').value = '0'; renderAll();
+  });
+
+  /* ── 淨利率推估 ── */
+  var tNm = $('en-t'), sumNm = $('en-sum'), lastM = null, Q = S.quarters || [];
+  function qRev(y, q){                    // 季營收（百萬）：y＝Y 用公告／預估／去年同月；y＝Y−1 用公告
+    var s = 0, est = false;
+    for(var k = (q - 1) * 3 + 1; k <= q * 3; k++){
+      var v;
+      if(y === Y){
+        if(merged(k)) v = 0;
+        else if(published(k)) v = cur[k - 1].rev;
+        else if(pred[k] !== undefined){ v = pred[k]; est = true; }
+        else return null;
+      } else v = lyRev(k) !== null ? lyRev(k) : (ly[k - 1] && ly[k - 1].merged_into ? 0 : null);
+      if(v === null) return null;
+      s += v;
+    }
+    return {v: s, est: est};
+  }
+  function qWeight(q){                    // 加權用的季營收：沒填的月份以去年同月代入
+    var s = 0;
+    for(var k = (q - 1) * 3 + 1; k <= q * 3; k++){
+      var v = merged(k) ? 0 : revOrLy(k);
+      if(v === null) return null;
+      s += v;
+    }
+    return s;
+  }
+  function lyNm(q){
+    for(var i = 0; i < Q.length; i++) if(Q[i].year === Y - 1 && Q[i].n === q) return Q[i].nm;
+    return null;
+  }
+  function renderNm(){
+    var h = '<thead><tr><th>季度</th>' + Q.map(function(x){
+      return '<th class="num">' + x.q + (x.published ? '' : '<br><small class="muted">(預估)</small>') + '</th>';
+    }).join('') + '</tr></thead><tbody>';
+    h += '<tr><th scope="row">營收年增率</th>' + Q.map(function(x){
+      if(x.published) return pctCell(x.rev_yoy);
+      if(x.year !== Y) return pctCell(null);
+      var a = qRev(Y, x.n), b = qRev(Y - 1, x.n);
+      return pctCell(a && b && b.v ? (a.v / b.v - 1) * 100 : null, a && a.est);
+    }).join('') + '</tr>';
+    h += '<tr><th scope="row">營業利益率</th>' + Q.map(function(x){ return pctCell(x.op); }).join('') + '</tr>';
+    h += '<tr><th scope="row">淨利率(歸母)</th>' + Q.map(function(x){
+      if(x.published) return pctCell(x.nm);
+      if(x.year !== Y) return pctCell(null);
+      var v = nmPred[x.n];
+      return '<td class="num"><span class="est-in"><input type="number" step="any" data-q="' + x.n + '" value="' +
+             (v === undefined ? '' : v) + '" placeholder="%"></span></td>';
+    }).join('') + '</tr>';
+    h += '<tr><th scope="row">EPS (元)</th>' + Q.map(function(x){
+      var v = x.eps;
+      if(v === null || v === undefined) return '<td class="num muted">—</td>';
+      return '<td class="num ' + (v > 0 ? 'up' : (v < 0 ? 'down' : '')) + '">' + v.toFixed(2) + '</td>';
+    }).join('') + '</tr></tbody>';
+    tNm.innerHTML = h;
+    [].forEach.call(tNm.querySelectorAll('input[data-q]'), function(inp){
+      inp.addEventListener('change', function(){
+        var q = +inp.getAttribute('data-q'), v = parseFloat(inp.value);
+        if(isNaN(v)) delete nmPred[q]; else nmPred[q] = v;
+        lastM = null; renderNmSum();
+      });
+    });
+    renderNmSum();
+  }
+  function curQ(q){ for(var i = 0; i < Q.length; i++) if(Q[i].year === Y && Q[i].n === q) return Q[i]; return null; }
+  function nmOf(q){
+    var x = curQ(q);
+    if(x && x.published) return {v: x.nm, est: false};
+    if(nmPred[q] !== undefined) return {v: nmPred[q], est: true};
+    return null;
+  }
+  function renderNmSum(){
+    var parts = [], miss = 0;
+    for(var q = 1; q <= 4; q++){
+      var a = nmOf(q);
+      if(!a || a.v === null || a.v === undefined){ parts.push('Q' + q + ' —'); miss++; }
+      else parts.push('Q' + q + ' ' + a.v.toFixed(1) + '%' + (a.est ? '(估)' : ''));
+    }
+    var h = '<span>' + Y + ' 各季淨利率(歸母)：' + parts.join('、') + (miss ? '（尚有 ' + miss + ' 季未填）' : '') + '</span>' +
+      '<button type="button" class="btn-grab" id="en-calc"' + (miss ? ' disabled title="四季都要有淨利率（公布或預估）才回推得出來"' : '') + '>回推今年稅後淨利率</button>';
+    if(lastM !== null){
+      h += '<span>' + Y + ' 稅後淨利率 <b class="' + (lastM >= 0 ? 'up' : 'down') + '">' + lastM.toFixed(1) + '%</b><small class="muted">（營收加權）</small></span>' +
+           '<button type="button" class="btn-grab" id="en-use">帶入目標價推估（中性淨利率）</button>';
+    }
+    sumNm.innerHTML = h;
+    var b = $('en-calc');
+    if(b) b.addEventListener('click', function(){
+      var num = 0, den = 0;
+      for(var q = 1; q <= 4; q++){
+        var a = nmOf(q), w = qWeight(q);
+        if(!a || w === null){ w = 1; }
+        num += a.v * w; den += w;
+      }
+      lastM = den ? num / den : null; renderNmSum();
+    });
+    var u = $('en-use');
+    if(u) u.addEventListener('click', function(){
+      if(window.TWSIXCalc) window.TWSIXCalc.setNeutral('m', lastM, '淨利率推估');
+    });
+  }
+  $('en-fill').addEventListener('click', function(){
+    var d = parseFloat($('en-delta').value);
+    if(isNaN(d)) return;
+    for(var q = 1; q <= 4; q++){
+      var x = curQ(q);
+      if(x && x.published) continue;
+      var b = lyNm(q);
+      if(b !== null && b !== undefined) nmPred[q] = Math.round((b + d) * 100) / 100;
+    }
+    lastM = null; renderNm();
+  });
+  $('en-reset').addEventListener('click', function(){
+    nmPred = {}; lastM = null; $('en-delta').value = '0'; renderNm();
+  });
+
+  function renderAll(){ renderRev(); renderNm(); }
+  renderAll();
 })();
 
 (function(){
@@ -2219,7 +2572,33 @@ function y3Eps(rev, sh, g, m){
     });
   }
   $('y3-run').addEventListener('click', run);
-  $('y3-reset').addEventListener('click', function(){ defaults(); run(); });
+  var from = $('y3-from');
+  $('y3-reset').addEventListener('click', function(){
+    defaults(); run();
+    if(from){ from.hidden = true; from.innerHTML = ''; }
+  });
+  /* 〔推估今年目標價〕的〔自訂假設試算〕改了假設：今年的成長率、淨利率換成那邊的中性值，
+     年營收、股數也照那邊；明年、後年不動（那是你在這裡自己的假設）。 */
+  document.addEventListener('twsix:calc', function(e){
+    var d = e.detail || {};
+    function put(input, v){
+      if(v === null || v === undefined || !isFinite(v)) return false;
+      var a = three(nums(input.value), v);
+      a[0] = Math.round(v * 10) / 10;
+      input.value = a.join(', ');
+      return true;
+    }
+    if(isFinite(d.rev) && d.rev > 0) el.rev.value = Math.round(d.rev);
+    if(isFinite(d.sh) && d.sh > 0) el.sh.value = d.sh;
+    var ok = put(el.g, d.g); ok = put(el.m, d.m) || ok;
+    if(!ok) return;
+    if(from){
+      from.hidden = false;
+      from.innerHTML = '今年已跟著〔推估今年目標價〕的〔自訂假設試算〕連動：營收成長率 <b>' + (Math.round(d.g * 10) / 10) +
+        '%</b>、淨利率 <b>' + (Math.round(d.m * 10) / 10) + '%</b>（中性值）。要回到原本的預設值，按〔↺ 還原預設值〕。';
+    }
+    if(box._drawn && box.offsetWidth > 0) run(); else box._drawn = false;
+  });
   [el.rev, el.sh, el.g, el.m, el.pe].forEach(function(i){
     i.addEventListener('keydown', function(e){ if(e.key === 'Enter') run(); });
     i.addEventListener('change', run);
@@ -2227,7 +2606,7 @@ function y3Eps(rev, sh, g, m){
   defaults();
 
   function first(){ if(box.offsetWidth === 0 || box._drawn) return; box._drawn = true; run(); }
-  var tab = document.getElementById('tab-eps');
+  var tab = document.getElementById('tab-y3') || document.getElementById('tab-eps');
   if(tab) tab.addEventListener('click', function(){ setTimeout(first, 0); });
   if(typeof ResizeObserver !== 'undefined'){
     new ResizeObserver(function(){ first(); }).observe(box);

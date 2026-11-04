@@ -27,8 +27,9 @@
 
 <div class="tabs" role="tablist" aria-label="頁面區塊">
   <button type="button" role="tab" id="tab-summary" class="tab" aria-controls="panel-summary" aria-selected="true">評價簡表</button>
-  <button type="button" role="tab" id="tab-six" class="tab" aria-controls="panel-six" aria-selected="false" tabindex="-1">六大財務指標評等</button>
-  <button type="button" role="tab" id="tab-eps" class="tab" aria-controls="panel-eps" aria-selected="false" tabindex="-1">EPS預估與估價</button>
+  <button type="button" role="tab" id="tab-six" class="tab" aria-controls="panel-six" aria-selected="false" tabindex="-1" title="六大財務指標評等">六大指標</button>
+  <button type="button" role="tab" id="tab-eps" class="tab" aria-controls="panel-eps" aria-selected="false" tabindex="-1">推估今年目標價</button>
+  {% if p.three_year %}<button type="button" role="tab" id="tab-y3" class="tab" aria-controls="panel-y3" aria-selected="false" tabindex="-1">推估三年目標價</button>{% endif %}
     <button type="button" role="tab" id="tab-health" class="tab" aria-controls="panel-health" aria-selected="false" tabindex="-1">財務健診</button>
   <button type="button" role="tab" id="tab-pxhealth" class="tab" aria-controls="panel-pxhealth" aria-selected="false" tabindex="-1">股價健診</button>
   <button type="button" role="tab" id="tab-yield" class="tab" aria-controls="panel-yield" aria-selected="false" tabindex="-1">殖利率估價</button>
@@ -233,7 +234,17 @@
 </section>
 
 <section class="panel" id="panel-eps" role="tabpanel" aria-labelledby="tab-eps" hidden>
-<h3 id="eps">EPS預估與估價</h3>
+<h3 id="eps">推估今年目標價</h3>
+<div class="subtabs est-tabs" role="tablist" aria-label="推估今年目標價">
+  <button type="button" role="tab" class="subtab" data-sub="est-rule" aria-selected="true">依規則自動估算</button>
+  {% if p.calc and p.calc.revenue and p.calc.shares %}
+  <button type="button" role="tab" class="subtab" data-sub="est-calc" aria-selected="false">自訂假設試算</button>
+  {% if p.est %}
+  <button type="button" role="tab" class="subtab" data-sub="est-rev" aria-selected="false">營收成長率推估</button>
+  <button type="button" role="tab" class="subtab" data-sub="est-nm" aria-selected="false">淨利率推估</button>
+  {% endif %}{% endif %}
+</div>
+<div class="subpanel" id="est-rule" role="tabpanel">
 
 {% if p.gaps.forecast or p.gaps.pe %}
 <p class="stale">{{ p.gaps.forecast or p.gaps.pe }}——此區塊無法計算。</p>
@@ -288,7 +299,7 @@
   </ol>
   <p class="note">
     以上為本次建置採用的參數（{{ mo.growth_method_label }} ／ {{ mo.margin_method_label }} ／
-    {{ mo.pe_basis_label }}），可在 config/settings.toml 調整；下方「目標價試算盤」可暫時
+    {{ mo.pe_basis_label }}），可在 config/settings.toml 調整；〔自訂假設試算〕可暫時
     覆寫這些假設重新試算，不影響此處記錄的引擎結果。
   </p>
 </details>
@@ -413,7 +424,24 @@
 {% if p.figures.pe_band %}{{ p.figures.pe_band|safe }}{% endif %}
 </section>
 
+<div class="criteria">
+  <h4>報酬風險比判斷準則<span class="muted">　總大EPS、PER 動態調整推估法</span></h4>
+  <ol>
+    {% for range_text, label, why in reward_risk_rules %}
+    <li class="{{ 'hit' if p.pe and p.pe.verdict == label else '' }}">
+      <b>{{ range_text }}</b>　{{ why }}
+      {%- if p.pe and p.pe.verdict == label %}　<span class="tag">本檔 {{ p.pe.reward_risk }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  <ul class="warnings">
+    {% for note in reward_risk_notes %}<li>{{ note }}</li>{% endfor %}
+  </ul>
+</div>
+</div>
+
 {% if p.calc and p.calc.revenue and p.calc.shares %}
+<div class="subpanel" id="est-calc" role="tabpanel" hidden>
 <section class="way way2">
 <h4 class="way-h"><span class="n">估值方式二</span>自訂假設試算
   <span class="sub">同一條公式，參數由你決定；改動不影響上面記錄的引擎結果</span></h4>
@@ -465,19 +493,29 @@
     <button type="button" class="linkish" id="c-cost-reset" hidden>回到現價</button>
     <span class="muted" id="c-cost-note"></span>
   </div>
-  <button type="button" class="btn-grab" id="c-run">重新計算</button>
-  <button type="button" class="linkish" id="c-reset">還原預設值</button>
+  <p class="est-from" id="calc-from" hidden></p>
+  <div class="calc-btns">
+    <button type="button" class="btn-grab" id="c-run">📊 計算〔預估EPS〕與〔預估目標價〕</button>
+    <button type="button" class="btn-sub" id="c-reset">↺ 還原預設值</button>
+  </div>
 
   <div id="calc-out"></div>
+  <div id="calc-chart"></div>
 </section>
 </section>
+</div>
+{% include "est_pages.html.j2" %}
 {% endif %}
 
+</section>
+
 {% if p.three_year %}
+<section class="panel" id="panel-y3" role="tabpanel" aria-labelledby="tab-y3" hidden>
+<h3 id="y3h">推估三年目標價</h3>
 <section class="way way3" id="y3" data-code="{{ p.stock_id }}" data-seed='{{ p.three_year|tojson }}'
          data-price="{{ p.market_price or '' }}" data-price-date="{{ p.price_date }}">
-<h4 class="way-h"><span class="n">推估三年目標價</span>逐年累乘三年
-  <span class="sub">年營收基準採 {{ p.three_year.base_year }} 全年；成長率、淨利率預設為最近一季（{{ p.three_year.basis.quarter }}）的數字，三年相同——請務必自行調整</span></h4>
+<h4 class="way-h"><span class="n">逐年累乘三年</span>今年、明年、後年
+  <span class="sub">年營收基準採 {{ p.three_year.base_year }} 全年；成長率、淨利率預設為最近一季（{{ p.three_year.basis.quarter }}）的數字，三年相同——請務必自行調整。在〔推估今年目標價〕的〔自訂假設試算〕改了中性成長率或淨利率，「今年」那一格會跟著連動</span></h4>
     <div class="calc-inputs">
     <label><span class="lab"><span class="t">年營收（百萬元）</span></span>
       <input type="number" id="y3-rev" step="any"></label>
@@ -493,30 +531,17 @@
       <span class="hint">一個 PE 一列</span></span>
       <input type="text" id="y3-pe" inputmode="decimal"></label>
   </div>
-  <button type="button" class="btn-grab" id="y3-run">📊 計算三年〔預估EPS〕與〔預估目標價〕</button>
-  <button type="button" class="linkish" id="y3-reset">還原預設值</button>
+  <p class="est-from" id="y3-from" hidden></p>
+  <div class="calc-btns">
+    <button type="button" class="btn-grab" id="y3-run">📊 計算三年〔預估EPS〕與〔預估目標價〕</button>
+    <button type="button" class="btn-sub" id="y3-reset">↺ 還原預設值</button>
+  </div>
   <p class="calc-formula">逐年累乘：今年營收 ＝ 年營收 ×（1＋今年成長率），明年 ＝ 今年 ×（1＋明年成長率），後年同理；
     該年 EPS ＝ 該年營收 × 該年淨利率 ÷ 股數　│　目標價 ＝ 該年 EPS × 預估本益比</p>
   <div id="y3-out"></div>
 </section>
-{% endif %}
-
-<div class="criteria">
-  <h4>報酬風險比判斷準則<span class="muted">　總大EPS、PER 動態調整推估法</span></h4>
-  <ol>
-    {% for range_text, label, why in reward_risk_rules %}
-    <li class="{{ 'hit' if p.pe and p.pe.verdict == label else '' }}">
-      <b>{{ range_text }}</b>　{{ why }}
-      {%- if p.pe and p.pe.verdict == label %}　<span class="tag">本檔 {{ p.pe.reward_risk }}</span>{% endif %}
-    </li>
-    {% endfor %}
-  </ol>
-  <ul class="warnings">
-    {% for note in reward_risk_notes %}<li>{{ note }}</li>{% endfor %}
-  </ul>
-</div>
-
 </section>
+{% endif %}
 
 <section class="panel" id="panel-health" role="tabpanel" aria-labelledby="tab-health" hidden>
 <div class="hl">

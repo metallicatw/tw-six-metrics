@@ -1,0 +1,48 @@
+{#- 〈推估今年目標價〉的〔營收成長率推估〕〔淨利率推估〕兩個子頁。資料在 p.est（report/health.py estimator_seed），
+    計算在 site.js（TWSIXEst）。兩頁算出來的「今年總營收年增率」「今年稅後淨利率（營收加權）」可以帶進
+    〔自訂假設試算〕當中性值。 -#}
+{% if p.est %}
+{% set Y = p.est.year %}
+<div class="subpanel" id="est-rev" role="tabpanel" hidden>
+<section class="est est-rev" id="er" data-seed='{{ p.est|tojson }}' data-base="{{ p.calc.revenue }}">
+  <h4 class="est-h">{{ p.stock_id }}　{{ p.name }}<span class="sub">營收成長率推估</span></h4>
+  <p class="note">
+    <b>怎麼推。</b>{{ Y }} 年還沒公告的月份填入預估的當月營收（百萬元），或用下面的「預估年增率」一次帶入
+    （＝ 去年同月營收 ×（1＋預估年增率））。表上的月增率、年增率、累計營收、累計年增率跟著重算；
+    已公告的月份照公司公告的數字。按〔回推今年總營收年增率〕＝（{{ Y }} 已公告＋預估的全年營收）÷ {{ Y - 1 }} 全年營收 − 1，
+    再按〔帶入目標價推估〕把它當成〔自訂假設試算〕的<b>中性營收成長率</b>。
+  </p>
+  <div class="est-bar">
+    <label>預估年增率<span class="hint">（{{ Y }} 年尚未公布的月份）</span>
+      <span class="est-in"><input type="number" id="er-rate" step="any" inputmode="decimal" value="0"><i>%</i></span></label>
+    <button type="button" class="btn-grab" id="er-fill">帶入預估</button>
+    <button type="button" class="btn-sub" id="er-reset">↺ 重設</button>
+    <span class="muted">＝ 去年同月營收 ×（1＋預估年增率），填入下方空格</span>
+  </div>
+  <div class="est-sum" id="er-sum"></div>
+  <div class="scroll"><table class="est-t" id="er-t"></table></div>
+</section>
+</div>
+
+<div class="subpanel" id="est-nm" role="tabpanel" hidden>
+<section class="est est-nm" id="en">
+  <h4 class="est-h">{{ p.stock_id }}　{{ p.name }}<span class="sub">淨利率推估</span></h4>
+  <p class="note">
+    <b>怎麼推。</b>{{ Y }} 年還沒公布財報的季別填入預估的淨利率（歸母，%），或用下面的「預估淨利率增減」一次帶入
+    （＝ 去年同季淨利率 ＋ 增減百分點）。按〔回推今年稅後淨利率〕＝ 各季淨利率以各季營收加權平均——
+    季營收用月營收加總：已公告的月份用公告數字，未公告的用〔營收成長率推估〕填的預估值，沒填的以去年同月營收代入。
+    再按〔帶入目標價推估〕把它當成〔自訂假設試算〕的<b>中性淨利率</b>。
+  </p>
+  <div class="scroll"><table class="est-t est-q" id="en-t"></table></div>
+  <p class="note-s">註：淨利率（歸母）＝ 歸屬母公司稅後淨利 ÷ 營收。季營收年增率標「估」的，是含預估月營收算出來的。</p>
+  <div class="est-bar">
+    <label>預估淨利率增減<span class="hint">（{{ Y }} 年尚未公布的季別，相對去年同季，百分點）</span>
+      <span class="est-in"><input type="number" id="en-delta" step="any" inputmode="decimal" value="0"><i>pp</i></span></label>
+    <button type="button" class="btn-grab" id="en-fill">帶入預估</button>
+    <button type="button" class="btn-sub" id="en-reset">↺ 重設</button>
+    <span class="muted">＝ 去年同季淨利率（歸母）＋ 增減，填入上方空格</span>
+  </div>
+  <div class="est-sum" id="en-sum"></div>
+</section>
+</div>
+{% endif %}

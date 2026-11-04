@@ -252,9 +252,13 @@ def test_主分頁只抓頁首那一排():
     assert "querySelectorAll('[role=tab]')" not in page
 
 
-def test_三年目標價在估值方式二下面():
+def test_三年目標價是自己的分頁_放在推估今年目標價右邊():
     page = (TPL / "stockpage.html.j2").read_text("utf-8")
-    assert page.index('class="way way2"') < page.index('id="y3"') < page.index('class="criteria"')
+    assert page.index('id="tab-eps"') < page.index('id="tab-y3"') < page.index('id="tab-health"')
+    assert page.index('id="panel-eps"') < page.index('id="panel-y3"') < page.index('id="y3"')
+    assert page.index('class="criteria"') < page.index('class="way way2"')   # 準則跟著〔依規則自動估算〕
+    for sub in ("est-rule", "est-calc", "est-rev", "est-nm"):
+        assert f'data-sub="{sub}"' in page or sub in (TPL / "est_pages.html.j2").read_text("utf-8")
     assert "儲存自選股" not in page and "讀取自選股" not in page
 
 
@@ -298,3 +302,43 @@ def test_長歷史補進舊的日子也會讓那一頁重畫():
     a = stock_signature([], tmp, history=(["2026-09-17", "2026-09-18"], [1.0, 2.0]))
     b = stock_signature([], tmp, history=(["2024-01-02", "2026-09-17", "2026-09-18"], [1.0, 1.0, 2.0]))
     assert a != b
+
+
+def test_營收與淨利率推估的種子():
+    from twsix.calendar_tw import Quarter
+    from twsix.rating.engine import FinancialData
+    from twsix.report.health import estimator_seed
+
+    d = FinancialData(stock_id="1234")
+    for q, nm in ((Quarter(2026, 2), 6.0), (Quarter(2026, 1), 7.0), (Quarter(2025, 4), 3.0),
+                  (Quarter(2025, 3), -1.0), (Quarter(2025, 2), 3.0), (Quarter(2025, 1), 2.0), (Quarter(2024, 4), -8.0)):
+        d.net_margin[q] = nm
+        d.operating_margin[q] = nm + 1
+        d.eps[q] = nm / 4
+    rows = [(f"115/{m:02d}", 1000.0 * m, None, None, None, None) for m in range(9, 0, -1)]
+    rows += [(f"114/{m:02d}", 500.0 * m, None, None, None, None) for m in range(12, 0, -1)]
+    s = estimator_seed(d, rows, "2026.2Q")
+    assert s["year"] == 2026
+    assert s["cur"][8]["rev"] == 9.0 and s["cur"][9] is None          # 十月還沒公告：留給使用者填
+    assert s["ly_total"] == round(sum(0.5 * m for m in range(1, 13)), 3)
+    qs = {x["q"]: x for x in s["quarters"]}
+    assert [x["q"] for x in s["quarters"]][:2] == ["2026Q4", "2026Q3"]
+    assert not qs["2026Q3"]["published"] and qs["2026Q3"]["nm"] is None
+    assert qs["2026Q2"]["published"] and qs["2026Q2"]["nm"] == 6.0
+    # 一、二月合併公告
+    rows2 = [("115/03", 3000.0, None, None, None, None), ("115/01-02", 2500.0, None, None, None, None)] + rows[9:]
+    s2 = estimator_seed(d, rows2, "2026.2Q")
+    assert s2["cur"][0]["merged_into"] == 2 and s2["cur"][1]["merged"] == "01-02"
+
+
+def test_推估今年目標價的四個子頁與帶入按鈕():
+    js = (TPL / "site.js").read_text("utf-8")
+    est = (TPL / "est_pages.html.j2").read_text("utf-8")
+    for bid in ("er-fill", "er-reset", "en-fill", "en-reset"):
+        assert f'id="{bid}"' in est
+    assert "帶入目標價推估（中性成長率）" in js and "帶入目標價推估（中性淨利率）" in js
+    assert "window.TWSIXCalc" in js and "twsix:calc" in js
+    page = (TPL / "stockpage.html.j2").read_text("utf-8")
+    assert 'id="c-reset">↺ 還原預設值' in page and 'id="calc-from"' in page
+    assert "預估目標價（元，預估PE=" in js and "'保守', '中性', '樂觀'" in js
+    assert ">六大指標</button>" in page

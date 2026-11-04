@@ -1591,3 +1591,36 @@ td.when-cell .basis{display:flex;width:max-content;margin:0 auto;vertical-align:
   html.cfi-on .ident .tabs .tab{flex:0 0 auto;min-width:0;overflow:visible;text-overflow:clip;white-space:nowrap;
     padding:5px 9px;font-size:12px;letter-spacing:0;display:inline-block}
 }
+
+/* 〈推估今年目標價〉（2026-11-04）：子頁、帶入提示、按鈕、保守／中性／樂觀標籤、營收與淨利率推估表 */
+.est-tabs{margin:2px 0 14px}
+.btn-sub{display:inline-block;padding:6px 14px;border-radius:5px;border:1.5px solid var(--rule);background:var(--surface);
+  color:var(--ink);font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn-sub:hover{border-color:var(--accent-2);color:var(--accent-2)}
+.btn-grab:disabled{opacity:.45;cursor:not-allowed}
+.calc-btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 6px}
+.est-from{margin:8px 0 4px;padding:8px 12px;border-radius:6px;font-size:13px;line-height:1.6;
+  background:color-mix(in srgb,var(--accent) 12%,transparent);border-left:3px solid var(--accent)}
+.est-from[hidden]{display:none}
+.scn{display:inline-block;margin-right:6px;padding:1px 9px;border-radius:5px;font-size:15px;font-weight:800;letter-spacing:.06em;
+  color:#fff;vertical-align:1px}
+.scn-1{background:#2f9e44}.scn-2{background:#e8890c}.scn-3{background:#e03131}
+h5.mtitle .scn{font-size:14.5px}
+.est-h{display:flex;align-items:baseline;gap:12px;margin:2px 0 8px;font-size:19px;font-weight:800}
+.est-h .sub{font-size:13px;font-weight:600;color:var(--muted)}
+.est-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:10px 0;font-size:13.5px}
+.est-bar label{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+.est-bar .hint{font-weight:400;color:var(--muted);font-size:12px}
+.est-in{display:inline-flex;align-items:center;gap:4px}
+.est-in input{width:7.5em;padding:5px 8px;border-radius:6px;border:1px solid var(--rule);background:var(--surface);
+  color:var(--ink);font:inherit;font-size:13.5px;text-align:right}
+.est-in i{font-style:normal;color:var(--muted)}
+.est-sum{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin:10px 0 12px;padding:10px 14px;border-radius:8px;
+  background:color-mix(in srgb,var(--accent-2) 9%,var(--surface));font-size:13.5px}
+.est-sum b{font-size:15px}
+table.est-t{font-size:13px}
+table.est-t th,table.est-t td{padding:7px 10px}
+table.est-t tr.pred td{background:color-mix(in srgb,#fab005 9%,transparent)}
+table.est-t tr.ly td{opacity:.85}
+table.est-t .est-in input{width:6.5em}
+.est-tag{margin-left:3px;font-size:10px;color:var(--muted);font-weight:600}

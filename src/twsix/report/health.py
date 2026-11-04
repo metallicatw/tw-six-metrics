@@ -170,6 +170,66 @@ def three_year_seed(data: Any, calc: dict[str, Any], fiscal_quarter: str = "") -
     }
 
 
+def estimator_seed(data: Any, every_month: list[tuple[Any, ...]], fiscal_quarter: str = "") -> dict[str, Any]:
+    """〈推估今年目標價〉的〔營收成長率推估〕〔淨利率推估〕要用的資料。
+
+    年度＝最新一個月營收所在的那一年（Y）。給 Y 與 Y−1 每個月的營收（百萬元）與公司公告的
+    月增率／年增率／累計營收／累計年增率；還沒公告的月份是 null，讓使用者填預估值。
+    季資料給 Y、Y−1 四季與 Y−2 第四季：營收年增率、營業利益率、淨利率（歸母）、EPS；
+    Y 年還沒公布財報的季別淨利率是 null，讓使用者填預估值。
+    """
+    by: dict[tuple[int, int], dict[str, Any]] = {}
+    for row in every_month or []:
+        label = str(row[0]).strip()
+        try:
+            y_txt, m_txt = label.split("/", 1)
+            roc = int(y_txt)
+            parts = [int(x) for x in m_txt.split("-")]
+        except ValueError:
+            continue
+        rev = None if row[1] is None else row[1] / 1000
+        item = {"rev": rev, "mom": row[2], "yoy": row[3],
+                "cum": None if row[4] is None else row[4] / 1000, "cumyoy": row[5]}
+        if len(parts) > 1:          # 一、二月合併公告：值記在最後一個月，前面的月份標成合併
+            item["merged"] = f"{parts[0]:02d}-{parts[-1]:02d}"
+            for k in parts[:-1]:
+                by[(roc + 1911, k)] = {"rev": 0.0, "mom": None, "yoy": None, "cum": None,
+                                       "cumyoy": None, "merged_into": parts[-1]}
+        by[(roc + 1911, parts[-1])] = item
+    have = [k for k, v in by.items() if v.get("rev") is not None and not v.get("merged_into")]
+    if not have:
+        return {}
+    year = max(have)[0]
+
+    def months(y: int) -> list[dict[str, Any] | None]:
+        return [by.get((y, m)) for m in range(1, 13)]
+
+    cur, ly = months(year), months(year - 1)
+    ly_total = None
+    if all(v is not None and v.get("rev") is not None for v in ly):
+        ly_total = round(sum(v["rev"] for v in ly if v), 3)
+
+    quarters = []
+    latest = latest_quarter(data, fiscal_quarter) if data is not None else None
+
+    for y, q in [(year, 4), (year, 3), (year, 2), (year, 1), (year - 1, 4), (year - 1, 3),
+                 (year - 1, 2), (year - 1, 1), (year - 2, 4)]:
+        key = None
+        for k in (getattr(data, "quarters", None) or []) if data is not None else []:
+            if k.year == y and k.q == q:
+                key = k
+                break
+        published = key is not None and (latest is None or key <= latest)
+        quarters.append({
+            "q": f"{y}Q{q}", "year": y, "n": q, "published": published,
+            "rev_yoy": revenue_growth(data, key, 4) if published else None,
+            "op": data.operating_margin.get(key) if published else None,
+            "nm": data.net_margin.get(key) if published else None,
+            "eps": data.eps.get(key) if published else None,
+        })
+    return {"year": year, "cur": cur, "ly": ly, "ly_total": ly_total, "quarters": quarters}
+
+
 def encode_history(dates: list[str], closes: list[float]) -> dict[str, Any]:
     if not dates:
         return {}
