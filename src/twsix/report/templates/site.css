@@ -17,24 +17,24 @@
   --mn2:linear-gradient(150deg,#a7b5bf,#97a7b3); --mn2-fg:var(--badge-ink);
   --mn3:linear-gradient(150deg,#8196a4,#718898); --mn3-fg:var(--badge-ink);
   --mn4:linear-gradient(150deg,#607585,#546774); --mn4-fg:#fff;
-  --ma0:linear-gradient(150deg,#eef4fb,#d7e5f6); --ma0-fg:var(--badge-ink);
-  --ma1:linear-gradient(150deg,#b1cded,#9abee7); --ma1-fg:var(--badge-ink);
-  --ma2:linear-gradient(150deg,#74a6de,#5d97d9); --ma2-fg:var(--badge-ink);
-  --ma3:linear-gradient(150deg,#2e74c4,#2967ad); --ma3-fg:#fff;
-  --ma4:linear-gradient(150deg,#245a98,#1e4c81); --ma4-fg:#fff;
-  --mb0:linear-gradient(150deg,#ebf9f4,#d5f2e7); --mb0-fg:var(--badge-ink);
-  --mb1:linear-gradient(150deg,#afe6d2,#99dfc5); --mb1-fg:var(--badge-ink);
-  --mb2:linear-gradient(150deg,#73d3af,#5dcca3); --mb2-fg:var(--badge-ink);
-  --mb3:linear-gradient(150deg,#3bbb8c,#34a67c); --mb3-fg:var(--badge-ink);
-  --mb4:linear-gradient(150deg,#287f5f,#21694f); --mb4-fg:#fff;
-  --mc0:linear-gradient(150deg,#fdf5ec,#fae7d3); --mc0-fg:var(--badge-ink);
-  --mc1:linear-gradient(150deg,#f5d2ab,#f2c592); --mc1-fg:var(--badge-ink);
-  --mc2:linear-gradient(150deg,#edb06b,#eaa251); --mc2-fg:var(--badge-ink);
-  --mc3:linear-gradient(150deg,#e58e2a,#d77f1b); --mc3-fg:var(--badge-ink);
-  --mc4:linear-gradient(150deg,#a76315,#8e5412); --mc4-fg:#fff;
-  --t1:#23619f; --t1-bg:#dbe8f8; --t1-line:#97bce7;
-  --t2:#1c6b50; --t2-bg:#d9f2e8; --t2-line:#7fd3b4;
-  --t3:#8f540e; --t3-bg:#fbeada; --t3-line:#f1c38f;
+  --ma0:linear-gradient(150deg,#ecf8ef,#d6f0dc); --ma0-fg:var(--badge-ink);
+  --ma1:linear-gradient(150deg,#b2e2bd,#9bd9a9); --ma1-fg:var(--badge-ink);
+  --ma2:linear-gradient(150deg,#6fc485,#57b96f); --ma2-fg:var(--badge-ink);
+  --ma3:linear-gradient(150deg,#237a36,#1d6b2e); --ma3-fg:#fff;
+  --ma4:linear-gradient(150deg,#1f6f30,#195c27); --ma4-fg:#fff;
+  --mb0:linear-gradient(150deg,#fff4e6,#ffe8cc); --mb0-fg:var(--badge-ink);
+  --mb1:linear-gradient(150deg,#ffd29e,#ffc580); --mb1-fg:var(--badge-ink);
+  --mb2:linear-gradient(150deg,#fcad52,#f99f35); --mb2-fg:var(--badge-ink);
+  --mb3:linear-gradient(150deg,#f08c00,#e8890c); --mb3-fg:var(--badge-ink);
+  --mb4:linear-gradient(150deg,#a85d06,#8d4e05); --mb4-fg:#fff;
+  --mc0:linear-gradient(150deg,#fdeeee,#fadada); --mc0-fg:var(--badge-ink);
+  --mc1:linear-gradient(150deg,#f5b3b3,#f19b9b); --mc1-fg:var(--badge-ink);
+  --mc2:linear-gradient(150deg,#ee8080,#ea6f6f); --mc2-fg:var(--badge-ink);
+  --mc3:linear-gradient(150deg,#d63031,#bf2626); --mc3-fg:#fff;
+  --mc4:linear-gradient(150deg,#9b1c1c,#821717); --mc4-fg:#fff;
+  --t1:#237a36; --t1-bg:#dcf1e1; --t1-line:#8fd19e;
+  --t2:#b8650a; --t2-bg:#ffecd4; --t2-line:#fbc27f;
+  --t3:#b42222; --t3-bg:#fbe0e0; --t3-line:#f0a3a3;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
   --ground:#0b1016; --surface:#141b22; --surface-2:#1c252e;
@@ -54,24 +54,24 @@
   --mn2:linear-gradient(150deg,#5e7382,#526471); --mn2-fg:#fff;
   --mn3:linear-gradient(150deg,#7b909f,#6a8293); --mn3-fg:var(--badge-ink);
   --mn4:linear-gradient(150deg,#97a8b4,#869aa8); --mn4-fg:var(--badge-ink);
-  --ma0:linear-gradient(150deg,#15355a,#102843); --ma0-fg:#fff;
-  --ma1:linear-gradient(150deg,#21538c,#1b4574); --ma1-fg:#fff;
-  --ma2:linear-gradient(150deg,#2c70bd,#2762a6); --ma2-fg:#fff;
-  --ma3:linear-gradient(150deg,#518fd6,#3a80d1); --ma3-fg:var(--badge-ink);
-  --ma4:linear-gradient(150deg,#82afe2,#6ba0dc); --ma4-fg:var(--badge-ink);
-  --mb0:linear-gradient(150deg,#19513c,#133b2c); --mb0-fg:#fff;
-  --mb1:linear-gradient(150deg,#267759,#1f6249); --mb1-fg:#fff;
-  --mb2:linear-gradient(150deg,#34a67c,#2e906c); --mb2-fg:var(--badge-ink);
-  --mb3:linear-gradient(150deg,#40c393,#37af83); --mb3-fg:var(--badge-ink);
-  --mb4:linear-gradient(150deg,#67cfa9,#51c89d); --mb4-fg:var(--badge-ink);
-  --mc0:linear-gradient(150deg,#673d0d,#4e2e0a); --mc0-fg:#fff;
-  --mc1:linear-gradient(150deg,#955812,#7b490f); --mc1-fg:#fff;
-  --mc2:linear-gradient(150deg,#d47e1a,#bb6f17); --mc2-fg:var(--badge-ink);
-  --mc3:linear-gradient(150deg,#e58d29,#d67f1a); --mc3-fg:var(--badge-ink);
-  --mc4:linear-gradient(150deg,#eaa556,#e7983d); --mc4-fg:var(--badge-ink);
-  --t1:#85b1e2; --t1-bg:#16334f; --t1-line:#2e5f92;
-  --t2:#6ad0aa; --t2-bg:#133a2d; --t2-line:#2a6b53;
-  --t3:#eba759; --t3-bg:#3c2a12; --t3-line:#7a5520;
+  --ma0:linear-gradient(150deg,#173d22,#122f1a); --ma0-fg:#fff;
+  --ma1:linear-gradient(150deg,#1f5c2e,#194c26); --ma1-fg:#fff;
+  --ma2:linear-gradient(150deg,#28773b,#226a33); --ma2-fg:#fff;
+  --ma3:linear-gradient(150deg,#45b45f,#3aa353); --ma3-fg:var(--badge-ink);
+  --ma4:linear-gradient(150deg,#74cf88,#5fc675); --ma4-fg:var(--badge-ink);
+  --mb0:linear-gradient(150deg,#4d2e08,#3b2306); --mb0-fg:#fff;
+  --mb1:linear-gradient(150deg,#7a4a0e,#653d0b); --mb1-fg:#fff;
+  --mb2:linear-gradient(150deg,#9c5b0d,#8a500b); --mb2-fg:#fff;
+  --mb3:linear-gradient(150deg,#e8902a,#dd821b); --mb3-fg:var(--badge-ink);
+  --mb4:linear-gradient(150deg,#f5b366,#f2a54a); --mb4-fg:var(--badge-ink);
+  --mc0:linear-gradient(150deg,#4f1717,#3d1212); --mc0-fg:#fff;
+  --mc1:linear-gradient(150deg,#7d2222,#681c1c); --mc1-fg:#fff;
+  --mc2:linear-gradient(150deg,#c03636,#a82e2e); --mc2-fg:#fff;
+  --mc3:linear-gradient(150deg,#e86a6a,#e45a5a); --mc3-fg:var(--badge-ink);
+  --mc4:linear-gradient(150deg,#f08f8f,#ec7a7a); --mc4-fg:var(--badge-ink);
+  --t1:#74cf88; --t1-bg:#143521; --t1-line:#2c6b3c;
+  --t2:#f5b366; --t2-bg:#3c2a10; --t2-line:#7a5520;
+  --t3:#f08f8f; --t3-bg:#3d1616; --t3-line:#7a2c2c;
 }
 :root:not([data-theme=light]) nav a.nav-list {--nav-c:#4fd6c4}
 :root:not([data-theme=light]) nav a.nav-watch{--nav-c:#f0a72a}
@@ -1624,3 +1624,8 @@ table.est-t tr.pred td{background:color-mix(in srgb,#fab005 9%,transparent)}
 table.est-t tr.ly td{opacity:.85}
 table.est-t .est-in input{width:6.5em}
 .est-tag{margin-left:3px;font-size:10px;color:var(--muted);font-weight:600}
+.scn-key{display:block;line-height:1.9;margin:6px 0 4px;font-size:12.5px;color:var(--ink-2)}
+.scn-key .scn + .scn{margin-left:10px}
+.scn-key .scn{font-size:12.5px;padding:0 7px;margin-right:2px}
+table.matrix th .scn{font-size:12px;padding:0 6px;margin:0 0 2px}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .scn-1{background:#2f8a45}:root:not([data-theme=light]) .scn-2{background:#c27313}:root:not([data-theme=light]) .scn-3{background:#c03636}}

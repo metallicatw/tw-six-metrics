@@ -1551,12 +1551,13 @@ window.TWSIXStarMenu = (function(){
     var html = matrix('預估 EPS（元）', eps,
       function(v){ return v.toFixed(2); }, 'n', 0, false);
 
-    var fams = ['a', 'b', 'c'];
+    // 保守＝綠、中性＝橘、樂觀＝紅：矩陣的色階、標題與外框都用同一個色系（family a／b／c、tone 1／2／3）
     var pes = nums(el.pe.value).slice().sort(function(a, b){ return a - b; });
     pes.forEach(function(pe, i){
+        var k = scenIdx(pes.length, i);
         html += matrix(peTitle(pes, i),
           function(gv, mv){ return eps(gv, mv) * pe; },
-          money, fams[i % 3], i % 3 + 1, true);
+          money, 'abc'.charAt(k), k + 1, true);
       });
     el.out.innerHTML = html;
     drawChart(eps, pes, money);
@@ -1570,6 +1571,12 @@ window.TWSIXStarMenu = (function(){
     if(n === 1) return SCEN[1];
     if(n === 2) return i ? SCEN[2] : SCEN[0];
     return '';
+  }
+  function scenIdx(n, i){                  // 0＝保守（綠）、1＝中性（橘）、2＝樂觀（紅）
+    if(n === 3) return i;
+    if(n === 1) return 1;
+    if(n === 2) return i ? 2 : 0;
+    return Math.min(2, Math.round(i * 2 / Math.max(1, n - 1)));
   }
   function peTitle(pes, i){
     var nm = scenName(pes.length, i);
@@ -1594,18 +1601,15 @@ window.TWSIXStarMenu = (function(){
     lastChart = {eps: eps, pes: pes, g: g, m: m, money: money};
     if(chartBox.offsetWidth === 0){ chartBox._dirty = true; return; }
     chartBox._dirty = false;
-    // 九條線依目標價高低上色：低的綠、高的紅（台股慣例的漲紅跌綠，也和矩陣的色階方向一致）
-    var RAMP = ['#2f9e44', '#37b24d', '#74b816', '#94d82d', '#fab005', '#f59f00', '#f76707', '#e8590c', '#e03131'];
+    // 線的顏色跟矩陣一致：保守 PE＝綠、中性 PE＝橘、樂觀 PE＝紅；同一個 PE 的悲觀／中性／樂觀由淺到深
+    var HUE = [['#8fd19e', '#40a356', '#1f6f30'], ['#fcc27a', '#f08c00', '#a85d06'], ['#f3a0a0', '#e03131', '#9b1c1c']];
     var lines = [];
-    pes.forEach(function(pe){
+    pes.forEach(function(pe, k){
+      var fam = scenIdx(pes.length, k), nm = scenName(pes.length, k);
       [['悲觀', 0], ['中性', 1], ['樂觀', 2]].forEach(function(x){
         var v = eps(g[x[1]], m[x[1]]) * pe;
-        lines.push({value: v, label: 'PE=' + pe + ' ' + x[0] + ' ' + money(v)});
+        lines.push({value: v, color: HUE[fam][x[1]], label: (nm ? nm + ' ' : '') + 'PE=' + pe + '・' + x[0] + ' ' + money(v)});
       });
-    });
-    var order = lines.map(function(l, i){ return i; }).sort(function(a, b){ return lines[a].value - lines[b].value; });
-    order.forEach(function(idx, rank){
-      lines[idx].color = RAMP[Math.round(rank * (RAMP.length - 1) / Math.max(1, order.length - 1))];
     });
     chartBox.innerHTML = '<h5 class="mtitle mt0">股價走勢 vs 目標價</h5><div class="pxc" id="calc-pxc"></div>';
     TWSIXChart(document.getElementById('calc-pxc'), {x: H.d, range: [Math.max(0, H.c.length - 500), H.c.length - 1],
@@ -2511,6 +2515,8 @@ function y3Eps(rev, sh, g, m){
     pes.forEach(function(pe){ eps.forEach(function(e){ all.push(e * pe); }); });
     var lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
 
+    // 保守 PE＝綠（a）、中性＝橘（b）、樂觀＝紅（c）：和〔推估今年目標價〕的矩陣同一套色
+    var fk = function(k){ var n = pes.length; return n === 3 ? k : (n === 1 ? 1 : (n === 2 ? (k ? 2 : 0) : Math.min(2, Math.round(k * 2 / Math.max(1, n - 1))))); };
     var fams = ['a', 'b', 'c'];
     var step9 = function(v){ return hi > lo ? Math.round((v - lo) / (hi - lo) * 4) : 2; };
     var eLo = Math.min.apply(null, eps), eHi = Math.max.apply(null, eps);
@@ -2525,7 +2531,7 @@ function y3Eps(rev, sh, g, m){
     var sw = function(f){ return '<span class="sw" style="background:var(--m' + f + '3)"></span>'; };
     var h = '<h5 class="mtitle mt0 y3-h">預估未來三年 EPS 與目標價</h5>' +
       '<p class="mlegend"><b>顏色</b>　數值由小到大、由淺至深　目標價：' +
-      pes.slice(0, 3).map(function(pe, k){ return sw(fams[k]) + '<span>PE ' + pe + '</span>'; }).join('　') +
+      pes.map(function(pe, k){ return sw(fams[fk(k)]) + '<span>' + (['保守', '中性', '樂觀'][fk(k)]) + ' PE ' + pe + '</span>'; }).join('　') +
       '<span>（九格一起比，' + money(lo) + ' → ' + money(hi) + '）</span>' +
       (price ? '<span>　每格第二行是相對現價 ' + price.toFixed(2) + (priceDate ? '（' + priceDate + ' 收盤）' : '') +
                ' 的預期報酬（＋）或預期風險（−）</span>' : '') + '</p>' +
@@ -2535,9 +2541,9 @@ function y3Eps(rev, sh, g, m){
       '<tr class="in"><th scope="row">淨利率（歸母）</th>' + m.map(function(v){ return '<td class="' + signCls(v) + '"><span class="v">' + v.toFixed(2) + '%</span></td>'; }).join('') + '</tr>' +
       '<tr class="eps"><th scope="row">預估 EPS（元）</th>' + eps.map(function(v){ return '<td class="num mn' + stepE(v) + '"><span class="v">' + v.toFixed(2) + '</span></td>'; }).join('') + '</tr>' +
       pes.map(function(pe, k){
-        return '<tr class="tp rt' + (k % 3 + 1) + '"><th scope="row">預估目標價<br>PE＝' + pe + '</th>' + eps.map(function(e){
+        return '<tr class="tp rt' + (fk(k) + 1) + '"><th scope="row"><span class="scn scn-' + (fk(k) + 1) + '">' + ['保守', '中性', '樂觀'][fk(k)] + '</span><br>預估目標價<br>PE＝' + pe + '</th>' + eps.map(function(e){
           var v = e * pe, d = delta(v);
-          return '<td class="num m' + fams[k % 3] + step9(v) + '"' + (d ? ' title="' + d.title + '"' : '') + '>' +
+          return '<td class="num m' + fams[fk(k)] + step9(v) + '"' + (d ? ' title="' + d.title + '"' : '') + '>' +
             '<span class="v">' + money(v) + '</span>' + (d ? '<span class="d">' + d.text + '</span>' : '') + '</td>';
         }).join('') + '</tr>';
       }).join('') + '</tbody></table></div>' +
@@ -2546,7 +2552,7 @@ function y3Eps(rev, sh, g, m){
 
     var tones = [1, 2, 3].map(function(k){
       var c = ''; try{ c = getComputedStyle(box).getPropertyValue('--t' + k).trim(); }catch(e){}
-      return c || ['#23619f', '#1f7a55', '#b8610d'][k - 1];
+      return c || ['#237a36', '#b8650a', '#b42222'][k - 1];
     });
     var charts = [];
     if(H && H.c.length > 1){
@@ -2566,8 +2572,8 @@ function y3Eps(rev, sh, g, m){
         series: [{name: '收盤價', color: 'ink', values: H.c, width: 1.4}],
         hlines: pes.map(function(pe, k){
           var v = eps[y] * pe;
-          return {value: v, color: tones[k % 3],
-                  label: (pes.length === 3 ? labels[k] : '') + '(PE=' + pe + ') ' + money(v)};
+          return {value: v, color: tones[fk(k)],
+                  label: labels[fk(k)] + '(PE=' + pe + ') ' + money(v)};
         })});
     });
   }
