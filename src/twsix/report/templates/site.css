@@ -1629,3 +1629,8 @@ table.est-t .est-in input{width:6.5em}
 .scn-key .scn{font-size:12.5px;padding:0 7px;margin-right:2px}
 table.matrix th .scn{font-size:12px;padding:0 6px;margin:0 0 2px}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]) .scn-1{background:#2f8a45}:root:not([data-theme=light]) .scn-2{background:#c27313}:root:not([data-theme=light]) .scn-3{background:#c03636}}
+/* 色階方向的說明跟著主題換：淺色主題由淺至深、深色主題由暗至亮（深色主題的色階是暗→亮） */
+.rdir .rd-d{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .rdir .rd-l{display:none}:root:not([data-theme=light]) .rdir .rd-d{display:inline}}
+:root[data-theme=dark] .rdir .rd-l{display:none}
+:root[data-theme=dark] .rdir .rd-d{display:inline}

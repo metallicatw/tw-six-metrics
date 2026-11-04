@@ -1494,7 +1494,7 @@ window.TWSIXStarMenu = (function(){
   }
 
   function legend(fam, lo, hi, fmt){
-    return '<p class="mlegend"><b>顏色</b>　數值由小到大、由淺至深' +
+    return '<p class="mlegend"><b>顏色</b>　數值由小到大、<span class="rdir"><span class="rd-l">由淺至深</span><span class="rd-d">由暗至亮</span></span>' +
       '<span class="ramp">' + [0,1,2,3,4].map(function(i){
         return '<span class="sw" style="background:var(--m' + fam + i + ')"></span>';
       }).join('') + '</span>' +
@@ -2530,7 +2530,7 @@ function y3Eps(rev, sh, g, m){
     var names = ['今年（' + (base + 1) + '）', '明年（' + (base + 2) + '）', '後年（' + (base + 3) + '）'];
     var sw = function(f){ return '<span class="sw" style="background:var(--m' + f + '3)"></span>'; };
     var h = '<h5 class="mtitle mt0 y3-h">預估未來三年 EPS 與目標價</h5>' +
-      '<p class="mlegend"><b>顏色</b>　數值由小到大、由淺至深　目標價：' +
+      '<p class="mlegend"><b>顏色</b>　數值由小到大、<span class="rdir"><span class="rd-l">由淺至深</span><span class="rd-d">由暗至亮</span></span>　目標價：' +
       pes.map(function(pe, k){ return sw(fams[fk(k)]) + '<span>' + (['保守', '中性', '樂觀'][fk(k)]) + ' PE ' + pe + '</span>'; }).join('　') +
       '<span>（九格一起比，' + money(lo) + ' → ' + money(hi) + '）</span>' +
       (price ? '<span>　每格第二行是相對現價 ' + price.toFixed(2) + (priceDate ? '（' + priceDate + ' 收盤）' : '') +
