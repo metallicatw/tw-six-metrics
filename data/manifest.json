@@ -1,16 +1,16 @@
 {
   "counts": {
     "market/tpex_balance/115Q2": 896,
-    "market/tpex_balance/115Q3": 61,
+    "market/tpex_balance/115Q3": 90,
     "market/tpex_income/115Q2": 896,
-    "market/tpex_income/115Q3": 61,
+    "market/tpex_income/115Q3": 90,
     "market/tpex_revenue/11507": 890,
     "market/tpex_revenue/11508": 892,
     "market/tpex_revenue/11509": 893,
     "market/twse_balance/115Q2": 1088,
-    "market/twse_balance/115Q3": 75,
+    "market/twse_balance/115Q3": 108,
     "market/twse_income/115Q2": 1088,
-    "market/twse_income/115Q3": 75,
+    "market/twse_income/115Q3": 108,
     "market/twse_revenue/11507": 1085,
     "market/twse_revenue/11508": 1086,
     "market/twse_revenue/11509": 1088,
@@ -18,7 +18,7 @@
     "tpex_companies": 897,
     "twse_companies": 1099
   },
-  "generated_at": "2026-11-04T02:18:54+00:00",
+  "generated_at": "2026-11-04T17:11:45+00:00",
   "notes": [
     "baseline imported from 評等清單 v6.62 (published snapshot)"
   ],

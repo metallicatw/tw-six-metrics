@@ -193,3 +193,17 @@
 {"a":"3162","b":"6190","asked":"2026-11-03","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.5,"note":"兩者皆屬電子零組件產業，因題材連動或資金效應常同步變動，非直接上下游。"}
 {"a":"3162","b":"8109","asked":"2026-11-03","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"兩者皆屬台股中小電子股或車用相關概念股，常因盤面資金輪動而具備題材連動性。"}
 {"a":"3162","b":"6233","asked":"2026-11-03","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.4,"note":"精確為車用零組件廠，旺玖為IC設計，兩者業務無直接供應或客戶關係，常因台股題材連動而被歸類在一起。"}
+{"a":"6532","b":"3583","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"瑞耘與辛耘皆為台灣半導體設備廠，主要提供晶圓代工廠相關製程設備與零組件，同屬半導體設備族群。"}
+{"a":"6532","b":"6231","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆為台股半導體設備及IC設計相關之科技股，常隨電子股與AI題材同步波動。"}
+{"a":"6532","b":"6234","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.8,"note":"兩者皆為半導體及光電設備廠，在精密機械零組件與設備領域具備同業競爭與相似題材關係。"}
+{"a":"6122","b":"5706","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆為台股上市櫃公司，股價同步變動主要歸類於資金輪動或大盤題材影響，無直接業務往來。"}
+{"a":"6122","b":"6957","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.3,"note":"兩者業務性質不同，擎邦為機電工程，裕慶-KY為商用展示架，股價同步多因台股資金常依綠能或櫃買指數等題材連動。"}
+{"a":"6112","b":"5202","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.9,"note":"邁達特與力新同屬佳世達集團旗下的資訊服務與軟體應用公司。"}
+{"a":"6112","b":"2471","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"邁達特與資通皆為台灣資訊服務（SI）與軟體代理廠商，業務性質相近，常同屬資訊服務類股。"}
+{"a":"6112","b":"6148","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆為台灣上市櫃資訊服務業者，常被歸類於同集團或數位轉型概念股，故股價連動。"}
+{"a":"3029","b":"6811","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"零壹與宏碁資訊皆為台灣知名的資訊服務與軟體代理商，同屬系統整合（SI）產業。"}
+{"a":"3029","b":"2471","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.85,"note":"零壹與資通皆為台灣知名的資訊服務與軟體代理商，業務性質高度重疊。"}
+{"a":"3029","b":"6112","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.95,"note":"零壹與邁達特皆屬於佳世達集團旗下的資訊服務公司，同屬網通及資安通路題材。"}
+{"a":"6690","b":"6811","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.95,"note":"安碁資訊與宏碁資訊皆為宏碁集團旗下的子公司，同屬資訊服務產業。"}
+{"a":"6690","b":"2471","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬資訊服務與資安概念股，股價常因題材連動。"}
+{"a":"6690","b":"6689","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"安碁資訊與伊雲谷皆為台灣知名的雲端服務與資訊服務商，同屬資安及雲端運算類股。"}
