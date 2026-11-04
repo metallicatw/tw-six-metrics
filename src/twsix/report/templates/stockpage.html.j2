@@ -5,7 +5,7 @@
 {% block body %}
 
 <div class="ident sticky">
-  <h2 id="top">{{ p.stock_id }}　{{ p.name }}
+  <h2 id="top">{{ p.stock_id }}　{{ p.name }}{{ m.ins(p.stock_id, rel) }}
         {%- if p.market %}<span class="chip mk">{{ p.market }}</span>{% endif -%}
     {%- if p.industry %}<span class="chip ind">{{ p.industry }}</span>{% endif -%}
     <button type="button" class="star" data-star="{{ p.stock_id }}"

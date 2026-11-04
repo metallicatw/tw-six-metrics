@@ -33,3 +33,13 @@ def test_其他頁的概況面板跟籌碼雷達同一份程式():
     assert "#cf .cfi-drawer" in css and "html.cfi-on body > .wrap" in css
     site = (TPL / "site.js").read_text("utf-8")
     assert "window.TWSIXIns" in site and "assets/ins.js" in site
+
+
+def test_個股頁名稱右邊也有概況():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / "src/twsix/report/templates"
+    tpl = (root / "stockpage.html.j2").read_text("utf-8")
+    assert "{{ p.name }}{{ m.ins(p.stock_id, rel) }}" in tpl
+    css = (root / "site.css").read_text("utf-8")
+    assert ".ident h2 a.ins-btn{" in css
+    assert "html.cfi-on .ident .tabs{flex-wrap:wrap" in css

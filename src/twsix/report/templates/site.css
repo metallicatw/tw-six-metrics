@@ -1581,3 +1581,13 @@ td.when-cell .basis{vertical-align:middle}
 table:not(.cfi-tbl):not(.basis-t) tr > td.tl{text-align:left !important}
 /* 財報基準那兩行：做成一個置中的方塊，不再坐在文字基線上，和左右格子對齊同一條中線 */
 td.when-cell .basis{display:flex;width:max-content;margin:0 auto;vertical-align:middle}
+/* 個股頁標題：名稱右邊的〔概況〕圖示跟 19px 的名稱同高，和後面的市場／產業標籤排在同一條中線 */
+.ident h2 a.ins-btn{width:24px;height:24px;margin-left:8px;vertical-align:middle;position:relative;top:-2px;border-radius:6px}
+.ident h2 a.ins-btn::before{width:15px;height:15px}
+@media (max-width:640px){.ident h2 a.ins-btn{width:22px;height:22px;margin-left:6px}.ident h2 a.ins-btn::before{width:14px;height:14px}}
+/* 右側〈概況〉面板打開時（桌機會把頁面往左擠 500px）：個股頁的分頁改成折成兩列、字完整顯示，不出現「…」 */
+@media (min-width:1180px){
+  html.cfi-on .ident .tabs{flex-wrap:wrap;overflow:visible;gap:4px}
+  html.cfi-on .ident .tabs .tab{flex:0 0 auto;min-width:0;overflow:visible;text-overflow:clip;white-space:nowrap;
+    padding:5px 9px;font-size:12px;letter-spacing:0;display:inline-block}
+}
