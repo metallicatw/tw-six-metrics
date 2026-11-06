@@ -207,3 +207,12 @@
 {"a":"6690","b":"6811","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.95,"note":"安碁資訊與宏碁資訊皆為宏碁集團旗下的子公司，同屬資訊服務產業。"}
 {"a":"6690","b":"2471","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.8,"note":"兩者皆屬資訊服務與資安概念股，股價常因題材連動。"}
 {"a":"6690","b":"6689","asked":"2026-11-05","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"安碁資訊與伊雲谷皆為台灣知名的雲端服務與資訊服務商，同屬資安及雲端運算類股。"}
+{"a":"2471","b":"2453","asked":"2026-11-07","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"資通與凌群皆為台灣老牌資訊服務與系統整合商，業務高度重疊。"}
+{"a":"2471","b":"6112","asked":"2026-11-07","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.9,"note":"資通與邁達特（原力晶集團旗下，現多屬資訊服務類股）皆為台灣知名資訊服務商，且在業務與市場題材上有高度關聯。"}
+{"a":"2471","b":"2468","asked":"2026-11-07","model":"gemini-flash-lite-latest","relation":"同業競爭","confidence":0.9,"note":"資通與華經皆為台股資訊服務（軟體與系統整合）同業公司。"}
+{"a":"9933","b":"5209","asked":"2026-11-07","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.95,"note":"新鼎為中鼎工程集團旗下的系統整合與工程自動化公司，兩者具高度業務與股權關聯。"}
+{"a":"9933","b":"8446","asked":"2026-11-07","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.85,"note":"兩者皆屬台股文創與工程不同產業，但常被歸類於高殖利率防禦型或櫃買特色個股等盤面資金題材。"}
+{"a":"9933","b":"6592","asked":"2026-11-07","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.9,"note":"中鼎為工程統包商，和潤企業為汽車融資租賃，業務性質與題材不同。"}
+{"a":"2207","b":"1726","asked":"2026-11-07","model":"gemini-flash-lite-latest","relation":"同一題材","confidence":0.9,"note":"和泰車與永記皆為台股中知名的長期穩定配息定存股及防禦型概念股，常被歸類於同一投資題材。"}
+{"a":"2207","b":"2923","asked":"2026-11-07","model":"gemini-flash-lite-latest","relation":"集團關係","confidence":0.9,"note":"和泰車與鼎固-KY皆屬於頂新集團或具備深厚淵源之泛和泰汽車集團相關企業（同屬國泰或特定財團投資脈絡）。"}
+{"a":"2207","b":"1234","asked":"2026-11-07","model":"gemini-flash-lite-latest","relation":"無明確關係","confidence":0.95,"note":"和泰車為汽車銷售與代理業，黑松為飲料製造業，兩者業務性質不同，無直接供應或客戶關係。"}
