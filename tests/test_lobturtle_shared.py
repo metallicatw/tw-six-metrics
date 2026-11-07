@@ -1,12 +1,18 @@
 """龍蝦／海龜整合：靜態輸出、回補防重複（券商頁季別先存）、市場監控資料共用。"""
 import gzip
 import json
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_lobturtle_static_export(tmp_path):
+def test_lobturtle_static_export():
+    with tempfile.TemporaryDirectory() as td:
+        _test_lobturtle_static_export(Path(td))
+
+
+def _test_lobturtle_static_export(tmp_path):
     from twsix.lobturtle.export import export
 
     got = export(ROOT / "data", tmp_path)
@@ -27,7 +33,12 @@ def _grid(rows):
     return gzip.compress(json.dumps(rows, ensure_ascii=False).encode("utf-8"))
 
 
-def test_archive_sheet_quarters_into_history(tmp_path):
+def test_archive_sheet_quarters_into_history():
+    with tempfile.TemporaryDirectory() as td:
+        _test_archive_sheet_quarters_into_history(Path(td))
+
+
+def _test_archive_sheet_quarters_into_history(tmp_path):
     from twsix.ingest import cl_history as CL
     from twsix.ingest import cx_history as CX
     from twsix.ingest.sheet_archive import archive
