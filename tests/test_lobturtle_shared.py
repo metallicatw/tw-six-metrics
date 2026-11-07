@@ -13,6 +13,11 @@ def test_lobturtle_static_export():
 
 
 def _test_lobturtle_static_export(tmp_path):
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        from twsix.report.build import MissingOptional
+        raise MissingOptional("這一條需要 numpy") from None
     from twsix.lobturtle.export import export
 
     got = export(ROOT / "data", tmp_path)
