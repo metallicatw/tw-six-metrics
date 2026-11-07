@@ -1967,7 +1967,11 @@ window.TWSIXStarMenu = (function(){
     var show = function(){
       var y = window.pageYOffset || document.documentElement.scrollTop;
 
-      top.hidden = (y - target()) < 400;
+      var hide = (y - target()) < 400;
+      if(top.classList){ top.hidden = false; top.classList.toggle('on', !hide); }
+      else { top.hidden = hide; }
+      top.setAttribute('aria-hidden', hide ? 'true' : 'false');
+      top.tabIndex = hide ? -1 : 0;
     };
     window.addEventListener('scroll', show, { passive: true });
     window.addEventListener('resize', show);
@@ -3771,4 +3775,38 @@ var TWSIXRefresh = (function(){
     var tr = b.closest('tr');
     show(b.getAttribute('data-ins'), tr);
   }, true);
+})();
+
+/* 深色／淺色模式切換（預設深色；記在這台瀏覽器） */
+(function(){
+  var root = document.documentElement;
+  if(!root || typeof root.getAttribute !== 'function' || typeof document.getElementById !== 'function') return;
+  var btn = document.getElementById('theme-tg');
+  var meta = document.getElementById('theme-color');
+  function paint(){
+    var dark = root.getAttribute('data-theme') !== 'light';
+    if(btn && btn.querySelector){
+      btn.querySelector('.ti').textContent = dark ? '☀️' : '🌙';
+      btn.querySelector('.tt').textContent = dark ? '淺色' : '深色';
+      btn.setAttribute('aria-pressed', dark ? 'false' : 'true');
+    }
+    if(meta) meta.setAttribute('content', dark ? '#0b1016' : '#eef4f7');
+  }
+  paint();
+  if(btn) btn.addEventListener('click', function(){
+    var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try{ localStorage.setItem('twsix-theme', next); }catch(e){}
+    paint();
+    try{ window.dispatchEvent(new CustomEvent('twsix:theme', {detail: next})); }catch(e){}
+    (document.querySelectorAll ? document.querySelectorAll('iframe') : []).forEach(function(f){
+      try{ f.contentWindow.postMessage({twsixTheme: next}, '*'); }catch(e){}
+    });
+  });
+  if(window.addEventListener) window.addEventListener('storage', function(e){
+    if(e.key === 'twsix-theme' && (e.newValue === 'light' || e.newValue === 'dark')){
+      root.setAttribute('data-theme', e.newValue); paint();
+      try{ window.dispatchEvent(new CustomEvent('twsix:theme', {detail: e.newValue})); }catch(_){}
+    }
+  });
 })();

@@ -224,7 +224,8 @@ var CFI = (function(){
     return {k: "營業利益率與營業利益", sub: ql[0], head: head || '<b class="cfi-big">' + yi(oi[0]) + "</b> 億元", spark: spark(rev(op.slice(0, 8))), lines: L, note: "圖：近 8 季營業利益率"};
   }
 
-  function secSheet(F){
+  function secSheet(F, out){
+    out = out || {flags: []};
     var cx = F.cx, cl = F.cl, ql = F.ql, rows = [];
     for (var i = 0; i < 5; i++){
       var st = i * 4;
@@ -248,6 +249,19 @@ var CFI = (function(){
       if (second && second.cl !== null && second.cl > 0) t += "，較一年前 " + chip(pct(first.cl, second.cl), 0, "%");
       if (okCl.length >= 3 && first.cl >= Math.max.apply(null, okCl)) t += '，<span class="cfi-flag">為' + (okCl.length >= 5 ? "近五年" : "取得期別中") + '期末餘額最高</span>';
       L.push(t);
+    }
+    // 合約負債 × 資本支出四象限（規則與 twsix/clcapex.py 相同：合約負債年增 ≥ 20% 為 ↑、< 10% 為 ─；資本支出 ×1.2 為 ↑、≤ ×1.0 為 ─）
+    if (first.cx !== null && second && second.cx !== null && second.cx > 0 && first.cl !== null && second.cl !== null && second.cl > 0){
+      var cly = (first.cl / second.cl - 1) * 100, cxr = first.cx / second.cx;
+      var clUp = cly >= 20, clFlat = cly < 10, cxUp = cxr >= 1.2, cxFlat = cxr <= 1.0, qd = null;
+      if (clUp && cxUp) qd = ["up", "最強組合：合約負債 ↑ ＋ 資本支出 ↑", "現在有訂單、未來有產能，擴產有真實需求（訂金）撐腰"];
+      else if (clFlat && cxUp) qd = ["dn", "風險組合 A：合約負債 ─ ＋ 資本支出 ↑", "大舉建廠卻沒有對應的預收訂單；需求不如預期時，新產能的折舊會侵蝕毛利"];
+      else if (clUp && cxFlat) qd = ["eq", "風險組合 B：合約負債 ↑ ＋ 資本支出 ─", "訂單多但沒有擴產，營收成長終將遇到產能天花板（輕資產、外包生產除外）"];
+      if (qd){
+        L.unshift('<span class="cfi-flag">' + qd[1] + "</span>：" + qd[2] + "（合約負債年增 " + chip(cly, 0, "%") + "、資本支出為前四季的 " + fx(cxr, 2) + " 倍）");
+        out.flags.push({t: qd[1].split("：")[0], k: qd[0]});
+      }
+      L.push('<span class="cfi-soft">時間差：合約負債約 2 季內隨交貨轉成營收；資本支出建廠調機約 2 年以上才貢獻營收。</span>');
     }
     var nas = rows.filter(function(x){ return x.na; }).length;
     if (nas) L.push('<span class="cfi-soft">合約負債有 ' + nas + " 個期間標「未揭露」：公開資訊觀測站那幾季的資產負債表沒有把合約負債單獨列出（併在「其他流動負債」等科目），查不到單獨的數字，不是 0。本站的券商季報從存檔起逐季累積，之後的期別會補上。</span>");
@@ -334,7 +348,7 @@ var CFI = (function(){
 
   function build(s, dates){
     var M = model(s, dates), out = {flags: []};
-    var fund = [secRevenue(M.fund, out), secEps(M.fund, out), secOpm(M.fund, out), secSheet(M.fund)].filter(Boolean);
+    var fund = [secRevenue(M.fund, out), secEps(M.fund, out), secOpm(M.fund, out), secSheet(M.fund, out)].filter(Boolean);
     var chipS = [secWhale(M.chip, out), secHolders(M.chip, out), secInst(M.chip, out), secFlow(M.chip), secPower(M.chip, out)].filter(Boolean);
     return {fund: fund, chip: chipS, flags: out.flags, M: M};
   }

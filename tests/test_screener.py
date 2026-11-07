@@ -156,7 +156,7 @@ def test_亮色底不放白字_淺色底不放淺色字():
     css = (T / "site.css").read_text("utf-8")
     assert ".hl-badge.hl-ok,.hl-badge.hl-warn,.hl-badge.hl-bad{color:#fff}" in css
     for sel in ("nav a[aria-current=page]", ".way-h .n", ".pxh-zoom button.on"):
-        assert f":root[data-theme=dark] {sel}" in css and f":root:not([data-theme=light]) {sel}" in css, sel
+        assert f":root[data-theme=dark] {sel}" in css, sel
     assert ".hl-ok{color:#047857" in css and ".rrv-weak,.criteria .warnings{color:#b86e00}" in css
     js = (T / "site.js").read_text("utf-8")
     assert 'table class="matrix mt0 y3-t"' in js and "function heatInk(" not in js

@@ -1,0 +1,15 @@
+{% extends "base.html.j2" %}
+{% from "_macros.html.j2" import tip %}
+{% block title %}龍蝦/海龜系統 × 全球宏觀策略｜{{ site_title }}{% endblock %}
+{% block body %}
+<h2 class="sr">龍蝦/海龜系統 × 全球宏觀策略</h2>
+<div class="muted note-s embed-cap mon-stamp">
+  {%- if latest %}<span>資料基準 {{ latest }}</span>{% endif %} {% call tip() %}
+  龍蝦指標（1～5 日方向）、海龜通道（中長線趨勢 10 軌）、外資現貨／台指期、小台與微台散戶多空比，
+  以及跨市場（費半、台積電 ADR、美債、美元、VIX）與新聞的總經策略。
+  <br><br>回測在瀏覽器裡計算；PDF 報表與本機⇄NAS 同步請在龍蝦／海龜原系統操作。
+  <a href="{{ rel }}lobturtle/index.html" target="_blank" rel="noopener">單獨開啟 ↗</a>
+{% endcall %}</div>
+<iframe id="lobturtle-frame" class="embed fit" src="{{ rel }}lobturtle/index.html"
+        title="龍蝦/海龜系統 × 全球宏觀策略"></iframe>
+{% endblock %}

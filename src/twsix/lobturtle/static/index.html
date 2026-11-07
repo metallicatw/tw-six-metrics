@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#070b14" id="meta-theme-color" />
+  <title>龍蝦/海龜系統 x 全球宏觀策略</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico?v=3" />
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png?v=3" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=3" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("lobturtle-theme");
+        var theme = saved === "light" || saved === "dark" ? saved : "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+        var m = document.getElementById("meta-theme-color");
+        if (m) m.setAttribute("content", theme === "dark" ? "#070b14" : "#f1f5f9");
+      } catch (_) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="/style.css?v=8" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="top-nav">
+    <div class="top-nav-inner">
+      <div class="brand-row">
+        <a href="/" id="brand-home-link" class="brand-home-link" title="點擊返回首頁（龍蝦指標）">
+          <img src="/logo.png?v=3" alt="龍蝦/海龜 專屬徽章" class="brand-logo" width="46" height="46" />
+          <div class="brand-text">
+            <h1>龍蝦/海龜系統 x 全球宏觀策略</h1>
+            <div id="header-submeta" class="header-submeta">資料範圍: 2020/11/05 ~ 載入中...</div>
+          </div>
+        </a>
+        <button id="btn-theme-toggle" type="button" class="btn btn-theme mobile-theme-btn" title="切換深色／淺色視覺主題" aria-label="切換深色與淺色模式">
+          <span class="theme-icon">☀️</span>
+          <span class="theme-text">淺色</span>
+        </button>
+      </div>
+
+      <div class="nav-actions">
+        <button id="btn-theme-toggle-desktop" type="button" class="btn btn-theme desktop-theme-btn" title="切換深色／淺色視覺主題">
+          <span class="theme-icon">☀️</span>
+          <span class="theme-text">淺色模式</span>
+        </button>
+        <a id="btn-download-pdf" href="/api/report/lobster.pdf" target="_blank" class="btn btn-pdf" title="下載無浮水印雙頁式高解析度 PDF 報表">
+          <span class="btn-ico">📄</span>
+          <span class="btn-label-full">無浮水印 PDF 報表</span>
+          <span class="btn-label-short">PDF報表</span>
+        </a>
+        <button id="btn-open-sync" type="button" class="btn btn-sync" title="設定並執行本機與 Synology NAS 雙向同步">
+          <span class="btn-ico">🔄</span>
+          <span class="btn-label-full">本機⇄NAS 雙向同步</span>
+          <span class="btn-label-short">雙向同步</span>
+        </button>
+        <button id="btn-refresh-intel" type="button" class="btn btn-intel" title="即時連線抓取全球 8 大跨市場指標與國內外財經新聞">
+          <span class="btn-ico">🌍</span>
+          <span class="btn-label-full">即時同步國際情勢</span>
+          <span class="btn-label-short">國際情勢</span>
+        </button>
+        <button id="btn-refresh-db" type="button" class="btn btn-refresh" title="向證交所／期交所／FinMind 增量抓取最新盤後數據寫回資料庫">
+          <span class="btn-ico">⚡</span>
+          <span class="btn-label-full">一鍵更新最新數據</span>
+          <span class="btn-label-short">更新數據</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div id="peer-sync-panel" class="peer-sync-panel" style="display:none;">
+    <div class="peer-sync-inner">
+      <div class="peer-sync-title">
+        <span>🔄 <strong>本機 ⇄ Synology NAS 無損雙向同步中心</strong></span>
+        <span id="peer-last-sync" class="peer-last-sync"></span>
+      </div>
+      <div class="peer-sync-controls">
+        <label class="peer-field peer-field-url">
+          <span>遠端節點網址</span>
+          <input type="text" id="input-peer-url" placeholder="例如 http://192.168.50.168:8088 或 https://192.168.50.168:8889" />
+        </label>
+        <label class="peer-field">
+          <span>同步方向</span>
+          <select id="select-sync-dir">
+            <option value="both">⇄ 雙向聯集同步（互補最新日期 · 最推薦）</option>
+            <option value="pull">⬅️ 遠端 ➔ 本節點（從 NAS 拉取新資料）</option>
+            <option value="push">➡️ 本節點 ➔ 遠端（推送本機資料至 NAS）</option>
+          </select>
+        </label>
+        <label class="peer-check" title="自動透過 SMB (\\192.168.50.168\docker\lobturtle) 或 HTTP 一鍵將最新網頁介面與後端程式直傳部署至 NAS">
+          <input type="checkbox" id="chk-sync-code" checked />
+          <span>一併一鍵部署新版程式至 NAS</span>
+        </label>
+        <div class="peer-btn-group">
+          <button id="btn-exec-sync" type="button" class="btn btn-sync-go">🚀 一鍵同步＋部署至 NAS</button>
+          <button id="btn-close-sync" type="button" class="btn btn-sync-cancel">收起</button>
+        </div>
+      </div>
+      <div class="peer-sync-hint">
+        💡 <strong>運作機制</strong>：自動透過網路芳鄰（<code>\\192.168.50.168\docker\lobturtle</code>）秒速更新 NAS 網站介面與程式碼，並採用主鍵聯集寫入（<code>INSERT OR IGNORE</code>）雙向補齊 9 大 SQLite 資料庫與國際情勢快取，<strong>100% 不覆蓋、不遺失既有歷史紀錄</strong>。
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-wrap">
+    <div id="update-toast" class="update-toast" style="display:none;"></div>
+  </div>
+
+  <nav class="subtab-nav-wrap" aria-label="主要功能分頁">
+    <div class="subtab-bar">
+      <button class="subtab-btn active" data-tab="lobster"><span class="tab-ico">🦞</span>龍蝦指標</button>
+      <button class="subtab-btn" data-tab="foreign"><span class="tab-ico">🏦</span>外資籌碼</button>
+      <button class="subtab-btn" data-tab="retail"><span class="tab-ico">👥</span>散戶未平倉</button>
+      <button class="subtab-btn" data-tab="backtest"><span class="tab-ico">🎯</span>龍蝦指標回測</button>
+      <button class="subtab-btn" data-tab="turtle"><span class="tab-ico">🐢</span>海龜指標</button>
+      <button class="subtab-btn" data-tab="strategy"><span class="tab-ico">🌐</span>國際總經與實戰投資策略</button>
+      <button class="subtab-btn" data-tab="intro"><span class="tab-ico">📋</span>指標說明與資料庫狀態</button>
+    </div>
+  </nav>
+
+  <main class="container">
+    <!-- 1. 指標說明與資料庫狀態 -->
+    <section id="panel-intro" class="subtab-panel" style="display:none;">
+      <div id="intro-hero-strip" class="intro-hero-strip"></div>
+
+      <div class="card intro-card">
+        <div class="section-title-bar">
+          <h3 class="section-heading">🗄️ 9 大歷史 SQLite 資料庫即時狀態（永久保留 · 增量寫回）</h3>
+          <span class="badge-pill">INSERT OR IGNORE 無損寫入</span>
+        </div>
+        <p class="lead-para">
+          所有歷史資料皆永久保存於 <code>data/*.db</code> 共 9 個獨立 SQLite 資料庫（<code>2020/11/05</code> 起逾 5 年完整回溯；微台期 <code>TMF</code> 自期交所掛牌首日 <code>2024/07/29</code> 起完整收錄，絕不偽造掛牌前數據）。點擊右上角 <strong>「⚡ 一鍵更新最新數據」</strong>（或部署於 Synology NAS 啟用交易日盤後自動排程更新）時，系統僅針對各資料庫 <code>MAX(DATE)</code> 之後的新交易日向證交所 (TWSE)、期交所 (TAIFEX) 與 FinMind 抓取最新盤後數據並<strong>逐筆寫回</strong>，既有歷史紀錄 100% 保留不覆蓋。
+        </p>
+        <div id="db-status-box" class="db-status-grid"></div>
+
+        <div class="section-title-bar" style="margin-top:30px;">
+          <h3 class="section-heading">🔬 量化模型架構與數據精準度透明揭露（投資判斷必讀）</h3>
+          <span class="badge-pill">雙重實證交叉核驗</span>
+        </div>
+
+        <div class="method-grid">
+          <div class="method-card">
+            <div class="method-tag">零誤差官方籌碼</div>
+            <h4>🏦 大盤、外資與散戶微結構數據</h4>
+            <p>
+              <strong>大盤與外資籌碼</strong>：加權指數 (<code>TWSE_INFO.db</code>)、外資現貨買賣超億 (<code>TWSE_FOREIGEN.db</code>) 及 N 日滾動累積買賣超、外資台指期交易與未平倉淨口數 (<code>TXF_FOREIGEN.db</code>)，與證交所／期交所官方盤後報表交叉核對誤差為 <code>0.00</code>。
+            </p>
+            <p>
+              <strong>小台／微台散戶多空比(%)</strong>：嚴格依期交所公式 <code>-(三大法人未平倉淨口數 / 一般交易時段單式契約全市場未平倉口數) × 100%</code> 計算；反指標計分（小台 <code>&lt;= 15%</code> 紅 <code>+1</code>、微台 <code>&lt;= 30%</code> 紅 <code>+1</code>、小台−微台 <code>&gt; -5%</code> 紅 <code>+1</code>）與 4 條件狀態轉換回測皆為 100% 精確公開公式。
+            </p>
+          </div>
+
+          <div class="method-card">
+            <div class="method-tag">短中期動能引擎</div>
+            <h4>🦞 龍蝦指標 (<code>LOBSTER</code> / <code>LOBSTER_SUM</code>)</h4>
+            <p>
+              <code>LOBSTER</code> 每日輸出 <code>+2</code>（偏多）或 <code>-2</code>（偏空），<code>LOBSTER_SUM</code> 為近 5 個交易日滾動積分（<code>-10 ~ +10</code>），專注捕捉 3～7 個交易日之短中期動能慣性。
+            </p>
+            <p>
+              <code>2025/06/05 ~ 2026/06/08</code> 區間為從 <code>4800×4800</code> 高解析報表 100% 精確提取之基準原值；其餘區間與未來新交易日採用非對稱雙日均線施密特遲滯狀態機（<code>SMA(2)</code> 偏離率 <code>+0.30% / -0.25%</code> 結合 <code>MA8/MA10</code> 主升段斜率支撐）運算，驗證吻合率約 <code>93.5%</code>。
+            </p>
+          </div>
+
+          <div class="method-card">
+            <div class="method-tag">中長線趨勢保護</div>
+            <h4>🐢 海龜指標 (<code>TW50_TURTLE_V1 ~ V3</code>)</h4>
+            <p>
+              包含 <code>V1 (A, B, C, D)</code> 長線唐奇安通道多週期突破系統、<code>V2 (5, 4.5, 4)</code> 中線通道突破搭配百分比移動停損系統、以及 <code>V3 (5, 4.5, 4)</code> 長線趨勢過濾系統，共 10 條趨勢狀態軌。
+            </p>
+            <p>
+              <code>2020/11/05 ~ 2026/06/05</code> 區間還原自公開歷史訊號帶；後續新交易日以多週期通道突破與 <code>4.0% / 4.5% / 5.0%</code> 移動停損模型延續計算（吻合率約 <code>85% ~ 93%</code>），作為中長期多空戰略濾網與核心資產配置依據。
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 龍蝦指標（預設首頁） -->
+    <section id="panel-lobster" class="subtab-panel">
+      <div id="lobster-hero-strip" class="intro-hero-strip"></div>
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <h2>🦞 龍蝦指標 (Lobster Indicator — 短中期動能遲滯濾波與五日推力積分)</h2>
+            <p id="lob-meta" class="meta-text"></p>
+          </div>
+        </div>
+        <div id="lob-controls"></div>
+        <div id="lob-readout" class="sticky-readout">💡 移動滑鼠或手指滑動圖表可同步檢視當日數值</div>
+        <div id="lob-charts" class="chart-stack"></div>
+        <div id="lob-strategy-box" class="deep-strategy-section"></div>
+      </div>
+    </section>
+
+    <!-- 3. 外資籌碼 -->
+    <section id="panel-foreign" class="subtab-panel" style="display:none;">
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <h2>🏦 外資籌碼微結構 (現貨波段累積 / 單日買賣超 / 台指期交易與未平倉避險部位)</h2>
+            <p id="for-meta" class="meta-text"></p>
+          </div>
+        </div>
+        <div id="for-controls"></div>
+        <div id="for-readout" class="sticky-readout">💡 移動滑鼠或手指滑動圖表可同步檢視當日數值</div>
+        <div id="for-charts" class="chart-stack"></div>
+      </div>
+    </section>
+
+    <!-- 4. 散戶未平倉 -->
+    <section id="panel-retail" class="subtab-panel" style="display:none;">
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <h2>👥 散戶未平倉反向微結構 (散戶綜合多空分數 / 小台 MTX / 微台 TMF / 跨級距散戶差值)</h2>
+            <p id="ret-meta" class="meta-text"></p>
+          </div>
+        </div>
+        <div id="ret-controls"></div>
+        <div id="ret-readout" class="sticky-readout">💡 移動滑鼠或手指滑動圖表可同步檢視當日數值</div>
+        <div id="ret-charts" class="chart-stack"></div>
+      </div>
+    </section>
+
+    <!-- 5. 龍蝦指標回測 -->
+    <section id="panel-backtest" class="subtab-panel" style="display:none;">
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <h2>🎯 龍蝦指標 × 散戶籌碼多條件狀態轉換量化回測引擎</h2>
+            <p id="bt-meta" class="meta-text"></p>
+          </div>
+        </div>
+        <div id="bt-cond-panel" class="cond-panel"></div>
+        <div id="bt-controls"></div>
+        <div id="bt-readout" class="sticky-readout">💡 移動滑鼠或手指滑動圖表可同步檢視當日數值</div>
+        <div id="bt-charts" class="chart-stack"></div>
+        <div id="bt-trade-panel" class="cond-panel" style="margin-top:14px;"></div>
+        <div id="bt-results"></div>
+      </div>
+    </section>
+
+    <!-- 6. 海龜指標 -->
+    <section id="panel-turtle" class="subtab-panel" style="display:none;">
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <h2>🐢 海龜指標 (Turtle Indicator — V1 長線唐奇安通道 / V2 中線移動停損 / V3 長線趨勢過濾)</h2>
+            <p id="tur-meta" class="meta-text"></p>
+          </div>
+        </div>
+        <div id="tur-controls"></div>
+        <div id="tur-readout" class="sticky-readout">💡 移動滑鼠或手指滑動圖表可同步檢視當日數值</div>
+        <div id="tur-charts" class="chart-stack"></div>
+        <div id="tur-strategy-box" class="deep-strategy-section"></div>
+      </div>
+    </section>
+
+    <!-- 7. 國際總經與實戰投資策略 -->
+    <section id="panel-strategy" class="subtab-panel" style="display:none;">
+      <div class="card">
+        <div class="panel-header">
+          <div>
+            <h2>🌐 全視角國際總經、台股微結構與多維度量化實戰投資策略報告</h2>
+            <p class="meta-text">融合國際金融期刊實證（JFE / JF / RFS / JPM）、即時全球 8 大跨市場指標、國內外新聞雷達與 9 大資料庫共振研判</p>
+          </div>
+        </div>
+        <div id="strategy-hub-content">正在載入即時量化與總經策略報告...</div>
+      </div>
+    </section>
+  </main>
+
+  <button id="btn-back-to-top" type="button" class="back-to-top-btn" title="回到最頂端" aria-label="回到最頂端">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 19V5" />
+      <path d="M5 12l7-7 7 7" />
+    </svg>
+  </button>
+
+  <script src="/app.js?v=8"></script>
+</body>
+</html>

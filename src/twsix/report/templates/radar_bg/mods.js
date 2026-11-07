@@ -489,6 +489,10 @@ var __fetch = API.fetch;
     if(window.matchMedia){
       window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(){ isDark = computeIsDark(); });
     }
+    window.addEventListener('twsix:theme', function(){
+      isDark = computeIsDark();
+      try { var y = window.pageYOffset; if(typeof LAST !== 'undefined' && LAST) { render(LAST[0], LAST[1], LAST[2]); window.scrollTo(0, y); } } catch(e) {}
+    });
 
     buildGrid();
 

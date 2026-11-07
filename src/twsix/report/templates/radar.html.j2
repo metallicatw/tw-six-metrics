@@ -29,10 +29,8 @@ window.CF_V = "@@CFV@@";
   ('t10','#087f5b','#38d9a9'),('t11','#862e9c','#e599f7'),('t12','#364fc7','#91a7ff'),
   ('t13','#9c6500','#ffc94d'),('t14','#5f3dc4','#d0bfff'),('picks','#c92a2a','#ff8787'),('val','#7a5230','#e0b084'),('guide','#2f4b7c','#8fb0e8'),('about','#495057','#adb5bd')] %}
 {% for k, c, d in cf_colors %}.cf-tab[data-t={{ k }}],#cf-{{ k }},#cf .bg-jump[data-jump={{ k }}]{--tc:{{ c }}}
-{% endfor %}@media (prefers-color-scheme:dark){
-{% for k, c, d in cf_colors %}  :root:not([data-theme=light]) .cf-tab[data-t={{ k }}],:root:not([data-theme=light]) #cf-{{ k }},:root:not([data-theme=light]) #cf .bg-jump[data-jump={{ k }}]{--tc:{{ d }}}
-{% endfor %}  :root:not([data-theme=light]) .cf-tab[aria-selected=true]{color:var(--ground)}
-}
+{% endfor %}{% for k, c, d in cf_colors %}  :root[data-theme=dark] .cf-tab[data-t={{ k }}],:root[data-theme=dark] #cf-{{ k }},:root[data-theme=dark] #cf .bg-jump[data-jump={{ k }}]{--tc:{{ d }}}
+{% endfor %}  :root[data-theme=dark] .cf-tab[aria-selected=true]{color:var(--ground)}
 {% for k, c, d in cf_colors %}:root[data-theme=dark] .cf-tab[data-t={{ k }}],:root[data-theme=dark] #cf-{{ k }}{--tc:{{ d }}}
 {% endfor %}:root[data-theme=dark] .cf-tab[aria-selected=true]{color:var(--ground)}
 .cf-card h4 .tip{margin-left:4px}
@@ -182,7 +180,7 @@ window.CF_V = "@@CFV@@";
 .gl-it p span{display:inline-block;min-width:3.2em;font-size:12px;font-weight:600;color:var(--muted)}
 .gl-it mark{background:var(--cf-hl);color:var(--cf-hl-ink);border-radius:2px}
 .gl-empty{color:var(--muted);font-size:13.5px;padding:10px 2px}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .gd-no,:root:not([data-theme=light]) .gl-cats button[aria-pressed=true]{color:var(--ground)}}
+:root[data-theme=dark] .gd-no,:root[data-theme=dark] .gl-cats button[aria-pressed=true]{color:var(--ground)}
 :root[data-theme=dark] .gd-no,:root[data-theme=dark] .gl-cats button[aria-pressed=true]{color:var(--ground)}
 
 /* 基本面與籌碼概況：② 卡片＋④⑤⑥⑬ 側邊面板 */

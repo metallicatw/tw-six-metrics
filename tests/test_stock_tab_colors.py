@@ -23,14 +23,13 @@ def _colours(prefix):
 
 def test_十四顆分頁都在():
     ids = _tab_ids()
-    assert len(ids) == 15, ids
-    assert ids[:5] == ["summary", "six", "eps", "health", "pxhealth"], ids
+    assert len(ids) == 16, ids
+    assert ids[:6] == ["summary", "six", "eps", "vd", "health", "pxhealth"], ids
 
 
 def test_每一顆都有自己的顏色而且不撞色():
     ids = _tab_ids()
-    for prefix in (".tabs ", ":root:not([data-theme=light]) .tabs ",
-                   ":root[data-theme=dark] .tabs "):
+    for prefix in (".tabs ", ":root[data-theme=dark] .tabs "):
         got = _colours(prefix)
         missing = [i for i in ids if i not in got]
         assert not missing, f"{prefix!r} 少了 {missing} 的顏色"
@@ -38,9 +37,11 @@ def test_每一顆都有自己的顏色而且不撞色():
         assert len(set(content)) == len(content), f"{prefix!r} 有兩顆同色：{got}"
 
 
-def test_深色的兩份一模一樣():
-    assert _colours(":root:not([data-theme=light]) .tabs ") == \
-        _colours(":root[data-theme=dark] .tabs ")
+def test_深色只由切換鈕決定_不再跟系統設定():
+    # 2026-11-07：深色／淺色改成按鈕切換（預設深色），樣式只剩 :root[data-theme=dark] 一份
+    css = (TPL / "site.css").read_text("utf-8")
+    assert "prefers-color-scheme" not in css
+    assert _colours(":root[data-theme=dark] .tabs ")
 
 
 def test_選中的那一顆是實心():

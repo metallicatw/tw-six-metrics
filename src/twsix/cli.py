@@ -2376,6 +2376,13 @@ def cmd_backfill_cl(args: argparse.Namespace) -> int:
     if not codes:
         print("合約負債回補：找不到要補的個股（data/sheets 底下沒有資產負債表）")
         return EXIT_OK
+    from .ingest.sheet_archive import (
+        archive,  # noqa: PLC0415 - 券商頁已有的季別先存起來，不再向觀測站查
+    )
+
+    got = archive(data, codes, cl_out=out)
+    if got["cl"]:
+        print(f"合約負債：券商頁已有的 {got['cl']} 期先存進歷史檔（之後滾出 8 季也不必再查）")
     r = CH.backfill(out, codes, today=datetime.now(_TAIPEI).date(), minutes=args.minutes,
                     pause=args.pause, data_dir=data)
     print(f"合約負債回補：{r['stocks']} 檔、這一趟查 {r['asked']} 次、新增 {r['added']} 個期別；"
@@ -2411,6 +2418,32 @@ def cmd_backfill_cl(args: argparse.Namespace) -> int:
     return cmd_backfill_capex(ns)
 
 
+def cmd_lobturtle_update(args: argparse.Namespace) -> int:
+    """龍蝦／海龜：盤後增量更新九個資料庫（證交所／期交所／FinMind），再刷新國際情勢快取。"""
+    settings = Settings.load(args.config)
+    from .lobturtle.data_fetcher import (  # noqa: PLC0415
+        seed_databases,
+        update_all_to_latest,
+    )
+    from .lobturtle.db import LobTurtleDBManager  # noqa: PLC0415
+    from .lobturtle.export import data_dir  # noqa: PLC0415
+
+    folder = data_dir(Path(args.data or settings.data_dir))
+    db = LobTurtleDBManager(data_dir=folder)
+    seed_databases(db, force=False)
+    res = update_all_to_latest(db)
+    ins = res.get("insertedByDb") or res.get("inserted_by_db") or {}
+    print("龍蝦／海龜：" + ("、".join(f"{k} +{v}" for k, v in ins.items() if v) or "已是最新"))
+    if not args.no_intel:
+        from .lobturtle.knowledge_base import (
+            get_or_refresh_external_intel,  # noqa: PLC0415
+        )
+
+        intel = get_or_refresh_external_intel(folder, force_refresh=True)
+        print("國際情勢：" + ("沿用快取（連不上）" if intel.get("offlineFallback") else intel.get("fetchedAt", "已更新")))
+    return EXIT_OK
+
+
 def cmd_backfill_capex(args: argparse.Namespace) -> int:
     settings = Settings.load(args.config)
     from .ingest import cx_history as CX  # noqa: PLC0415
@@ -2423,6 +2456,11 @@ def cmd_backfill_capex(args: argparse.Namespace) -> int:
     if not codes:
         print("資本支出回補：找不到要補的個股（data/sheets 底下沒有現金流量表）")
         return EXIT_OK
+    from .ingest.sheet_archive import archive  # noqa: PLC0415
+
+    got = archive(data, codes, cx_out=out)
+    if got["capex"]:
+        print(f"資本支出：券商頁已有的 {got['capex']} 季先存進歷史檔（之後滾出 8 季也不必再查）")
     r = CX.backfill(out, codes, today=datetime.now(_TAIPEI).date(), minutes=args.minutes,
                     pause=args.pause)
     if out.resolve() != data_file.resolve():
@@ -3790,6 +3828,11 @@ def build_parser() -> argparse.ArgumentParser:
     bcx.add_argument("--minutes", type=float, default=40.0, help="這一趟最多跑幾分鐘（預設 40）")
     bcx.add_argument("--pause", type=float, default=2.5, help="每次查詢之間至少停幾秒（預設 2.5）")
     bcx.set_defaults(func=cmd_backfill_capex)
+
+    lob = sub.add_parser("lobturtle-update", help="龍蝦／海龜：盤後增量更新九個資料庫並刷新國際情勢快取")
+    lob.add_argument("--data", help="資料目錄（資料庫在 data/lobturtle/）")
+    lob.add_argument("--no-intel", action="store_true", help="不刷新國際情勢（費半、美債、新聞）快取")
+    lob.set_defaults(func=cmd_lobturtle_update)
 
     bq = sub.add_parser(
         "backfill-qfii",

@@ -99,6 +99,11 @@ jobs:
         continue-on-error: true
         run: twsix chipflow || echo "::error::籌碼雷達這一趟失敗（行情照常存檔），看上面的 log"
 
+      - name: 龍蝦／海龜 × 全球宏觀
+        timeout-minutes: 8
+        continue-on-error: true
+        run: twsix lobturtle-update || echo "::error::龍蝦／海龜這一趟失敗（行情照常存檔），看上面的 log"
+
       - name: Commit
         id: commit
         run: |
@@ -106,6 +111,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A -- data/market data/sheets data/valuations.csv data/aipick data/ownership
           if [ -d data/chipflow ]; then git add data/chipflow; fi
+          if [ -d data/lobturtle ]; then git add data/lobturtle; fi
           git add -- data/manifest.json 2>/dev/null || true   # 寫資料表時列數會同步到 manifest
           if ! git diff --quiet; then
             echo "::error::這些檔案被改到了但沒有被 commit，請把它們加進上面的 git add："

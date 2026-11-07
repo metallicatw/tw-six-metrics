@@ -48,6 +48,7 @@ HIDDEN_PAGES: frozenset[str] = frozenset({"picks", "stats", "about"})
 GRADE_KEYS = ["AA", "A", "BB", "B", "C", "不評分", "數據不足"]
 
 MONITOR_PAGE = "monitor.html"
+LOBTURTLE_PAGE = "lobturtle.html"
 AI_PAGE = "ai.html"
 RADAR_PAGE = "radar.html"
 CL_PAGE = "cl.html"
@@ -750,10 +751,20 @@ def build_site(
     if has_monitor:
         hide_report_toggle(out_dir / MONITOR_REPORT)
     has_trend = (out_dir / TREND_REPORT).exists()
+    lob = {}
+    if sheets_dir is not None:
+        try:
+            from ..lobturtle.export import export as export_lobturtle  # noqa: PLC0415
+
+            lob = export_lobturtle(sheets_dir.parent, out_dir) or {}
+        except Exception as exc:  # noqa: BLE001 - 龍蝦／海龜出錯不影響其他頁
+            print(f"  龍蝦／海龜頁沒有產生：{type(exc).__name__}：{exc}")
+            lob = {}
 
     base = dict(
         hidden_pages=sorted(HIDDEN_PAGES),
         monitor_page=MONITOR_PAGE if has_monitor else "",
+        lobturtle_page=LOBTURTLE_PAGE if lob else "",
         trend_page=TREND_PAGE if has_trend else "",
         repo=repo,
         site_title=ctx.site_title,
@@ -1030,6 +1041,12 @@ def build_site(
             **base, page="monitor", rel="", report=MONITOR_REPORT, stamp=mon_stamp
         ).dump(str(out_dir / MONITOR_PAGE))
         written["monitor.html（市場監控）"] = 1
+
+    if lob:
+        env.get_template("lobturtle.html.j2").stream(
+            **base, page="lobturtle", rel="", latest=lob.get("latest", "")
+        ).dump(str(out_dir / LOBTURTLE_PAGE))
+        written["lobturtle.html（龍蝦／海龜 × 全球宏觀）"] = lob.get("files", 1)
 
     written[f"{AI_PAGE}（AI 選股）"] = _write_ai_page(
         env, base, out_dir, sheets_dir.parent if sheets_dir is not None else None)
@@ -1331,6 +1348,15 @@ def _full_stock_page(
         from ..ingest.yearly_trading import annotate_sources
 
         annotate_sources(page, sheets_dir.parent, stock_id)
+        try:
+            from .decision_seed import build as build_decision  # noqa: PLC0415
+
+            page.decision = build_decision(
+                stock_id, data=data, reader=reader, data_dir=sheets_dir.parent,
+                price=valuation.market_price, price_date=page.price_date,
+                industry=page.industry, name=page.name, history=history, inst_days=inst_days)
+        except Exception:  # noqa: BLE001 - 估值決策算不出來不影響個股頁其他分頁
+            page.decision = {}
     except Exception:  # noqa: BLE001 - a bad cache must not fail the build
         return False
 
@@ -1348,6 +1374,7 @@ def _full_stock_page(
         build_id=base.get("build_id", ""),
         delisted=delisted,
         monitor_page=base.get("monitor_page", ""),
+        lobturtle_page=base.get("lobturtle_page", ""),
         trend_page=base.get("trend_page", ""),
     )
     return True
@@ -1450,6 +1477,7 @@ def build_stock_page(
     build_id: str = "",
     delisted: bool = False,
     monitor_page: str = "",
+    lobturtle_page: str = "",
     trend_page: str = "",
 ) -> Path:
     from .stock_page import (
@@ -1465,6 +1493,7 @@ def build_stock_page(
         p=page,
         hidden_pages=sorted(HIDDEN_PAGES),
         monitor_page=monitor_page,
+        lobturtle_page=lobturtle_page,
         trend_page=trend_page,
         repo=repo,
         page="stock",

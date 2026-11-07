@@ -30,6 +30,7 @@
   <button type="button" role="tab" id="tab-six" class="tab" aria-controls="panel-six" aria-selected="false" tabindex="-1" title="六大財務指標評等">六大指標</button>
   <button type="button" role="tab" id="tab-eps" class="tab" aria-controls="panel-eps" aria-selected="false" tabindex="-1">推估今年目標價</button>
   {% if p.three_year %}<button type="button" role="tab" id="tab-y3" class="tab" aria-controls="panel-y3" aria-selected="false" tabindex="-1">推估三年目標價</button>{% endif %}
+  {% if p.decision and p.decision.ok %}<button type="button" role="tab" id="tab-vd" class="tab" aria-controls="panel-vd" aria-selected="false" tabindex="-1" title="七大步驟估值與下單前五道防線">估值決策</button>{% endif %}
     <button type="button" role="tab" id="tab-health" class="tab" aria-controls="panel-health" aria-selected="false" tabindex="-1">財務健診</button>
   <button type="button" role="tab" id="tab-pxhealth" class="tab" aria-controls="panel-pxhealth" aria-selected="false" tabindex="-1">股價健診</button>
   <button type="button" role="tab" id="tab-yield" class="tab" aria-controls="panel-yield" aria-selected="false" tabindex="-1">殖利率估價</button>
@@ -544,6 +545,8 @@
 </section>
 </section>
 {% endif %}
+
+{% if p.decision and p.decision.ok %}{% include "decision.html.j2" %}{% endif %}
 
 <section class="panel" id="panel-health" role="tabpanel" aria-labelledby="tab-health" hidden>
 <div class="hl">

@@ -329,6 +329,11 @@ def _st_capex(c: Ctx) -> tuple[str, str]:
 
 def st_cl(c: Ctx) -> tuple[str, str]:
     """合約負債與資本支出的較早季別（券商頁只有最近 8 季）。"""
+    from .ingest.sheet_archive import archive
+
+    with contextlib.suppress(Exception):     # 券商頁已有的季別先存進歷史檔，不重複向觀測站查
+        archive(c.root, [c.code], cl_out=c.cl_keep or None,
+                cx_out=(c.cl_keep.with_name("capex_hist.csv") if c.cl_keep else None))
     rank = {"warn": 3, "ok": 2, "skip": 1}
     parts = [_st_cl_only(c), _st_capex(c)]
     state = max((p[0] for p in parts), key=lambda k: rank.get(k, 0))

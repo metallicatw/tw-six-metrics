@@ -472,6 +472,13 @@ def flags_of(m: dict[str, Any], p: dict[str, Any]) -> list[dict[str, str]]:
         out.append({"k": "capacity", "lv": "good", "t": "折舊與廠房設備都年增 10% 以上：新產能開出，可以消化訂單"})
     elif sec in ("general", "equip", "icd") and (m.get("capex_r") or 0) >= 1.3:
         out.append({"k": "capex", "lv": "info", "t": "近四季資本支出比前四季多 30% 以上：擴產中，產能還沒開出"})
+    from .clcapex import (
+        quadrant,  # noqa: PLC0415 - 合約負債 × 資本支出四象限（全站同一套規則）
+    )
+
+    qd = quadrant(yoy, m.get("capex_r"))
+    if qd and qd["key"] in ("best", "risk_a", "risk_b"):
+        out.append({"k": "clcx_" + qd["key"], "lv": qd["level"], "t": qd["title"] + "：" + qd["text"]})
     if m.get("trust_first"):
         out.append({"k": "trust_first", "lv": "good", "t": "投信首買：近 5 日買超、之前 20 日沒有買"})
     return out

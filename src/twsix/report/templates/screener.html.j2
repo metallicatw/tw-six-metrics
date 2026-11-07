@@ -25,13 +25,11 @@ window.SC_V = "{{ data_v|default('') }}";
 .sc-tab:focus-visible{outline:2px solid var(--tk);outline-offset:2px}
 .sc-tab[aria-selected=true]{background:var(--tk);color:#fff}
 .sc-tab[data-t=fin]{--tc:#1c62b8}.sc-tab[data-t=trend]{--tc:#2b8a3e}.sc-tab[data-t=strong]{--tc:#c92a2a}.sc-tab[data-t=high]{--tc:#b25a00}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme=light]) .sc-tab[data-t=fin]{--tc:#6fb0f5}
-  :root:not([data-theme=light]) .sc-tab[data-t=trend]{--tc:#69db7c}
-  :root:not([data-theme=light]) .sc-tab[data-t=strong]{--tc:#ff8787}
-  :root:not([data-theme=light]) .sc-tab[data-t=high]{--tc:#ffa94d}
-  :root:not([data-theme=light]) .sc-tab[aria-selected=true]{color:var(--ground)}
-}
+  :root[data-theme=dark] .sc-tab[data-t=fin]{--tc:#6fb0f5}
+  :root[data-theme=dark] .sc-tab[data-t=trend]{--tc:#69db7c}
+  :root[data-theme=dark] .sc-tab[data-t=strong]{--tc:#ff8787}
+  :root[data-theme=dark] .sc-tab[data-t=high]{--tc:#ffa94d}
+  :root[data-theme=dark] .sc-tab[aria-selected=true]{color:var(--ground)}
 :root[data-theme=dark] .sc-tab[data-t=fin]{--tc:#6fb0f5}
 :root[data-theme=dark] .sc-tab[data-t=trend]{--tc:#69db7c}
 :root[data-theme=dark] .sc-tab[data-t=strong]{--tc:#ff8787}
@@ -71,7 +69,7 @@ window.SC_V = "{{ data_v|default('') }}";
 .sc-head{display:flex;align-items:center;justify-content:flex-start;gap:10px;flex-wrap:wrap}
 .sc-head h3{margin:0;font-size:17px}
 .sc-count{background:var(--accent-2);color:#fff;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:600}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .sc-count,:root:not([data-theme=light]) .sc-btn.pri{color:var(--ground)}}
+:root[data-theme=dark] .sc-count,:root[data-theme=dark] .sc-btn.pri{color:var(--ground)}
 :root[data-theme=dark] .sc-count,:root[data-theme=dark] .sc-btn.pri{color:var(--ground)}
 .sc-scroll{overflow:auto;max-height:70vh;border:1px solid var(--rule);border-radius:10px;margin-top:10px}
 .sc-tbl{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums;min-width:0}

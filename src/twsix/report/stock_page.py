@@ -191,6 +191,7 @@ class StockPage:
     three_year: dict[str, Any] = field(default_factory=dict)
     est: dict[str, Any] = field(default_factory=dict)
     history: dict[str, Any] = field(default_factory=dict)
+    decision: dict[str, Any] = field(default_factory=dict)
 
     @property
     def worth_researching(self) -> bool:

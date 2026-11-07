@@ -411,6 +411,10 @@ def name_of(meta: dict[str, Meta], names: dict[str, str], code: str) -> str:
 
 MACRO_BASE = "https://raw.githubusercontent.com/metallicatw/market-monitor/main/data/"
 MACRO_FILES = ("taiex.json", "vix.json", "tw_pmi.json", "tw_marketcap_m1b.json")
+# 估值決策的大盤警訊與個股融資／當沖（市場監控已經抓了，這裡直接共用，不重複抓證交所／櫃買）
+EXTRA_MACRO_FILES = ("tw_margin.json", "tw_daytrade.json", "tw_margin_stocks.json", "tw_daytrade_stocks.json")
+MACRO_KEEP = ("dates", "close", "pmi", "ratio", "m1b", "market_cap", "twse_amt", "tpex_amt",
+              "stocks", "day", "days", "share", "value_ratio", "m1b_yoy", "m2_yoy")
 
 
 def macro_dir(data_dir: Path) -> Path:
@@ -429,16 +433,17 @@ def sync_macro(data_dir: Path, fetch=None) -> list[str]:
     folder = macro_dir(data_dir)
     folder.mkdir(parents=True, exist_ok=True)
     missed = []
-    for name in MACRO_FILES:
+    for name in MACRO_FILES + EXTRA_MACRO_FILES:
         try:
             body = fetch(MACRO_BASE + name)
             doc = json.loads(body)
-            if not doc.get("dates"):
+            if not doc.get("dates") and not doc.get("stocks"):
                 raise ValueError("沒有 dates")
         except Exception:  # noqa: BLE001 - 一份抓不到不該擋住其他三份
-            missed.append(name)
+            if name in MACRO_FILES:
+                missed.append(name)
             continue
-        keep = {k: doc[k] for k in ("dates", "close", "pmi", "ratio") if k in doc}
+        keep = {k: doc[k] for k in MACRO_KEEP if k in doc}
         (folder / name).write_text(json.dumps(keep, ensure_ascii=False, separators=(",", ":")),
                                    encoding="utf-8")
     return missed

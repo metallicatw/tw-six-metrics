@@ -1,0 +1,80 @@
+{# 〈估值決策〉：七大標準步驟 × 本益比故事 × 斷捨離五準則 × 下單前五道防線（資料：p.decision） #}
+{% set d = p.decision %}
+<section class="panel" id="panel-vd" role="tabpanel" aria-labelledby="tab-vd" hidden>
+<h3>估值決策 <span class="vd-sub">先求敗（算風險）、再求勝（看空間）</span></h3>
+{% if not d or not d.ok %}
+  <p class="muted">估值決策需要月營收、季財報與股本；這一檔目前{{ (d.gaps or ['資料不足'])|join('、') if d else '資料不足' }}。</p>
+{% else %}
+{% set dec = d.decision %}
+<div class="vd-hero vd-{{ dec.tone }}">
+  <div class="vd-act"><span class="vd-k">最終決策</span><b>{{ dec.action }}</b><span class="vd-why">{{ dec.why }}</span></div>
+  <dl class="vd-zone">
+    <div><dt>股價</dt><dd>{{ '{:,.2f}'.format(d.price) if d.price is not none else '—' }}{% if d.price_date %}<i>{{ d.price_date }}</i>{% endif %}</dd></div>
+    <div><dt>防禦進場價（中性）</dt><dd>{{ '{:,.1f}'.format(dec.zone.entry) if dec.zone.entry is not none else '—' }}</dd></div>
+    <div><dt>殖利率 7%／8% 買點</dt><dd>{{ '{:,.1f}'.format(dec.zone.yield_7) if dec.zone.yield_7 is not none else '—' }}／{{ '{:,.1f}'.format(dec.zone.yield_8) if dec.zone.yield_8 is not none else '—' }}</dd></div>
+    <div><dt>明年目標高價 PH</dt><dd class="vd-up">{{ '{:,.1f}'.format(dec.zone.ph) if dec.zone.ph is not none else '—' }}</dd></div>
+    <div><dt>明年預估低價 PL</dt><dd class="vd-dn">{{ '{:,.1f}'.format(dec.zone.pl) if dec.zone.pl is not none else '—' }}</dd></div>
+    <div><dt>五道防線</dt><dd>{{ dec.passed }}／{{ dec.known }} 通過</dd></div>
+  </dl>
+</div>
+
+<div class="vd-grid">
+  <section class="vd-card">
+    <h4>本益比故事：類別 {{ d.story.primary }}「{{ d.story.name }}」</h4>
+    <p class="vd-note">{{ d.story.strategy }}</p>
+    <ul class="vd-list">{% for s in d.story.matched %}<li><b>類別 {{ s.n }} {{ s.name }}</b>：{{ s.why }}</li>{% endfor %}</ul>
+  </section>
+  <section class="vd-card">
+    <h4>大盤位階：總經警訊（動態保守折價）</h4>
+    <p class="vd-note">{{ d.macro.summary }}</p>
+    <ul class="vd-list">{% for a in d.macro['items'] %}<li class="vd-st-{{ 'fail' if a.hit else ('pass' if a.hit is sameas false else 'na') }}"><b>{{ a.title }}</b>：{{ a.why }}</li>{% endfor %}</ul>
+  </section>
+</div>
+
+<section class="vd-card">
+  <h4>斷捨離五準則（進入估值前的體質過濾）<span class="vd-tag">{{ d.criteria.verdict }}</span></h4>
+  <table class="vd-t"><thead><tr><th>準則</th><th>結果</th><th class="tl">依據</th></tr></thead><tbody>
+  {% for c in d.criteria['items'] %}
+    <tr><td>{{ c.n }}. {{ c.title }}</td><td><span class="vd-pill vd-st-{{ c.state }}">{{ {'pass':'好球帶','warn':'留意','fail':'扣分','na':'缺資料'}[c.state] }}</span></td><td class="tl">{{ c.why }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+</section>
+
+<section class="vd-card">
+  <h4>三情境總覽</h4>
+  <div class="scroll"><table class="vd-t vd-sum"><thead><tr><th>情境</th><th>今年 EPS</th><th>明年 EPS</th><th>目標高價 PH</th><th>預估低價 PL</th><th>往上空間</th><th>往下風險</th></tr></thead><tbody>
+  {% for k in ['保守', '中性', '樂觀'] %}{% set r = d.summary[k] %}
+    <tr><td><span class="scn scn-{{ loop.index }}">{{ k }}</span></td>
+      <td>{{ '%.2f'|format(r.eps_cur) if r.eps_cur is not none else '—' }}</td>
+      <td>{{ '%.2f'|format(r.eps_next) if r.eps_next is not none else '—' }}</td>
+      <td>{{ '{:,.1f}'.format(r.ph) if r.ph is not none else '—' }}</td>
+      <td>{{ '{:,.1f}'.format(r.pl) if r.pl is not none else '—' }}</td>
+      <td class="{{ 'vd-up' if r.up is not none and r.up > 0 else 'vd-dn' }}">{{ '%+.1f%%'|format(r.up * 100) if r.up is not none else '—' }}</td>
+      <td class="{{ 'vd-risk' if r.down is not none and r.down > 0.2 else '' }}">{{ '%.1f%%'|format(r.down * 100) if r.down is not none else '—' }}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+</section>
+
+<section class="vd-card">
+  <h4>七大標準步驟（每一步的公式、代入與結果）</h4>
+  {% for st in d.steps %}
+  <details class="vd-step"{% if loop.index in (1, 6, 7) %} open{% endif %}>
+    <summary><span class="vd-n">{{ st.n }}</span>{{ st.title }}</summary>
+    <p class="vd-rule">{{ st.rule }}</p>
+    <ol class="vd-calc">{% for c in st.calc %}<li>{{ c }}</li>{% endfor %}</ol>
+  </details>
+  {% endfor %}
+</section>
+
+<section class="vd-card">
+  <h4>下單前五道防線</h4>
+  <table class="vd-t"><thead><tr><th>防線</th><th>結果</th><th class="tl">依據</th></tr></thead><tbody>
+  {% for x in d.defenses %}
+    <tr><td>{{ x.n }}. {{ x.title }}</td><td><span class="vd-pill vd-st-{{ 'pass' if x.pass else ('na' if x.pass is none else 'fail') }}">{{ '通過' if x.pass else ('缺資料' if x.pass is none else '未過') }}</span></td><td class="tl">{{ x.why }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+  <p class="vd-note">寧願少賺也不要多賠：只有用最保守的參數（營收季減、年增取半再減、淨利率下修、本益比打折）推算後，依然有足夠的往上空間、極低的往下風險，才是值得重拳出擊的買點。AI 或券商的樂觀預估一律剔除，決策者是你自己。</p>
+</section>
+<p class="vd-foot muted">估值決策依公開財報與股價自動推算，僅供研究參考，不構成投資建議。股數以最新股本 ÷ 面額 10 元計算（{{ d.shares }} 百萬股）。</p>
+{% endif %}
+</section>
